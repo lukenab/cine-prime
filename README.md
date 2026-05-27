@@ -20,6 +20,7 @@ hcm26_cpl_java_05_group1/
 ├── .gitattributes           
 ├── CONTRIBUTING.md          
 └── README.md
+```
 
 ## **Tech Stack**
 - Frontend: React.js, Vite
@@ -40,24 +41,30 @@ Before running this project, ensure you have the following installed:
 ### **1. Clone the repository**
 ```json
 git clone <your-gitlab-repo-url>
-cd hcm26_cpl_java_05_group1`
+cd hcm26_cpl_java_05_group1
+```
 
-###2.2. Run Backend Services (Java Spring Boot)***
+### **2.2. Run Backend Services (Java Spring Boot)**
 Using the provided Maven Wrapper, you do not need to install Maven globally.
-`cd server/user-service
+```text
+cd server/user-service
 ./mvnw spring-boot:run
-# For Windows use: mvnw.cmd spring-boot:run`
+# For Windows use: mvnw.cmd spring-boot:run
+```
 
-###**3. Run Frontend Portals (React + Vite)**
-```json
+### **3. Run Frontend Portals (React + Vite)**
+```text
 # For Customer Portal
 cd client/customer-portal
 npm install
 npm run dev
+```
 
-# For Admin Dashboard
+# **For Admin Dashboard**
+```text
 cd client/admin-dashboard
 npm install
 npm run dev
+```
 
 
