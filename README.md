@@ -39,7 +39,7 @@ Before running this project, ensure you have the following installed:
 - PostgreSQL & SQL Server
 
 ### **1. Clone the repository**
-```json
+```text
 git clone <your-gitlab-repo-url>
 cd hcm26_cpl_java_05_group1
 ```
@@ -53,8 +53,8 @@ cd server/user-service
 ```
 
 ### **3. Run Frontend Portals (React + Vite)**
-```text
 # For Customer Portal
+```text
 cd client/customer-portal
 npm install
 npm run dev
@@ -66,5 +66,14 @@ cd client/admin-dashboard
 npm install
 npm run dev
 ```
+## Contribution Guidelines
+We follow a strict Git workflow to avoid merge conflicts. Please read our CONTRIBUTING.md before pushing any code.
 
+- NEVER push directly to the main or develop branches.
+
+- Always create a new branch from develop (e.g., feature/login-page).
+
+- Use Conventional Commits (feat:, fix:, chore:, etc.).
+
+- Create a Merge Request (MR) to develop and request a review from the Team Leader.
 
