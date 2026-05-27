@@ -1,12 +1,12 @@
-#**Movie Theater Management System**
+# **Movie Theater Management System**
 
-##**Project Overview**
+## **Project Overview**
 The **Movie Theater Management System** is a comprehensive solution designed to handle all aspects of cinema operations. It provides a seamless ticket-booking experience for customers while offering robust management tools for cinema administrators to handle movie schedules, theaters, and revenue.
 
 This project is developed as part of the **FPT Software OJT Program (HCM26_CPL_JAVA_05)**.
 
-##**Repository Structure**
-
+## **Repository Structure**
+```text
 hcm26_cpl_java_05_group1/
 ├── client/
 │   ├── admin-dashboard/     
@@ -19,9 +19,9 @@ hcm26_cpl_java_05_group1/
 ├── .gitignore              
 ├── .gitattributes           
 ├── CONTRIBUTING.md          
-└── README.md                
+└── README.md
 
-##**Tech Stack**
+## **Tech Stack**
 - Frontend: React.js, Vite
 
 - Backend: Java
@@ -30,16 +30,14 @@ hcm26_cpl_java_05_group1/
 
 - Version Control: Git & GitLab 
 
-##**Getting Started**
-###**Prerequisites**
+## **Getting Started**
+### **Prerequisites**
 Before running this project, ensure you have the following installed:
-- Java JDK 17 or 21
+- Java 21
 
-- Node.js (v18 or higher)
+- PostgreSQL & SQL Server
 
-- PostgreSQL
-
-###**1. Clone the repository**
+### **1. Clone the repository**
 ```json
 git clone <your-gitlab-repo-url>
 cd hcm26_cpl_java_05_group1`
