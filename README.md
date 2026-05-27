@@ -24,18 +24,14 @@ hcm26_cpl_java_05_group1/
 
 ## **Tech Stack**
 - Frontend: React.js, Vite
-
 - Backend: Java
-
 - Database: PostgreSQL + SQL Server
-
 - Version Control: Git & GitLab 
 
 ## **Getting Started**
 ### **Prerequisites**
 Before running this project, ensure you have the following installed:
 - Java 21
-
 - PostgreSQL & SQL Server
 
 ### **1. Clone the repository**
@@ -70,10 +66,7 @@ npm run dev
 We follow a strict Git workflow to avoid merge conflicts. Please read our CONTRIBUTING.md before pushing any code.
 
 - NEVER push directly to the main or develop branches.
-
 - Always create a new branch from develop (e.g., feature/login-page).
-
 - Use Conventional Commits (feat:, fix:, chore:, etc.).
-
 - Create a Merge Request (MR) to develop and request a review from the Team Leader.
 
