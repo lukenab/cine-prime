@@ -26,6 +26,7 @@
         <module>booking-service</module>
         <module>movie-service</module>
         <module>user-service</module>
+        <module>payment-service</module>
     </modules>
 
     <dependencyManagement>
