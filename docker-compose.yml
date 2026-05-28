@@ -60,7 +60,18 @@ services:
       - "8085:8085"
     networks:
       - cinema-network
-
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "123456"
+      POSTGRES_DB: database
+    ports:
+      - "5433:5432" # Máy thật gọi 5433
+    networks:
+      - cinema-network
 
 networks:
   cinema-network:
