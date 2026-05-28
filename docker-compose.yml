@@ -1,0 +1,59 @@
+version: '3.9'
+
+services:
+
+  # ===== FRONTEND =====
+  admin-dashboard:
+    build: ./client/admin-dashboard
+    container_name: admin-dashboard
+    ports:
+      - "3000:3000"
+    networks:
+      - cinema-network
+
+  customer-portal:
+    build: ./client/customer-portal
+    container_name: customer-portal
+    ports:
+      - "3001:3000"
+    networks:
+      - cinema-network
+
+
+  # ===== BACKEND =====
+  movie-service:
+    build: ./server/movie-service
+    container_name: movie-service
+    ports:
+      - "8081:8081"
+    networks:
+      - cinema-network
+
+  booking-service:
+    build: ./server/booking-service
+    container_name: booking-service
+    ports:
+      - "8082:8082"
+    networks:
+      - cinema-network
+
+  payment-service:
+    build: ./server/payment-service
+    container_name: payment-service
+    ports:
+      - "8083:8083"
+    networks:
+      - cinema-network
+
+  user-service:
+    build: ./server/user-service
+    container_name: user-service
+    ports:
+      - "8084:8084"
+    networks:
+      - cinema-network
+
+
+networks:
+  cinema-network:
+    driver: bridge
