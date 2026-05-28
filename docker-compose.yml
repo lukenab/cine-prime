@@ -53,6 +53,14 @@ services:
     networks:
       - cinema-network
 
+  api-gateway-service:
+    build: ./server/api-gateway-service
+    container_name: api-gateway-service
+    ports:
+      - "8085:8085"
+    networks:
+      - cinema-network
+
 
 networks:
   cinema-network:
