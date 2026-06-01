@@ -33,14 +33,32 @@ Dự án áp dụng mô hình phân nhánh sau:
 * **`master` / `main`:** Nhánh Production, chỉ merge code đã test kỹ lưỡng (thường merge từ nhánh release).
 * **`develop`:** Nhánh hội tụ code chính, dùng để merge các nhánh Feature và Hotfix.
 
-### Quy tắc đặt tên nhánh con:
-Tên nhánh con nên phản ánh đúng `Type` của Issue trên GitLab:
-* **Tính năng mới:** Tách làm 2 nhánh rõ ràng:
-  * Nhánh Code: `features/Implementation_UserStoryName`
-  * Nhánh Thiết kế (Figma/API Docs): `features/Design_UserStoryName`
-* **Sửa lỗi:** `hotfix/Bug_UserStoryName` (Sau khi test local, merge vào cả `main` và `develop`).
-* **Cấu hình/Hạ tầng:** `chore/Setup_Docker_Gateway`
-* **Nhánh Release:** Dành cho Sprint Demo, tên: `release/sprint_x` (x là số thứ tự sprint).
+### Quy tắc đặt tên nhánh con (Branch Naming Convention):
+Tất cả các nhánh tạo mới bắt buộc phải tuân thủ nghiêm ngặt định dạng dưới đây. Tuyệt đối không dùng khoảng trắng, không dùng tiếng Việt có dấu, nối các từ bằng dấu gạch ngang (`-`) và luôn phải đính kèm **Issue ID** (Ví dụ: `#12`).
+
+* **Nhánh Code Tính năng (Feature Implementation):**
+  Cú pháp: `features/Implementation_#<IssueID>-<mô-tả-ngắn>`
+  Ví dụ: `features/Implementation_#12-login-api`
+
+* **Nhánh Thiết kế (Feature Design):**
+  Cú pháp: `features/Design_#<IssueID>-<mô-tả-ngắn>`
+  Ví dụ: `features/Design_#13-erd-database-schema`
+
+* **Nhánh Sửa lỗi (Hotfix):**
+  Cú pháp: `hotfix/Bug_#<IssueID>-<mô-tả-lỗi>`
+  Ví dụ: `hotfix/Bug_#15-payment-crash-fix`
+
+* **Nhánh Cấu hình/Hạ tầng (Chore):**
+  Cú pháp: `chore/#<IssueID>-<mô-tả>`
+  Ví dụ: `chore/#18-setup-api-gateway`
+
+* **Nhánh Tài liệu (Docs):**
+  Cú pháp: `docs/#<IssueID>-<mô-tả>`
+  Ví dụ: `docs/#19-update-readme-instructions`
+
+* **Nhánh Phát hành (Release):**
+  Cú pháp: `release/sprint_<số-thứ-tự>`
+  Ví dụ: `release/sprint_1`
 
 ## 3. Quy tắc Commit (Commit Rules)
 Viết commit rõ ràng theo cú pháp Conventional Commits kết hợp với `Layer` đang làm.
