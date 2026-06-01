@@ -117,12 +117,12 @@ Review Checklist
 - [ ] Feature is integrated and does not break existing flows
 
 Test Coverage
-* Unit Tests:
-* Manual Test Results: (Chèn hình ảnh screenshot giao diện hoặc kết quả gọi API Postman thành công tại đây)
+- Unit Tests:
+- Manual Test Results: 
 
-**Change Description
-* Mô tả ngắn gọn các thay đổi/tính năng đã làm ở đây:
+Change Description
+- Mô tả ngắn gọn các thay đổi/tính năng đã làm ở đây:
 
-**Related Tasks / Issues**
-* Link dẫn tới Issue tương ứng trên GitLab:
+Related Tasks / Issues**
+- Link dẫn tới Issue tương ứng trên GitLab:
 ```
