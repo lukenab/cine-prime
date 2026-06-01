@@ -70,38 +70,59 @@ Viết commit rõ ràng theo cú pháp Conventional Commits kết hợp với `L
   * `docs(database): cập nhật sơ đồ ERD cho module thanh toán`
 * **Yêu cầu:** Mỗi commit chỉ giải quyết ĐÚNG MỘT thay đổi. Tuyệt đối không gom chung code sửa UI React và code sửa file `docker-compose` vào một commit.
 
-## 4. Hướng dẫn tạo Pull Request (PR)
-Để merge tính năng mới vào nhánh `develop`, bắt buộc tạo Pull Request (PR) để theo dõi và verify. 
-* **Lưu ý:** Ngay khi tạo PR, hãy gắn label `Review/ QA` để báo cho team biết code đã sẵn sàng để kiểm tra.
-* **Quy trình Review:** Tuyệt đối không tự ý gộp (Merge) code của chính mình. Chỉ người được assign review mới có quyền bấm nút Merge sau khi code đạt chuẩn.
+## 4. Quy trình Tạo và Duyệt Merge Request (MR / PR Process)
+[cite_start]Mọi lượt gộp code từ nhánh con vào nhánh `develop` đều bắt buộc phải thông qua Merge Request để kiểm tra chất lượng và theo dõi[cite: 212, 250].
 
-### 4.1. Template dành cho nhánh Code (Implementation Format)
+### 4.1. Quy trình từng bước áp dụng cho người làm (Assignee)
+1. **Đẩy code lên mạng:** Tiến hành push nhánh tính năng cá nhân lên GitLab[cite: 250].
+2. **Khởi tạo MR:** Trên GitLab, bấm nút **New Merge Request**, chọn nguồn là nhánh của bạn và đích đến là nhánh `develop`.
+3. **Ghi nhận thông tin:** * Đặt tiêu đề MR rõ ràng bắt đầu bằng tiền tố loại công việc (`[Feature]`, `[Fix]`, `[Refactor]`, `[Docs]`)[cite: 272].
+   * Chỉ định người kiểm duyệt chéo (Reviewer/Leader) ở mục Reviewers.
+   * Gắn nhãn `Review/ QA` cho Merge Request đó.
+4. **Áp dụng Template:** Sao chép chính xác nội dung mẫu mô tả PR tương ứng dưới đây (Mẫu Code hoặc Mẫu Thiết kế) dán vào phần Description.
+5. **Cung cấp Bằng chứng (Evidence):**
+   * Đối với task Code: Bắt buộc phải đính kèm ảnh chụp màn hình kiểm thử thủ công kết quả chạy API (Postman) hoặc giao diện chạy thành công vào mục **Test Coverage**.
+   * Đối với task Document: Viết tài liệu trực tiếp bằng định dạng Markdown (`.md`) nằm trong thư mục `docs/` để Reviewer có thể nhìn thấy rõ các dòng chữ thay đổi và comment trực tiếp.
+6. **Yêu cầu Duyệt:** Gửi link MR cho người được phân công phụ trách Review.
+
+### 4.2. Quy trình dành cho Người kiểm duyệt (Reviewer)
+* Reviewer có trách nhiệm rà soát kỹ mã nguồn, đối chiếu với danh sách các tiêu chí trong phần *Review Checklist* của PR.
+* Nếu phát hiện lỗi hoặc điểm chưa tối ưu, thực hiện để lại Comment ngay tại dòng code lỗi để Assignee quay lại sửa đổi[cite: 303].
+* Khi code đạt chất lượng và các checklist đều được tích chọn đầy đủ, Reviewer bấm nút **Approve** (Phê duyệt) và thực hiện thao tác **Merge** để gộp code[cite: 266, 300].
+* **Tuyệt đối nghiêm cấm:** Thành viên không được tự ý ấn nút Merge vào các nhánh chính khi chưa có sự phê duyệt từ Reviewer/Leader.
+
+---
+
+### 4.3. Các Mẫu mô tả Pull Request (PR Templates)
+
+#### Mẫu dành cho nhánh Code (Implementation Format)
 ```text
-**Definition of Done**
-* [ ] Feature works as expected and passes manual testing
-* [ ] Code follows project conventions and is lint-free
-* [ ] Unit and integration tests are written and passing
-* [ ] No sensitive data or hardcoded secrets
-* [ ] Feature is documented (README, API docs)
-* [ ] CI/CD pipeline passes successfully
-* [ ] Code is reviewed and approved
+Definition of Done
+- [ ] Feature works as expected and passes manual testing
+- [ ] Code follows project conventions and is lint-free
+- [ ] Unit and integration tests are written and passing
+- [ ] No sensitive data or hardcoded secrets
+- [ ] Feature is documented (README, API docs)
+- [ ] CI/CD pipeline passes successfully
+- [ ] Code is reviewed and approved
 
-**Review Checklist**
-* [ ] PR is linked to a task or issue
-* [ ] PR title follows naming convention ([Feature], [Fix], [Refactor], etc.)
-* [ ] Code is modular and follows SOLID principles
-* [ ] Proper error handling and edge case coverage
-* [ ] API responses are consistent and documented
-* [ ] Git history is clean (no debug commits, proper messages)
-* [ ] No unused code, commented-out blocks, or console logs
-* [ ] Feature is integrated and does not break existing flows
+Review Checklist
+- [ ] PR is linked to a task or issue
+- [ ] PR title follows naming convention ([Feature], [Fix], [Refactor], etc.)
+- [ ] Code is modular and follows SOLID principles
+- [ ] Proper error handling and edge case coverage
+- [ ] API responses are consistent and documented
+- [ ] Git history is clean (no debug commits, proper messages)
+- [ ] No unused code, commented-out blocks, or console logs
+- [ ] Feature is integrated and does not break existing flows
 
-**Test Coverage**
+Test Coverage
 * Unit Tests:
-* Manual Test Results: (Insert screenshots or logs)
+* Manual Test Results: (Chèn hình ảnh screenshot giao diện hoặc kết quả gọi API Postman thành công tại đây)
 
-**Change Description**
-* Design: [Link the design pull request if have]
+**Change Description
+* Mô tả ngắn gọn các thay đổi/tính năng đã làm ở đây:
 
 **Related Tasks / Issues**
-* Issues: [Insert Link]
+* Link dẫn tới Issue tương ứng trên GitLab:
+```
