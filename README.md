@@ -13,9 +13,14 @@ hcm26_cpl_java_05_group1/
 │   └── customer-portal/    
 ├── server/
 │   ├── api-gateway/         
+|   |── discovery-server/      
 │   ├── booking-service/    
 │   ├── movie-service/      
-│   └── user-service/       
+│   |── user-service/  
+|   |── promotion-service/     
+|   |── payment-service/     
+|   └── notification-service/  
+|
 ├── .gitignore              
 ├── .gitattributes           
 ├── CONTRIBUTING.md          
