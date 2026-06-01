@@ -9,7 +9,7 @@ Chúng ta sử dụng Git Lab Issues Board để log và quản lý task. Mọi 
   * `Type::Feature`: Phát triển tính năng mới mang lại giá trị cho người dùng.
   * `Type::Bug`: Lỗi phát sinh trong quá trình code hoặc do QA báo cáo.
   * `Type::Chore`: Các task cấu hình hạ tầng, maintain hệ thống (không liên quan trực tiếp đến end-user).
-  * `Type::Docs`: Tạo tài liệu, sơ đồ, đặc tả hệ thống.
+  * `Type::Docs`: Tạo tài liệu, sơ đồ, đặc tả hệ thống
 
 * **Label Theo Tầng (Layer):**
   * `Layer::Frontend`: Các task về UI/UX, quản lý state cho ứng dụng React/Vite.
