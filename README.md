@@ -77,14 +77,14 @@ docker-compose down
 
 ### **3. Run Frontend Portals (React + Vite)**
 Open a new terminal for each frontend portal.
-## For Customer Portal
+#### For Customer Portal
 ```text
 cd client/customer-portal
 npm install
 npm run dev
 ```
 
-## **For Admin Dashboard**
+#### **For Admin Dashboard**
 ```text
 cd client/admin-dashboard
 npm install
