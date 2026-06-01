@@ -23,40 +23,68 @@ hcm26_cpl_java_05_group1/
 ```
 
 ## **Tech Stack**
-- Frontend: React.js, Vite
-- Backend: Java
-- Database: PostgreSQL + SQL Server
-- Version Control: Git & GitLab 
+1. Frontend
+- Libary: React.js (v18.x) 
+- Build Tool: Vite (v8.x)
+
+2. Backend
+- Language: Java 21
+- Framework: Spring Boot
+- Microservices Ecosystems
+    - API Gateway: Spring Cloud Gateway
+    - Service Discovery: Netflix Eureka
+    - Synchronous Communication: Spring Cloud OpenFeign
+- Security: JWT (Json Web Token)
+
+3. Database
+- PostgreSQL 
+- MySQL 
+- ORM: Spring Data JPA (Hibernate)
+
+4. DevOps & Tools
+- Containerization: Docker & Docker Compose
+- Version Control: Git & GitLab
+
 
 ## **Getting Started**
 ### **Prerequisites**
 Before running this project, ensure you have the following installed:
 - Java 21
-- PostgreSQL & SQL Server
+- Node.js (v18 or higher for React/Vite)
+- Docker Desktop (Crucial for running the Microservices and Databases automatically)
 
 ### **1. Clone the repository**
+Clone the project and switch to the active development branch:
 ```text
 git clone <your-gitlab-repo-url>
 cd hcm26_cpl_java_05_group1
+git checkout develop
 ```
 
-### **2.2. Run Backend Services (Java Spring Boot)**
-Using the provided Maven Wrapper, you do not need to install Maven globally.
+### **2. Run Backend Services (Docker Compose)**
+Using the Docker Compose, you do not need to install MySQL, PostgreSQL, or run each Spring Boot service manually.
 ```text
-cd server/user-service
-./mvnw spring-boot:run
-# For Windows use: mvnw.cmd spring-boot:run
+docker-compose up -d --build
+```
+
+Wait 1-2 minutes for the containers to start. Once ready, you can check the Eureka Discovery Server at http://localhost:8761. All API requests should be routed through the API Gateway at http://localhost:8080/api/.
+
+(Optional) If you want to stop the backend system:
+
+```text
+docker-compose down
 ```
 
 ### **3. Run Frontend Portals (React + Vite)**
-# For Customer Portal
+Open a new terminal for each frontend portal.
+## For Customer Portal
 ```text
 cd client/customer-portal
 npm install
 npm run dev
 ```
 
-# **For Admin Dashboard**
+## **For Admin Dashboard**
 ```text
 cd client/admin-dashboard
 npm install
@@ -69,4 +97,11 @@ We follow a strict Git workflow to avoid merge conflicts. Please read our CONTRI
 - Always create a new branch from develop (e.g., feature/login-page).
 - Use Conventional Commits (feat:, fix:, chore:, etc.).
 - Create a Merge Request (MR) to develop and request a review from the Team Leader.
+
+## Team Members
+- **Nguyễn An Bình** - Team Leader/ Developer
+- **Diệp Đăng Khoa** - Team Member/ Developer
+- **Nguyễn Mạnh Khải** - Team Member/ Developer
+- **Lê Tấn Lộc** - Team Member/ Developer
+- **Trần Nhật Duy** - Team Member/ Developer
 
