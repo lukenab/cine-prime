@@ -8,19 +8,21 @@ This project is developed as part of the **FPT Software OJT Program (HCM26_CPL_J
 ## **Repository Structure**
 ```text
 hcm26_cpl_java_05_group1/
-├── client/
-│   ├── admin-dashboard/     
-│   └── customer-portal/    
-├── server/
+├── client/                      
+│   ├── src/
+│   ├── package.json
+│   └── vite.config.js
+├── server/                     
 │   ├── api-gateway/         
-|   |── discovery-server/      
+│   ├── discovery-server/      
 │   ├── booking-service/    
 │   ├── movie-service/      
-│   |── user-service/  
-|   |── promotion-service/     
-|   |── payment-service/     
-|   └── notification-service/  
-|
+│   ├── user-service/  
+│   ├── promotion-service/     
+│   ├── payment-service/     
+│   └── notification-service/  
+├── docs/                       
+├── docker-compose.yml           
 ├── .gitignore              
 ├── .gitattributes           
 ├── CONTRIBUTING.md          
@@ -28,11 +30,11 @@ hcm26_cpl_java_05_group1/
 ```
 
 ## **Tech Stack**
-1. Frontend
+**1. Frontend**
 - Libary: React.js (v18.x) 
 - Build Tool: Vite (v8.x)
 
-2. Backend
+**2. Backend**
 - Language: Java 21
 - Framework: Spring Boot
 - Microservices Ecosystems
@@ -41,12 +43,12 @@ hcm26_cpl_java_05_group1/
     - Synchronous Communication: Spring Cloud OpenFeign
 - Security: JWT (Json Web Token)
 
-3. Database
+**3. Database**
 - PostgreSQL 
 - MySQL 
 - ORM: Spring Data JPA (Hibernate)
 
-4. DevOps & Tools
+**4. DevOps & Tools**
 - Containerization: Docker & Docker Compose
 - Version Control: Git & GitLab
 
