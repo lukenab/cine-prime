@@ -70,30 +70,31 @@ Viết commit rõ ràng theo cú pháp Conventional Commits kết hợp với `L
   * `docs(database): cập nhật sơ đồ ERD cho module thanh toán`
 * **Yêu cầu:** Mỗi commit chỉ giải quyết ĐÚNG MỘT thay đổi. Tuyệt đối không gom chung code sửa UI React và code sửa file `docker-compose` vào một commit.
 
-## 4. Quy trình Tạo và Duyệt Merge Request (MR / PR Process)
-[cite_start]Mọi lượt gộp code từ nhánh con vào nhánh `develop` đều bắt buộc phải thông qua Merge Request để kiểm tra chất lượng và theo dõi[cite: 212, 250].
+## 4. Quy trình Tạo và Duyệt Merge Request (MR Process)
+Mọi lượt gộp code từ nhánh con vào nhánh `develop` đều bắt buộc phải thông qua Merge Request để kiểm tra chất lượng và theo dõi.
 
 ### 4.1. Quy trình từng bước áp dụng cho người làm (Assignee)
-1. **Đẩy code lên mạng:** Tiến hành push nhánh tính năng cá nhân lên GitLab[cite: 250].
+1. **Đẩy code lên mạng:** Tiến hành tạo nhánh con, commit và push nhánh chứa code của bạn lên GitLab.
 2. **Khởi tạo MR:** Trên GitLab, bấm nút **New Merge Request**, chọn nguồn là nhánh của bạn và đích đến là nhánh `develop`.
-3. **Ghi nhận thông tin:** * Đặt tiêu đề MR rõ ràng bắt đầu bằng tiền tố loại công việc (`[Feature]`, `[Fix]`, `[Refactor]`, `[Docs]`)[cite: 272].
+3. **Ghi nhận thông tin:** 
+   * Đặt tiêu đề MR rõ ràng bắt đầu bằng tiền tố loại công việc (`[Feature]`, `[Fix]`, `[Refactor]`, `[Docs]`).
    * Chỉ định người kiểm duyệt chéo (Reviewer/Leader) ở mục Reviewers.
    * Gắn nhãn `Review/ QA` cho Merge Request đó.
-4. **Áp dụng Template:** Sao chép chính xác nội dung mẫu mô tả PR tương ứng dưới đây (Mẫu Code hoặc Mẫu Thiết kế) dán vào phần Description.
+4. **Áp dụng Template:** Sao chép chính xác nội dung mẫu mô tả MR tương ứng dưới đây (Mẫu Code hoặc Mẫu Thiết kế) dán vào phần Description.
 5. **Cung cấp Bằng chứng (Evidence):**
-   * Đối với task Code: Bắt buộc phải đính kèm ảnh chụp màn hình kiểm thử thủ công kết quả chạy API (Postman) hoặc giao diện chạy thành công vào mục **Test Coverage**.
+   * Đối với task Code: Nhánh code của bạn đã được đẩy lên ở Bước 1. Tuy nhiên, để Reviewer có thể xem nhanh kết quả thực tế mà chưa cần clone code về máy, bạn bắt buộc phải đính kèm ảnh chụp màn hình chạy thử API (Postman) hoặc giao diện chạy thành công vào mục **Test Coverage** trong nội dung (Description) của MR.
    * Đối với task Document: Viết tài liệu trực tiếp bằng định dạng Markdown (`.md`) nằm trong thư mục `docs/` để Reviewer có thể nhìn thấy rõ các dòng chữ thay đổi và comment trực tiếp.
 6. **Yêu cầu Duyệt:** Gửi link MR cho người được phân công phụ trách Review.
 
 ### 4.2. Quy trình dành cho Người kiểm duyệt (Reviewer)
-* Reviewer có trách nhiệm rà soát kỹ mã nguồn, đối chiếu với danh sách các tiêu chí trong phần *Review Checklist* của PR.
-* Nếu phát hiện lỗi hoặc điểm chưa tối ưu, thực hiện để lại Comment ngay tại dòng code lỗi để Assignee quay lại sửa đổi[cite: 303].
-* Khi code đạt chất lượng và các checklist đều được tích chọn đầy đủ, Reviewer bấm nút **Approve** (Phê duyệt) và thực hiện thao tác **Merge** để gộp code[cite: 266, 300].
+* Reviewer có trách nhiệm rà soát kỹ mã nguồn, đối chiếu với danh sách các tiêu chí trong phần *Review Checklist* của MR.
+* Nếu phát hiện lỗi hoặc điểm chưa tối ưu, thực hiện để lại Comment ngay tại dòng code lỗi để Assignee quay lại sửa đổi.
+* Khi code đạt chất lượng và các checklist đều được tích chọn đầy đủ, Reviewer bấm nút **Approve** (Phê duyệt) và thực hiện thao tác **Merge** để gộp code.
 * **Tuyệt đối nghiêm cấm:** Thành viên không được tự ý ấn nút Merge vào các nhánh chính khi chưa có sự phê duyệt từ Reviewer/Leader.
 
 ---
 
-### 4.3. Các Mẫu mô tả Pull Request (PR Templates)
+### 4.3. Các Mẫu mô tả Merge Request (MR Templates)
 
 #### Mẫu dành cho nhánh Code (Implementation Format)
 ```text
@@ -109,6 +110,8 @@ Definition of Done
 Review Checklist
 - [ ] PR is linked to a task or issue
 - [ ] PR title follows naming convention ([Feature], [Fix], [Refactor], etc.)
+- [ ] MR is linked to a task or issue
+- [ ] MR title follows naming convention ([Feature], [Fix], [Refactor], etc.)
 - [ ] Code is modular and follows SOLID principles
 - [ ] Proper error handling and edge case coverage
 - [ ] API responses are consistent and documented
