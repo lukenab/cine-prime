@@ -1,11 +1,11 @@
 services:
-
   # ===== FRONTEND =====
   admin-dashboard:
     build: ./client/admin-dashboard
     container_name: admin-dashboard
     ports:
       - "3000:3000"
+    tty: true
     networks:
       - cinema-network
 
@@ -14,6 +14,7 @@ services:
     container_name: customer-portal
     ports:
       - "3001:3000"
+    tty: true
     networks:
       - cinema-network
 
@@ -27,6 +28,22 @@ services:
       - cinema-network
 
   # ===== BACKEND MICROSERVICES =====
+  auth-service:
+    build: ./server/auth-service
+    container_name: auth-service
+    ports:
+      - "8088:8088"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/database
+      - SPRING_DATASOURCE_USERNAME=postgres  
+      - SPRING_DATASOURCE_PASSWORD=123456   
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
+    depends_on:
+      - postgres
+      - discovery-server 
+    networks:
+      - cinema-network
+
   movie-service:
     build: ./server/movie-service
     container_name: movie-service
@@ -92,7 +109,7 @@ services:
     environment:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/database
       - SPRING_DATASOURCE_USERNAME=postgres  
-      - SPRING_DATASOURCE_PASSWORD=123456   
+      - SPRING_DATASOURCE_PASSWORD=123456  
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
     depends_on:
       - postgres
@@ -187,7 +204,6 @@ services:
       - "5433:5432" 
     networks:
       - cinema-network
-
 
   mysql_db:
     image: mysql:8.0
