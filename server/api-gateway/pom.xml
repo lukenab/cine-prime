@@ -11,7 +11,7 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>api-gateway-service</artifactId>
+    <artifactId>api-gateway</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <name>api-gateway-service</name>
 

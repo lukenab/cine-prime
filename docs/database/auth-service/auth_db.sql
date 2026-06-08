@@ -1,11 +1,5 @@
-CREATE TABLE roles (
-    role_id SERIAL PRIMARY KEY,
-    role_name VARCHAR(50) NOT NULL UNIQUE,
-    description VARCHAR(255)
-);
-
 CREATE TABLE account (
-    account_id VARCHAR(10) PRIMARY KEY, 
+    account_id VARCHAR(36) PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
     email VARCHAR(100) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
@@ -16,9 +10,15 @@ CREATE TABLE account (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE roles (
+    role_id SERIAL PRIMARY KEY,
+    role_name VARCHAR(50) NOT NULL UNIQUE,
+    description VARCHAR(255)
+);
+
 CREATE TABLE auth_token (
     token_id BIGSERIAL PRIMARY KEY,
-    account_id VARCHAR(10) NOT NULL REFERENCES account(account_id),
+    account_id VARCHAR(36) NOT NULL REFERENCES account(account_id),
     token_type VARCHAR(20) DEFAULT 'BEARER',
     jwt_id VARCHAR(100) NOT NULL UNIQUE,
     token VARCHAR(500) NOT NULL,
@@ -33,7 +33,7 @@ CREATE TABLE auth_token (
 
 CREATE TABLE password_reset (
     reset_id BIGSERIAL PRIMARY KEY,
-    account_id VARCHAR(10) NOT NULL REFERENCES account(account_id),
+    account_id VARCHAR(36) NOT NULL REFERENCES account(account_id),
     token VARCHAR(255) NOT NULL UNIQUE,
     expires_at TIMESTAMPTZ NOT NULL,
     used_at TIMESTAMPTZ,
