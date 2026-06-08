@@ -1,6 +1,5 @@
 package authservice.dto.request;
 
-import authservice.entity.Role;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -11,10 +10,8 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Builder
-public class RegisterRequest {
-    String username;
-    String password;
-    String email;
+public class UserCreationRequest {
+    String accountId; 
     String fullName;
     String phoneNumber;
     LocalDate dateOfBirth;
