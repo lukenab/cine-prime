@@ -1,5 +1,5 @@
 CREATE TABLE users (
-    account_id VARCHAR(10) PRIMARY KEY,
+    account_id VARCHAR(36) PRIMARY KEY,
     full_name VARCHAR(100) NOT NULL,
     phone_number VARCHAR(15),
     date_of_birth DATE,
