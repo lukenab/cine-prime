@@ -34,13 +34,13 @@ services:
     ports:
       - "8088:8088"
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/database
-      - SPRING_DATASOURCE_USERNAME=postgres  
-      - SPRING_DATASOURCE_PASSWORD=123456   
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/auth_db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=123456
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
     depends_on:
       - postgres
-      - discovery-server 
+      - discovery-server
     networks:
       - cinema-network
 
@@ -50,13 +50,13 @@ services:
     ports:
       - "8081:8081"
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql_db:3306/movie_catalog?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
-      - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=rootpassword
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/movie_db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=123456
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
     depends_on:
-      - mysql_db
-      - discovery-server 
+      - postgres
+      - discovery-server
     networks:
       - cinema-network
 
@@ -66,17 +66,16 @@ services:
     ports:
       - "8082:8082"
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/database
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/booking_db
       - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=123456    
+      - SPRING_DATASOURCE_PASSWORD=123456
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
-      # Kết nối Redis & Kafka cho Booking (Khóa ghế & Bắn event)
       - SPRING_DATA_REDIS_HOST=redis
       - SPRING_DATA_REDIS_PORT=6379
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
     depends_on:
       - postgres
-      - discovery-server 
+      - discovery-server
       - redis
       - kafka
     networks:
@@ -88,15 +87,14 @@ services:
     ports:
       - "8083:8083"
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/database
-      - SPRING_DATASOURCE_USERNAME=postgres  
-      - SPRING_DATASOURCE_PASSWORD=123456    
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/ 
-      # Kết nối Kafka để bắn Event thanh toán thành công
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/payment_db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=123456
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
     depends_on:
       - postgres
-      - discovery-server 
+      - discovery-server
       - kafka
     networks:
       - cinema-network
@@ -107,30 +105,30 @@ services:
     ports:
       - "8084:8084"
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/database
-      - SPRING_DATASOURCE_USERNAME=postgres  
-      - SPRING_DATASOURCE_PASSWORD=123456  
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/user_db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=123456
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
     depends_on:
       - postgres
-      - discovery-server 
+      - discovery-server
     networks:
       - cinema-network
 
   promotion-service:
     build: ./server/promotion-service
     container_name: promotion-service
-    restart: on-failure 
+    restart: on-failure
     ports:
       - "8086:8086"
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql_db:3306/movie_catalog?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
-      - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=rootpassword
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/promotion_db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=123456
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
     depends_on:
-      - mysql_db
-      - discovery-server 
+      - postgres
+      - discovery-server
     networks:
       - cinema-network
 
@@ -140,11 +138,10 @@ services:
     ports:
       - "8087:8087"
     environment:
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/ 
-      # Kết nối Kafka để lắng nghe Event gửi email/SMS
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
     depends_on:
-      - discovery-server 
+      - discovery-server
       - kafka
     networks:
       - cinema-network
@@ -155,9 +152,9 @@ services:
     ports:
       - "8085:8085"
     environment:
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/ 
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
     depends_on:
-      - discovery-server 
+      - discovery-server
     networks:
       - cinema-network
 
@@ -199,21 +196,10 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: "123456"
-      POSTGRES_DB: database
     ports:
-      - "5433:5432" 
-    networks:
-      - cinema-network
-
-  mysql_db:
-    image: mysql:8.0
-    container_name: mysql_db
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: movie_catalog
-    ports:
-      - "3307:3306" 
+      - "5433:5432"
+    volumes:
+      - ./postgres-init:/docker-entrypoint-initdb.d
     networks:
       - cinema-network
 
