@@ -3,6 +3,8 @@ package authservice.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -39,10 +41,12 @@ public class Account {
     @Column(name = "last_login_at")
     LocalDateTime lastLoginAt;
 
+    @CreationTimestamp
     @Column(name = "created_at", insertable = false, updatable = false)
     LocalDateTime createdAt;
 
-    @Column(name = "updated_at", insertable = false, updatable = false)
+    @UpdateTimestamp
+    @Column(name = "updated_at", insertable = false)
     LocalDateTime updatedAt;
 
 }
