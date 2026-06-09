@@ -57,11 +57,9 @@ graph TB
         AC --> JS
 
         US --> USD
+        US --> UR
 
-        US --> UE
-
-        UE --> UR
-
+        UR --> UE
         UR -->|SQL| PG
 
     end
@@ -88,11 +86,9 @@ graph TB
         MRD --> MS
 
         MS --> MSD
+        MS --> MR
 
-        MS --> ME
-
-        ME --> MR
-
+        MR --> ME
         MR -->|SQL| MY
 
     end
@@ -109,9 +105,6 @@ graph TB
     MOVIE_SERVICE -. Register .-> EU
 
 ```
-
----
-
 ## User Service
 
 ### Controller Layer
