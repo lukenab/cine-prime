@@ -1,10 +1,23 @@
 import { useState } from "react";
-import { Film, Ticket, Menu, X } from "lucide-react";
-import { Link } from "react-router-dom";
-
+import { Film, Ticket, Menu, X, User, LogOut } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const navigate = useNavigate();
+
+  // Kiểm tra trạng thái đăng nhập từ localStorage
+  const token = localStorage.getItem("accessToken");
+  const username = localStorage.getItem("username") || "User";
+  const isLogged = !!token;
+
+  // Hàm xử lý đăng xuất
+  const handleLogout = () => {
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("username");
+    // Ép component render lại bằng cách navigate hoặc reload
+    navigate("/login"); 
+  };
 
   return (
     <nav
@@ -37,11 +50,39 @@ export function Navbar() {
           ))}
         </div>
 
-        {/* CTA */}
-        <div className="hidden md:flex items-center gap-3">
-          <Link to="/login" className="text-white/60 hover:text-white text-sm transition-colors">
-             Sign In
-          </Link>
+        {/* CTA & User Profile */}
+        <div className="hidden md:flex items-center gap-4">
+          {isLogged ? (
+            // UI khi ĐÃ ĐĂNG NHẬP
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 cursor-pointer group">
+                <div 
+                  className="w-8 h-8 rounded-full flex items-center justify-center transition-transform group-hover:scale-105"
+                  style={{ backgroundColor: "rgba(255,215,0,0.15)", border: "1px solid #FFD700" }}
+                >
+                  {/* Lấy chữ cái đầu tiên của username làm Avatar */}
+                  <span style={{ color: "#FFD700", fontWeight: 700, fontSize: "0.85rem" }}>
+                    {username.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <span className="text-white/80 text-sm font-medium">{username}</span>
+              </div>
+              
+              <button 
+                onClick={handleLogout}
+                className="text-white/50 hover:text-[#FFD700] transition-colors p-1"
+                title="Logout"
+              >
+                <LogOut size={18} />
+              </button>
+            </div>
+          ) : (
+            // UI khi CHƯA ĐĂNG NHẬP
+            <Link to="/login" className="text-white/60 hover:text-white text-sm transition-colors mr-2">
+              Sign In
+            </Link>
+          )}
+
           <button
             className="flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-200 hover:brightness-110"
             style={{ backgroundColor: "#FFD700", color: "#050505", fontSize: "0.85rem", fontWeight: 700 }}
@@ -62,17 +103,45 @@ export function Navbar() {
 
       {/* Mobile menu */}
       {menuOpen && (
-        <div style={{ backgroundColor: "#050505" }} className="md:hidden px-6 pb-4 flex flex-col gap-4">
+        <div style={{ backgroundColor: "#050505" }} className="md:hidden px-6 pb-4 flex flex-col gap-4 border-t border-white/10 pt-4">
+          
+          {/* Thông tin user trên Mobile */}
+          {isLogged && (
+             <div className="flex items-center justify-between mb-2 pb-4 border-b border-white/10">
+               <div className="flex items-center gap-3">
+                 <div 
+                   className="w-10 h-10 rounded-full flex items-center justify-center"
+                   style={{ backgroundColor: "rgba(255,215,0,0.15)", border: "1px solid #FFD700" }}
+                 >
+                   <span style={{ color: "#FFD700", fontWeight: 700 }}>
+                     {username.charAt(0).toUpperCase()}
+                   </span>
+                 </div>
+                 <span className="text-white font-medium">{username}</span>
+               </div>
+               <button onClick={handleLogout} className="text-white/50 hover:text-white">
+                 <LogOut size={20} />
+               </button>
+             </div>
+          )}
+
           {["Home", "Movies", "Cinemas", "Events", "Offers"].map((item) => (
             <a key={item} href="#" className="text-white/70 hover:text-white text-sm py-1">
               {item}
             </a>
           ))}
+          
+          {!isLogged && (
+            <Link to="/login" className="text-white/70 hover:text-white text-sm py-1 font-bold">
+              Sign In
+            </Link>
+          )}
+
           <button
-            className="flex items-center gap-2 px-4 py-2 rounded-full w-fit mt-2"
-            style={{ backgroundColor: "#FFD700", color: "#050505", fontWeight: 700, fontSize: "0.85rem" }}
+            className="flex items-center justify-center gap-2 px-4 py-3 rounded-full w-full mt-2"
+            style={{ backgroundColor: "#FFD700", color: "#050505", fontWeight: 700, fontSize: "0.9rem" }}
           >
-            <Ticket size={14} />
+            <Ticket size={16} />
             Book Now
           </button>
         </div>
