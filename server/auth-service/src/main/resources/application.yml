@@ -6,7 +6,8 @@ spring:
     name: auth-service
   
   datasource:
-    url: jdbc:postgresql://postgres:5432/database
+#    url: jdbc:postgresql://postgres:5432/auth_db
+    url: jdbc:postgresql://localhost:5433/auth_db
     username: postgres
     password: "123456"
     driver-class-name: org.postgresql.Driver
@@ -18,9 +19,12 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
 
 eureka:
   client:
     serviceUrl:
-      defaultZone: http://discovery-server:8761/eureka/
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
 
+jwt:
+  signerKey: 873bcf3b6023c6cfac735831cc01cbd59c6f64c2341050f12e5f0224d7edea62

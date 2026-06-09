@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -22,6 +23,7 @@ public class UserCreationRequest {
 
     @NotBlank(message = "Full name must not be blank")
     @Size(max = 100, message = "Full name must not exceed 100 characters")
+
     String fullName;
 
     @NotBlank(message = "Phone number must not be blank")
