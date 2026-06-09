@@ -15,6 +15,7 @@ public class UserCreationRequest {
     String fullName;
     String phoneNumber;
     LocalDate dateOfBirth;
+    String email;
     String gender;
     String address;
     String identityCard;
