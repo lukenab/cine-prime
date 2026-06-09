@@ -75,6 +75,8 @@
                     .phoneNumber(request.getPhoneNumber())
                     .address(request.getAddress())
                     .gender(request.getGender())
+                    .dateOfBirth(request.getDateOfBirth())
+                    .email(request.getEmail())
                     .identityCard(request.getIdentityCard())
                     .build();
 
@@ -132,4 +134,9 @@
             }
             return stringJoiner.toString();
         }
+
+//        public RegisterResponse getAccountById(String accountId){
+//            return accountMapper.toRegisterResponse(accountRepository.findById(accountId)
+//                    .orElseThrow(() -> new RuntimeException("Account not found!")));
+//        }
     }

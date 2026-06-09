@@ -5,14 +5,11 @@ import authservice.dto.request.RegisterRequest;
 import authservice.dto.response.ApiResponse;
 import authservice.dto.response.AuthenticationResponse;
 import authservice.dto.response.RegisterResponse;
-import authservice.entity.Account;
 import authservice.service.AuthenticationService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -34,4 +31,9 @@ public class AuthenticationController {
                 .result(authenticationService.authenticate(request))
                 .build();
     }
+
+//    @GetMapping("/{accountId}")
+//    RegisterResponse getAccountById(@PathVariable String accountId){
+//        return authenticationService.getAccountById(accountId);
+//    }
 }

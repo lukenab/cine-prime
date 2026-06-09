@@ -42,7 +42,7 @@ public class Account {
     LocalDateTime lastLoginAt;
 
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_at", nullable = false)
     LocalDateTime createdAt;
 
     @UpdateTimestamp
