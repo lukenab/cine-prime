@@ -1,4 +1,4 @@
-import axiosClient from './axiosClient'
+import axiosClient from './api.ts'
 
 export interface LoginPayLoad {
     username: string;
