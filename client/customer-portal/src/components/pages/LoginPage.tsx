@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Eye, EyeOff, Film } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import {authApi} from '../../api/authApi'
 
 const CINEMA_IMAGE =
   "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjaW5lbWElMjBtb3ZpZSUyMHRoZWF0ZXIlMjBkYXJrJTIwbW9vZHklMjBpbnRlcmlvcnxlbnwxfHx8fDE3ODA5MzEwMDJ8MA&ixlib=rb-4.1.0&q=80&w=1080";
@@ -10,8 +11,25 @@ export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    try {
+      const response = await authApi.login({
+        username: username,
+        password: password
+      });
+
+      console.log("Login successfully:", response);
+      
+      navigate("/"); 
+      
+    } catch (error) {
+      console.error("Login failed:", error);
+      alert("Incorrect username or password!");
+    }
   };
 
   return (
@@ -393,15 +411,15 @@ export default function LoginPage() {
             }}
           >
             By signing in, you agree to CinePrime's{" "}
-            <a
-              href="#"
+            <Link
+              to="/register"
               style={{
                 color: "rgba(255,255,255,0.35)",
                 textDecoration: "underline",
               }}
             >
               Terms of Service
-            </a>{" "}
+            </Link>{" "}
             and{" "}
             <a
               href="#"
