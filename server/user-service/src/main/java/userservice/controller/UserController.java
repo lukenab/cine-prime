@@ -1,20 +1,29 @@
 package userservice.controller;
 
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import userservice.dto.UserCreationRequest;
 
+import jakarta.validation.Valid;
+import userservice.dto.ApiResponse;
+import userservice.dto.UserCreationRequest;
+import userservice.dto.UserResponse;
+import userservice.service.UserService;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 @RestController
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @RequestMapping("/api/users")
 public class UserController {
+    UserService userService;
 
     @PostMapping("/profile")
-    public ResponseEntity<String> createProfile(@RequestBody UserCreationRequest request) {
-        System.out.println("Data fetching form Auth Service: " + request.getFullName());
-
-        return ResponseEntity.ok("Profile created (Mocked)");
+    public ApiResponse<UserResponse> createProfile(@Valid @RequestBody UserCreationRequest request) {
+        return ApiResponse.<UserResponse>builder()
+        .result(userService.create(request))
+        .build();
     }
 }

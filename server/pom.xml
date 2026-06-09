@@ -33,6 +33,7 @@
         <module>payment-service</module>
         <module>promotion-service</module>
         <module>notification-service</module>
+        <module>commonservice</module>
     </modules>
 
     <dependencyManagement>
