@@ -8,7 +8,6 @@ import org.springframework.context.annotation.ComponentScan;
 import java.util.TimeZone;
 
 @SpringBootApplication
-@ComponentScan({"commonservice", "movieservice"})
 @EnableDiscoveryClient
 public class MovieServiceApplication {
 
