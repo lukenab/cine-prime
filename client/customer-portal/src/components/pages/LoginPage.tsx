@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Eye, EyeOff, Film } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import {authApi} from '../../api/authApi'
+import {authApi} from '../../api/authApi.ts'
 
 const CINEMA_IMAGE =
   "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjaW5lbWElMjBtb3ZpZSUyMHRoZWF0ZXIlMjBkYXJrJTIwbW9vZHklMjBpbnRlcmlvcnxlbnwxfHx8fDE3ODA5MzEwMDJ8MA&ixlib=rb-4.1.0&q=80&w=1080";
@@ -13,23 +13,28 @@ export default function LoginPage() {
 
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    try {
-      const response = await authApi.login({
-        username: username,
-        password: password
-      });
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
 
-      console.log("Login successfully:", response);
-      
-      navigate("/"); 
-      
-    } catch (error) {
-      console.error("Login failed:", error);
-      alert("Incorrect username or password!");
-    }
+        try {
+            const response = await authApi.login({
+                username: username,
+                password: password
+            });
+
+            console.log("Login successfully:", response);
+
+            localStorage.setItem("accessToken", response.data.result.token);
+            localStorage.setItem("username", username);
+
+            // ĐỔI DÒNG NÀY: Dùng window.location.href để ép trang tải lại,
+            // giúp Navbar đọc lại dữ liệu mới nhất và hiện Avatar ngay lập tức.
+            window.location.href = "/";
+
+        } catch (error) {
+            console.error("Login failed:", error);
+            alert("Incorrect username or password!");
+        }
   };
 
   return (

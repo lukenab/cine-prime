@@ -6,16 +6,13 @@ export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
 
-  // Kiểm tra trạng thái đăng nhập từ localStorage
   const token = localStorage.getItem("accessToken");
   const username = localStorage.getItem("username") || "User";
   const isLogged = !!token;
 
-  // Hàm xử lý đăng xuất
   const handleLogout = () => {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("username");
-    // Ép component render lại bằng cách navigate hoặc reload
     navigate("/login"); 
   };
 
