@@ -2,46 +2,36 @@ package userservice.service;
 
 import java.time.LocalDateTime;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import userservice.dto.UserCreationRequest;
+import userservice.dto.UserResponse;
 import userservice.entity.User;
+import userservice.mapper.UserMapper;
 import userservice.repository.UserRepository;
 
 @Service
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class UserService {
-    private UserRepository userRepository;
+    UserRepository userRepository;
+    UserMapper userMapper;
 
-    public UserService(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
+    public UserResponse create(UserCreationRequest creationRequest) {
 
-    public ResponseEntity<String> create(UserCreationRequest creationRequest) {
-        try {
-            User user = new User();
-            user.setAccountId(creationRequest.getAccountId());
-            user.setAddress(creationRequest.getAddress());
-            user.setAvatarUrl(null);
-            user.setCreatedAt(LocalDateTime.now());
-            user.setFullName(creationRequest.getFullName());
-            user.setGender(creationRequest.getGender());
-            user.setDateOfBirth(creationRequest.getDateOfBirth());
-            if (userRepository.existsByPhoneNumber(creationRequest.getPhoneNumber())) {
-                return ResponseEntity.ok("Phone number already exists");
-            }
-
-            if (userRepository.existsByIdentityCard(creationRequest.getIdentityCard())) {
-                return ResponseEntity.ok("Identity card already exists");
-            }
-
-            user.setPhoneNumber(creationRequest.getPhoneNumber());
-            user.setIdentityCard(creationRequest.getIdentityCard());
-            userRepository.save(user);
-            return ResponseEntity.ok("User account created successfully!!!");
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+        if (userRepository.existsByPhoneNumber(creationRequest.getPhoneNumber())) {
+            throw new RuntimeException("Phone number already exists");
         }
+
+        if (userRepository.existsByIdentityCard(creationRequest.getIdentityCard())) {
+            throw new RuntimeException("Idenity card already exists");
+        }
+
+        User user = userMapper.toUser(creationRequest);
+        user.setCreatedAt(LocalDateTime.now());
+        return userMapper.toUserResponse(userRepository.save(user));
     }
 }
