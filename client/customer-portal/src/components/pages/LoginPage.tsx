@@ -24,7 +24,7 @@ export default function LoginPage() {
 
             console.log("Login successfully:", response);
 
-            localStorage.setItem("accessToken", response.data.result.token);
+            localStorage.setItem("accessToken", (response as any).result.token);
             localStorage.setItem("username", username);
 
             // ĐỔI DÒNG NÀY: Dùng window.location.href để ép trang tải lại,
