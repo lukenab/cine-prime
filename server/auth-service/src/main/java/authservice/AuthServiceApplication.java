@@ -7,7 +7,7 @@ import org.springframework.cloud.openfeign.FeignClient;
 
 import java.util.TimeZone;
 
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {"authservice", "com.cineprime.common"})
 @EnableFeignClients
 public class AuthServiceApplication {
 

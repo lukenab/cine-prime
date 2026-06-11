@@ -7,31 +7,22 @@
     import authservice.dto.response.RegisterResponse;
     import authservice.entity.Account;
     import authservice.entity.Role;
-    import authservice.exception.AppException;
-    import authservice.exception.ErrorCode;
     import authservice.mapper.AccountMapper;
     import authservice.repository.AccountRepository;
     import authservice.repository.RoleRepository;
     import authservice.repository.UserProfileClient;
     import com.nimbusds.jose.*;
-    import com.nimbusds.jose.crypto.MACSigner;
-    import com.nimbusds.jwt.JWTClaimsSet;
     import jakarta.transaction.Transactional;
     import lombok.AccessLevel;
     import lombok.RequiredArgsConstructor;
     import lombok.experimental.FieldDefaults;
-    import lombok.experimental.NonFinal;
     import lombok.extern.slf4j.Slf4j;
-    import org.springframework.beans.factory.annotation.Value;
+    import movie.theater.common.exception.AppException;
+    import movie.theater.common.exception.ErrorCode;
     import org.springframework.security.crypto.password.PasswordEncoder;
     import org.springframework.stereotype.Service;
-    import org.springframework.util.CollectionUtils;
+    import movie.theater.common.exception.ErrorCode;
 
-    import java.nio.charset.StandardCharsets;
-    import java.time.Instant;
-    import java.time.temporal.ChronoUnit;
-    import java.util.Date;
-    import java.util.StringJoiner;
 
     @Service
     @RequiredArgsConstructor
@@ -43,20 +34,17 @@
         AccountMapper accountMapper;
         PasswordEncoder passwordEncoder;
         UserProfileClient userProfileClient;
-
-        @NonFinal
-        @Value("${jwt.signerKey}")
-        private String SIGNER_KEY;
+        JwtService jwtService;
 
         @Transactional
         public RegisterResponse registerAccount(RegisterRequest request){
 
             if(accountRepository.existsByUsername(request.getUsername())){
-                throw new RuntimeException("Username has already existed!");
+                throw new AppException(ErrorCode.USERNAME_EXISTED);
             }
 
             if(accountRepository.existsByEmail(request.getEmail())) {
-                throw new RuntimeException("Email has already existed!");
+                throw new AppException(ErrorCode.EMAIL_EXISTED);
             }
 
             Account account = accountMapper.toAccount(request);
@@ -64,10 +52,10 @@
             account.setStatus(1);
 
             Role accountRole = roleRepository.findByRoleName("ROLE_USER")
-                    .orElseThrow(() -> new RuntimeException("Default Role not found"));
+                    .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND));
             account.setRole(accountRole);
 
-            account = accountRepository.save(account);
+            account = accountRepository.saveAndFlush(account);
 
             UserCreationRequest userCreationRequest = UserCreationRequest.builder()
                     .accountId(account.getAccountId())
@@ -75,6 +63,8 @@
                     .phoneNumber(request.getPhoneNumber())
                     .address(request.getAddress())
                     .gender(request.getGender())
+                    .dateOfBirth(request.getDateOfBirth())
+                    .email(request.getEmail())
                     .identityCard(request.getIdentityCard())
                     .build();
 
@@ -92,44 +82,11 @@
             if(!authenticate){
                 throw new AppException(ErrorCode.UNAUTHENTICATED);
             }
-            var token = generateToken(account);
+            var token = jwtService.generateToken(account);
 
             return AuthenticationResponse.builder()
                     .authenticate(true)
                     .token(token)
                     .build();
-        }
-
-        public String generateToken(Account account){
-            JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
-
-            JWTClaimsSet claimsSet = new JWTClaimsSet.Builder()
-                    .subject(account.getUsername())
-                    .issueTime(new Date())
-                    .expirationTime(
-                            new Date(Instant.now().plus(1, ChronoUnit.HOURS).toEpochMilli())
-                    )
-                    .issuer("FPT.com")
-                    .claim("scope", buildScope(account))
-                    .build();
-
-            Payload payload = new Payload(claimsSet.toJSONObject());
-
-            JWSObject jwsObject = new JWSObject(header, payload);
-            try {
-                jwsObject.sign(new MACSigner(SIGNER_KEY.getBytes(StandardCharsets.UTF_8)));
-                return jwsObject.serialize();
-            } catch (JOSEException e) {
-                log.error("Fail to generate token", e);
-                throw new RuntimeException(e);
-            }
-        }
-
-        private String buildScope(Account account){
-            StringJoiner stringJoiner = new StringJoiner(" ");
-            if(account.getRole() != null){
-                stringJoiner.add(account.getRole().getRoleName());
-            }
-            return stringJoiner.toString();
         }
     }

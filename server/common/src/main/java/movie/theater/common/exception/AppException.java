@@ -1,4 +1,4 @@
-package authservice.exception;
+package movie.theater.common.exception;
 
 import lombok.Getter;
 import lombok.Setter;

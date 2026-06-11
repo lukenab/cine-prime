@@ -6,7 +6,7 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 
 import java.util.TimeZone;
 
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {"userservice", "com.cineprime.common"})
 @EnableDiscoveryClient
 public class UserServiceApplication {
 
