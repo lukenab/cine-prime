@@ -1,4 +1,4 @@
-package authservice.dto.response;
+package movie.theater.common.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.*;
