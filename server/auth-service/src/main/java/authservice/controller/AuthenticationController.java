@@ -2,13 +2,13 @@ package authservice.controller;
 
 import authservice.dto.request.AuthenticationRequest;
 import authservice.dto.request.RegisterRequest;
-import authservice.dto.response.ApiResponse;
 import authservice.dto.response.AuthenticationResponse;
 import authservice.dto.response.RegisterResponse;
 import authservice.service.AuthenticationService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import movie.theater.common.dto.ApiResponse;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
