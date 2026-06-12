@@ -1,10 +1,55 @@
 import { useState } from "react";
 import { Eye, EyeOff, Film } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import {authApi} from '../../api/authApi.ts'
+import { authApi } from "../../api/authApi.ts";
+import { jwtDecode } from "jwt-decode";
 
 const CINEMA_IMAGE =
   "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjaW5lbWElMjBtb3ZpZSUyMHRoZWF0ZXIlMjBkYXJrJTIwbW9vZHklMjBpbnRlcmlvcnxlbnwxfHx8fDE3ODA5MzEwMDJ8MA&ixlib=rb-4.1.0&q=80&w=1080";
+
+// Tách Logo thành component riêng để tái sử dụng cho cả giao diện Desktop (trái) và Mobile (phải)
+function ClickableLogo({ isMobile = false }: { isMobile?: boolean }) {
+  return (
+    <Link
+      to="/"
+      style={{
+        textDecoration: "none",
+        display: "flex",
+        alignItems: "center",
+        gap: isMobile ? "8px" : "10px",
+        cursor: "pointer",
+      }}
+    >
+      <div
+        style={{
+          width: isMobile ? "32px" : "36px",
+          height: isMobile ? "32px" : "36px",
+          background: "#FFD700",
+          borderRadius: "8px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: "transform 0.2s ease",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
+        onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+      >
+        <Film size={isMobile ? 16 : 20} color="#050505" strokeWidth={2.5} />
+      </div>
+      <span
+        style={{
+          color: "#ffffff",
+          fontSize: isMobile ? "18px" : "20px",
+          fontWeight: 800,
+          letterSpacing: "0.06em",
+          fontFamily: "Inter, sans-serif",
+        }}
+      >
+        CINE<span style={{ color: "#FFD700" }}>PRIME</span>
+      </span>
+    </Link>
+  );
+}
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -13,35 +58,40 @@ export default function LoginPage() {
 
   const navigate = useNavigate();
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-        try {
-            const response = await authApi.login({
-                username: username,
-                password: password
-            });
+    try {
+      const response = await authApi.login({
+        username: username,
+        password: password,
+      });
 
-            console.log("Login successfully:", response);
+      const token = (response as any).result.token;
 
-            localStorage.setItem("accessToken", (response as any).result.token);
-            localStorage.setItem("username", username);
+      console.log("Login successfully:", response);
 
-            // ĐỔI DÒNG NÀY: Dùng window.location.href để ép trang tải lại,
-            // giúp Navbar đọc lại dữ liệu mới nhất và hiện Avatar ngay lập tức.
-            window.location.href = "/";
+      localStorage.setItem("accessToken", token);
+      localStorage.setItem("username", username);
 
-        } catch (error) {
-            console.error("Login failed:", error);
-            alert("Incorrect username or password!");
-        }
+      const decodedToken: any = jwtDecode(token);
+      const userRole = decodedToken.role;
+
+      localStorage.setItem("role", userRole);
+
+      if (userRole === "ROLE_ADMIN" || userRole === "ADMIN") {
+        window.location.href = "/admin";
+      } else {
+        window.location.href = "/";
+      }
+    } catch (error) {
+      console.error("Login failed:", error);
+      alert("Incorrect username or password!");
+    }
   };
 
   return (
-    <div
-      className="min-h-screen w-full flex"
-      style={{ fontFamily: "'Inter', sans-serif", background: "#050505" }}
-    >
+    <div className="min-h-screen w-full flex" style={{ fontFamily: "'Inter', sans-serif", background: "#050505" }}>
       {/* Left panel — cinematic image */}
       <div className="hidden md:flex w-1/2 relative overflow-hidden flex-col">
         <img
@@ -53,30 +103,13 @@ export default function LoginPage() {
         <div
           className="absolute inset-0"
           style={{
-            background:
-              "linear-gradient(135deg, rgba(5,5,5,0.72) 0%, rgba(5,5,5,0.40) 60%, rgba(5,5,5,0.82) 100%)",
+            background: "linear-gradient(135deg, rgba(5,5,5,0.72) 0%, rgba(5,5,5,0.40) 60%, rgba(5,5,5,0.82) 100%)",
           }}
         />
         {/* Logo lockup on left panel */}
         <div className="relative z-10 flex flex-col justify-between h-full p-10">
-          <div className="flex items-center gap-3">
-            <div
-              className="flex items-center justify-center w-9 h-9 rounded-lg"
-              style={{ background: "#FFD700" }}
-            >
-              <Film size={18} color="#050505" strokeWidth={2.5} />
-            </div>
-            <span
-              className="tracking-widest uppercase"
-              style={{
-                color: "#FFD700",
-                fontSize: "14px",
-                fontWeight: 700,
-                letterSpacing: "0.2em",
-              }}
-            >
-              CinePrime
-            </span>
+          <div>
+            <ClickableLogo />
           </div>
 
           <div className="mb-4">
@@ -109,8 +142,7 @@ export default function LoginPage() {
                 letterSpacing: "-0.02em",
               }}
             >
-              Your world of cinema,{" "}
-              <span style={{ color: "#FFD700" }}>unlocked.</span>
+              Your world of cinema, <span style={{ color: "#FFD700" }}>unlocked.</span>
             </h1>
             <p
               style={{
@@ -120,8 +152,7 @@ export default function LoginPage() {
                 lineHeight: 1.65,
               }}
             >
-              Book seats, explore new releases, and manage your watchlist — all
-              in one place.
+              Book seats, explore new releases, and manage your watchlist — all in one place.
             </p>
           </div>
         </div>
@@ -142,31 +173,14 @@ export default function LoginPage() {
             width: "600px",
             height: "600px",
             borderRadius: "50%",
-            background:
-              "radial-gradient(circle, rgba(255,215,0,0.04) 0%, transparent 70%)",
+            background: "radial-gradient(circle, rgba(255,215,0,0.04) 0%, transparent 70%)",
           }}
         />
 
         <div className="relative z-10 w-full max-w-[400px]">
-          {/* Mobile logo */}
-          <div className="flex md:hidden items-center gap-3 mb-10">
-            <div
-              className="flex items-center justify-center w-8 h-8 rounded-lg"
-              style={{ background: "#FFD700" }}
-            >
-              <Film size={16} color="#050505" strokeWidth={2.5} />
-            </div>
-            <span
-              style={{
-                color: "#FFD700",
-                fontSize: "13px",
-                fontWeight: 700,
-                letterSpacing: "0.2em",
-                textTransform: "uppercase",
-              }}
-            >
-              CinePrime
-            </span>
+          {/* Mobile logo (Chỉ hiển thị trên màn hình nhỏ) */}
+          <div className="flex md:hidden mb-10">
+            <ClickableLogo isMobile={true} />
           </div>
 
           {/* Heading */}
@@ -183,9 +197,7 @@ export default function LoginPage() {
             >
               Welcome back
             </h2>
-            <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px" }}>
-              Sign in to continue to your account
-            </p>
+            <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px" }}>Sign in to continue to your account</p>
           </div>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
@@ -222,12 +234,8 @@ export default function LoginPage() {
                   width: "100%",
                   boxSizing: "border-box",
                 }}
-                onFocus={(e) =>
-                  (e.currentTarget.style.borderColor = "rgba(255,215,0,0.5)")
-                }
-                onBlur={(e) =>
-                  (e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)")
-                }
+                onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(255,215,0,0.5)")}
+                onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)")}
               />
             </div>
 
@@ -254,12 +262,8 @@ export default function LoginPage() {
                     fontWeight: 500,
                     textDecoration: "none",
                   }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.textDecoration = "underline")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.textDecoration = "none")
-                  }
+                  onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+                  onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
                 >
                   Forgot Password?
                 </a>
@@ -284,13 +288,8 @@ export default function LoginPage() {
                     width: "100%",
                     boxSizing: "border-box",
                   }}
-                  onFocus={(e) =>
-                    (e.currentTarget.style.borderColor = "rgba(255,215,0,0.5)")
-                  }
-                  onBlur={(e) =>
-                    (e.currentTarget.style.borderColor =
-                      "rgba(255,255,255,0.1)")
-                  }
+                  onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(255,215,0,0.5)")}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)")}
                 />
                 <button
                   type="button"
@@ -334,14 +333,12 @@ export default function LoginPage() {
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.filter = "brightness(1.08)";
-                e.currentTarget.style.boxShadow =
-                  "0 6px 40px rgba(255,215,0,0.36)";
+                e.currentTarget.style.boxShadow = "0 6px 40px rgba(255,215,0,0.36)";
                 e.currentTarget.style.transform = "translateY(-1px)";
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.filter = "brightness(1)";
-                e.currentTarget.style.boxShadow =
-                  "0 4px 32px rgba(255,215,0,0.22)";
+                e.currentTarget.style.boxShadow = "0 4px 32px rgba(255,215,0,0.22)";
                 e.currentTarget.style.transform = "translateY(0)";
               }}
               onMouseDown={(e) => {
@@ -356,49 +353,19 @@ export default function LoginPage() {
 
             {/* Divider */}
             <div className="flex items-center gap-3 my-1">
-              <div
-                style={{
-                  flex: 1,
-                  height: "1px",
-                  background: "rgba(255,255,255,0.08)",
-                }}
-              />
-              <span
-                style={{ color: "rgba(255,255,255,0.25)", fontSize: "12px" }}
-              >
-                or
-              </span>
-              <div
-                style={{
-                  flex: 1,
-                  height: "1px",
-                  background: "rgba(255,255,255,0.08)",
-                }}
-              />
+              <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.08)" }} />
+              <span style={{ color: "rgba(255,255,255,0.25)", fontSize: "12px" }}>or</span>
+              <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.08)" }} />
             </div>
 
             {/* Register link */}
-            <p
-              style={{
-                textAlign: "center",
-                color: "rgba(255,255,255,0.4)",
-                fontSize: "14px",
-              }}
-            >
+            <p style={{ textAlign: "center", color: "rgba(255,255,255,0.4)", fontSize: "14px" }}>
               Don't have an account?{" "}
               <Link
                 to="/register"
-                style={{
-                  color: "#FFD700",
-                  fontWeight: 600,
-                  textDecoration: "none",
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.textDecoration = "underline")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.textDecoration = "none")
-                }
+                style={{ color: "#FFD700", fontWeight: 600, textDecoration: "none" }}
+                onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+                onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
               >
                 Register now
               </Link>
@@ -408,31 +375,14 @@ export default function LoginPage() {
           {/* Footer */}
           <p
             className="mt-12"
-            style={{
-              textAlign: "center",
-              color: "rgba(255,255,255,0.18)",
-              fontSize: "11px",
-              lineHeight: 1.6,
-            }}
+            style={{ textAlign: "center", color: "rgba(255,255,255,0.18)", fontSize: "11px", lineHeight: 1.6 }}
           >
             By signing in, you agree to CinePrime's{" "}
-            <Link
-              to="/register"
-              style={{
-                color: "rgba(255,255,255,0.35)",
-                textDecoration: "underline",
-              }}
-            >
+            <Link to="/register" style={{ color: "rgba(255,255,255,0.35)", textDecoration: "underline" }}>
               Terms of Service
             </Link>{" "}
             and{" "}
-            <a
-              href="#"
-              style={{
-                color: "rgba(255,255,255,0.35)",
-                textDecoration: "underline",
-              }}
-            >
+            <a href="#" style={{ color: "rgba(255,255,255,0.35)", textDecoration: "underline" }}>
               Privacy Policy
             </a>
             .

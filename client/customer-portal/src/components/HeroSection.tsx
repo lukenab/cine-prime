@@ -1,43 +1,40 @@
 import { Ticket, Play, ChevronDown } from "lucide-react";
-
-const HERO_BG =
-  "https://images.unsplash.com/photo-1766425597359-08c8f7585ba4?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjaW5lbWElMjBtb3ZpZSUyMHRoZWF0ZXIlMjBkYXJrJTIwYXRtb3NwaGVyaWN8ZW58MXx8fHwxNzgwOTE5NTU2fDA&ixlib=rb-4.1.0&q=80&w=1080";
+import trailerVideo from "../assets/GattoTeaser.mp4";
 
 export function HeroSection() {
   return (
     <section className="relative w-full min-h-screen flex flex-col items-center justify-center overflow-hidden">
-      {/* Background image */}
-      <div
-        className="absolute inset-0 bg-cover bg-center"
-        style={{ backgroundImage: `url(${HERO_BG})` }}
-      />
+      {/* 1. Lớp chứa Video MP4 Native */}
+      <div className="absolute inset-0 w-full h-full z-0 overflow-hidden bg-black pointer-events-none">
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ opacity: 0.9 }}
+        >
+          <source src={trailerVideo} type="video/mp4" />
+        </video>
+      </div>
 
-      {/* Gradient overlays */}
+      {/* 2. Gradient overlays (Giảm mờ để video vẫn nổi bật) */}
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 z-10"
         style={{
-          background:
-            "linear-gradient(to bottom, rgba(5,5,5,0.55) 0%, rgba(5,5,5,0.2) 40%, rgba(5,5,5,0.7) 80%, rgba(5,5,5,1) 100%)",
+          background: "linear-gradient(to bottom, rgba(5,5,5,0.2) 0%, rgba(5,5,5,0.05) 40%, rgba(5,5,5,0.45) 80%, rgba(5,5,5,0.8) 100%)",
         }}
       />
-
-      {/* Side vignette */}
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 z-10"
         style={{
-          background:
-            "radial-gradient(ellipse at center, transparent 30%, rgba(5,5,5,0.6) 100%)",
+          background: "radial-gradient(ellipse at center, transparent 30%, rgba(5,5,5,0.45) 100%)",
         }}
       />
+      <div className="absolute top-0 left-0 right-0 h-[2px] z-10" style={{ background: "linear-gradient(90deg, transparent, #FFD700, transparent)" }} />
 
-      {/* Gold accent line top */}
-      <div
-        className="absolute top-0 left-0 right-0 h-[2px]"
-        style={{ background: "linear-gradient(90deg, transparent, #FFD700, transparent)" }}
-      />
-
-      {/* Content */}
-      <div className="relative z-10 flex flex-col items-center text-center px-6 max-w-5xl mx-auto" style={{ gap: "24px" }}>
+      {/* 3. Nội dung chữ bên trên (z-20 để luôn đè lên video) */}
+      <div className="relative z-20 flex flex-col items-center text-center px-6 max-w-5xl mx-auto" style={{ gap: "24px" }}>
         {/* Badge */}
         <div
           className="flex items-center gap-2 px-4 py-1.5 rounded-full border"
@@ -47,13 +44,8 @@ export function HeroSection() {
             backdropFilter: "blur(8px)",
           }}
         >
-          <span
-            className="inline-block w-2 h-2 rounded-full animate-pulse"
-            style={{ backgroundColor: "#FFD700" }}
-          />
-          <span style={{ color: "#FFD700", fontSize: "0.75rem", letterSpacing: "0.15em", fontWeight: 600 }}>
-            NOW SHOWING IN THEATRES
-          </span>
+          <span className="inline-block w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: "#FFD700" }} />
+          <span style={{ color: "#FFD700", fontSize: "0.75rem", letterSpacing: "0.15em", fontWeight: 600 }}>NOW SHOWING IN THEATRES</span>
         </div>
 
         {/* Main headline */}
@@ -84,10 +76,11 @@ export function HeroSection() {
         {/* Subheading */}
         <p
           style={{
-            color: "rgba(255,255,255,0.65)",
+            color: "rgba(255,255,255,0.8)",
             fontSize: "clamp(1rem, 2vw, 1.25rem)",
             maxWidth: "600px",
             lineHeight: 1.7,
+            textShadow: "0 2px 10px rgba(0,0,0,0.5)",
           }}
         >
           Premium screens. Dolby Atmos sound. Reclining seats. Your next cinematic adventure starts here.
@@ -142,25 +135,17 @@ export function HeroSection() {
             { value: "Dolby", label: "Atmos Sound" },
           ].map(({ value, label }) => (
             <div key={label} className="flex flex-col items-center gap-1">
-              <span
-                style={{ color: "#FFD700", fontSize: "1.5rem", fontWeight: 800, lineHeight: 1 }}
-              >
-                {value}
-              </span>
-              <span style={{ color: "rgba(255,255,255,0.45)", fontSize: "0.75rem", letterSpacing: "0.1em" }}>
-                {label}
-              </span>
+              <span style={{ color: "#FFD700", fontSize: "1.5rem", fontWeight: 800, lineHeight: 1 }}>{value}</span>
+              <span style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.75rem", letterSpacing: "0.1em" }}>{label}</span>
             </div>
           ))}
         </div>
       </div>
 
       {/* Scroll indicator */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 animate-bounce">
-        <span style={{ color: "rgba(255,255,255,0.3)", fontSize: "0.65rem", letterSpacing: "0.15em" }}>
-          SCROLL
-        </span>
-        <ChevronDown size={16} style={{ color: "rgba(255,255,255,0.3)" }} />
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 animate-bounce z-10">
+        <span style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.65rem", letterSpacing: "0.15em" }}>SCROLL</span>
+        <ChevronDown size={16} style={{ color: "rgba(255,255,255,0.5)" }} />
       </div>
     </section>
   );

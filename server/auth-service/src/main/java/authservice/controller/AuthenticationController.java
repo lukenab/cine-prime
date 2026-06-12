@@ -2,6 +2,7 @@ package authservice.controller;
 
 import authservice.dto.request.AuthenticationRequest;
 import authservice.dto.request.RegisterRequest;
+import authservice.dto.request.VerifyOtpRequest;
 import authservice.dto.response.AuthenticationResponse;
 import authservice.dto.response.RegisterResponse;
 import authservice.service.AuthenticationService;
@@ -18,10 +19,18 @@ import org.springframework.web.bind.annotation.*;
 public class AuthenticationController {
     AuthenticationService authenticationService;
 
-    @PostMapping("/register")
-    ApiResponse<RegisterResponse> registerAccount(@RequestBody RegisterRequest request){
+    @PostMapping("/register/initiate")
+    ApiResponse<String> initiateRegistration(@RequestBody RegisterRequest request){
+        authenticationService.initiateRegistration(request);
+        return ApiResponse.<String>builder()
+                .result("OTP has been sent to your email")
+                .build();
+    }
+
+    @PostMapping("/register/verify")
+    ApiResponse<RegisterResponse> verifyAndRegister(@RequestBody VerifyOtpRequest request){
         return ApiResponse.<RegisterResponse>builder()
-                .result(authenticationService.registerAccount(request))
+                .result(authenticationService.verifyOtpAndRegister(request))
                 .build();
     }
 
