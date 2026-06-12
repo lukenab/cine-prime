@@ -23,8 +23,8 @@ public enum ErrorCode {
     // User-Service Errors
     PHONE_EXISTED(2001, "Phone number already exists!"),
     IDENTITY_CARD_EXISTED(2002, "Identity card already exists!"),
-    USER_NOT_FOUND(2003, "User profile not found!")
-    ;
+    USER_NOT_FOUND(2003, "User profile not found!"),
+    INVALID_OTP(2004, "Otp invalid");
 
     int code;
     String message;

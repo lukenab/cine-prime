@@ -10,7 +10,11 @@ export const authApi = {
         return axiosClient.post('api/auth/login', data);
     },
 
-    register: (data: any) => {
-        return axiosClient.post('api/auth/register', data);
-    }
+    initiateRegister: (payload: any) => {
+    return axiosClient.post('/api/auth/register/initiate', payload);
+  },
+
+  verifyRegister: (payload: { otp: string, registerRequest: any }) => {
+    return axiosClient.post('/api/auth/register/verify', payload);
+  }
 }

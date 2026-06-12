@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
+import movie.theater.common.exception.AppException;
+import movie.theater.common.exception.ErrorCode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -34,10 +36,12 @@ public class JwtService {
                 .subject(account.getUsername())
                 .issueTime(new Date())
                 .expirationTime(
-                        new Date(Instant.now().plus(1, ChronoUnit.HOURS).toEpochMilli())
+                        new Date(Instant.now().plus(30, ChronoUnit.MINUTES).toEpochMilli())
                 )
-                .issuer("FPT.com")
+                .issuer("cineprime.com")
+                .claim("accountId", account.getAccountId())
                 .claim("scope", buildScope(account))
+                .claim("role", buildScope(account))
                 .build();
 
         Payload payload = new Payload(claimsSet.toJSONObject());
@@ -48,7 +52,7 @@ public class JwtService {
             return jwsObject.serialize();
         } catch (JOSEException e) {
             log.error("Fail to generate token", e);
-            throw new RuntimeException(e);
+            throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
         }
     }
 

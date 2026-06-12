@@ -107,9 +107,7 @@ export function NowShowing() {
               >
                 Now Showing
               </h2>
-              <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.8rem" }}>
-                {NOW_SHOWING.length} movies available this week
-              </p>
+              <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.8rem" }}>{NOW_SHOWING.length} movies available this week</p>
             </div>
           </div>
 
