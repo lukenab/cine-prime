@@ -1,19 +1,10 @@
 services:
   # ===== FRONTEND =====
-  admin-dashboard:
-    build: ./client/admin-dashboard
-    container_name: admin-dashboard
+  client:
+    build: ./client
+    container_name: cineprime-client
     ports:
-      - "3000:3000"
-    tty: true
-    networks:
-      - cinema-network
-
-  customer-portal:
-    build: ./client/customer-portal
-    container_name: customer-portal
-    ports:
-      - "3001:3000"
+      - "3000:3000" 
     tty: true
     networks:
       - cinema-network
@@ -118,7 +109,6 @@ services:
   promotion-service:
     build: ./server/promotion-service
     container_name: promotion-service
-    restart: on-failure
     ports:
       - "8086:8086"
     environment:
