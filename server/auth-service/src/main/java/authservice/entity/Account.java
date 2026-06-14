@@ -7,6 +7,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 
 @Entity
 @Table(name = "account")
@@ -31,9 +32,11 @@ public class Account {
     @Column(name = "password_hash", nullable = false, length = 255)
     String passwordHash;
 
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "role_id", referencedColumnName = "role_id")
-    Role role;
+//    @ManyToOne(fetch = FetchType.EAGER)
+//    @JoinColumn(name = "role_id", referencedColumnName = "role_id")
+//    Role role;
+
+    Set<String> roles;
 
     @Column(name = "status", columnDefinition = "integer default 1")
     Integer status;

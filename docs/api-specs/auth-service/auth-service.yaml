@@ -1,0 +1,265 @@
+openapi: 3.0.1
+info:
+  title: CinePrime Auth Service API
+  description: OpenAPI specification for the CinePrime authentication service. This document defines the endpoints for user registration, OTP verification, and login.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: Local Development Server
+tags:
+  - name: Authentication
+    description: Endpoints for user registration and authentication
+paths:
+  /api/auth/register/initiate:
+    post:
+      tags:
+        - Authentication
+      summary: Initiate registration by sending OTP
+      description: Validates the registration payload and sends a 6-digit OTP to the user's email if the username and email are available.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: OTP successfully sent to email
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseString'
+        '400':
+          description: Bad Request - Username or Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              examples:
+                UsernameExisted:
+                  summary: "Error 1010: Username Existed"
+                  value:
+                    code: 1010
+                    message: "Username already exists!"
+                EmailExisted:
+                  summary: "Error 1011: Email Existed"
+                  value:
+                    code: 1011
+                    message: "Email already exists!"
+
+  /api/auth/register/verify:
+    post:
+      tags:
+        - Authentication
+      summary: Verify OTP and register user
+      description: Verifies OTP and creates the account. Note that this API communicates with `user-service` to create the profile, so it may throw validation errors from `user-service` (e.g., Phone or ID Card existed).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyOtpRequest'
+      responses:
+        '200':
+          description: User successfully registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseRegisterResponse'
+        '400':
+          description: Bad Request - Validation failures from Auth Service or User Service
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              examples:
+                InvalidOtp:
+                  summary: "Error 1013: Invalid OTP"
+                  value:
+                    code: 1013
+                    message: "Otp invalid"
+                RoleNotFound:
+                  summary: "Error 1012: Role Not Found"
+                  value:
+                    code: 1012
+                    message: "Default role not found!"
+                PhoneExisted:
+                  summary: "Error 2001: Phone Existed (From User Service)"
+                  value:
+                    code: 2001
+                    message: "Phone number already exists!"
+                IdentityCardExisted:
+                  summary: "Error 2002: Identity Card Existed (From User Service)"
+                  value:
+                    code: 2002
+                    message: "Identity card already exists!"
+
+  /api/auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Authenticate user and return token
+      description: Authenticates the user using username and password. Returns a JWT token upon successful authentication.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthenticationRequest'
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseAuthenticationResponse'
+        '401':
+          description: Unauthorized - Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              examples:
+                Unauthenticated:
+                  summary: "Error 1008: Unauthenticated"
+                  value:
+                    code: 1008
+                    message: "Unauthenticated"
+
+components:
+  schemas:
+    # --- REQUEST SCHEMAS ---
+    RegisterRequest:
+      type: object
+      required: [username, password, email]
+      properties:
+        username:
+          type: string
+          example: "john_doe"
+        password:
+          type: string
+          format: password
+          example: "Password123@"
+        email:
+          type: string
+          format: email
+          example: "johndoe@example.com"
+        fullName:
+          type: string
+          example: "John Doe"
+        phoneNumber:
+          type: string
+          example: "0123456789"
+        dateOfBirth:
+          type: string
+          format: date
+          example: "1995-10-15"
+        gender:
+          type: string
+          example: "MALE"
+        address:
+          type: string
+          example: "123 Main Street, Tech City"
+        identityCard:
+          type: string
+          example: "079012345678"
+
+    VerifyOtpRequest:
+      type: object
+      required: [otp, registerRequest]
+      properties:
+        otp:
+          type: string
+          example: "654321"
+        registerRequest:
+          $ref: '#/components/schemas/RegisterRequest'
+
+    AuthenticationRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: "john_doe"
+        password:
+          type: string
+          format: password
+          example: "Password123@"
+
+    # --- CORE RESPONSE SCHEMAS ---
+    AuthenticationResponse:
+      type: object
+      properties:
+        authenticate:
+          type: boolean
+          example: true
+        token:
+          type: string
+          nullable: true
+          example: "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJqb2huX2RvZSIsImlzcyI6ImNpbmVwcmltZSJ9..."
+
+    RegisterResponse:
+      type: object
+      properties:
+        accountId:
+          type: string
+          example: "acc-uuid-1234-5678"
+        username:
+          type: string
+          example: "john_doe"
+        email:
+          type: string
+          example: "johndoe@example.com"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-06-14T15:00:00Z"
+
+    # --- WRAPPER RESPONSES (API RESPONSE STANDARD) ---
+    ApiResponseString:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 1000
+        message:
+          type: string
+          example: "Success"
+        result:
+          type: string
+          example: "OTP has been sent to your email"
+
+    ApiResponseRegisterResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 1000
+        message:
+          type: string
+          example: "Success"
+        result:
+          $ref: '#/components/schemas/RegisterResponse'
+
+    ApiResponseAuthenticationResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 1000
+        message:
+          type: string
+          example: "Success"
+        result:
+          $ref: '#/components/schemas/AuthenticationResponse'
+
+    # --- ERROR RESPONSE SCHEMA ---
+    ApiErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 1003
+        message:
+          type: string
+          example: "Uncategorized error!"
