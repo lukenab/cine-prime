@@ -24,7 +24,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import movieservice.exception.ResponseWrapper;
 import movieservice.service.MovieService;
+import movieservice.dto.request.CinemaRoomRequest;
 import movieservice.dto.request.CreateMovieRequest;
+import movieservice.dto.request.TypeRequest;
 import movieservice.dto.response.MovieResponse;
 
 import org.springframework.web.bind.annotation.PostMapping;
@@ -41,66 +43,69 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Tag(name = "Movie Controller", description = "APIs for managing movies in the Cinema system")
-@ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Thành công (OK)"),
-        @ApiResponse(responseCode = "400", description = "Dữ liệu yêu cầu không hợp lệ (Bad Request)"),
-        @ApiResponse(responseCode = "404", description = "Không tìm thấy tài nguyên (Not Found)"),
-        @ApiResponse(responseCode = "405", description = "Phương thức không được cho phép (Method Not Allowed)"),
-        @ApiResponse(responseCode = "409", description = "Xung đột dữ liệu (Conflict)"),
-        @ApiResponse(responseCode = "429", description = "Quá nhiều yêu cầu (Too Many Requests)"),
-        @ApiResponse(responseCode = "500", description = "Lỗi máy chủ nội bộ (Internal Server Error)"),
-        @ApiResponse(responseCode = "502", description = "Lỗi cổng kết nối (Bad Gateway)"),
-        @ApiResponse(responseCode = "503", description = "Dịch vụ không khả dụng (Service Unavailable)")
-})
 public class MovieController {
     private MovieService movieService;
 
     @Operation(summary = "Tạo phim mới", description = "API tạo phim và lịch chiếu")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Tạo movie thành công", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"200\", \"message\": \"Tạo movie thành công\", \"status\": \"OK\", \"data\": null}"))),
-            @ApiResponse(responseCode = "400", description = "Dữ liệu yêu cầu không hợp lệ", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"400\", \"message\": \"Tên phim tiếng Việt không được để trống; Đạo diễn không được để trống\", \"status\": \"BAD_REQUEST\", \"data\": null}"))),
-            @ApiResponse(responseCode = "404", description = "Không tìm thấy tài nguyên", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"404\", \"message\": \"Không tìm thấy thể loại với ID: 999\", \"status\": \"NOT_FOUND\", \"data\": null}"))),
-            @ApiResponse(responseCode = "405", description = "Phương thức không được cho phép", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"405\", \"message\": \"Phương thức GET không được hỗ trợ\", \"status\": \"METHOD_NOT_ALLOWED\", \"data\": null}"))),
-            @ApiResponse(responseCode = "409", description = "Xung đột dữ liệu", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"409\", \"message\": \"Phòng 1 đã có lịch chiếu khác trong khoảng 10:00 -> 12:00 vào ngày 15-06-2026\", \"status\": \"CONFLICT\", \"data\": null}"))),
-            @ApiResponse(responseCode = "429", description = "Quá nhiều yêu cầu", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"429\", \"message\": \"Quá nhiều yêu cầu. Vui lòng thử lại sau 60 giây\", \"status\": \"TOO_MANY_REQUESTS\", \"data\": null}"))),
-            @ApiResponse(responseCode = "500", description = "Lỗi máy chủ nội bộ", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"500\", \"message\": \"Lỗi database: connection timeout\", \"status\": \"INTERNAL_SERVER_ERROR\", \"data\": null}"))),
-            @ApiResponse(responseCode = "502", description = "Lỗi cổng kết nối", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"502\", \"message\": \"Service khác không phản hồi\", \"status\": \"BAD_GATEWAY\", \"data\": null}"))),
-            @ApiResponse(responseCode = "503", description = "Dịch vụ không khả dụng", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"503\", \"message\": \"Dịch vụ đang bảo trì\", \"status\": \"SERVICE_UNAVAILABLE\", \"data\": null}")))
+            @ApiResponse(responseCode = "200", description = "Tạo movie thành công", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"200\", \"message\": \"Tạo movie thành công\", \"status\": \"OK\"}"))),
+            @ApiResponse(responseCode = "400", description = "Dữ liệu yêu cầu không hợp lệ", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"400\", \"message\": \"Tên phim tiếng Việt không được để trống; Đạo diễn không được để trống\", \"status\": \"BAD_REQUEST\"}"))),
+            @ApiResponse(responseCode = "404", description = "Không tìm thấy tài nguyên", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"404\", \"message\": \"Không tìm thấy thể loại với ID\", \"status\": \"NOT_FOUND\"}"))),
+            @ApiResponse(responseCode = "900", description = "Dữ liệu yêu cầu không hợp lệ", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"900\", \"message\": \"Giờ chiếu không hợp lệ! Rạp chỉ hoạt động trong khoảng từ 8h đến 23h\", \"status\": \"INTERNAL_SERVER_ERROR\"}"))),
+            @ApiResponse(responseCode = "901", description = "Xung đột dữ liệu", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"901\", \"message\": \"Lỗi có lịch phim đã tồn tại trong phòng\", \"status\": \"CONFLICT\"}"))),
+            @ApiResponse(responseCode = "902", description = "Dữ liệu yêu cầu không hợp lệ", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"902\", \"message\": \"Ngày chiếu không hợp lệ! Chỉ được đăng ký lịch chiếu tối thiểu 3 ngày sau tính từ hôm nay.\", \"status\": \"INTERNAL_SERVER_ERROR\"}"))),
+            @ApiResponse(responseCode = "903", description = "Lỗi có lịch phim đã tồn tại", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"903\", \"message\": \"Phòng đã có lịch chiếu khác.\", \"status\": \"INTERNAL_SERVER_ERROR\"}"))),
+            @ApiResponse(responseCode = "904", description = "Không tìm thấy tài nguyên", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"904\", \"message\": \"Phòng không tồn tại.\", \"status\": \"INTERNAL_SERVER_ERROR\"}")))
     })
     @PostMapping("/create")
-    public ResponseEntity<?> createMovie(@Valid @RequestBody CreateMovieRequest createMovieRequest) {
+    public movieservice.dto.response.ApiResponse<?> createMovie(
+            @Valid @RequestBody CreateMovieRequest createMovieRequest) {
         return movieService.createMovie(createMovieRequest);
     }
 
     @Operation(summary = "Lấy phim theo ID", description = "Trả về đối tượng Movie nếu tồn tại")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "OK", content = @Content(mediaType = "application/json", schema = @Schema(implementation = movieservice.exception.ResponseWrapper.class), examples = @ExampleObject(value = "{\"code\": \"200\", \"message\": \"Lấy movie thành công\", \"status\": \"OK\", \"data\": {\"movieId\": 1, \"movieNameVn\": \"One Piece Film Red\", \"movieNameEnglish\": \"One Piece Film Red\", \"director\": \"Goro Taniguchi\", \"actor\": \"Luffy, Uta\", \"duration\": 115, \"content\": \"Câu chuyện...\", \"version\": \"2D\", \"status\": true}}"))),
-            @ApiResponse(responseCode = "400", description = "Dữ liệu yêu cầu không hợp lệ", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"400\", \"message\": \"ID phim không hợp lệ\", \"status\": \"BAD_REQUEST\", \"data\": null}"))),
-            @ApiResponse(responseCode = "404", description = "Không tìm thấy tài nguyên", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"404\", \"message\": \"Không tìm thấy phim với ID: 999\", \"status\": \"NOT_FOUND\", \"data\": null}"))),
-            @ApiResponse(responseCode = "405", description = "Phương thức không được cho phép", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"405\", \"message\": \"Phương thức POST không được hỗ trợ\", \"status\": \"METHOD_NOT_ALLOWED\", \"data\": null}"))),
-            @ApiResponse(responseCode = "409", description = "Xung đột dữ liệu", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"409\", \"message\": \"Phòng chiếu đã có lịch chiếu khác\", \"status\": \"CONFLICT\", \"data\": null}"))),
-            @ApiResponse(responseCode = "429", description = "Quá nhiều yêu cầu", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"429\", \"message\": \"Quá nhiều yêu cầu. Vui lòng thử lại sau 60 giây\", \"status\": \"TOO_MANY_REQUESTS\", \"data\": null}"))),
-            @ApiResponse(responseCode = "500", description = "Lỗi máy chủ nội bộ", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"500\", \"message\": \"Lỗi database: connection timeout\", \"status\": \"INTERNAL_SERVER_ERROR\", \"data\": null}"))),
-            @ApiResponse(responseCode = "502", description = "Lỗi cổng kết nối", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"502\", \"message\": \"Service khác không phản hồi\", \"status\": \"BAD_GATEWAY\", \"data\": null}"))),
-            @ApiResponse(responseCode = "503", description = "Dịch vụ không khả dụng", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"503\", \"message\": \"Dịch vụ đang bảo trì\", \"status\": \"SERVICE_UNAVAILABLE\", \"data\": null}")))
+            @ApiResponse(responseCode = "400", description = "Dữ liệu yêu cầu không hợp lệ", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"400\", \"message\": \"lỗi dữ liệu không hợp lệ\", \"status\": \"BAD_REQUEST\"}"))),
+            @ApiResponse(responseCode = "404", description = "Không tìm thấy tài nguyên", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"404\", \"message\": \"Không tìm thầy movie phù hợp\", \"status\": \"NOT_FOUND\"}")))
     })
     @GetMapping("/find/{id}")
-    public ResponseEntity<?> getMethodName(@PathVariable("id") Long movieId) {
+    public movieservice.dto.response.ApiResponse<?> getMethodName(@PathVariable("id") String movieId) {
         return movieService.getMovie(movieId);
     }
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ResponseWrapper<?>> handleValidation(MethodArgumentNotValidException ex) {
-        String errors = ex.getBindingResult().getFieldErrors().stream()
-                .map(FieldError::getDefaultMessage)
-                .collect(Collectors.joining("; "));
-        ResponseWrapper<?> body = new ResponseWrapper<>("400", errors, "BAD_REQUEST");
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    @Operation(summary = "Lấy tất cả phim", description = "Trả về danh sách Movie nếu tồn tại")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "OK", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\":200,\"message\":\"Lấy danh sách phim thành công\",\"result\":[{\"movieId\":1,\"actor\":\"Robert Downey Jr., Chris Evans, Scarlett Johansson\",\"content\":\"Sau sự kiện Infinity War, các siêu anh hùng còn sống sót tìm cách đảo ngược hậu quả do Thanos gây ra.\",\"director\":\"Anthony Russo, Joe Russo\",\"duration\":181,\"movieProductionCompany\":\"Marvel Studios\",\"version\":\"2D\",\"movieNameEnglish\":\"Avengers: Endgame\",\"movieNameVn\":\"Avengers: Hồi Kết\",\"largeImage\":\"https://example.com/images/avengers-large.jpg\",\"smallImage\":\"https://example.com/images/avengers-small.jpg\",\"status\":true,\"movieConnects\":[\"Hành động\"],\"showTimes\":[{\"showTimeId\":1,\"showDate\":\"2026-11-30\",\"startTime\":\"08:00:00\",\"endTime\":\"11:01:00\",\"updateAt\":null},{\"showTimeId\":2,\"showDate\":\"2026-10-30\",\"startTime\":\"08:00:00\",\"endTime\":\"11:01:00\",\"updateAt\":null}],\"createAt\":\"2026-06-15T02:51:46.966967\"}]}"))),
+            @ApiResponse(responseCode = "404", description = "Không tìm thấy tài nguyên", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"404\", \"message\": \"Không tìm thầy movie phù hợp\", \"status\": \"NOT_FOUND\"}")))
+    })
+    @GetMapping("/find-all")
+    public ResponseEntity<movieservice.dto.response.ApiResponse<List<MovieResponse>>> getAllMovies() {
+        return movieService.findAll();
     }
 
-    @GetMapping("/find-all")
-    public ResponseEntity<List<MovieResponse>> getAllMovies() {
-        return ResponseEntity.ok(movieService.findAll());
+    @Operation(summary = "Tạo room cinema", description = "Trả về trạng thái thành công")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Tạo room cinema", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"200\", \"message\": \"Tạo Room Cinema thành công\", \"status\": \"OK\"}"))),
+            @ApiResponse(responseCode = "409", description = "Xung đột dữ liệu", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"409\", \"message\": \"Tên phòng đã tồn tại!!!\", \"status\": \"CONFLICT\"}")))
+    })
+    @PostMapping("/create-room")
+    public ResponseEntity<movieservice.dto.response.ApiResponse<?>> createTypeRoom(
+            @RequestBody CinemaRoomRequest cinemaRoomRequest) {
+        return movieService.createCinemaRoom(cinemaRoomRequest);
+
+    }
+
+    @Operation(summary = "Tạo loại phim", description = "Trả về trạng thái thành công")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Tạo loại phim", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"200\", \"message\": \"Tạo loại phim thành công\", \"status\": \"OK\"}"))),
+            @ApiResponse(responseCode = "409", description = "Xung đột dữ liệu", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\"code\": \"409\", \"message\": \"Tên loại phim đã tồn tại!!!\", \"status\": \"CONFLICT\"}")))
+    })
+    @PostMapping("/create-type")
+    public ResponseEntity<movieservice.dto.response.ApiResponse<?>> createTypeMovie(
+            @RequestBody TypeRequest typeRequest) {
+        return movieService.createTypeMovie(typeRequest);
+
     }
 
 }

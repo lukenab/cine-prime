@@ -82,7 +82,7 @@ public class Movie {
         @OneToMany(mappedBy = "movie", fetch = FetchType.LAZY)
         @JsonManagedReference
         @Schema(description = "Danh sách thể loại phim")
-        private List<MovieType> movieTypes;
+        private List<MovieConnect> movieConnects;
 
         @OneToMany(mappedBy = "movie", fetch = FetchType.LAZY)
         @JsonManagedReference

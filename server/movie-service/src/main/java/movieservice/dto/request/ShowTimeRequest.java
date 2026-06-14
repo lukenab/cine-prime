@@ -11,7 +11,6 @@ import java.time.LocalTime;
 public class ShowTimeRequest {
 
     @NotNull(message = "Ngày chiếu không được để trống")
-    @FutureOrPresent(message = "Ngày chiếu phải từ hôm nay trở đi")
     private LocalDate showDate;
 
     @NotNull(message = "Giờ bắt đầu không được để trống")

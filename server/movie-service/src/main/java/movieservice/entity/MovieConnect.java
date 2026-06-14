@@ -17,7 +17,7 @@ import lombok.Setter;
 @Setter
 @Entity
 @Table(name = "movie_type")
-public class MovieType {
+public class MovieConnect {
 
     @EmbeddedId
     private MovieTypeId id = new MovieTypeId();
@@ -32,5 +32,5 @@ public class MovieType {
     @MapsId("typeId")
     @JoinColumn(name = "type_id")
     @JsonBackReference
-    private Type type;
+    private TypeMovie type;
 }
