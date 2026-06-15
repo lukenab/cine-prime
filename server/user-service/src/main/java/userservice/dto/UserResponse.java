@@ -23,6 +23,9 @@ public class UserResponse {
     String gender;
     String address;
     String identityCard;
+    String email;
     String avatarUrl;
     LocalDateTime createdAt;
+    LocalDateTime updatedAt;
+    Boolean isActive;
 }

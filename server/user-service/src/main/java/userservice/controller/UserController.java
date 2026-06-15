@@ -1,14 +1,12 @@
 package userservice.controller;
 
 import movie.theater.common.dto.ApiResponse;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
 import userservice.dto.UserCreationRequest;
 import userservice.dto.UserResponse;
+import userservice.dto.UserUpdateRequest;
 import userservice.service.UserService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -25,5 +23,27 @@ public class UserController {
         return ApiResponse.<UserResponse>builder()
         .result(userService.create(request))
         .build();
+    }
+
+    @GetMapping("/{id}")
+    public ApiResponse<UserResponse> getUserById(@PathVariable String id){
+        return ApiResponse.<UserResponse>builder()
+                .result(userService.getUserById(id))
+                .build();
+    }
+
+    @PutMapping("/{id}")
+    public ApiResponse<UserResponse> updateUser(@PathVariable String id, @Valid @RequestBody UserUpdateRequest request){
+        return ApiResponse.<UserResponse>builder()
+                .result(userService.updateUser(id, request))
+                .build();
+    }
+
+    @DeleteMapping("/{id}")
+    public ApiResponse<UserResponse> deleteUser(@PathVariable String id){
+        userService.softDeleteUser(id);
+        return ApiResponse.<UserResponse>builder()
+                .message("User has been deleted")
+                .build();
     }
 }

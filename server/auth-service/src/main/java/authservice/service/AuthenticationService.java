@@ -1,135 +1,130 @@
-    package authservice.service;
+package authservice.service;
 
-    import authservice.dto.request.AuthenticationRequest;
-    import authservice.dto.request.RegisterRequest;
-    import authservice.dto.request.UserCreationRequest;
-    import authservice.dto.response.AuthenticationResponse;
-    import authservice.dto.response.RegisterResponse;
-    import authservice.entity.Account;
-    import authservice.entity.Role;
-    import authservice.exception.AppException;
-    import authservice.exception.ErrorCode;
-    import authservice.mapper.AccountMapper;
-    import authservice.repository.AccountRepository;
-    import authservice.repository.RoleRepository;
-    import authservice.repository.UserProfileClient;
-    import com.nimbusds.jose.*;
-    import com.nimbusds.jose.crypto.MACSigner;
-    import com.nimbusds.jwt.JWTClaimsSet;
-    import jakarta.transaction.Transactional;
-    import lombok.AccessLevel;
-    import lombok.RequiredArgsConstructor;
-    import lombok.experimental.FieldDefaults;
-    import lombok.experimental.NonFinal;
-    import lombok.extern.slf4j.Slf4j;
-    import org.springframework.beans.factory.annotation.Value;
-    import org.springframework.security.crypto.password.PasswordEncoder;
-    import org.springframework.stereotype.Service;
-    import org.springframework.util.CollectionUtils;
+import authservice.dto.request.AuthenticationRequest;
+import authservice.dto.request.RegisterRequest;
+import authservice.dto.request.UserCreationRequest;
+import authservice.dto.request.VerifyOtpRequest;
+import authservice.dto.response.AuthenticationResponse;
+import authservice.dto.response.RegisterResponse;
+import authservice.entity.Account;
+//import authservice.entity.Role;
+import authservice.enums.Role;
+import authservice.mapper.AccountMapper;
+import authservice.repository.AccountRepository;
+import authservice.repository.RoleRepository;
+import authservice.repository.UserProfileClient;
+import jakarta.transaction.Transactional;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
+import movie.theater.common.exception.AppException;
+import movie.theater.common.exception.GlobalErrorCode;
+import authservice.exception.AuthErrorCode;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
 
-    import java.nio.charset.StandardCharsets;
-    import java.time.Instant;
-    import java.time.temporal.ChronoUnit;
-    import java.util.Date;
-    import java.util.StringJoiner;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
-    @Service
-    @RequiredArgsConstructor
-    @Slf4j
-    @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-    public class AuthenticationService {
-        AccountRepository accountRepository;
-        RoleRepository roleRepository;
-        AccountMapper accountMapper;
-        PasswordEncoder passwordEncoder;
-        UserProfileClient userProfileClient;
+@Service
+@RequiredArgsConstructor
+@Slf4j
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+public class AuthenticationService {
+    AccountRepository accountRepository;
+    RoleRepository roleRepository;
+    AccountMapper accountMapper;
+    PasswordEncoder passwordEncoder;
+    UserProfileClient userProfileClient;
+    JwtService jwtService;
+    EmailService emailService;
 
-        @NonFinal
-        @Value("${jwt.signerKey}")
-        private String SIGNER_KEY;
+    RedisTemplate<String, String> redisTemplate;
 
-        @Transactional
-        public RegisterResponse registerAccount(RegisterRequest request){
-
-            if(accountRepository.existsByUsername(request.getUsername())){
-                throw new RuntimeException("Username has already existed!");
-            }
-
-            if(accountRepository.existsByEmail(request.getEmail())) {
-                throw new RuntimeException("Email has already existed!");
-            }
-
-            Account account = accountMapper.toAccount(request);
-            account.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-            account.setStatus(1);
-
-            Role accountRole = roleRepository.findByRoleName("ROLE_USER")
-                    .orElseThrow(() -> new RuntimeException("Default Role not found"));
-            account.setRole(accountRole);
-
-            account = accountRepository.save(account);
-
-            UserCreationRequest userCreationRequest = UserCreationRequest.builder()
-                    .accountId(account.getAccountId())
-                    .fullName(request.getFullName())
-                    .phoneNumber(request.getPhoneNumber())
-                    .address(request.getAddress())
-                    .gender(request.getGender())
-                    .identityCard(request.getIdentityCard())
-                    .build();
-
-            userProfileClient.createProfile(userCreationRequest);
-
-            return accountMapper.toRegisterResponse(account);
+    public void initiateRegistration(RegisterRequest request) {
+        if (accountRepository.existsByUsername(request.getUsername())) {
+            throw new AppException(AuthErrorCode.USERNAME_EXISTED);
+        }
+        if (accountRepository.existsByEmail(request.getEmail())) {
+            throw new AppException(AuthErrorCode.EMAIL_EXISTED);
         }
 
-        public AuthenticationResponse authenticate(AuthenticationRequest request){
-            Account account = accountRepository.findByUsername(request.getUsername())
-                    .orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
+        String otp = String.format("%06d", new Random().nextInt(999999));
 
-            boolean authenticate = passwordEncoder.matches(request.getPassword(), account.getPasswordHash());
+        redisTemplate.opsForValue().set(request.getEmail(), otp, 5, TimeUnit.MINUTES);
 
-            if(!authenticate){
-                throw new AppException(ErrorCode.UNAUTHENTICATED);
-            }
-            var token = generateToken(account);
-
-            return AuthenticationResponse.builder()
-                    .authenticate(true)
-                    .token(token)
-                    .build();
-        }
-
-        public String generateToken(Account account){
-            JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
-
-            JWTClaimsSet claimsSet = new JWTClaimsSet.Builder()
-                    .subject(account.getUsername())
-                    .issueTime(new Date())
-                    .expirationTime(
-                            new Date(Instant.now().plus(1, ChronoUnit.HOURS).toEpochMilli())
-                    )
-                    .issuer("FPT.com")
-                    .claim("scope", buildScope(account))
-                    .build();
-
-            Payload payload = new Payload(claimsSet.toJSONObject());
-
-            JWSObject jwsObject = new JWSObject(header, payload);
-            try {
-                jwsObject.sign(new MACSigner(SIGNER_KEY.getBytes(StandardCharsets.UTF_8)));
-                return jwsObject.serialize();
-            } catch (JOSEException e) {
-                log.error("Fail to generate token", e);
-                throw new RuntimeException(e);
-            }
-        }
-
-        private String buildScope(Account account){
-            StringJoiner stringJoiner = new StringJoiner(" ");
-            if(account.getRole() != null){
-                stringJoiner.add(account.getRole().getRoleName());
-            }
-            return stringJoiner.toString();
-        }
+        emailService.sendOtpEmail(request.getEmail(), otp);
+        log.info("Saved OTP in redis and sent to email: {}", request.getEmail());
     }
+
+    @Transactional
+    public RegisterResponse verifyOtpAndRegister(VerifyOtpRequest request) {
+        RegisterRequest regReq = request.getRegisterRequest();
+        String email = regReq.getEmail();
+
+        String cachedOtp = redisTemplate.opsForValue().get(email);
+
+        if (cachedOtp == null || !cachedOtp.equals(request.getOtp())) {
+            throw new AppException(AuthErrorCode.INVALID_OTP);
+        }
+
+        redisTemplate.delete(email);
+
+        if (accountRepository.existsByUsername(regReq.getUsername())) {
+            throw new AppException(AuthErrorCode.USERNAME_EXISTED);
+        }
+        if (accountRepository.existsByEmail(email)) {
+            throw new AppException(AuthErrorCode.EMAIL_EXISTED);
+        }
+
+        Account account = accountMapper.toAccount(regReq);
+        account.setPasswordHash(passwordEncoder.encode(regReq.getPassword()));
+        account.setStatus(1);
+
+//        Role accountRole = roleRepository.findByRoleName("ROLE_USER").orElseThrow(() -> new AppException(AuthErrorCode.ROLE_NOT_FOUND));
+        HashSet<String> roles = new HashSet<>();
+        roles.add(Role.USER.name());
+        account.setRoles(roles);
+
+        account = accountRepository.saveAndFlush(account);
+
+        UserCreationRequest userCreationRequest = UserCreationRequest.builder().accountId(account.getAccountId()).fullName(regReq.getFullName()).phoneNumber(regReq.getPhoneNumber()).address(regReq.getAddress()).gender(regReq.getGender()).dateOfBirth(regReq.getDateOfBirth()).email(regReq.getEmail()).identityCard(regReq.getIdentityCard()).build();
+
+        userProfileClient.createProfile(userCreationRequest);
+
+        return accountMapper.toRegisterResponse(account);
+    }
+
+    public AuthenticationResponse authenticate(AuthenticationRequest request) {
+        Account account = accountRepository.findByUsername(request.getUsername()).orElseThrow(() -> new AppException(GlobalErrorCode.UNAUTHENTICATED));
+
+        boolean authenticate = passwordEncoder.matches(request.getPassword(), account.getPasswordHash());
+
+        if (!authenticate) {
+            throw new AppException(GlobalErrorCode.UNAUTHENTICATED);
+        }
+        var token = jwtService.generateToken(account);
+
+        return AuthenticationResponse.builder().authenticate(true).token(token).build();
+    }
+
+    public RegisterResponse myInfo() {
+        var context = SecurityContextHolder.getContext();
+
+        String name = context.getAuthentication().getName();
+
+        Account account = accountRepository.findByUsername(name).orElseThrow(() -> new AppException(AuthErrorCode.USERNAME_EXISTED));
+
+        return accountMapper.toRegisterResponse(account);
+    }
+
+    public List<Account> getAllAccount(){
+        return accountRepository.findAll();
+    }
+
+}

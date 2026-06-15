@@ -1,0 +1,383 @@
+openapi: 3.0.1
+info:
+  title: CinePrime User Service API
+  description: OpenAPI specification for the CinePrime user profile management service. This document defines the endpoints for user profile CRUD operations including create, read, update, and soft delete.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: API Gateway (Recommended)
+  - url: http://localhost:8084
+    description: Direct User Service Access
+tags:
+  - name: User Management
+    description: Endpoints for managing user profiles
+paths:
+  /api/users/profile:
+    post:
+      tags:
+        - User Management
+      summary: Create user profile
+      description: Creates a new user profile. This endpoint is typically called by auth-service after successful account registration. Validates phone number, email, and identity card uniqueness.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreationRequest'
+      responses:
+        '200':
+          description: User profile created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseUserResponse'
+        '400':
+          description: Bad Request - Validation failures
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              examples:
+                PhoneExisted:
+                  summary: "Error 2001: Phone Number Existed"
+                  value:
+                    code: 2001
+                    message: "Phone number already exists!"
+                IdentityCardExisted:
+                  summary: "Error 2002: Identity Card Existed"
+                  value:
+                    code: 2002
+                    message: "Identity card already exists!"
+                EmailExisted:
+                  summary: "Error 2005: Email Existed"
+                  value:
+                    code: 2005
+                    message: "Email already exists!"
+                InvalidInput:
+                  summary: "Error 2004: Invalid Input Data"
+                  value:
+                    code: 2004
+                    message: "Invalid input data!"
+                    result:
+                      phoneNumber: "Invalid phone number format"
+                      dateOfBirth: "Date of birth must be in the past"
+
+  /api/users/{id}:
+    get:
+      tags:
+        - User Management
+      summary: Get user by ID
+      description: Retrieves user profile information by account ID. Only returns active users (isActive = true).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User account ID (UUID format)
+          schema:
+            type: string
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: User profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseUserResponse'
+        '404':
+          description: User not found or inactive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              examples:
+                UserNotFound:
+                  summary: "Error 2003: User Not Found"
+                  value:
+                    code: 2003
+                    message: "User profile not found!"
+
+    put:
+      tags:
+        - User Management
+      summary: Update user profile
+      description: Updates existing user profile information. All fields in the request body are optional - only provided fields will be updated. The updatedAt timestamp is automatically set.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User account ID (UUID format)
+          schema:
+            type: string
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateRequest'
+      responses:
+        '200':
+          description: User profile updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseUserResponse'
+        '400':
+          description: Bad Request - Validation failures
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              examples:
+                PhoneExisted:
+                  summary: "Error 2001: Phone Number Already Exists"
+                  value:
+                    code: 2001
+                    message: "Phone number already exists!"
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              examples:
+                UserNotFound:
+                  summary: "Error 2003: User Not Found"
+                  value:
+                    code: 2003
+                    message: "User profile not found!"
+
+    delete:
+      tags:
+        - User Management
+      summary: Delete user (soft delete)
+      description: Deactivates user profile by setting isActive to false. User data is not physically deleted from the database and can be restored if needed. The updatedAt timestamp is automatically set.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User account ID (UUID format)
+          schema:
+            type: string
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: User profile deactivated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+        '400':
+          description: User already inactive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              examples:
+                UserAlreadyInactive:
+                  summary: "Error 2008: User Already Inactive"
+                  value:
+                    code: 2008
+                    message: "User is already inactive!"
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              examples:
+                UserNotFound:
+                  summary: "Error 2003: User Not Found"
+                  value:
+                    code: 2003
+                    message: "User profile not found!"
+
+components:
+  schemas:
+    # --- REQUEST SCHEMAS ---
+    UserCreationRequest:
+      type: object
+      required: [accountId, fullName, phoneNumber, dateOfBirth, gender, address, identityCard, email]
+      properties:
+        accountId:
+          type: string
+          description: Account ID from auth service (UUID format)
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        fullName:
+          type: string
+          maxLength: 100
+          description: User's full name
+          example: "Nguyen Van A"
+        phoneNumber:
+          type: string
+          pattern: '^(0|\+84)[0-9]{9,10}$'
+          description: Phone number in Vietnamese format
+          example: "0912345678"
+        dateOfBirth:
+          type: string
+          format: date
+          description: User's date of birth (must be in the past)
+          example: "1995-05-15"
+        gender:
+          type: string
+          enum: [Male, Female, Other]
+          description: User's gender
+          example: "Male"
+        address:
+          type: string
+          maxLength: 255
+          description: User's residential address
+          example: "123 Nguyen Hue, District 1, HCMC"
+        identityCard:
+          type: string
+          pattern: '^[0-9]{12}$'
+          description: Identity card number (12 digits)
+          example: "079095001234"
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: "nguyenvana@gmail.com"
+
+    UserUpdateRequest:
+      type: object
+      description: All fields are optional - only provided fields will be updated
+      properties:
+        fullName:
+          type: string
+          maxLength: 50
+          description: User's full name
+          example: "Nguyen Van A Updated"
+        phoneNumber:
+          type: string
+          pattern: '^(0|\+84)[0-9]{9,10}$'
+          description: Phone number in Vietnamese format
+          example: "0987654321"
+        dateOfBirth:
+          type: string
+          format: date
+          description: User's date of birth
+          example: "1995-05-15"
+        gender:
+          type: string
+          enum: [Male, Female, Other]
+          description: User's gender
+          example: "Female"
+        address:
+          type: string
+          maxLength: 255
+          description: User's residential address
+          example: "456 Le Loi, District 1, HCMC"
+        avatarUrl:
+          type: string
+          format: uri
+          description: URL to user's avatar image
+          example: "https://example.com/avatars/user123.jpg"
+
+    # --- CORE RESPONSE SCHEMAS ---
+    UserResponse:
+      type: object
+      properties:
+        accountId:
+          type: string
+          description: User account ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        fullName:
+          type: string
+          description: User's full name
+          example: "Nguyen Van A"
+        phoneNumber:
+          type: string
+          description: User's phone number
+          example: "0912345678"
+        dateOfBirth:
+          type: string
+          format: date
+          description: User's date of birth
+          example: "1995-05-15"
+        gender:
+          type: string
+          description: User's gender
+          example: "Male"
+        address:
+          type: string
+          description: User's residential address
+          example: "123 Nguyen Hue, District 1, HCMC"
+        identityCard:
+          type: string
+          description: Identity card number
+          example: "079095001234"
+        email:
+          type: string
+          description: User's email address
+          example: "nguyenvana@gmail.com"
+        avatarUrl:
+          type: string
+          nullable: true
+          description: URL to user's avatar image
+          example: "https://example.com/avatars/user123.jpg"
+        createdAt:
+          type: string
+          format: date-time
+          description: Profile creation timestamp
+          example: "2026-06-15T19:00:00"
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last update timestamp
+          example: "2026-06-15T19:30:00"
+        isActive:
+          type: boolean
+          description: User active status (true = active, false = soft deleted)
+          example: true
+
+    # --- WRAPPER RESPONSES (API RESPONSE STANDARD) ---
+    ApiResponseUserResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: Response code (1000 = success)
+          example: 1000
+        message:
+          type: string
+          nullable: true
+          description: Response message
+          example: "Success"
+        result:
+          $ref: '#/components/schemas/UserResponse'
+
+    ApiResponseVoid:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: Response code (1000 = success)
+          example: 1000
+        message:
+          type: string
+          description: Response message
+          example: "User has been deleted"
+        result:
+          type: object
+          nullable: true
+          example: null
+
+    # --- ERROR RESPONSE SCHEMA ---
+    ApiErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: Error code
+          example: 2003
+        message:
+          type: string
+          description: Error message
+          example: "User profile not found!"
+        result:
+          type: object
+          nullable: true
+          description: Additional error details (for validation errors)
+          example: null

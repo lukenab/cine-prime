@@ -1,7 +1,10 @@
 package userservice.mapper;
 
-import org.mapstruct.*;
+import org.mapstruct.BeanMapping;
+import org.mapstruct.Mapper;
 
+import org.mapstruct.MappingTarget;
+import org.mapstruct.NullValuePropertyMappingStrategy;
 import userservice.dto.UserCreationRequest;
 import userservice.dto.UserResponse;
 import userservice.dto.UserUpdateRequest;
