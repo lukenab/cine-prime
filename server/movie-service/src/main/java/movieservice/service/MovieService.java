@@ -72,7 +72,8 @@ public class MovieService {
                         return movieservice.dto.response.ApiResponse.builder()
                                 .code(904)
                                 .message(
-                                        "Phòng không tồn tại!!!")
+                                        "Cinema room does not exist.")
+                                .result("INTERNAL_SERVER_ERROR")
                                 .build();
                     }
                     movieservice.dto.response.ApiResponse apiResponse3 = validateLocalRequests(showTimeRequests,
@@ -84,7 +85,6 @@ public class MovieService {
                     LocalTime startTime = stReq.getStartTime();
                     LocalTime endTime = startTime.plusMinutes(request.getDuration());
 
-                    // Kiểm tra trùng lịch với Database
                     movieservice.dto.response.ApiResponse apiResponse4 = validateWithDatabase(stReq, startTime,
                             endTime);
                     if (apiResponse4.getCode() != 200) {
@@ -107,7 +107,8 @@ public class MovieService {
                         return movieservice.dto.response.ApiResponse.builder()
                                 .code(404)
                                 .message(
-                                        "Không tìm thấy thể loại với ID phù hợp!!!")
+                                        "Movie genre not found with the provided ID.")
+                                        .result("NOT_FOUND")
                                 .build();
                     }
                     MovieConnect movieType = new MovieConnect();
@@ -122,34 +123,57 @@ public class MovieService {
             }
             return movieservice.dto.response.ApiResponse.builder()
                     .code(200)
-                    .message("Tạo movie thành công")
+                    .message("Movie created successfully")
+                    .result("OK")
                     .build();
         } catch (Exception e) {
-            throw new RuntimeException("Lỗi hệ thống");
+            return movieservice.dto.response.ApiResponse.builder()
+                    .code(500)
+                    .message(e.getMessage())
+                    .result("INTERNAL_SERVER_ERROR")
+                    .build();
         }
     }
 
-    public movieservice.dto.response.ApiResponse<?> getMovie(String id) {
-        try {
-            Integer.parseInt(id);
-        } catch (Exception e) {
-            return movieservice.dto.response.ApiResponse.builder()
-                    .code(400)
-                    .message("lỗi dữ liệu không hợp lệ")
-                    .build();
-        }
-        Optional<Movie> movie = movieRepository.findById(Integer.parseInt(id));
-        if (movie.isEmpty()) {
-            return movieservice.dto.response.ApiResponse.builder()
-                    .code(404)
-                    .message("Không tìm thầy movie phù hợp")
-                    .build();
-        }
-        return movieservice.dto.response.ApiResponse.builder()
-                .code(200)
-                .message("Lấy movie thành công")
+   public  movieservice.dto.response.ApiResponse<?> getMovie(String id) {
+    try {
+        Integer.parseInt(id);
+    } catch (Exception e) {
+        return  movieservice.dto.response.ApiResponse.builder()
+                .code(400) // Đổi thành String nếu YAML định nghĩa code là string
+                .message("Invalid request data error")
+                .result("BAD_REQUEST")
                 .build();
     }
+    
+    Optional<Movie> movieOptional = movieRepository.findById(Integer.parseInt(id));
+    if (movieOptional.isEmpty()) {
+        return  movieservice.dto.response.ApiResponse.builder()
+                .code(404)
+                .message("No matching movie found")
+                .result("NOT_FOUND")
+                .build();
+    }
+
+    // 1. Lấy Entity ra khỏi Optional
+    Movie movie = movieOptional.get();
+
+    // 2. Sử dụng mapper để biến đổi Entity thành DTO phẳng (đã xử lý map phẳng genreNames)
+    MovieResponse detailData = movieMapper.toResponse(movie); 
+    
+    // Nếu mapper chưa xử lý map list String cho movieConnects, bạn có thể tự set thủ công tại đây:
+    List<String> genreNames = movie.getMovieConnects().stream()
+            .map(connect -> connect.getType().getTypeName())
+            .collect(java.util.stream.Collectors.toList());
+    detailData.setMovieType(genreNames);
+
+    // 3. Trả về DTO sạch sẽ cho Frontend
+    return  movieservice.dto.response.ApiResponse.builder()
+            .code(200)
+            .message("Movie retrieved successfully")
+            .result(detailData)
+            .build();
+}
 
     private movieservice.dto.response.ApiResponse<?> validateStartTimes(List<ShowTimeRequest> requests) {
         LocalTime openingTime = LocalTime.of(8, 0);
@@ -160,13 +184,15 @@ public class MovieService {
             if (startTime.isBefore(openingTime) || startTime.isAfter(closingTime)) {
                 return movieservice.dto.response.ApiResponse.builder()
                         .code(900)
-                        .message("Giờ chiếu không hợp lệ! Rạp chỉ hoạt động trong khoảng từ 8h đến 23h.")
+                        .message("Invalid showtime! The cinema only operates from 8:00 AM to 11:00 PM")
+                        .result("INTERNAL_SERVER_ERROR")
                         .build();
             }
         }
         return movieservice.dto.response.ApiResponse.builder()
                 .code(200)
-                .message("Tạo movie thành công!!!!")
+                .message("Successful")
+                .result("OK")
                 .build();
     }
 
@@ -189,7 +215,8 @@ public class MovieService {
                     if (currentStart.isBefore(nextEnd) && currentEnd.isAfter(nextStart)) {
                         return movieservice.dto.response.ApiResponse.builder()
                                 .code(901)
-                                .message("Lỗi có lịch phim đã tồn tại trong phòng")
+                                .message("Conflict: A movie schedule already exists in this room")
+                                .result("CONFLICT")
                                 .build();
                     }
                 }
@@ -197,7 +224,8 @@ public class MovieService {
         }
         return movieservice.dto.response.ApiResponse.builder()
                 .code(200)
-                .message("Tạo movie thành công!!!!")
+                .message("Successful")
+                .result("OK")
                 .build();
     }
 
@@ -209,13 +237,15 @@ public class MovieService {
                 return movieservice.dto.response.ApiResponse.builder()
                         .code(902)
                         .message(
-                                "Ngày chiếu không hợp lệ! Chỉ được đăng ký lịch chiếu tối thiểu 3 ngày sau tính từ hôm nay.")
+                                "Invalid showdate! Showtimes must be scheduled at least 3 days in advance from today.")
+                            .result("INTERNAL_SERVER_ERROR")
                         .build();
             }
         }
         return movieservice.dto.response.ApiResponse.builder()
                 .code(200)
-                .message("Tạo movie thành công!!!!")
+                .message("Successful")
+                .result("OK")
                 .build();
     }
 
@@ -230,12 +260,14 @@ public class MovieService {
         if (isOverlapped) {
             return movieservice.dto.response.ApiResponse.builder()
                     .code(903)
-                    .message("Phòng đã có lịch chiếu khác.")
+                    .message("The room has been booked for another showtime.")
+                    .result("INTERNAL_SERVER_ERROR")
                     .build();
         }
         return movieservice.dto.response.ApiResponse.builder()
                 .code(200)
-                .message("Tạo movie thành công!!!!")
+                .message("Successful")
+                .result("OK")
                 .build();
     }
 
@@ -244,7 +276,7 @@ public class MovieService {
 
         boolean isEmpty = movies.isEmpty();
         int statusCode = isEmpty ? 404 : 200;
-        String message = isEmpty ? "Không tìm thầy movie phù hợp" : "Lấy danh sách phim thành công";
+        String message = isEmpty ? "No movies found" : "Movie list retrieved successfully";
 
         List<MovieResponse> movieResponses = movieMapper.toResponseList(movies);
 
@@ -262,7 +294,8 @@ public class MovieService {
 
             ApiResponse<?> response = ApiResponse.builder()
                     .code(409)
-                    .message("Tên phòng đã tồn tại!!!")
+                    .message("Room name already exists!!!")
+                    .result("CONFLICT")
                     .build();
 
             // Trả về HttpStatus.CONFLICT (409) thay vì 200
@@ -275,7 +308,8 @@ public class MovieService {
         generateSeatsForRoom(room.getCinemaRoomId(), room.getSeatQuantity(), room);
         return ResponseEntity.ok(ApiResponse.builder()
                 .code(200)
-                .message("Tạo Room Cinema thành công")
+                .message("Cinema room created successfully")
+                .result("OK")
                 .build());
     }
 
@@ -307,7 +341,8 @@ public class MovieService {
                     .status(409) // HTTP Status 409
                     .body(ApiResponse.builder()
                             .code(409) // Business Code 409
-                            .message("Tên loại phim đã tồn tại!")
+                            .message("Movie type name already exists!!!")
+                            .result("CONFLICT")
                             .build());
         }
 
@@ -317,7 +352,8 @@ public class MovieService {
 
         return ResponseEntity.ok(ApiResponse.builder()
                 .code(200)
-                .message("Tạo Loại phim thành công")
+                .message("Movie type created successfully")
+                .result("OK")
                 .build());
     }
 }

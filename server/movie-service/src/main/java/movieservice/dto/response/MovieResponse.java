@@ -32,7 +32,7 @@ public class MovieResponse {
 
     private Boolean status;
 
-    private List<String> movieConnects;
+    private List<String> movieType;
 
     private List<ShowTimeResponse> showTimes;
 

@@ -1,10 +1,12 @@
 package movieservice.mapper;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
+import jakarta.inject.Named;
 import movieservice.dto.request.CinemaRoomRequest;
 import movieservice.dto.request.CreateMovieRequest;
 import movieservice.dto.request.TypeRequest;
@@ -18,7 +20,7 @@ import movieservice.entity.TypeMovie;
 public interface MovieMapper {
     Movie toMovie(CreateMovieRequest createMovieRequest);
 
-    @Mapping(target = "movieConnects", source = "movieConnects")
+    @Mapping(target = "movieType", source = "movieConnects")
     MovieResponse toResponse(Movie movie);
 
     List<MovieResponse> toResponseList(List<Movie> movies);
@@ -28,5 +30,14 @@ public interface MovieMapper {
     TypeMovie toType(TypeRequest typeRequest);
     default String map(MovieConnect movieType) {
         return movieType.getType().getTypeName();
+    }
+    @Named("mapConnectToGenreNames")
+    default List<String> mapConnectToGenreNames(List<MovieConnect> movieConnects) {
+        if (movieConnects == null) {
+            return null;
+        }
+        return movieConnects.stream()
+                .map(connect -> connect.getType().getTypeName()) 
+                .collect(Collectors.toList());
     }
 }

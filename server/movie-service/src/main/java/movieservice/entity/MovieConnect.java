@@ -3,6 +3,7 @@ package movieservice.entity;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
@@ -31,6 +32,6 @@ public class MovieConnect {
     @ManyToOne // 🌟 ĐÃ SỬA: Không để thuộc tính cascade ở đây nữa!
     @MapsId("typeId")
     @JoinColumn(name = "type_id")
-    @JsonBackReference
+    @JsonIgnoreProperties("movieTypes")
     private TypeMovie type;
 }
