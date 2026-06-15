@@ -73,6 +73,7 @@
                     .accountId(account.getAccountId())
                     .fullName(request.getFullName())
                     .phoneNumber(request.getPhoneNumber())
+                    .dateOfBirth(request.getDateOfBirth())
                     .address(request.getAddress())
                     .gender(request.getGender())
                     .identityCard(request.getIdentityCard())

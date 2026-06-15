@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import userservice.dto.UserCreationRequest;
 import userservice.dto.UserResponse;
+import userservice.dto.UserUpdateRequest;
 import userservice.entity.User;
 import userservice.mapper.UserMapper;
 import userservice.repository.UserRepository;
@@ -34,4 +35,22 @@ public class UserService {
         user.setCreatedAt(LocalDateTime.now());
         return userMapper.toUserResponse(userRepository.save(user));
     }
+
+    public UserResponse getUserById(String id){
+        User user = userRepository.findById(id).orElseThrow(() -> new RuntimeException("User not found"));
+        return userMapper.toUserResponse(user);
+    }
+
+    public UserResponse updateUser(String id, UserUpdateRequest request){
+        User user = userRepository.findById(id).orElseThrow(() -> new RuntimeException("User not found with ID:" + id));
+        if(request.getPhoneNumber() != null
+           && !request.getPhoneNumber().equals(user.getPhoneNumber())
+           && userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
+            throw  new RuntimeException("Phone number already exists");
+        }
+
+        userMapper.updateUser(request, user);
+        return userMapper.toUserResponse(userRepository.save(user));
+    }
+
 }
