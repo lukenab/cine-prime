@@ -2,7 +2,7 @@ openapi: 3.0.1
 info:
   title: CinePrime Auth Service API
   description: OpenAPI specification for the CinePrime authentication service. Defines endpoints for user registration, authentication, and RBAC (Roles & Permissions) management.
-  version: 1.0.0
+  version: 1.1.0
 servers:
   - url: http://localhost:8088
     description: Auth Service Local Server
@@ -13,6 +13,8 @@ tags:
     description: Endpoints for user registration and login
   - name: Permission
     description: Endpoints for managing system permissions
+  - name: Role
+    description: Endpoints for managing system roles
 paths:
   # ==========================================
   # AUTHENTICATION ENDPOINTS
@@ -85,11 +87,21 @@ paths:
                   value:
                     code: 1013
                     message: "Otp invalid"
+                DefaultRoleNotFound:
+                  summary: "Error 1012: Default Role Not Found"
+                  value:
+                    code: 1012
+                    message: "Default role not found!"
                 PhoneExisted:
                   summary: "Error 2001: Phone Existed (From User Service)"
                   value:
                     code: 2001
                     message: "Phone number already exists!"
+                IdentityCardExisted:
+                  summary: "Error 2002: Identity Card Existed (From User Service)"
+                  value:
+                    code: 2002
+                    message: "Identity card already exists!"
 
   /api/auth/login:
     post:
@@ -179,6 +191,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseVoid'
+
+  /api/roles:
+    post:
+      tags:
+        - Role
+      summary: Create a new role with assigned permissions
+      description: Creates a new role and assigns permission names for RBAC.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+      responses:
+        '200':
+          description: Role successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseRoleResponse'
+    get:
+      tags:
+        - Role
+      summary: Get all roles
+      description: Retrieves all roles and their assigned permissions.
+      responses:
+        '200':
+          description: List of roles retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseListRoleResponse'
 
 components:
   schemas:
@@ -382,6 +426,32 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PermissionResponse'
+
+    ApiResponseRoleResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 1000
+        message:
+          type: string
+          example: "Success"
+        result:
+          $ref: '#/components/schemas/RoleResponse'
+
+    ApiResponseListRoleResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 1000
+        message:
+          type: string
+          example: "Success"
+        result:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleResponse'
 
     ApiResponseVoid:
       type: object

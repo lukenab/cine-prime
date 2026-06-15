@@ -3,7 +3,6 @@ CREATE TABLE account (
     username VARCHAR(50) NOT NULL UNIQUE,
     email VARCHAR(100) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    role_id INT REFERENCES roles(role_id),
     status INT DEFAULT 1,
     last_login_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -11,9 +10,25 @@ CREATE TABLE account (
 );
 
 CREATE TABLE roles (
-    role_id SERIAL PRIMARY KEY,
-    role_name VARCHAR(50) NOT NULL UNIQUE,
+    role_name VARCHAR(50) PRIMARY KEY,
     description VARCHAR(255)
+);
+
+CREATE TABLE permission (
+    name VARCHAR(50) PRIMARY KEY,
+    description VARCHAR(255)
+);
+
+CREATE TABLE account_role (
+    account_id VARCHAR(36) NOT NULL REFERENCES account(account_id),
+    role_name VARCHAR(50) NOT NULL REFERENCES roles(role_name),
+    PRIMARY KEY (account_id, role_name)
+);
+
+CREATE TABLE role_permissions (
+    role_name VARCHAR(50) NOT NULL REFERENCES roles(role_name),
+    permission_name VARCHAR(50) NOT NULL REFERENCES permission(name),
+    PRIMARY KEY (role_name, permission_name)
 );
 
 CREATE TABLE auth_token (
