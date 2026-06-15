@@ -7,8 +7,7 @@ import authservice.dto.request.VerifyOtpRequest;
 import authservice.dto.response.AuthenticationResponse;
 import authservice.dto.response.RegisterResponse;
 import authservice.entity.Account;
-//import authservice.entity.Role;
-import authservice.enums.Role;
+import authservice.entity.Role;
 import authservice.mapper.AccountMapper;
 import authservice.repository.AccountRepository;
 import authservice.repository.RoleRepository;
@@ -86,10 +85,13 @@ public class AuthenticationService {
         account.setPasswordHash(passwordEncoder.encode(regReq.getPassword()));
         account.setStatus(1);
 
-//        Role accountRole = roleRepository.findByRoleName("ROLE_USER").orElseThrow(() -> new AppException(AuthErrorCode.ROLE_NOT_FOUND));
-        HashSet<String> roles = new HashSet<>();
-        roles.add(Role.USER.name());
-//        account.setRoles(roles);
+        Role accountRole = roleRepository.findById("ROLE_USER")
+                .orElseThrow(() -> new AppException(AuthErrorCode.ROLE_NOT_FOUND));
+
+        HashSet<Role> roles = new HashSet<>();
+        roles.add(accountRole);
+
+        account.setRoles(roles);
 
         account = accountRepository.saveAndFlush(account);
 
@@ -113,17 +115,17 @@ public class AuthenticationService {
         return AuthenticationResponse.builder().authenticate(true).token(token).build();
     }
 
-    public RegisterResponse myInfo() {
-        var context = SecurityContextHolder.getContext();
+//    public RegisterResponse myInfo() {
+//        var context = SecurityContextHolder.getContext();
+//
+//        String name = context.getAuthentication().getName();
+//
+//        Account account = accountRepository.findByUsername(name).orElseThrow(() -> new AppException(AuthErrorCode.USERNAME_EXISTED));
+//
+//        return accountMapper.toRegisterResponse(account);
+//    }
 
-        String name = context.getAuthentication().getName();
-
-        Account account = accountRepository.findByUsername(name).orElseThrow(() -> new AppException(AuthErrorCode.USERNAME_EXISTED));
-
-        return accountMapper.toRegisterResponse(account);
-    }
-
-    public List<Account> getAllAccount(){
+    public List<Account> getAllAccount() {
         return accountRepository.findAll();
     }
 
