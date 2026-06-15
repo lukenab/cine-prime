@@ -1,5 +1,6 @@
 package userservice.dto;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import lombok.AccessLevel;
@@ -16,7 +17,12 @@ import lombok.experimental.FieldDefaults;
 @Builder
 public class UserResponse {
     String accountId;
-    String username;
-    String email;
+    String fullName;
+    String phoneNumber;
+    LocalDate dateOfBirth;
+    String gender;
+    String address;
+    String identityCard;
+    String avatarUrl;
     LocalDateTime createdAt;
 }

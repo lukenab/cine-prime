@@ -21,7 +21,7 @@ import java.nio.charset.StandardCharsets;
 @Configuration
 public class SecurityConfig {
 
-    public final String [] END_POINTS = {"/api/auth/register", "/api/auth/login", "/api/auth/introspect"};
+    public final String [] END_POINTS = {"/api/auth/register/initiate", "/api/auth/login", "/api/auth/introspect", "/api/auth/register/verify"};
 
     @Value("${jwt.signerKey}")
     private String SIGNER_KEY;
@@ -31,10 +31,14 @@ public class SecurityConfig {
         http.csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(request -> request
                         .requestMatchers(HttpMethod.POST, END_POINTS).permitAll()
+                        .requestMatchers(HttpMethod.GET, "api/auth/accounts")
+                        .hasAuthority("ROLE_ADMIN")
                         .anyRequest().authenticated());
 
         http.oauth2ResourceServer(oath2
-                -> oath2.jwt(jwtConfigurer -> jwtConfigurer.decoder(jwtDecoder())));
+                -> oath2.jwt(jwtConfigurer -> jwtConfigurer.decoder(jwtDecoder()))
+                .authenticationEntryPoint(new JwtAuthEntryPoint())
+        );
 
         return http.build();
     }
