@@ -89,7 +89,7 @@ public class AuthenticationService {
 //        Role accountRole = roleRepository.findByRoleName("ROLE_USER").orElseThrow(() -> new AppException(AuthErrorCode.ROLE_NOT_FOUND));
         HashSet<String> roles = new HashSet<>();
         roles.add(Role.USER.name());
-        account.setRoles(roles);
+//        account.setRoles(roles);
 
         account = accountRepository.saveAndFlush(account);
 

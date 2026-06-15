@@ -34,7 +34,7 @@ public class ApplicationInitConfig {
                         .username("admin")
                         .email("admin@gmail.com")
                         .passwordHash(passwordEncoder.encode("admin"))
-                        .roles(roles)
+//                        .roles(roles)
                         .build();
 
                 accountRepository.save(account);
