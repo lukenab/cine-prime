@@ -1,7 +1,6 @@
 package movieservice.entity;
 
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
 
 import org.springframework.data.annotation.CreatedDate;
@@ -17,6 +16,9 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -35,7 +37,7 @@ public class Movie {
         @GeneratedValue(strategy = GenerationType.IDENTITY)
         @Column(name = "movie_id")
         @Schema(description = "ID của phim", example = "123")
-        private Integer movieId;
+        private Long movieId;
 
         @Column(name = "actor")
         @Schema(description = "Danh sách diễn viên (chuỗi)", example = "Luffy, Uta, Shanks")
@@ -79,10 +81,9 @@ public class Movie {
         @Schema(description = "Trạng thái hoạt động", example = "true")
         private Boolean status;
         // movie type
-        @OneToMany(mappedBy = "movie", fetch = FetchType.LAZY)
-        @JsonManagedReference
-        @Schema(description = "Danh sách thể loại phim")
-        private List<MovieConnect> movieConnects;
+        @ManyToMany
+        @JoinTable(name = "movie_type", joinColumns = @JoinColumn(name = "movie_id"), inverseJoinColumns = @JoinColumn(name = "type_id"))
+        private List<TypeMovie> types;
 
         @OneToMany(mappedBy = "movie", fetch = FetchType.LAZY)
         @JsonManagedReference

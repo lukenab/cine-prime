@@ -12,7 +12,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 
 @SpringBootApplication
-// @ComponentScan(basePackages = {"movieservice", "movie.theater.common"})
+@ComponentScan(basePackages = {"movieservice", "movie.theater.common"})
 @EnableScheduling
 @EnableJpaAuditing
 @EnableDiscoveryClient

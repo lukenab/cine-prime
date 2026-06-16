@@ -7,95 +7,69 @@ tags:
   - name: Movie Controller
     description: APIs for managing movies in the Cinema system
 paths:
-  /api/movie/create:
+  /api/movie:
     post:
       tags:
         - Movie Controller
       summary: Create a new movie
       description: API to create a movie along with its showtimes.
       operationId: createMovie
+
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateMovieRequest'
+              $ref: "#/components/schemas/CreateMovieRequest"
+
       responses:
-        '200':
+        "200":
           description: Movie created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
-              example:
-                code: "200"
-                message: "Movie created successfully"
-                status: "OK"
-        '400':
-          description: Invalid input data (Validation or Business logic errors)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-              examples:
-                ValidationError:
-                  summary: Blank fields error
-                  value:
-                    code: "400"
-                    message: "Vietnamese movie name cannot be blank; Director cannot be blank"
-                    status: "BAD_REQUEST"
-                InvalidShowtime:
-                  summary: Invalid showtime hours (Custom code 900)
-                  value:
-                    code: "900"
-                    message: "Invalid showtime! The cinema only operates from 8:00 AM to 11:00 PM"
-                    status: "INTERNAL_SERVER_ERROR"
-                InvalidShowdate:
-                  summary: Invalid showdate (Custom code 902)
-                  value:
-                    code: "902"
-                    message: "Invalid showdate! Showtimes must be scheduled at least 3 days in advance from today."
-                    status: "INTERNAL_SERVER_ERROR"
-        '404':
-          description: Resource not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-              examples:
-                GenreNotFound:
-                  summary: Genre not found
-                  value:
-                    code: "404"
-                    message: "Movie genre not found with the provided ID"
-                    status: "NOT_FOUND"
-                RoomNotFound:
-                  summary: Cinema room not found (Custom code 904)
-                  value:
-                    code: "904"
-                    message: "Cinema room does not exist."
-                    status: "INTERNAL_SERVER_ERROR"
-        '409':
-          description: Data conflict error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-              examples:
-                RoomScheduleConflict:
-                  summary: Schedule conflict in room (Custom code 901)
-                  value:
-                    code: "901"
-                    message: "Conflict: A movie schedule already exists in this room"
-                    status: "CONFLICT"
-                GeneralScheduleConflict:
-                  summary: General room schedule conflict (Custom code 903)
-                  value:
-                    code: "903"
-                    message: "The room has been booked for another showtime."
-                    status: "INTERNAL_SERVER_ERROR"
+                $ref: "#/components/schemas/ApiResponse"
+    get:
+      tags:
+        - Movie Controller
+      summary: Get movies with pagination
+      description: Returns paginated movies.
+      operationId: getPageMovies
 
-  /api/movie/find/{id}:
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+
+      responses:
+        "200":
+          description: Movies retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponsePageMovie"
+        "404":
+          description: No movies found
+          content:
+              application/json:
+                schema:
+                  $ref: "#/components/schemas/ApiResponse"
+                example:
+                  code: "404"
+                  message: "No movies found"
+
+    
+  /api/movie/{id}:
     get:
       tags:
         - Movie Controller
@@ -110,12 +84,12 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Movie retrieved successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponseWithData'
+                $ref: "#/components/schemas/MovieDetailResponse"
               example:
                 code: 200
                 message: "Movie retrieved successfully"
@@ -133,7 +107,7 @@ paths:
                   smallImage: "https://example.com/images/avengers-small.jpg"
                   status: true
                   movieType:
-                    - "Hành động"
+                    - "Action"
                   showTimes:
                     - showTimeId: 1
                       showDate: "2026-11-30"
@@ -146,83 +120,28 @@ paths:
                       endTime: "11:01:00"
                       updateAt: null
                   createAt: "2026-06-15T02:51:46.966967Z"
-        '400':
+        "400":
           description: Invalid request data
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
+                $ref: "#/components/schemas/ApiResponse"
               example:
                 code: "400"
                 message: "Invalid request data error"
                 status: "BAD_REQUEST"
-        '404':
+        "404":
           description: Movie not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
+                $ref: "#/components/schemas/ApiResponse"
               example:
                 code: "404"
                 message: "No matching movie found"
                 status: "NOT_FOUND"
 
-  /api/movie/find-all:
-    get:
-      tags:
-        - Movie Controller
-      summary: Get all movies
-      description: Returns a list of all movies along with their genres and showtimes.
-      operationId: getAllMovies
-      responses:
-        '200':
-          description: Movie list retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponseWithList'
-              example:
-                code: 200
-                message: "Movie list retrieved successfully"
-                result:
-                  - movieId: 1
-                    actor: "Robert Downey Jr., Chris Evans, Scarlett Johansson"
-                    content: "After the devastating events of Infinity War, the universe is in ruins. With the help of remaining allies, the Avengers assemble once more in order to reverse Thanos' actions."
-                    director: "Anthony Russo, Joe Russo"
-                    duration: 181
-                    movieProductionCompany: "Marvel Studios"
-                    version: "2D"
-                    movieNameEnglish: "Avengers: Endgame"
-                    movieNameVn: "Avengers: Hồi Kết"
-                    largeImage: "https://example.com/images/avengers-large.jpg"
-                    smallImage: "https://example.com/images/avengers-small.jpg"
-                    status: true
-                    movieConnects:
-                      - "Action"
-                    showTimes:
-                      - showTimeId: 1
-                        showDate: "2026-11-30"
-                        startTime: "08:00:00"
-                        endTime: "11:01:00"
-                        updateAt: null
-                      - showTimeId: 2
-                        showDate: "2026-10-30"
-                        startTime: "08:00:00"
-                        endTime: "11:01:00"
-                        updateAt: null
-                    createAt: "2026-06-15T02:51:46.966967"
-        '404':
-          description: Movies not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-              example:
-                code: "404"
-                message: "No movies found"
-                status: "NOT_FOUND"
-
-  /api/movie/create-room:
+  /api/movie/room:
     post:
       tags:
         - Movie Controller
@@ -234,59 +153,59 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CinemaRoomRequest'
+              $ref: "#/components/schemas/CinemaRoomRequest"
       responses:
-        '200':
+        "200":
           description: Cinema room created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
+                $ref: "#/components/schemas/ApiResponse"
               example:
                 code: "200"
                 message: "Cinema room created successfully"
                 status: "OK"
-        '409':
+        "409":
           description: Cinema room conflict
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
+                $ref: "#/components/schemas/ApiResponse"
               example:
                 code: "409"
                 message: "Room name already exists!!!"
                 status: "CONFLICT"
 
-  /api/movie/create-type:
+  /api/movie/type:
     post:
       tags:
         - Movie Controller
-      summary: Create a movie type/genre
-      description: Creates a new movie genre and returns the operation status.
+      summary: Create a movie type
+      description: Creates a new movie and returns the operation status.
       operationId: createTypeMovie
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TypeRequest'
+              $ref: "#/components/schemas/TypeRequest"
       responses:
-        '200':
+        "200":
           description: Movie type created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
+                $ref: "#/components/schemas/ApiResponse"
               example:
                 code: "200"
                 message: "Movie type created successfully"
                 status: "OK"
-        '409':
+        "409":
           description: Movie type conflict
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
+                $ref: "#/components/schemas/ApiResponse"
               example:
                 code: "409"
                 message: "Movie type name already exists!!!"
@@ -344,7 +263,7 @@ components:
         showTimes:
           type: array
           items:
-            $ref: '#/components/schemas/ShowTimeRequest'
+            $ref: "#/components/schemas/ShowTimeRequest"
           example:
             - cinemaRoomId: 1
               showDate: "2026-11-30"
@@ -411,7 +330,7 @@ components:
           type: string
           example: "OK"
 
-    ApiResponseWithData:
+    ApiResponseWithList:
       type: object
       properties:
         code:
@@ -420,25 +339,10 @@ components:
         message:
           type: string
           example: "Successful"
-        status:
-          type: string
-          example: "OK"
-        data:
-          $ref: '#/components/schemas/MovieDetailResponse'
-
-    ApiResponseWithList:
-      type: object
-      properties:
-        code:
-          type: integer
-          example: 200
-        message:
-          type: string
-          example: "Successful"
         result:
           type: array
           items:
-            $ref: '#/components/schemas/MovieDetailResponse'
+            $ref: "#/components/schemas/MovieDetailResponse"
 
     MovieDetailResponse:
       type: object
@@ -488,7 +392,7 @@ components:
         showTimes:
           type: array
           items:
-            $ref: '#/components/schemas/ShowTimeResponse'
+            $ref: "#/components/schemas/ShowTimeResponse"
           example:
             - showTimeId: 1
               showDate: "2026-11-30"
@@ -525,3 +429,59 @@ components:
           type: string
           nullable: true
           example: null
+
+    PageMovieResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/MovieDetailResponse'
+        pageable:
+          type: object
+          properties:
+            pageNumber:
+              type: integer
+              example: 0
+            pageSize:
+              type: integer
+              example: 10
+        totalPages:
+          type: integer
+          example: 5
+        totalElements:
+          type: integer
+          example: 48
+        last:
+          type: boolean
+          example: false
+        first:
+          type: boolean
+          example: true
+        size:
+          type: integer
+          example: 10
+        number:
+          type: integer
+          example: 0
+        numberOfElements:
+          type: integer
+          example: 10
+        empty:
+          type: boolean
+          example: false
+
+    ApiResponsePageMovie:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "200"
+        message:
+          type: string
+          example: "Movies retrieved successfully"
+        status:
+          type: string
+          example: "OK"
+        result:
+          $ref: '#/components/schemas/PageMovieResponse'

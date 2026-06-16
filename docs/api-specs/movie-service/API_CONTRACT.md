@@ -36,11 +36,11 @@ All endpoints listed below belong to the **Movie Controller** tag (Managing movi
 
 | Status | Method | Endpoint | Use Case / Business Description | Assignee |
 | :---: | :--- | :--- | :--- | :--- |
-| **In Prog** | `POST` | `/api/movie/create` | Create a new movie along with its assigned showtimes. | Nguyễn An Bình |
-| **Ready** | `GET` | `/api/movie/find/{id}` | Retrieve details of a specific movie by its ID. | Nguyễn An Bình |
-| **Ready** | `GET` | `/api/movie/find-all` | Fetch a list of all movies (including genres and showtimes). | Nguyễn An Bình |
-| **In Prog** | `POST` | `/api/movie/create-room` | Initialize a new cinema room in the theater system. | Trần Minh Tâm |
-| **In Prog** | `POST` | `/api/movie/create-type` | Add a new movie genre/type (e.g., Action, Sci-Fi). | Trần Minh Tâm |
+| **In Prog** | `POST` | `/api/movie` | Create a new movie along with its assigned showtimes. | Lê Tấn Lộc |
+| **Ready** | `GET` | `/api/movie/{id}` | Retrieve details of a specific movie by its ID. | Lê Tấn Lộc |
+| **Ready** | `GET` | `/api/movie?page=1&size=10` | Retrieve paginated movies. | Lê Tấn Lộc |
+| **In Prog** | `POST` | `/api/movie/room` | Initialize a new cinema room in the theater system. | Lê Tấn Lộc |
+| **In Prog** | `POST` | `/api/movie/type` | Add a new movie genre/type (e.g., Action, Sci-Fi). | Lê Tấn Lộc |
 
 ---
 
@@ -257,7 +257,7 @@ Create a new movie.
 
 ---
 
-### 5.2 Get Movie By ID (`GET /api/movie/find/{id}`)
+### 5.2 Get Movie By ID (`GET /api/movie/{id}`)
 
 #### Description
 
@@ -324,48 +324,68 @@ Retrieve a movie by its ID.
 
 ---
 
-### 5.3 Get All Movies (`GET /api/movie/find-all`)
+### 5.3 Get Movies With Pagination (`GET /api/movie`)
 
 #### Description
 
-Retrieve all movies.
+Retrieve movies using pagination.
+
+#### Query Parameters
+
+| Name | Type    | Required | Default | Description               |
+| ---- | ------- | -------- | ------- | ------------------------- |
+| page | Integer | No       | 1       | Current page number       |
+| size | Integer | No       | 10      | Number of movies per page |
+
+#### Example Request
+
+```http
+GET /api/movie?page=1&size=10
+```
 
 #### Response - 200 OK
 
 ```json
 {
-  "code": "200",
+  "code": 200,
   "message": "Movie list retrieved successfully",
-  "status": "OK",
-  "data": [
-    {
-      "movieId": 1,
-      "actor": "Robert Downey Jr., Chris Evans",
-      "content": "After the devastating events...",
-      "director": "Anthony Russo, Joe Russo",
-      "duration": 181,
-      "movieProductionCompany": "Marvel Studios",
-      "version": "2D",
-      "movieNameEnglish": "Avengers: Endgame",
-      "movieNameVn": "Avengers: Hồi Kết",
-      "largeImage": "https://example.com/images/avengers-large.jpg",
-      "smallImage": "https://example.com/images/avengers-small.jpg",
-      "status": true,
-      "movieConnects": [
-        "Action"
-      ],
-      "showTimes": [
-        {
-          "showTimeId": 1,
-          "showDate": "2026-11-30",
-          "startTime": "08:00:00",
-          "endTime": "11:01:00",
-          "updateAt": null
-        }
-      ],
-      "createAt": "2026-06-15T02:51:46.966967"
-    }
-  ]
+  "result": {
+    "content": [
+      {
+        "movieId": 1,
+        "actor": "Robert Downey Jr., Chris Evans",
+        "content": "After the devastating events...",
+        "director": "Anthony Russo, Joe Russo",
+        "duration": 181,
+        "movieProductionCompany": "Marvel Studios",
+        "version": "2D",
+        "movieNameEnglish": "Avengers: Endgame",
+        "movieNameVn": "Avengers: Hồi Kết",
+        "largeImage": "https://example.com/images/avengers-large.jpg",
+        "smallImage": "https://example.com/images/avengers-small.jpg",
+        "status": true,
+        "movieType": [
+          "Action"
+        ],
+        "showTimes": [
+          {
+            "showTimeId": 1,
+            "showDate": "2026-11-30",
+            "startTime": "08:00:00",
+            "endTime": "11:01:00",
+            "updateAt": null
+          }
+        ],
+        "createAt": "2026-06-15T02:51:46.966967"
+      }
+    ],
+    "totalElements": 4,
+    "totalPages": 1,
+    "size": 10,
+    "number": 0,
+    "first": true,
+    "last": true
+  }
 }
 ```
 
@@ -373,15 +393,12 @@ Retrieve all movies.
 
 ```json
 {
-  "code": "404",
-  "message": "No movies found",
-  "status": "NOT_FOUND"
+  "code": 404,
+  "message": "No movies found"
 }
 ```
 
----
-
-### 5.4 Create Cinema Room (`POST /api/movie/create-room`)
+### 5.4 Create Cinema Room (`POST /api/movie/room`)
 
 #### Request Body
 
@@ -396,9 +413,8 @@ Retrieve all movies.
 
 ```json
 {
-  "code": "200",
-  "message": "Cinema room created successfully",
-  "status": "OK"
+  "code": 200,
+  "message": "Cinema room created successfully"
 }
 ```
 
@@ -406,15 +422,14 @@ Retrieve all movies.
 
 ```json
 {
-  "code": "409",
-  "message": "Room name already exists",
-  "status": "CONFLICT"
+  "code": 409,
+  "message": "Room name already exists"
 }
 ```
 
 ---
 
-### 5.5 Create Movie Type (`POST /api/movie/create-type`)
+### 5.5 Create Movie Type (`POST /api/movie/type`)
 
 #### Request Body
 
@@ -428,9 +443,8 @@ Retrieve all movies.
 
 ```json
 {
-  "code": "200",
-  "message": "Movie type created successfully",
-  "status": "OK"
+  "code": 200,
+  "message": "Movie type created successfully"
 }
 ```
 
@@ -438,9 +452,8 @@ Retrieve all movies.
 
 ```json
 {
-  "code": "409",
-  "message": "Movie type name already exists",
-  "status": "CONFLICT"
+  "code": 409,
+  "message": "Movie type name already exists"
 }
 ```
 
