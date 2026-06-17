@@ -37,8 +37,8 @@ Below is a summary of the primary API workflows. For detailed payloads, please r
 
 | Status | Method | Endpoint | Use Case | Assignee |
 | :---: | :--- | :--- | :--- | :--- |
-| Ready | `PUT` | `/api/movie/update/{id}` | Cập nhật thông tin chi tiết phim | Nguyễn An Bình |
-| Ready | `DELETE` | `/api/movie/delete/{id}` | Xóa mềm phim (soft delete) | Nguyễn An Bình |
+| Ready | `PUT` | `/api/movie/update/{id}` | Cập nhật thông tin chi tiết phim | Nguyễn Mạnh Khải|
+| Ready | `DELETE` | `/api/movie/delete/{id}` | Xóa mềm phim (soft delete) | Nguyễn Mạnh Khải |
 
 ---
 
@@ -78,4 +78,4 @@ All successful responses share a unified JSON structure wrapping the result unde
     "status": true
   }
 }
-```
+
