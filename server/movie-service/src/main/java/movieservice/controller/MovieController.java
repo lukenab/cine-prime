@@ -38,7 +38,7 @@ public class MovieController {
     }
 
     @GetMapping("/{id}")
-    public MovieResponse findById(@PathVariable("id") Integer movieId) {
+    public MovieResponse findById(@PathVariable("id") Long movieId) {
         return movieService.getMovie(movieId);
     }
 
@@ -50,14 +50,14 @@ public class MovieController {
     }
 
     @PostMapping("/room")
-    public ApiResponse<?> createTypeRoom(
+    public ApiResponse<?> createTypeRoom(@Valid
             @RequestBody CinemaRoomRequest cinemaRoomRequest) {
         return movieService.createCinemaRoom(cinemaRoomRequest);
 
     }
 
     @PostMapping("/type")
-    public ApiResponse<?> createTypeMovie(
+    public ApiResponse<?> createTypeMovie( @Valid
             @RequestBody TypeRequest typeRequest) {
         return movieService.createTypeMovie(typeRequest);
 

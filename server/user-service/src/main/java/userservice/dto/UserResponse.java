@@ -23,6 +23,5 @@ public class UserResponse {
     String gender;
     String address;
     String identityCard;
-    String avatarUrl;
     LocalDateTime createdAt;
 }

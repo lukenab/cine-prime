@@ -1,16 +1,23 @@
 package movieservice.service;
 
+import java.io.IOException;
+import java.lang.reflect.Type;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
 
 import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
@@ -26,12 +33,14 @@ import movieservice.dto.request.TypeRequest;
 import movieservice.dto.response.MovieResponse;
 import movieservice.entity.CinemaRoom;
 import movieservice.entity.Movie;
+import movieservice.entity.MovieActionLog;
 import movieservice.entity.Seat;
 import movieservice.entity.ShowTime;
 import movieservice.entity.TypeMovie;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.CinemaRoomRepository;
+import movieservice.repository.MovieActionLogRepository;
 import movieservice.repository.MovieRepository;
 import movieservice.repository.SeatRepository;
 import movieservice.repository.ShowTimeRepository;
@@ -48,6 +57,8 @@ public class MovieService {
     MovieMapper movieMapper;
     CinemaRoomRepository cinemaRoomRepository;
     SeatRepository seatRepository;
+    MovieActionLogRepository movieActionLogRepository;
+    Cloudinary cloudinary;
 
     @Transactional
     public ApiResponse<?> createMovie(CreateMovieRequest request) {
@@ -103,10 +114,20 @@ public class MovieService {
 
                 types.add(type.get());
             }
-
             movie.setTypes(types);
-            movieRepository.save(movie);
         }
+        try {
+            Map uploadSmallImage = uploadImage(request.getSmallImage());
+            Map uploadLagreImage = uploadImage(request.getLargeImage());
+            movie.setLargeImage(uploadSmallImage.get("url").toString());
+            movie.setLargeImage(uploadLagreImage.get("url").toString());
+        } catch (Exception e) {
+            throw new AppException(MovieErrorCode.UPLOAD_IMAGE_FAILED);
+        }
+        Movie movie2 = movieRepository.save(movie);
+        logAction("1", "Admin System","movie - id:" + String.valueOf(movie2.getMovieId()), "Created new movie: " + movie2.getMovieNameEnglish());
+
+        
         return ApiResponse.builder()
                 .code(200)
                 .message("Movie created successfully")
@@ -114,7 +135,17 @@ public class MovieService {
                 .build();
     }
 
-    public MovieResponse getMovie(Integer id) {
+    public void logAction(String accountId, String actor, String note, String content) {
+        MovieActionLog log = new MovieActionLog();
+        log.setAccountId(accountId);
+        log.setActor(actor);
+        log.setNote(note);
+        log.setActionDescription(content);
+        log.setTimestamp(LocalDateTime.now());
+        movieActionLogRepository.save(log);
+    }
+
+    public MovieResponse getMovie(Long id) {
         Movie movie = movieRepository.findById(id).orElseThrow(() -> new RuntimeException("error"));
         return movieMapper.toResponse(movie);
     }
@@ -227,6 +258,8 @@ public class MovieService {
         CinemaRoom room = cinemaRoomRepository.save(cinemaRoom);
 
         generateSeatsForRoom(room.getCinemaRoomId(), room.getSeatQuantity(), room);
+        logAction("1", "Admin System", "cinema - id:" + String.valueOf(room.getCinemaRoomId()), "Created new cinema: " + room.getCinemaRoomName());
+
         return ApiResponse.builder()
                 .code(200)
                 .message("Cinema room created successfully")
@@ -236,20 +269,16 @@ public class MovieService {
 
     public void generateSeatsForRoom(Long cinemaRoomId, int quantity, CinemaRoom cinemaRoom) {
         int seatsPerRow = 10;
-
         for (int i = 0; i < quantity; i++) {
             char row = (char) ('A' + (i / seatsPerRow));
             int col = (i % seatsPerRow) + 1;
-
             String seatCode = row + String.valueOf(col);
-
             Seat seat = new Seat();
             seat.setSeatCode(seatCode);
             seat.setCinemaRoom(cinemaRoom);
             seat.setPrice(100000.0);
             seat.setSeatStatus("AVAILABLE");
             seat.setSeatType("STANDARD");
-
             seatRepository.save(seat);
         }
     }
@@ -260,12 +289,17 @@ public class MovieService {
             throw new AppException(MovieErrorCode.MOVIE_TYPE_NAME_EXISTED);
         }
         TypeMovie type = movieMapper.toType(typeRequest);
-        typeRepository.save(type);
+        TypeMovie typeTmp = typeRepository.save(type);
+        logAction("1", "Admin System", "type - id:" + String.valueOf(typeTmp.getTypeId()), "Created new type movie: " + typeTmp.getTypeName());
 
         return ApiResponse.builder()
                 .code(200)
                 .message("Movie type created successfully")
                 .result("OK")
                 .build();
+    }
+
+    public Map uploadImage(String fileUrlOrPath) throws IOException {
+        return cloudinary.uploader().upload(fileUrlOrPath, ObjectUtils.emptyMap());
     }
 }

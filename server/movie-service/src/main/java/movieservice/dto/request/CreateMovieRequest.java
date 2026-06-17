@@ -37,12 +37,16 @@ public class CreateMovieRequest {
     @NotBlank(message = "Movie production company cannot be blank")
     private String movieProductionCompany;
 
+    @NotBlank(message = "Large image URL must not be blank")
     private String largeImage;
 
+    @NotBlank(message = "Small image URL must not be blank")
     private String smallImage;
 
+    @NotEmpty(message = "At least one type ID must be selected")
     private List<Long> typeIds;
 
     @Valid
+    @NotEmpty(message = "Show times list must not be empty")
     private List<ShowTimeRequest> showTimes;
 }

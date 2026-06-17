@@ -14,7 +14,7 @@ import movieservice.entity.Movie;
 
 @Repository
 
-public interface MovieRepository extends JpaRepository<Movie, Integer> {
+public interface MovieRepository extends JpaRepository<Movie, Long> {
 
 
 
