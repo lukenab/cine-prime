@@ -1,10 +1,38 @@
-import { Users, UserCheck, UserX, TrendingUp } from "lucide-react";
+import { Film, PlayCircle, Calendar, TrendingUp } from "lucide-react";
 
 const stats = [
-  { label: "Total Users", value: "2,847", change: "+12.5%", positive: true, icon: Users, color: "blue" },
-  { label: "Active Users", value: "2,391", change: "+8.2%", positive: true, icon: UserCheck, color: "emerald" },
-  { label: "Inactive Users", value: "456", change: "-3.1%", positive: false, icon: UserX, color: "rose" },
-  { label: "New This Month", value: "184", change: "+24.3%", positive: true, icon: TrendingUp, color: "violet" },
+  {
+    label: "Total Movies",
+    value: "156",
+    change: "+12",
+    positive: true,
+    icon: Film,
+    color: "blue",
+  },
+  {
+    label: "Now Showing",
+    value: "24",
+    change: "+3",
+    positive: true,
+    icon: PlayCircle,
+    color: "emerald",
+  },
+  {
+    label: "Coming Soon",
+    value: "18",
+    change: "-2",
+    positive: false,
+    icon: Calendar,
+    color: "rose",
+  },
+  {
+    label: "Top Trending",
+    value: "8",
+    change: "+25.4%",
+    positive: true,
+    icon: TrendingUp,
+    color: "violet",
+  },
 ];
 
 const colorMap: Record<string, { bg: string; icon: string; text: string }> = {
@@ -14,15 +42,15 @@ const colorMap: Record<string, { bg: string; icon: string; text: string }> = {
   violet: { bg: "bg-violet-50", icon: "text-violet-600", text: "text-violet-600" },
 };
 
-export function StatsCards() {
+export function MovieStatsCards() {
   return (
-    <div className="grid grid-cols-4 gap-5 mb-8">
+    <div className="grid grid-cols-4 gap-5 mb-6">
       {stats.map(({ label, value, change, positive, icon: Icon, color }) => {
         const c = colorMap[color];
         return (
           <div
             key={label}
-            className="rounded-2xl border p-5 flex flex-col gap-4 hover:shadow-sm transition-shadow"
+            className="bg-white rounded-2xl border border-gray-100 p-5 flex flex-col gap-4 hover:shadow-sm transition-shadow"
             style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
           >
             <div className="flex items-start justify-between">

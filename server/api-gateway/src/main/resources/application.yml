@@ -35,7 +35,7 @@ spring:
         - id: auth-service
           uri: lb://auth-service
           predicates:
-            - Path=/api/auth/**, /api/permissions/**, /api/roles/**
+            - Path=/api/auth/**, /api/permissions/**, /api/roles/**, /api/accounts/**
             
 eureka:
   instance:

@@ -16,7 +16,7 @@ public enum GlobalErrorCode implements BaseErrorCode {
     UNCATEGORIZED_EXCEPTION(1003, "Uncategorized error!", HttpStatus.INTERNAL_SERVER_ERROR),
     INVALID_KEY(1005, "Invalid message key!", HttpStatus.BAD_REQUEST),
     UNAUTHENTICATED(1008, "Unauthenticated", HttpStatus.UNAUTHORIZED),
-    UNAUTHORIZED(1009, "You do not have permission", HttpStatus.FORBIDDEN)
+    UNAUTHORIZED(1009, "You do not have permission", HttpStatus.FORBIDDEN),
     ;
 
     int code;

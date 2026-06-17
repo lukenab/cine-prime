@@ -1,15 +1,5 @@
-import {
-  LayoutDashboard,
-  Film,
-  Calendar,
-  Ticket,
-  Users,
-  BarChart2,
-  Settings,
-  Clapperboard,
-  LogOut,
-} from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { LayoutDashboard, Film, Calendar, Ticket, Users, BarChart2, Settings, Clapperboard, LogOut } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom"; // 1. Thêm import useLocation
 
 // 1. Thêm 'path' chuẩn cho từng mục menu
 const navItems = [
@@ -17,19 +7,18 @@ const navItems = [
   { icon: Film, label: "Movies", id: "movies", path: "/admin/movies" },
   { icon: Calendar, label: "Showtimes", id: "showtimes", path: "/admin/showtimes" },
   { icon: Ticket, label: "Bookings", id: "bookings", path: "/admin/bookings" },
-  { icon: Users, label: "Users", id: "users", path: "/admin/users" }, // Đường dẫn tới trang User
+  { icon: Users, label: "Users", id: "users", path: "/admin/users" },
   { icon: BarChart2, label: "Reports", id: "reports", path: "/admin/reports" },
   { icon: Settings, label: "Settings", id: "settings", path: "/admin/settings" },
 ];
 
-// 2. Bỏ onItemClick đi vì Sidebar sẽ tự lo việc điều hướng
 interface SidebarProps {
-  activeItem: string;
   isDarkMode?: boolean;
 }
 
-export function Sidebar({ activeItem, isDarkMode = true }: SidebarProps) {
+export function Sidebar({ isDarkMode = true }: SidebarProps) {
   const navigate = useNavigate();
+  const location = useLocation(); 
 
   const handleLogout = () => {
     localStorage.removeItem("accessToken");
@@ -58,7 +47,7 @@ export function Sidebar({ activeItem, isDarkMode = true }: SidebarProps) {
       {/* Logo */}
       <div
         style={{
-          height: "60px", // match Header height so borders align
+          height: "60px",
           padding: "0 20px",
           borderBottom: "1px solid var(--border-color)",
           transition: "border-color 0.25s ease",
@@ -125,11 +114,16 @@ export function Sidebar({ activeItem, isDarkMode = true }: SidebarProps) {
       {/* Nav items */}
       <nav style={{ padding: "0 10px", flex: 1 }}>
         {navItems.map(({ icon: Icon, label, id, path }) => {
-          const isActive = activeItem === id;
+          // 3. Logic check active thông minh dựa trên URL
+          const isActive =
+            path === "/admin"
+              ? location.pathname === "/admin" // Trang Dashboard phải khớp chính xác để không bị sáng ở mọi trang
+              : location.pathname.startsWith(path); // Các trang con thì chỉ cần khớp phần đầu
+
           return (
             <button
               key={id}
-              onClick={() => navigate(path)} // 3. Sử dụng navigate tới path tương ứng
+              onClick={() => navigate(path)}
               style={{
                 width: "100%",
                 display: "flex",
@@ -140,21 +134,15 @@ export function Sidebar({ activeItem, isDarkMode = true }: SidebarProps) {
                 borderRadius: "8px",
                 border: "none",
                 cursor: "pointer",
-                background: isActive 
-                  ? (isDarkMode ? "rgba(59, 130, 246, 0.1)" : "rgba(37, 99, 235, 0.08)") 
-                  : "transparent",
-                color: isActive 
-                  ? (isDarkMode ? "#3b82f6" : "#2563eb") 
-                  : "var(--text-sub)",
+                background: isActive ? (isDarkMode ? "rgba(59, 130, 246, 0.1)" : "rgba(37, 99, 235, 0.08)") : "transparent",
+                color: isActive ? (isDarkMode ? "#3b82f6" : "#2563eb") : "var(--text-sub)",
                 fontSize: "13.5px",
                 fontWeight: isActive ? 600 : 500,
                 letterSpacing: "0.01em",
                 transition: "all 0.15s ease",
                 position: "relative",
                 textAlign: "left",
-                boxShadow: isActive
-                  ? (isDarkMode ? "inset 0 0 0 1px rgba(59, 130, 246, 0.15)" : "inset 0 0 0 1px rgba(37, 99, 235, 0.2)")
-                  : "none",
+                boxShadow: isActive ? (isDarkMode ? "inset 0 0 0 1px rgba(59, 130, 246, 0.15)" : "inset 0 0 0 1px rgba(37, 99, 235, 0.2)") : "none",
               }}
               onMouseEnter={(e) => {
                 if (!isActive) {
@@ -184,14 +172,7 @@ export function Sidebar({ activeItem, isDarkMode = true }: SidebarProps) {
                   }}
                 />
               )}
-              <Icon
-                size={16}
-                style={
-                  isActive && isDarkMode
-                    ? { filter: "drop-shadow(0 0 4px rgba(59, 130, 246, 0.5))" }
-                    : {}
-                }
-              />
+              <Icon size={16} style={isActive && isDarkMode ? { filter: "drop-shadow(0 0 4px rgba(59, 130, 246, 0.5))" } : {}} />
               {label}
             </button>
           );
@@ -272,9 +253,14 @@ export function Sidebar({ activeItem, isDarkMode = true }: SidebarProps) {
           >
             <LogOut
               size={14}
-              style={{ color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.2s ease" }}
-              onMouseEnter={(e) => e.currentTarget.style.color = isDarkMode ? "#3b82f6" : "#2563eb"}
-              onMouseLeave={(e) => e.currentTarget.style.color = "var(--text-muted)"}
+              style={{
+                color: "var(--text-muted)",
+                cursor: "pointer",
+                flexShrink: 0,
+                transition: "color 0.2s ease",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = isDarkMode ? "#3b82f6" : "#2563eb")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
             />
           </button>
         </div>
