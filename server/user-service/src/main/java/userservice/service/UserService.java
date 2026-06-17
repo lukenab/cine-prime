@@ -1,21 +1,34 @@
 package userservice.service;
 
+import java.security.Security;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import jakarta.transaction.Transactional;
+
 import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.exception.AppException;
+import org.mapstruct.control.MappingControl;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.web.client.RestClient;
+import userservice.dto.PageResponse;
 import userservice.dto.UserCreationRequest;
 import userservice.dto.UserResponse;
 import userservice.dto.UserUpdateRequest;
 import userservice.entity.User;
 import userservice.exception.ErrorCode;
 import userservice.mapper.UserMapper;
+import userservice.repository.AuditLogRepository;
 import userservice.repository.UserRepository;
 
 @Service
@@ -25,6 +38,8 @@ import userservice.repository.UserRepository;
 public class UserService {
     UserRepository userRepository;
     UserMapper userMapper;
+    AuditLogService auditLogService;
+    private final RestClient.Builder builder;
 
     @Transactional
     public UserResponse create(UserCreationRequest creationRequest) {
@@ -44,7 +59,12 @@ public class UserService {
         User user = userMapper.toUser(creationRequest);
         user.setCreatedAt(LocalDateTime.now());
         user.setIsActive(true);
-        return userMapper.toUserResponse(userRepository.save(user));
+
+        // Ghi Log
+        User savedUser = userRepository.save(user);
+        auditLogService.log("User", savedUser.getAccountId(), "CREATE", null, savedUser, getCurrentAccountId());
+
+        return userMapper.toUserResponse(savedUser);
     }
 
     @Transactional
@@ -67,9 +87,16 @@ public class UserService {
             throw  new AppException(ErrorCode.PHONE_EXISTED);
         }
 
+        UserResponse oldData = userMapper.toUserResponse(user);
+
         userMapper.updateUser(request, user);
         user.setUpdatedAt(LocalDateTime.now());
-        return userMapper.toUserResponse(userRepository.save(user));
+
+        // Ghi Log
+        User savedUser = userRepository.save(user);
+        auditLogService.log("User", savedUser.getAccountId(), "UPDATE", oldData, savedUser, getCurrentAccountId());
+
+        return userMapper.toUserResponse(savedUser);
     }
 
     @Transactional
@@ -84,6 +111,41 @@ public class UserService {
         user.setIsActive(false);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
+
+        // Ghi Log
+        User savedUser = userRepository.save(user);
+        auditLogService.log("User", savedUser.getAccountId(), "DELETE", null, savedUser, getCurrentAccountId());
+
+    }
+
+    private String getCurrentAccountId(){
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        // Check đã login và đã có token là JWT hay chưa
+        if(authentication != null && authentication.getPrincipal() instanceof Jwt jwt) {
+            return jwt.getClaimAsString("accountId");
+        }
+
+        return "SYSTEM";
+    }
+
+    public PageResponse<UserResponse> getAllUser(int page, int size){
+        Pageable pageable = PageRequest.of(page - 1, size);
+
+        Page<User> pageData = userRepository.findAll(pageable);
+
+        List<UserResponse> userResponses = pageData.getContent().stream()
+                .map(userMapper::toUserResponse)
+                .toList();
+
+        return PageResponse.<UserResponse>builder()
+                .currentPage(page)
+                .totalPages(pageData.getTotalPages())
+                .pageSize(pageData.getSize())
+                .totalElements(pageData.getTotalElements())
+                .data(userResponses)
+                .build();
+
 
     }
 }

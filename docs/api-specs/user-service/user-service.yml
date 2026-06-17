@@ -12,6 +12,35 @@ tags:
   - name: User Management
     description: Endpoints for managing user profiles
 paths:
+  /api/users:
+    get:
+      tags:
+        - User Management
+      summary: Get all users with pagination
+      description: Retrieves a paginated list of user profiles.
+      parameters:
+        - name: page
+          in: query
+          description: Page number (1-based index)
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: size
+          in: query
+          description: Number of records per page
+          required: false
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Successfully retrieved list of users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponsePageResponseUserResponse'
+
   /api/users/profile:
     post:
       tags:
@@ -333,6 +362,41 @@ components:
           example: true
 
     # --- WRAPPER RESPONSES (API RESPONSE STANDARD) ---
+    PageResponseUserResponse:
+      type: object
+      properties:
+        currentPage:
+          type: integer
+          example: 1
+        totalPages:
+          type: integer
+          example: 5
+        pageSize:
+          type: integer
+          example: 10
+        totalElements:
+          type: integer
+          example: 45
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserResponse'
+
+    ApiResponsePageResponseUserResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: Response code (1000 = success)
+          example: 1000
+        message:
+          type: string
+          nullable: true
+          description: Response message
+          example: "Success"
+        result:
+          $ref: '#/components/schemas/PageResponseUserResponse'
+
     ApiResponseUserResponse:
       type: object
       properties:

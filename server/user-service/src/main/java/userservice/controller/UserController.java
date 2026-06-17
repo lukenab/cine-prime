@@ -4,6 +4,7 @@ import movie.theater.common.dto.ApiResponse;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import userservice.dto.PageResponse;
 import userservice.dto.UserCreationRequest;
 import userservice.dto.UserResponse;
 import userservice.dto.UserUpdateRequest;
@@ -44,6 +45,16 @@ public class UserController {
         userService.softDeleteUser(id);
         return ApiResponse.<UserResponse>builder()
                 .message("User has been deleted")
+                .build();
+    }
+
+    @GetMapping()
+    public ApiResponse<PageResponse<UserResponse>> getAllUsers(
+            @RequestParam(value = "page", defaultValue = "1") int page,
+            @RequestParam(value = "size", defaultValue = "10") int size
+    ){
+        return ApiResponse.<PageResponse<UserResponse>>builder()
+                .result(userService.getAllUser(page, size))
                 .build();
     }
 }

@@ -269,6 +269,52 @@ DELETE /api/users/550e8400-e29b-41d4-a716-446655440000
 
 ---
 
+### 5. Get All Users (Paginated)
+**GET** `/api/users`
+
+Retrieves a paginated list of user profiles.
+
+**Query Parameters:**
+- `page` (integer, optional): Page number (1-based index). Default: `1`
+- `size` (integer, optional): Number of records per page. Default: `10`
+
+**Example Request:**
+```
+GET /api/users?page=1&size=5
+```
+
+**Success Response (200):**
+```json
+{
+  "code": 1000,
+  "message": "Success",
+  "result": {
+    "currentPage": 1,
+    "totalPages": 5,
+    "pageSize": 5,
+    "totalElements": 23,
+    "data": [
+      {
+        "accountId": "550e8400-e29b-41d4-a716-446655440000",
+        "fullName": "Nguyen Van A",
+        "phoneNumber": "0912345678",
+        "dateOfBirth": "1995-05-15",
+        "gender": "Male",
+        "address": "123 Nguyen Hue, District 1, HCMC",
+        "identityCard": "079095001234",
+        "email": "nguyenvana@gmail.com",
+        "avatarUrl": null,
+        "createdAt": "2026-06-15T19:00:00",
+        "updatedAt": null,
+        "isActive": true
+      }
+    ]
+  }
+}
+```
+
+---
+
 ## Validation Rules
 
 ### Phone Number
@@ -439,6 +485,9 @@ CREATE INDEX idx_users_is_active ON users(is_active);
 
 ## Changelog
 
+### Version 1.1.0 (2026-06-17)
+- Added GET `/api/users` endpoint to list all users with pagination support
+
 ### Version 1.0.0 (2026-06-15)
 - Initial API specification
 - CRUD operations for user profiles
@@ -449,7 +498,6 @@ CREATE INDEX idx_users_is_active ON users(is_active);
 
 ### Future Enhancements
 - User restore endpoint (reactivate soft-deleted users)
-- List all users endpoint with pagination
 - Search users by criteria
 - Batch operations support
 - Avatar upload endpoint
