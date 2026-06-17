@@ -21,9 +21,8 @@ import movieservice.entity.MovieType;
 @Mapper(componentModel = "spring")
 public interface MovieMapper {
     Movie toMovie(CreateMovieRequest request);
-
-    // @Mapping(target = "movieType", source = "movieType", qualifiedByName = "mapTypesToGenreNames")
-    // void updateMovieFromRequest(UpdateMovieRequest request, @MappingTarget Movie movie);
+    // cái này nảy tui sửa k đc, có s phía cuối hong, k bt nữa
+    void updateMovieFromRequest(UpdateMovieRequest request, @MappingTarget Movie movie);
 
     @Mapping(target = "movieType", source = "movieTypes", qualifiedByName = "mapTypesToGenreNames")
     MovieResponse toResponse(Movie movie);
@@ -34,6 +33,7 @@ public interface MovieMapper {
     CinemaRoomResponse toCinemaResponse(CinemaRoom cinemaRoom);
     MovieType toType(TypeRequest typeRequest);
     TypeMovieResponse toMovieResponse(MovieType typeMovie);
+    // ông coi cái hàm dưới đây để gì v
     @Named("mapTypesToGenreNames")
     default List<String> mapTypesToGenreNames(List<MovieType> types) {
         if (types == null) {

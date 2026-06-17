@@ -76,7 +76,7 @@ public class MovieService {
         validateStartTimes(showTimeRequests);
 
         if (showTimeRequests != null && !showTimeRequests.isEmpty()) {
-            List<ShowTime> showTimesToSave = new ArrayList<>(); 
+            List<ShowTime> showTimesToSave = new ArrayList<>();
 
             for (ShowTimeRequest stReq : showTimeRequests) {
                 Optional<CinemaRoom> cinemaRoom = cinemaRoomRepository.findById(stReq.getCinemaRoomId().intValue());
@@ -97,7 +97,7 @@ public class MovieService {
                 showTime.setMovie(movie);
                 showTime.setCinemaRoom(cinemaRoom.get());
 
-                showTimesToSave.add(showTime); 
+                showTimesToSave.add(showTime);
             }
 
             List<ShowTime> savedShowTimes = showTimeRepository.saveAll(showTimesToSave);
@@ -203,6 +203,7 @@ public class MovieService {
             throw new AppException(MovieErrorCode.SHOWTIME_CONFLICT_IN_DATABASE);
         }
     }
+
     public Page<MovieResponse> findPageMovie(int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
 
@@ -260,41 +261,43 @@ public class MovieService {
     public Map uploadImage(String fileUrlOrPath) throws IOException {
         return cloudinary.uploader().upload(fileUrlOrPath, ObjectUtils.emptyMap());
     }
+
     public List<MovieResponse> findAll() {
         List<Movie> movies = movieRepository.findByStatusTrue();
         return movieMapper.toResponseList(movies);
     }
 
-    // @Transactional
-    // public MovieResponse updateMovie(Long id, UpdateMovieRequest request) {
-    //     Movie movie = movieRepository.findById(id)
-    //             .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+    @Transactional
+    public MovieResponse updateMovie(Long id, UpdateMovieRequest request) {
+        // 1. Tìm Movie cũ, nếu không có trả về lỗi
+        Movie movie = movieRepository.findById(id)
+                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
 
-    //     movieMapper.updateMovieFromRequest(request, movie);
-    //     movieRepository.save(movie);
+        // 2. Dùng Mapper cập nhật các trường thông tin cơ bản (Tên, đạo diễn, diễn
+        // viên,...)
+        movieMapper.updateMovieFromRequest(request, movie);
 
-    //     if (request.getTypeIds() != null) {
-    //         movieTypeRepository.deleteByMovie(movie);
-    //         List<MovieType> updatedMovieTypes = new ArrayList<>();
-    //         for (Long typeId : request.getTypeIds()) {
-    //             Type type = typeRepository.findById(typeId)
-    //                     .orElseThrow(() -> new AppException(MovieErrorCode.GENRE_NOT_FOUND));
-    //             MovieType movieType = new MovieType();
-    //             MovieTypeId movieTypeId = new MovieTypeId();
-    //             movieTypeId.setMovieId(movie.getMovieId());
-    //             movieTypeId.setTypeId(typeId);
-    //             movieType.setId(movieTypeId);
-    //             movieType.setMovie(movie);
-    //             movieType.setType(type);
-    //             movieTypeRepository.save(movieType);
-    //             updatedMovieTypes.add(movieType);
-    //         }
-    //         movie.setMovieTypes(updatedMovieTypes);
-    //     }
+        // 3. Xử lý cập nhật danh sách Thể loại (MovieType) nếu request có truyền lên
+        if (request.getTypeIds() != null) {
+            List<MovieType> updatedMovieTypes = new ArrayList<>();
 
-    //     Movie updatedMovie = movieRepository.findById(id.intValue()).orElse(movie);
-    //     return movieMapper.toResponse(updatedMovie);
-    // }
+            for (Long typeId : request.getTypeIds()) {
+                // Thay vì tự tạo bảng trung gian lỗi, ta tìm thẳng thực thể MovieType từ DB
+                MovieType type = typeRepository.findById(typeId)
+                        .orElseThrow(() -> new AppException(MovieErrorCode.GENRE_NOT_FOUND));
+                updatedMovieTypes.add(type);
+            }
+
+            // Cập nhật lại list mới cho Movie. JPA/Hibernate sẽ tự động clear bảng trung
+            // gian cũ
+            // và chèn dữ liệu mới vào bảng trung gian `@ManyToMany` cho bạn.
+            movie.setMovieTypes(updatedMovieTypes);
+        }
+
+        // Do có @Transactional, không cần gọi repo.save() hay repo.findById() nữa.
+        // Các thay đổi trên đối tượng `movie` sẽ tự động được commit xuống DB.
+        return movieMapper.toResponse(movie);
+    }
 
     @Transactional
     public void deleteMovie(Long id) {

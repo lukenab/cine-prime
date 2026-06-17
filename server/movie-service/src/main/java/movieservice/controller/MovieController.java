@@ -18,6 +18,7 @@ import movieservice.service.MovieService;
 import movieservice.dto.request.CinemaRoomRequest;
 import movieservice.dto.request.CreateMovieRequest;
 import movieservice.dto.request.TypeRequest;
+import movieservice.dto.request.UpdateMovieRequest;
 import movieservice.dto.response.CinemaRoomResponse;
 import movieservice.dto.response.MovieResponse;
 import movieservice.dto.response.TypeMovieResponse;
@@ -64,17 +65,16 @@ public class MovieController {
                 .build();
     }
 
-    // @PutMapping("/{movieId}")
-    // public movie.theater.common.dto.ApiResponse<MovieResponse> updateMovie(@PathVariable("movieId") Long movieId,
-    //         @Valid @RequestBody UpdateMovieRequest updateMovieRequest) {
-    //     MovieResponse movieResponse = movieService.updateMovie(movieId, updateMovieRequest);
-    //     return movie.theater.common.dto.ApiResponse.<MovieResponse>builder()
-    //             .code(1000)
-    //             .message("Movie successfully updated")
-    //             .result(movieResponse)
-    //             .build();
-    // }
-
+    @PutMapping("/{movieId}")
+    public movie.theater.common.dto.ApiResponse<MovieResponse> updateMovie(@PathVariable("movieId") Long movieId,
+            @Valid @RequestBody UpdateMovieRequest updateMovieRequest) {
+        MovieResponse movieResponse = movieService.updateMovie(movieId, updateMovieRequest);
+        return movie.theater.common.dto.ApiResponse.<MovieResponse>builder()
+                .code(1000)
+                .message("Movie successfully updated")
+                .result(movieResponse)
+                .build();
+    }
     @DeleteMapping("/{movieId}")
     public movie.theater.common.dto.ApiResponse<Void> deleteMovie(@PathVariable("movieId") Long movieId) {
         movieService.deleteMovie(movieId);
