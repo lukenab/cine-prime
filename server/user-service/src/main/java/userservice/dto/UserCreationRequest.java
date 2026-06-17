@@ -37,6 +37,13 @@ public class UserCreationRequest {
     @Past(message = "Date of birth must be in the past")
     LocalDate dateOfBirth;
 
+    @NotBlank(message = "Email must not be blank")
+    @Pattern(
+            regexp = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$",
+            message = "Invalid email format"
+    )
+    String email;
+
     @NotBlank(message = "Gender must not be blank")
     @Pattern(
         regexp = "^(Male|Female|Other)$",

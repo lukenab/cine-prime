@@ -47,6 +47,9 @@ public class User {
     @Column(name = "identity_card", length = 20)
     private String identityCard;
 
+    @Column(name = "email", length = 255)
+    private  String email;
+
     @Column(name = "avatar_url", length = 255)
     private String avatarUrl;
 
@@ -57,9 +60,13 @@ public class User {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
+
     @OneToOne(mappedBy = "user")
     private Member member;
 
     @OneToOne(mappedBy = "user")
     private Employee employee;
+
 }

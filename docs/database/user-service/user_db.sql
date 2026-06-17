@@ -31,3 +31,17 @@ CREATE TABLE employee (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+
+-- 4. Bảng AUDITLOG (Ghi lại tất cả Log)
+CREATE TABLE public.audit_logs (
+    id varchar(255) NOT NULL,
+    "action" varchar(255) NULL,
+    ntity_id varchar(255) NULL,
+    entity_name varchar(255) NULL,
+    new_value text NULL,
+    old_value text NULL,
+    perform_at timestamp(6) NULL,
+    perform_by varchar(255) NULL,
+    CONSTRAINT audit_logs_pkey PRIMARY KEY (id)
+);
