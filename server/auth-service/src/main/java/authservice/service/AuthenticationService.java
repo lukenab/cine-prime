@@ -2,16 +2,16 @@ package authservice.service;
 
 import authservice.dto.request.AuthenticationRequest;
 import authservice.dto.request.RegisterRequest;
-import authservice.dto.request.UserCreationRequest;
+import authservice.event.UserRegisteredEvent;
 import authservice.dto.request.VerifyOtpRequest;
 import authservice.dto.response.AuthenticationResponse;
-import authservice.dto.response.RegisterResponse;
+import authservice.dto.response.AccountResponse;
 import authservice.entity.Account;
 import authservice.entity.Role;
 import authservice.mapper.AccountMapper;
+import authservice.producer.UserEventProducer;
 import authservice.repository.AccountRepository;
 import authservice.repository.RoleRepository;
-import authservice.repository.UserProfileClient;
 import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -21,12 +21,10 @@ import movie.theater.common.exception.AppException;
 import movie.theater.common.exception.GlobalErrorCode;
 import authservice.exception.AuthErrorCode;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.HashSet;
-import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
@@ -39,11 +37,13 @@ public class AuthenticationService {
     RoleRepository roleRepository;
     AccountMapper accountMapper;
     PasswordEncoder passwordEncoder;
-    UserProfileClient userProfileClient;
     JwtService jwtService;
     EmailService emailService;
+    UserEventProducer userEventProducer;
 
     StringRedisTemplate redisTemplate;
+
+    private static final String DEFAULT_USER_ROLE = "ROLE_USER";
 
     public void initiateRegistration(RegisterRequest request) {
         String emailKey = request.getEmail().trim().toLowerCase();
@@ -64,10 +64,10 @@ public class AuthenticationService {
     }
 
     @Transactional
-    public RegisterResponse verifyOtpAndRegister(VerifyOtpRequest request) {
-        RegisterRequest regReq = request.getRegisterRequest();
+    public AccountResponse verifyOtpAndRegister(VerifyOtpRequest request) {
+        RegisterRequest registerRequest = request.getRegisterRequest();
 
-        String emailKey = regReq.getEmail().trim().toLowerCase();
+        String emailKey = registerRequest.getEmail().trim().toLowerCase();
         String inputOtp = request.getOtp() != null ? request.getOtp().trim() : "";
 
         String cachedOtp = redisTemplate.opsForValue().get(emailKey);
@@ -78,32 +78,40 @@ public class AuthenticationService {
 
         redisTemplate.delete(emailKey);
 
-        if (accountRepository.existsByUsername(regReq.getUsername())) {
+        if (accountRepository.existsByUsername(registerRequest.getUsername())) {
             throw new AppException(AuthErrorCode.USERNAME_EXISTED);
         }
         if (accountRepository.existsByEmail(emailKey)) {
             throw new AppException(AuthErrorCode.EMAIL_EXISTED);
         }
 
-        Account account = accountMapper.toAccount(regReq);
-        account.setPasswordHash(passwordEncoder.encode(regReq.getPassword()));
+        Account account = accountMapper.toAccount(registerRequest);
+        account.setPasswordHash(passwordEncoder.encode(registerRequest.getPassword()));
         account.setStatus(1);
 
-        Role accountRole = roleRepository.findById("ROLE_USER")
+        Role accountRole = roleRepository.findById(DEFAULT_USER_ROLE)
                 .orElseThrow(() -> new AppException(AuthErrorCode.ROLE_NOT_FOUND));
 
         HashSet<Role> roles = new HashSet<>();
         roles.add(accountRole);
 
         account.setRoles(roles);
-
         account = accountRepository.saveAndFlush(account);
 
-        UserCreationRequest userCreationRequest = UserCreationRequest.builder().accountId(account.getAccountId()).fullName(regReq.getFullName()).phoneNumber(regReq.getPhoneNumber()).address(regReq.getAddress()).gender(regReq.getGender()).dateOfBirth(regReq.getDateOfBirth()).email(regReq.getEmail()).identityCard(regReq.getIdentityCard()).build();
+        UserRegisteredEvent userRegisteredEvent = UserRegisteredEvent.builder()
+                .accountId(account.getAccountId())
+                .fullName(registerRequest.getFullName())
+                .phoneNumber(registerRequest.getPhoneNumber())
+                .address(registerRequest.getAddress())
+                .gender(registerRequest.getGender())
+                .dateOfBirth(registerRequest.getDateOfBirth())
+                .email(registerRequest.getEmail())
+                .identityCard(registerRequest.getIdentityCard())
+                .build();
 
-        userProfileClient.createProfile(userCreationRequest);
+        userEventProducer.sendRegisteredEvent(userRegisteredEvent);
 
-        return accountMapper.toRegisterResponse(account);
+        return accountMapper.toAccountResponse(account);
     }
 
     public AuthenticationResponse authenticate(AuthenticationRequest request) {
@@ -118,19 +126,4 @@ public class AuthenticationService {
 
         return AuthenticationResponse.builder().authenticate(true).token(token).build();
     }
-
-//    public RegisterResponse myInfo() {
-//        var context = SecurityContextHolder.getContext();
-//
-//        String name = context.getAuthentication().getName();
-//
-//        Account account = accountRepository.findByUsername(name).orElseThrow(() -> new AppException(AuthErrorCode.USERNAME_EXISTED));
-//
-//        return accountMapper.toRegisterResponse(account);
-//    }
-
-    public List<Account> getAllAccount() {
-        return accountRepository.findAll();
-    }
-
 }
