@@ -1,15 +1,24 @@
 openapi: 3.0.1
 info:
   title: CinePrime Auth Service API
-  description: OpenAPI specification for the CinePrime authentication service. This document defines the endpoints for user registration, OTP verification, and login.
-  version: 1.0.0
+  description: OpenAPI specification for the CinePrime authentication service. Defines endpoints for user registration, authentication, and RBAC (Roles & Permissions) management.
+  version: 1.1.0
 servers:
-  - url: http://localhost:8080
-    description: Local Development Server
+  - url: http://localhost:8088
+    description: Auth Service Local Server
+  - url: http://localhost:8085
+    description: API Gateway
 tags:
   - name: Authentication
-    description: Endpoints for user registration and authentication
+    description: Endpoints for user registration and login
+  - name: Permission
+    description: Endpoints for managing system permissions
+  - name: Role
+    description: Endpoints for managing system roles
 paths:
+  # ==========================================
+  # AUTHENTICATION ENDPOINTS
+  # ==========================================
   /api/auth/register/initiate:
     post:
       tags:
@@ -52,7 +61,7 @@ paths:
       tags:
         - Authentication
       summary: Verify OTP and register user
-      description: Verifies OTP and creates the account. Note that this API communicates with `user-service` to create the profile, so it may throw validation errors from `user-service` (e.g., Phone or ID Card existed).
+      description: Verifies OTP and creates the account. Note that this API communicates with `user-service` to create the profile.
       requestBody:
         required: true
         content:
@@ -67,7 +76,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseRegisterResponse'
         '400':
-          description: Bad Request - Validation failures from Auth Service or User Service
+          description: Bad Request - Validation failures
           content:
             application/json:
               schema:
@@ -78,8 +87,8 @@ paths:
                   value:
                     code: 1013
                     message: "Otp invalid"
-                RoleNotFound:
-                  summary: "Error 1012: Role Not Found"
+                DefaultRoleNotFound:
+                  summary: "Error 1012: Default Role Not Found"
                   value:
                     code: 1012
                     message: "Default role not found!"
@@ -99,7 +108,7 @@ paths:
       tags:
         - Authentication
       summary: Authenticate user and return token
-      description: Authenticates the user using username and password. Returns a JWT token upon successful authentication.
+      description: Authenticates the user using username and password. Returns a JWT token.
       requestBody:
         required: true
         content:
@@ -125,6 +134,95 @@ paths:
                   value:
                     code: 1008
                     message: "Unauthenticated"
+
+  # ==========================================
+  # PERMISSION ENDPOINTS
+  # ==========================================
+  /api/permissions:
+    post:
+      tags:
+        - Permission
+      summary: Create a new permission
+      description: Creates a new system permission to be used in RBAC.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PermissionRequest'
+      responses:
+        '200':
+          description: Permission successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponsePermissionResponse'
+    get:
+      tags:
+        - Permission
+      summary: Get all permissions
+      description: Retrieves a list of all existing permissions in the system.
+      responses:
+        '200':
+          description: List of permissions retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseListPermissionResponse'
+
+  /api/permissions/{permissionId}:
+    delete:
+      tags:
+        - Permission
+      summary: Delete a permission
+      description: Removes a permission from the system using its ID (name).
+      parameters:
+        - name: permissionId
+          in: path
+          required: true
+          description: The unique name of the permission
+          schema:
+            type: string
+            example: "UPDATE_DATA"
+      responses:
+        '200':
+          description: Permission deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+
+  /api/roles:
+    post:
+      tags:
+        - Role
+      summary: Create a new role with assigned permissions
+      description: Creates a new role and assigns permission names for RBAC.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+      responses:
+        '200':
+          description: Role successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseRoleResponse'
+    get:
+      tags:
+        - Role
+      summary: Get all roles
+      description: Retrieves all roles and their assigned permissions.
+      responses:
+        '200':
+          description: List of roles retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseListRoleResponse'
 
 components:
   schemas:
@@ -186,6 +284,33 @@ components:
           format: password
           example: "Password123@"
 
+    PermissionRequest:
+      type: object
+      required: [name, description]
+      properties:
+        name:
+          type: string
+          example: "UPDATE_DATA"
+        description:
+          type: string
+          example: "Update data permission"
+
+    RoleRequest:
+      type: object
+      required: [roleName, description]
+      properties:
+        roleName:
+          type: string
+          example: "ADMIN"
+        description:
+          type: string
+          example: "Administrator Role"
+        permissions:
+          type: array
+          items:
+            type: string
+          example: ["UPDATE_DATA", "CREATE_USER"]
+
     # --- CORE RESPONSE SCHEMAS ---
     AuthenticationResponse:
       type: object
@@ -195,8 +320,7 @@ components:
           example: true
         token:
           type: string
-          nullable: true
-          example: "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJqb2huX2RvZSIsImlzcyI6ImNpbmVwcmltZSJ9..."
+          example: "eyJhbGciOiJIUzUxMiJ9..."
 
     RegisterResponse:
       type: object
@@ -214,6 +338,30 @@ components:
           type: string
           format: date-time
           example: "2026-06-14T15:00:00Z"
+
+    PermissionResponse:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "UPDATE_DATA"
+        description:
+          type: string
+          example: "Update data permission"
+
+    RoleResponse:
+      type: object
+      properties:
+        roleName:
+          type: string
+          example: "ADMIN"
+        description:
+          type: string
+          example: "Administrator Role"
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionResponse'
 
     # --- WRAPPER RESPONSES (API RESPONSE STANDARD) ---
     ApiResponseString:
@@ -252,6 +400,68 @@ components:
           example: "Success"
         result:
           $ref: '#/components/schemas/AuthenticationResponse'
+
+    ApiResponsePermissionResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 1000
+        message:
+          type: string
+          example: "Success"
+        result:
+          $ref: '#/components/schemas/PermissionResponse'
+
+    ApiResponseListPermissionResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 1000
+        message:
+          type: string
+          example: "Success"
+        result:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionResponse'
+
+    ApiResponseRoleResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 1000
+        message:
+          type: string
+          example: "Success"
+        result:
+          $ref: '#/components/schemas/RoleResponse'
+
+    ApiResponseListRoleResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 1000
+        message:
+          type: string
+          example: "Success"
+        result:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleResponse'
+
+    ApiResponseVoid:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 1000
+        message:
+          type: string
+          example: "Success"
 
     # --- ERROR RESPONSE SCHEMA ---
     ApiErrorResponse:

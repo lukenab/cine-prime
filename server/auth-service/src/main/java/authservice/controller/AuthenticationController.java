@@ -43,16 +43,16 @@ public class AuthenticationController {
                 .result(authenticationService.authenticate(request))
                 .build();
     }
-
-    @GetMapping("/myInfo")
-    ApiResponse<RegisterResponse> myInfo() {
-        return ApiResponse.<RegisterResponse>builder()
-                .result(authenticationService.myInfo())
-                .build();
-    }
-
-    @GetMapping("/accounts")
-    List<Account> getAll(){
-        return authenticationService.getAllAccount();
-    }
+//
+//    @GetMapping("/myInfo")
+//    ApiResponse<RegisterResponse> myInfo() {
+//        return ApiResponse.<RegisterResponse>builder()
+//                .result(authenticationService.myInfo())
+//                .build();
+//    }
+//
+//    @GetMapping("/accounts")
+//    List<Account> getAll(){
+//        return authenticationService.getAllAccount();
+//    }
 }

@@ -68,7 +68,9 @@ public class JwtService {
     private String buildScope(Account account){
         StringJoiner stringJoiner = new StringJoiner(" ");
         if(!CollectionUtils.isEmpty(account.getRoles())){
-            account.getRoles().forEach((stringJoiner::add));
+            account.getRoles().forEach(role -> {
+                stringJoiner.add(role.getRoleName());
+            });
         }
 
         return stringJoiner.toString();

@@ -7,8 +7,7 @@ import authservice.dto.request.VerifyOtpRequest;
 import authservice.dto.response.AuthenticationResponse;
 import authservice.dto.response.RegisterResponse;
 import authservice.entity.Account;
-//import authservice.entity.Role;
-import authservice.enums.Role;
+import authservice.entity.Role;
 import authservice.mapper.AccountMapper;
 import authservice.repository.AccountRepository;
 import authservice.repository.RoleRepository;
@@ -21,7 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.exception.AppException;
 import movie.theater.common.exception.GlobalErrorCode;
 import authservice.exception.AuthErrorCode;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -44,41 +43,45 @@ public class AuthenticationService {
     JwtService jwtService;
     EmailService emailService;
 
-    RedisTemplate<String, String> redisTemplate;
+    StringRedisTemplate redisTemplate;
 
     public void initiateRegistration(RegisterRequest request) {
+        String emailKey = request.getEmail().trim().toLowerCase();
+
         if (accountRepository.existsByUsername(request.getUsername())) {
             throw new AppException(AuthErrorCode.USERNAME_EXISTED);
         }
-        if (accountRepository.existsByEmail(request.getEmail())) {
+        if (accountRepository.existsByEmail(emailKey)) {
             throw new AppException(AuthErrorCode.EMAIL_EXISTED);
         }
 
         String otp = String.format("%06d", new Random().nextInt(999999));
 
-        redisTemplate.opsForValue().set(request.getEmail(), otp, 5, TimeUnit.MINUTES);
+        redisTemplate.opsForValue().set(emailKey, otp, 5, TimeUnit.MINUTES);
 
-        emailService.sendOtpEmail(request.getEmail(), otp);
-        log.info("Saved OTP in redis and sent to email: {}", request.getEmail());
+        emailService.sendOtpEmail(emailKey, otp);
+        log.info("Saved OTP [{}] in redis for email: {}", otp, emailKey);
     }
 
     @Transactional
     public RegisterResponse verifyOtpAndRegister(VerifyOtpRequest request) {
         RegisterRequest regReq = request.getRegisterRequest();
-        String email = regReq.getEmail();
 
-        String cachedOtp = redisTemplate.opsForValue().get(email);
+        String emailKey = regReq.getEmail().trim().toLowerCase();
+        String inputOtp = request.getOtp() != null ? request.getOtp().trim() : "";
 
-        if (cachedOtp == null || !cachedOtp.equals(request.getOtp())) {
+        String cachedOtp = redisTemplate.opsForValue().get(emailKey);
+
+        if (cachedOtp == null || !cachedOtp.equals(inputOtp)) {
             throw new AppException(AuthErrorCode.INVALID_OTP);
         }
 
-        redisTemplate.delete(email);
+        redisTemplate.delete(emailKey);
 
         if (accountRepository.existsByUsername(regReq.getUsername())) {
             throw new AppException(AuthErrorCode.USERNAME_EXISTED);
         }
-        if (accountRepository.existsByEmail(email)) {
+        if (accountRepository.existsByEmail(emailKey)) {
             throw new AppException(AuthErrorCode.EMAIL_EXISTED);
         }
 
@@ -86,9 +89,12 @@ public class AuthenticationService {
         account.setPasswordHash(passwordEncoder.encode(regReq.getPassword()));
         account.setStatus(1);
 
-//        Role accountRole = roleRepository.findByRoleName("ROLE_USER").orElseThrow(() -> new AppException(AuthErrorCode.ROLE_NOT_FOUND));
-        HashSet<String> roles = new HashSet<>();
-        roles.add(Role.USER.name());
+        Role accountRole = roleRepository.findById("ROLE_USER")
+                .orElseThrow(() -> new AppException(AuthErrorCode.ROLE_NOT_FOUND));
+
+        HashSet<Role> roles = new HashSet<>();
+        roles.add(accountRole);
+
         account.setRoles(roles);
 
         account = accountRepository.saveAndFlush(account);
@@ -113,17 +119,17 @@ public class AuthenticationService {
         return AuthenticationResponse.builder().authenticate(true).token(token).build();
     }
 
-    public RegisterResponse myInfo() {
-        var context = SecurityContextHolder.getContext();
+//    public RegisterResponse myInfo() {
+//        var context = SecurityContextHolder.getContext();
+//
+//        String name = context.getAuthentication().getName();
+//
+//        Account account = accountRepository.findByUsername(name).orElseThrow(() -> new AppException(AuthErrorCode.USERNAME_EXISTED));
+//
+//        return accountMapper.toRegisterResponse(account);
+//    }
 
-        String name = context.getAuthentication().getName();
-
-        Account account = accountRepository.findByUsername(name).orElseThrow(() -> new AppException(AuthErrorCode.USERNAME_EXISTED));
-
-        return accountMapper.toRegisterResponse(account);
-    }
-
-    public List<Account> getAllAccount(){
+    public List<Account> getAllAccount() {
         return accountRepository.findAll();
     }
 

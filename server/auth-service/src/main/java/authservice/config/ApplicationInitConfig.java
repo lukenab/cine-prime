@@ -1,8 +1,9 @@
 package authservice.config;
 
 import authservice.entity.Account;
-import authservice.enums.Role;
 import authservice.repository.AccountRepository;
+import authservice.repository.RoleRepository;
+import authservice.entity.Role;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -21,14 +22,22 @@ import java.util.HashSet;
 public class ApplicationInitConfig {
     AccountRepository accountRepository;
     PasswordEncoder passwordEncoder;
+    RoleRepository roleRepository;
 
     @Bean
     ApplicationRunner applicationRunner(){
         return args -> {
-            if(accountRepository.findByUsername("admin").isEmpty()){
+            if(roleRepository.findById("ADMIN").isEmpty()) {
+                roleRepository.save(Role.builder()
+                                .roleName("ADMIN")
+                                .description("Administrator role")
+                        .build());
+            }
 
-                var roles = new HashSet<String>();
-                roles.add(Role.ADMIN.name());
+            if(accountRepository.findByUsername("admin").isEmpty()){
+                Role adminRole = roleRepository.findById("ADMIN").get();
+                HashSet<Role> roles = new HashSet<>();
+                roles.add(adminRole);
 
                 Account account = Account.builder()
                         .username("admin")
