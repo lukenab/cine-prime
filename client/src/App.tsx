@@ -19,7 +19,6 @@ export default function App() {
 
         <Route element={<CustomerLayout />}>
           <Route path="/" element={<HomePage />} />
-          {/* Cậu có thể thêm các trang như /movie/:id, /booking vào đây */}
         </Route>
 
         <Route element={<AuthLayout />}>

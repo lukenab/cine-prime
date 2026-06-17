@@ -14,7 +14,13 @@ import org.springframework.http.HttpStatusCode;
 public enum ErrorCode implements BaseErrorCode {
     PHONE_EXISTED(2001, "Phone number already exists!", HttpStatus.BAD_REQUEST),
     IDENTITY_CARD_EXISTED(2002, "Identity card already exists!", HttpStatus.BAD_REQUEST),
-    USER_NOT_FOUND(2003, "User profile not found!", HttpStatus.NOT_FOUND)
+    USER_NOT_FOUND(2003, "User profile not found!", HttpStatus.NOT_FOUND),
+    INVALID_INPUT(2004, "Invalid input data!", HttpStatus.BAD_REQUEST),
+    EMAIL_EXISTED(2005, "Email already exists!", HttpStatus.BAD_REQUEST),
+    AGE_TOO_YOUNG(2007, "User must be at least 18 years old", HttpStatus.BAD_REQUEST),
+    AGE_INVALID(2008, "Invalid age! Age must be beetween 18 and 100 yearolds!", HttpStatus.BAD_REQUEST),
+    USER_ALREADY_INACTIVE(2010, "User is already inactive", HttpStatus.BAD_REQUEST),
+    USER_ALREADY_ACTIVE(2011, "User is already active", HttpStatus.BAD_REQUEST)
     ;
 
     int code;

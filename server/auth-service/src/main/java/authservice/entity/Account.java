@@ -20,7 +20,7 @@ import java.util.Set;
 public class Account {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "account_id", updatable = false,nullable = false, length = 36)
+    @Column(name = "account_id", updatable = false, nullable = false, length = 36)
     String accountId;
 
     @Column(name = "username", nullable = false, unique = true, length = 50)
@@ -32,11 +32,13 @@ public class Account {
     @Column(name = "password_hash", nullable = false, length = 255)
     String passwordHash;
 
-//    @ManyToOne(fetch = FetchType.EAGER)
-//    @JoinColumn(name = "role_id", referencedColumnName = "role_id")
-//    Role role;
-
-    Set<String> roles;
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+            name = "account_role",
+            joinColumns = @JoinColumn(name = "account_id"),
+            inverseJoinColumns = @JoinColumn(name = "role_name")
+    )
+    Set<Role> roles;
 
     @Column(name = "status", columnDefinition = "integer default 1")
     Integer status;
@@ -45,11 +47,10 @@ public class Account {
     LocalDateTime lastLoginAt;
 
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false)
+    @Column(name = "created_at", nullable = false, updatable = false) // Đã thêm updatable = false
     LocalDateTime createdAt;
 
     @UpdateTimestamp
     @Column(name = "updated_at", insertable = false)
     LocalDateTime updatedAt;
-
 }

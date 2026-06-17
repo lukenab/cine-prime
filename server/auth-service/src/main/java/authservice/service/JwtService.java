@@ -30,7 +30,7 @@ public class JwtService {
     @Value("${jwt.signerKey}")
     private String SIGNER_KEY;
 
-    public String generateToken(Account account){
+    public String generateToken(Account account) {
         JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
 
         JWTClaimsSet claimsSet = new JWTClaimsSet.Builder()
@@ -56,19 +56,17 @@ public class JwtService {
             throw new AppException(GlobalErrorCode.UNCATEGORIZED_EXCEPTION);
         }
     }
-//
-//    private String buildScope(Account account){
-//        StringJoiner stringJoiner = new StringJoiner(" ");
-//        if(account.getRole() != null){
-//            stringJoiner.add(account.getRole().getRoleName());
-//        }
-//        return stringJoiner.toString();
-//    }
 
-    private String buildScope(Account account){
+    private String buildScope(Account account) {
         StringJoiner stringJoiner = new StringJoiner(" ");
-        if(!CollectionUtils.isEmpty(account.getRoles())){
-            account.getRoles().forEach((stringJoiner::add));
+        if (!CollectionUtils.isEmpty(account.getRoles())) {
+            account.getRoles().forEach(role -> {
+                stringJoiner.add("ROLE_" + role.getRoleName());
+                if (!CollectionUtils.isEmpty(role.getPermissions())) {
+                    role.getPermissions().forEach(
+                            permission -> stringJoiner.add(permission.getName()));
+                }
+            });
         }
 
         return stringJoiner.toString();
