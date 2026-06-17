@@ -1,32 +1,33 @@
-# 🎬 API Contract - CinePrime Movie Service
+# API Contract - CinePrime Movie Service (Update & Delete)
 
-> **Source of Truth:** This is the single, official document defining the data structures, endpoints, and business error codes for the Movie Service within the CinePrime Cinema Management System. Any modifications to Request/Response schemas must be discussed, updated, and agreed upon here before any actual code implementation begins.
+> **Source of Truth:** This is the single, official document defining the APIs for the Movie Service updates and deletes. Any modifications to Input/Output schemas must be updated and agreed upon here before actual implementation.
 
-**Version:** v1.0.0  
-**OpenAPI Spec:** 3.0.0  
-**Last Updated:** June 15, 2026  
+**Version:** v1.0.0
+**Last Updated:** June 15, 2026
 
 ---
 
 ## 1. Quick Links (Essential Resources)
 
-For parallel development and automated testing, the engineering team should utilize the following standardized resources:
+For API testing and UI integration, the team should utilize the following resources:
 
-* **OpenAPI Specification (Source File):** `docs/api-specs/movie-service.yaml`
-* **Swagger UI (Local Environment):** Run the Spring Boot project and navigate to `http://localhost:8080/docs/index.html`
-* **Postman Collection:** `docs/postman/CinePrime_Movie_Collection.json` *(Download and import into Postman for rapid API testing)*
+* **OpenAPI Specification (Source File):** [`docs/api-specs/movie-service/movie-service.yaml`](./movie-service.yaml)
+* **Swagger UI (Local):** Run the Spring Boot project and navigate to `http://localhost:8081/swagger-ui`
+* **API Documentation Path:** `/v3/api-docs`
 
 ---
 
 ## 2. Team Collaboration Workflow
 
-### For the Frontend Team (Web / Mobile)
-1. **Independent Development:** Do not wait for the Backend implementation. Directly use the data samples (`examples`) defined in this contract via Postman Mock Server or by hardcoding mock states in your React/Next.js components.
-2. **Mandatory Error Handling:** It is required to handle all HTTP Status Codes (`400`, `404`, `409`) along with the specific business error codes listed below to render intuitive UI/UX alerts for the end-user (e.g., room conflict warnings, schedule overlaps).
+To ensure parallel development and prevent blockers, all team members must strictly adhere to this workflow:
 
-### For the Backend Team (Spring Boot / Microservices)
-1. **API-First Approach:** Strictly adhere to the API-First model. The Request Body and Response JSON structures must match 100% with the schemas defined in this contract.
-2. **Change Control:** Under no circumstances should fields be added, renamed, deleted, or data types altered without first updating this Markdown Contract and notifying the Frontend team.
+### For the Frontend Team
+1. **Independent Development:** Do not wait for the Backend implementation. Open `movie-service.yaml` in Swagger Editor or Local Swagger UI to review the JSON schemas.
+2. **API Mocking:** Hardcode mock data directly into the client components based on the schemas provided in this contract.
+
+### For the Backend Team
+1. **API-First Approach:** Strictly adhere to the Request/Response schemas defined in the YAML file. 
+2. **Contract Updates:** If any structural changes are required (e.g., adding a new field, renaming a variable), update the YAML file and notify the entire team before modifying the Java source code.
 
 ---
 
@@ -41,6 +42,12 @@ All endpoints listed below belong to the **Movie Controller** tag (Managing movi
 | **Ready** | `GET` | `/api/movie?page=1&size=10` | Retrieve paginated movies. | Lê Tấn Lộc |
 | **In Prog** | `POST` | `/api/movie/room` | Initialize a new cinema room in the theater system. | Lê Tấn Lộc |
 | **In Prog** | `POST` | `/api/movie/type` | Add a new movie genre/type (e.g., Action, Sci-Fi). | Lê Tấn Lộc |
+Below is a summary of the primary API workflows. For detailed payloads, please refer to the YAML file or Swagger UI.
+
+| Status | Method | Endpoint | Use Case | Assignee |
+| :---: | :--- | :--- | :--- | :--- |
+| Ready | `PUT` | `/api/movie/update/{id}` | Cập nhật thông tin chi tiết phim | Nguyễn Mạnh Khải|
+| Ready | `DELETE` | `/api/movie/delete/{id}` | Xóa mềm phim (soft delete) | Nguyễn Mạnh Khải |
 
 ---
 
@@ -491,7 +498,5 @@ GET /api/movie?page=1&size=10
   "message": "Movie type name already exists"
 }
 ```
-
----
 
 

@@ -40,10 +40,13 @@ public enum MovieErrorCode implements BaseErrorCode {
 
         INTERNAL_SERVER_ERROR(5000,
                         "Internal server error",
-                        HttpStatus.INTERNAL_SERVER_ERROR);
+                        HttpStatus.INTERNAL_SERVER_ERROR),
 
-        private final int code;
-        private final String message;
-        private final HttpStatusCode statusCode;
 
+    GENRE_NOT_FOUND(2002, "Không tìm thấy thể loại phim", HttpStatus.NOT_FOUND),
+    ACTIVE_SHOWTIMES_EXIST(2003, "Không thể xóa phim vì vẫn còn suất chiếu hoạt động trong tương lai", HttpStatus.CONFLICT);
+
+    int code;
+    String message;
+    HttpStatusCode statusCode;
 }

@@ -32,3 +32,13 @@ CLOUDINARY:
   CLOUD_NAME: dzlfgmtbc
   API_KEY: 144287537763843
   API_SECRET: 7kJ1TfEb7kEAVArwaY5jq0ctvlA
+  instance:
+    prefer-ip-address: true
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui

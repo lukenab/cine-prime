@@ -11,6 +11,7 @@ import LoginPage from "./pages/auth/LoginPage.tsx";
 import RegisterPage from "./pages/auth/RegisterPage.tsx";
 import AdminDashboard from "./pages/admin/Dashboard.tsx"; // Sửa lại tên file import cho đúng
 import ManageUserPage from "./pages/admin/ManageUser.tsx"; // Sửa lại tên file import cho đúng
+import ManageMoviePage from "./pages/admin/ManageMoviePage.tsx";
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} /> 
           <Route path="users" element={<ManageUserPage />} /> 
+          <Route path="movies" element={<ManageMoviePage />} /> 
         </Route>
 
       </Routes>

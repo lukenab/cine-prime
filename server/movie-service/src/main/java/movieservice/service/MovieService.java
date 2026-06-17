@@ -31,15 +31,20 @@ import movieservice.dto.request.CreateMovieRequest;
 import movieservice.dto.request.ShowTimeRequest;
 import movieservice.dto.request.TypeRequest;
 import movieservice.dto.response.CinemaRoomResponse;
+import movieservice.dto.request.UpdateMovieRequest;
 import movieservice.dto.response.MovieResponse;
 import movieservice.dto.response.TypeMovieResponse;
 import movieservice.entity.CinemaRoom;
 import movieservice.entity.Movie;
 import movieservice.entity.MovieActionLog;
+import movieservice.entity.MovieType;
 import movieservice.entity.Seat;
 import movieservice.entity.ShowTime;
-import movieservice.entity.TypeMovie;
 import movieservice.exception.MovieErrorCode;
+import movieservice.exception.ResponseWrapper;
+import movieservice.exception.ResourceNotFoundException;
+import movieservice.exception.MovieErrorCode;
+import movie.theater.common.exception.AppException;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.MovieActionLogRepository;
@@ -100,12 +105,12 @@ public class MovieService {
         }
 
         if (request.getTypeIds() != null && !request.getTypeIds().isEmpty()) {
-            List<TypeMovie> types = typeRepository.findAllById(request.getTypeIds());
+            List<MovieType> types = typeRepository.findAllById(request.getTypeIds());
 
             if (types.size() != request.getTypeIds().size()) {
                 throw new AppException(MovieErrorCode.MOVIE_TYPE_NOT_FOUND);
             }
-            movie.setTypes(types);
+            movie.setMovieTypes(types);
         }
 
         try {
@@ -198,7 +203,6 @@ public class MovieService {
             throw new AppException(MovieErrorCode.SHOWTIME_CONFLICT_IN_DATABASE);
         }
     }
-
     public Page<MovieResponse> findPageMovie(int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
 
@@ -244,8 +248,8 @@ public class MovieService {
         if (typeRepository.existsByTypeName(typeRequest.getTypeName())) {
             throw new AppException(MovieErrorCode.MOVIE_TYPE_NAME_EXISTED);
         }
-        TypeMovie type = movieMapper.toType(typeRequest);
-        TypeMovie typeTmp = typeRepository.save(type);
+        MovieType type = movieMapper.toType(typeRequest);
+        MovieType typeTmp = typeRepository.save(type);
         logAction("1", "Admin System", "type - id:" + String.valueOf(typeTmp.getTypeId()),
                 "Created new type movie: " + typeTmp.getTypeName());
         TypeMovieResponse typeMovieResponse = movieMapper.toMovieResponse(typeTmp);
@@ -255,5 +259,56 @@ public class MovieService {
 
     public Map uploadImage(String fileUrlOrPath) throws IOException {
         return cloudinary.uploader().upload(fileUrlOrPath, ObjectUtils.emptyMap());
+    }
+    public List<MovieResponse> findAll() {
+        List<Movie> movies = movieRepository.findByStatusTrue();
+        return movieMapper.toResponseList(movies);
+    }
+
+    // @Transactional
+    // public MovieResponse updateMovie(Long id, UpdateMovieRequest request) {
+    //     Movie movie = movieRepository.findById(id)
+    //             .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+
+    //     movieMapper.updateMovieFromRequest(request, movie);
+    //     movieRepository.save(movie);
+
+    //     if (request.getTypeIds() != null) {
+    //         movieTypeRepository.deleteByMovie(movie);
+    //         List<MovieType> updatedMovieTypes = new ArrayList<>();
+    //         for (Long typeId : request.getTypeIds()) {
+    //             Type type = typeRepository.findById(typeId)
+    //                     .orElseThrow(() -> new AppException(MovieErrorCode.GENRE_NOT_FOUND));
+    //             MovieType movieType = new MovieType();
+    //             MovieTypeId movieTypeId = new MovieTypeId();
+    //             movieTypeId.setMovieId(movie.getMovieId());
+    //             movieTypeId.setTypeId(typeId);
+    //             movieType.setId(movieTypeId);
+    //             movieType.setMovie(movie);
+    //             movieType.setType(type);
+    //             movieTypeRepository.save(movieType);
+    //             updatedMovieTypes.add(movieType);
+    //         }
+    //         movie.setMovieTypes(updatedMovieTypes);
+    //     }
+
+    //     Movie updatedMovie = movieRepository.findById(id.intValue()).orElse(movie);
+    //     return movieMapper.toResponse(updatedMovie);
+    // }
+
+    @Transactional
+    public void deleteMovie(Long id) {
+        Movie movie = movieRepository.findById(id)
+                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+
+        LocalDate currentDate = LocalDate.now();
+        LocalTime currentTime = LocalTime.now();
+        boolean hasFutureShowTimes = showTimeRepository.existsByMovieMovieIdAndFutureShowTime(
+                movie.getMovieId(), currentDate, currentTime);
+        if (hasFutureShowTimes) {
+            throw new AppException(MovieErrorCode.ACTIVE_SHOWTIMES_EXIST);
+        }
+
+        movieRepository.softDeleteMovie(movie.getMovieId());
     }
 }

@@ -19,4 +19,11 @@ public interface ShowTimeRepository extends JpaRepository<ShowTime, Long> {
                         @Param("showDate") LocalDate showDate,
                         @Param("startTime") LocalTime startTime,
                         @Param("endTime") LocalTime endTime);
+
+        @Query("SELECT COUNT(s) > 0 FROM ShowTime s WHERE s.movie.movieId = :movieId " +
+                        "AND (s.showDate > :currentDate OR (s.showDate = :currentDate AND s.startTime > :currentTime))")
+        boolean existsByMovieMovieIdAndFutureShowTime(
+                        @Param("movieId") Long movieId,
+                        @Param("currentDate") LocalDate currentDate,
+                        @Param("currentTime") LocalTime currentTime);
 }

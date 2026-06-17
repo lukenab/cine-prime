@@ -5,6 +5,9 @@ import jakarta.validation.constraints.*;
 import lombok.Data;
 import java.util.List;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+import movieservice.constant.ApiConstants;
+
 @Data
 public class CreateMovieRequest {
 

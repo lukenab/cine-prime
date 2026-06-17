@@ -1,3 +1,6 @@
+server:
+  port: 8080
+
 spring:
   application:
     name: api-gateway
@@ -19,12 +22,10 @@ spring:
         - id: movie-service
           uri: lb://movie-service 
           predicates:
-            - Path=/api/movie-service/**
-
-        - id: booking-service
-          uri: lb://booking-service # 
+            - Path=/api/movies/**, /api/cinemas/**, /api/shows/** - id: booking-service
+          uri: lb://booking-service 
           predicates:
-            - Path=/api/booking-service/**
+            - Path=/api/bookings/**, /api/tickets/**
             
         - id: user-service
           uri: lb://user-service
@@ -34,9 +35,13 @@ spring:
         - id: auth-service
           uri: lb://auth-service
           predicates:
-            - Path=/api/auth/**, /api/permissions/**, /api/roles/**
+            - Path=/api/auth/**, /api/permissions/**, /api/roles/**, /api/accounts/**
             
 eureka:
+  instance:
+    hostname: localhost
+    instance-id: localhost:${spring.application.name}:${server.port}
+    prefer-ip-address: true
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}

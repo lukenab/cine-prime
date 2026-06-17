@@ -24,12 +24,15 @@ import movieservice.dto.response.TypeMovieResponse;
 import movieservice.entity.CinemaRoom;
 
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 
+
 @RestController
-@RequestMapping("/api/movie")
+@RequestMapping("/api/movies")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class MovieController {
@@ -51,13 +54,33 @@ public class MovieController {
                 .build();
     }
 
-    @GetMapping
+     @GetMapping
     public ApiResponse<Page<MovieResponse>> getPageMovies(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size) {
         return ApiResponse.<Page<MovieResponse>>builder()
                 .code(HttpStatus.SC_ACCEPTED)
                 .result(movieService.findPageMovie(page - 1, size))
+                .build();
+    }
+
+    // @PutMapping("/{movieId}")
+    // public movie.theater.common.dto.ApiResponse<MovieResponse> updateMovie(@PathVariable("movieId") Long movieId,
+    //         @Valid @RequestBody UpdateMovieRequest updateMovieRequest) {
+    //     MovieResponse movieResponse = movieService.updateMovie(movieId, updateMovieRequest);
+    //     return movie.theater.common.dto.ApiResponse.<MovieResponse>builder()
+    //             .code(1000)
+    //             .message("Movie successfully updated")
+    //             .result(movieResponse)
+    //             .build();
+    // }
+
+    @DeleteMapping("/{movieId}")
+    public movie.theater.common.dto.ApiResponse<Void> deleteMovie(@PathVariable("movieId") Long movieId) {
+        movieService.deleteMovie(movieId);
+        return movie.theater.common.dto.ApiResponse.<Void>builder()
+                .code(1000)
+                .message("Movie successfully deleted")
                 .build();
     }
 

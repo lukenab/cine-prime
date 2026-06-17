@@ -1,6 +1,5 @@
 package authservice.dto.request;
 
-import authservice.entity.Permission;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
