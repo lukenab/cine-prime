@@ -179,9 +179,41 @@ Create a new movie.
 
 ```json
 {
-  "code": "200",
-  "message": "Movie created successfully",
-  "status": "OK"
+    "code": 0,
+    "result": {
+        "movieId": 13,
+        "actor": "Robert Downey Jr., Chris Evans, Scarlett Johansson",
+        "content": "Sau sự kiện Infinity War, các siêu anh hùng còn sống sót tìm cách đảo ngược hậu quả do Thanos gây ra.",
+        "director": "Anthony Russo, Joe Russo",
+        "duration": 181,
+        "movieProductionCompany": "Marvel Studios",
+        "version": "2D",
+        "movieNameEnglish": "Avengers: Endgame",
+        "movieNameVn": "Avengers: Hồi Kết",
+        "largeImage": "http://res.cloudinary.com/dzlfgmtbc/image/upload/v1781711111/ltorcd3buhdvkp8uqque.jpg",
+        "smallImage": "http://res.cloudinary.com/dzlfgmtbc/image/upload/v1781711108/fg55eskmku8dkbv9tnd3.jpg",
+        "status": true,
+        "movieType": [
+            "Hành độn"
+        ],
+        "showTimes": [
+            {
+                "showTimeId": 13,
+                "showDate": "2035-11-01",
+                "startTime": "16:00:00",
+                "endTime": "19:01:00",
+                "updateAt": null
+            },
+            {
+                "showTimeId": 14,
+                "showDate": "2035-08-01",
+                "startTime": "12:01:00",
+                "endTime": "15:02:00",
+                "updateAt": null
+            }
+        ],
+        "createAt": "2026-06-17T22:45:04.7810888"
+    }
 }
 ```
 
@@ -435,7 +467,7 @@ GET /api/movie?page=1&size=10
 
 ```json
 {
-  "typeName": "Action"
+  "typeName": "Hành động"
 }
 ```
 
@@ -443,8 +475,11 @@ GET /api/movie?page=1&size=10
 
 ```json
 {
-  "code": 200,
-  "message": "Movie type created successfully"
+    "code": 0,
+    "result": {
+        "typeId": 2,
+        "typeName": "Hành động"
+    }
 }
 ```
 
