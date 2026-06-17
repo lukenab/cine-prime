@@ -23,23 +23,11 @@ const roles = ["Admin", "Editor", "Viewer", "Manager", "Developer"];
 const departments = ["Engineering", "Marketing", "Design", "Sales", "Support", "HR"];
 
 export function UserModal({ open, onClose, onSave, editUser }: Props) {
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    role: "Viewer",
-    status: "Active" as "Active" | "Inactive",
-    department: "Engineering",
-  });
+  const [form, setForm] = useState({ name: "", email: "", role: "Viewer", status: "Active" as "Active" | "Inactive", department: "Engineering" });
 
   useEffect(() => {
     if (editUser) {
-      setForm({
-        name: editUser.name,
-        email: editUser.email,
-        role: editUser.role,
-        status: editUser.status,
-        department: editUser.department,
-      });
+      setForm({ name: editUser.name, email: editUser.email, role: editUser.role, status: editUser.status, department: editUser.department });
     } else {
       setForm({ name: "", email: "", role: "Viewer", status: "Active", department: "Engineering" });
     }
@@ -55,92 +43,61 @@ export function UserModal({ open, onClose, onSave, editUser }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
 
-      {/* Modal */}
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+      <div className="relative rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden" style={{ background: "var(--bg-main)" }}>
+        <div className="flex items-center justify-between px-6 py-5 border-b" style={{ borderColor: "var(--border-color)" }}>
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
               <User size={16} className="text-blue-600" />
             </div>
-            <h2 className="text-gray-900" style={{ fontSize: "16px" }}>
+            <h2 style={{ fontSize: "16px", color: "var(--text-main)", fontWeight: 600 }}>
               {editUser ? "Edit User" : "Add New User"}
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
-          >
+          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors" style={{ color: "var(--text-sub)" }}>
             <X size={16} />
           </button>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
           <div>
-            <label className="block text-gray-600 mb-1.5" style={{ fontSize: "13px" }}>
-              Full Name
-            </label>
+            <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>Full Name</label>
             <input
-              type="text"
-              required
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              type="text" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
               placeholder="e.g. Jane Doe"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 outline-none focus:border-blue-400 focus:bg-white transition-colors"
-              style={{ fontSize: "14px" }}
+              className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-blue-400 transition-colors"
+              style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
             />
           </div>
 
           <div>
-            <label className="block text-gray-600 mb-1.5" style={{ fontSize: "13px" }}>
-              Email Address
-            </label>
+            <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>Email Address</label>
             <input
-              type="email"
-              required
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
               placeholder="e.g. jane@company.com"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 outline-none focus:border-blue-400 focus:bg-white transition-colors"
-              style={{ fontSize: "14px" }}
+              className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-blue-400 transition-colors"
+              style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-gray-600 mb-1.5" style={{ fontSize: "13px" }}>
-                Role
-              </label>
+              <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>Role</label>
               <select
-                value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-900 outline-none focus:border-blue-400 focus:bg-white transition-colors appearance-none cursor-pointer"
-                style={{ fontSize: "14px" }}
+                value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-blue-400 transition-colors appearance-none cursor-pointer"
+                style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
               >
-                {roles.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
+                {roles.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
-
             <div>
-              <label className="block text-gray-600 mb-1.5" style={{ fontSize: "13px" }}>
-                Status
-              </label>
+              <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>Status</label>
               <select
-                value={form.status}
-                onChange={(e) => setForm({ ...form, status: e.target.value as "Active" | "Inactive" })}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-900 outline-none focus:border-blue-400 focus:bg-white transition-colors appearance-none cursor-pointer"
-                style={{ fontSize: "14px" }}
+                value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as "Active" | "Inactive" })}
+                className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-blue-400 transition-colors appearance-none cursor-pointer"
+                style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
               >
                 <option value="Active">Active</option>
                 <option value="Inactive">Inactive</option>
@@ -149,30 +106,21 @@ export function UserModal({ open, onClose, onSave, editUser }: Props) {
           </div>
 
           <div>
-            <label className="block text-gray-600 mb-1.5" style={{ fontSize: "13px" }}>
-              Department
-            </label>
+            <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>Department</label>
             <select
-              value={form.department}
-              onChange={(e) => setForm({ ...form, department: e.target.value })}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-900 outline-none focus:border-blue-400 focus:bg-white transition-colors appearance-none cursor-pointer"
-              style={{ fontSize: "14px" }}
+              value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}
+              className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-blue-400 transition-colors appearance-none cursor-pointer"
+              style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
             >
-              {departments.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
+              {departments.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
           </div>
 
-          {/* Actions */}
           <div className="flex gap-3 pt-2">
             <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
-              style={{ fontSize: "14px" }}
+              type="button" onClick={onClose}
+              className="flex-1 px-4 py-2.5 rounded-xl border transition-colors hover:opacity-80"
+              style={{ fontSize: "14px", borderColor: "var(--border-color)", color: "var(--text-main)" }}
             >
               Cancel
             </button>
