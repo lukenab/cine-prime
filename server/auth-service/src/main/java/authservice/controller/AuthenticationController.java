@@ -4,16 +4,14 @@ import authservice.dto.request.AuthenticationRequest;
 import authservice.dto.request.RegisterRequest;
 import authservice.dto.request.VerifyOtpRequest;
 import authservice.dto.response.AuthenticationResponse;
-import authservice.dto.response.RegisterResponse;
-import authservice.entity.Account;
+import authservice.dto.response.AccountResponse;
 import authservice.service.AuthenticationService;
+import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import movie.theater.common.dto.ApiResponse;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -23,7 +21,7 @@ public class AuthenticationController {
     AuthenticationService authenticationService;
 
     @PostMapping("/register/initiate")
-    ApiResponse<String> initiateRegistration(@RequestBody RegisterRequest request) {
+    ApiResponse<String> initiateRegistration(@Valid @RequestBody RegisterRequest request) {
         authenticationService.initiateRegistration(request);
         return ApiResponse.<String>builder()
                 .result("OTP has been sent to your email")
@@ -31,8 +29,8 @@ public class AuthenticationController {
     }
 
     @PostMapping("/register/verify")
-    ApiResponse<RegisterResponse> verifyAndRegister(@RequestBody VerifyOtpRequest request) {
-        return ApiResponse.<RegisterResponse>builder()
+    ApiResponse<AccountResponse> verifyAndRegister(@Valid @RequestBody VerifyOtpRequest request) {
+        return ApiResponse.<AccountResponse>builder()
                 .result(authenticationService.verifyOtpAndRegister(request))
                 .build();
     }

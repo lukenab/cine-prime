@@ -28,16 +28,21 @@ import movieservice.dto.request.CreateMovieRequest;
 import movieservice.dto.response.MovieResponse;
 
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import movieservice.dto.request.UpdateMovieRequest;
+import movieservice.exception.ResourceNotFoundException;
 
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
+
 @RestController
-@RequestMapping("/api/movie")
+@RequestMapping("/api/movies")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Tag(name = "Movie Controller", description = "APIs for managing movies in the Cinema system")
@@ -89,13 +94,23 @@ public class MovieController {
         return movieService.getMovie(movieId);
     }
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ResponseWrapper<?>> handleValidation(MethodArgumentNotValidException ex) {
-        String errors = ex.getBindingResult().getFieldErrors().stream()
-                .map(FieldError::getDefaultMessage)
-                .collect(Collectors.joining("; "));
-        ResponseWrapper<?> body = new ResponseWrapper<>("400", errors, "BAD_REQUEST");
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    @PutMapping("/{movieId}")
+    public movie.theater.common.dto.ApiResponse<MovieResponse> updateMovie(@PathVariable("movieId") Long movieId, @Valid @RequestBody UpdateMovieRequest updateMovieRequest) {
+        MovieResponse movieResponse = movieService.updateMovie(movieId, updateMovieRequest);
+        return movie.theater.common.dto.ApiResponse.<MovieResponse>builder()
+                .code(1000)
+                .message("Movie successfully updated")
+                .result(movieResponse)
+                .build();
+    }
+
+    @DeleteMapping("/{movieId}")
+    public movie.theater.common.dto.ApiResponse<Void> deleteMovie(@PathVariable("movieId") Long movieId) {
+        movieService.deleteMovie(movieId);
+        return movie.theater.common.dto.ApiResponse.<Void>builder()
+                .code(1000)
+                .message("Movie successfully deleted")
+                .build();
     }
 
     @GetMapping("/find-all")
