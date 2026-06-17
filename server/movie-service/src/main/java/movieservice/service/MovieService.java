@@ -16,6 +16,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import movieservice.dto.request.CreateMovieRequest;
 import movieservice.dto.request.ShowTimeRequest;
+import movieservice.dto.request.UpdateMovieRequest;
 import movieservice.dto.response.MovieResponse;
 import movieservice.entity.CinemaRoom;
 import movieservice.entity.Movie;
@@ -24,6 +25,9 @@ import movieservice.entity.MovieTypeId;
 import movieservice.entity.ShowTime;
 import movieservice.entity.Type;
 import movieservice.exception.ResponseWrapper;
+import movieservice.exception.ResourceNotFoundException;
+import movieservice.exception.MovieErrorCode;
+import movie.theater.common.exception.AppException;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.MovieRepository;
@@ -119,7 +123,7 @@ public class MovieService {
 
     public ResponseEntity<?> getMovie(Long id) {
         Movie movie = movieRepository.findById(id.intValue())
-                .orElseThrow(() -> new RuntimeException("Movie not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phim với ID: " + id));
 
         return ResponseEntity.ok(new ResponseWrapper<>("Lấy movie thành công", movieMapper.toResponse(movie)));
     }
@@ -195,10 +199,55 @@ public class MovieService {
         }
     }
     public List<MovieResponse> findAll() {
-
-        List<Movie> movies = movieRepository.findAll();
-
+        List<Movie> movies = movieRepository.findByStatusTrue();
         return movieMapper.toResponseList(movies);
+    }
+
+    @Transactional
+    public MovieResponse updateMovie(Long id, UpdateMovieRequest request) {
+        Movie movie = movieRepository.findById(id.intValue())
+                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+
+        movieMapper.updateMovieFromRequest(request, movie);
+        movieRepository.save(movie);
+
+        if (request.getTypeIds() != null) {
+            movieTypeRepository.deleteByMovie(movie);
+            List<MovieType> updatedMovieTypes = new ArrayList<>();
+            for (Long typeId : request.getTypeIds()) {
+                Type type = typeRepository.findById(typeId)
+                        .orElseThrow(() -> new AppException(MovieErrorCode.GENRE_NOT_FOUND));
+                MovieType movieType = new MovieType();
+                MovieTypeId movieTypeId = new MovieTypeId();
+                movieTypeId.setMovieId(movie.getMovieId());
+                movieTypeId.setTypeId(typeId);
+                movieType.setId(movieTypeId);
+                movieType.setMovie(movie);
+                movieType.setType(type);
+                movieTypeRepository.save(movieType);
+                updatedMovieTypes.add(movieType);
+            }
+            movie.setMovieTypes(updatedMovieTypes);
+        }
+
+        Movie updatedMovie = movieRepository.findById(id.intValue()).orElse(movie);
+        return movieMapper.toResponse(updatedMovie);
+    }
+
+    @Transactional
+    public void deleteMovie(Long id) {
+        Movie movie = movieRepository.findById(id.intValue())
+                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+
+        LocalDate currentDate = LocalDate.now();
+        LocalTime currentTime = LocalTime.now();
+        boolean hasFutureShowTimes = showTimeRepository.existsByMovieMovieIdAndFutureShowTime(
+                movie.getMovieId(), currentDate, currentTime);
+        if (hasFutureShowTimes) {
+            throw new AppException(MovieErrorCode.ACTIVE_SHOWTIMES_EXIST);
+        }
+
+        movieRepository.softDeleteMovie(movie.getMovieId());
     }
 
 }

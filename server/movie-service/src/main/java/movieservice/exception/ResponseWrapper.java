@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import movieservice.constant.ApiConstants;
 
 @Data
 @NoArgsConstructor
@@ -13,13 +14,13 @@ import lombok.NoArgsConstructor;
 @Schema(description = "API Response wrapper chứa code, message, status và dữ liệu")
 public class ResponseWrapper<T> {
     
-    @Schema(description = "Mã lỗi/thành công", example = "200")
+    @Schema(description = ApiConstants.RESPONSE_CODE_DESC, example = ApiConstants.RESPONSE_CODE_EXAMPLE)
     private String code;
     
-    @Schema(description = "Thông báo", example = "Lấy movie thành công")
+    @Schema(description = ApiConstants.RESPONSE_MESSAGE_DESC, example = ApiConstants.RESPONSE_MESSAGE_EXAMPLE)
     private String message;
     
-    @Schema(description = "Trạng thái HTTP", example = "OK")
+    @Schema(description = ApiConstants.RESPONSE_STATUS_DESC, example = ApiConstants.RESPONSE_STATUS_EXAMPLE)
     private String status;
     
     @Schema(description = "Dữ liệu trả về")
