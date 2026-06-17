@@ -14,7 +14,7 @@ import jakarta.transaction.Transactional;
 import movieservice.entity.ShowTime;
 
 @Repository
-public interface SheduleRepository extends JpaRepository<ShowTime, String> {
+public interface SheduleRepository extends JpaRepository<ShowTime, Long> {
 
 
 }
