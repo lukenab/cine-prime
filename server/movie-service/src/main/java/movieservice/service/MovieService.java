@@ -30,7 +30,9 @@ import movieservice.dto.request.CinemaRoomRequest;
 import movieservice.dto.request.CreateMovieRequest;
 import movieservice.dto.request.ShowTimeRequest;
 import movieservice.dto.request.TypeRequest;
+import movieservice.dto.response.CinemaRoomResponse;
 import movieservice.dto.response.MovieResponse;
+import movieservice.dto.response.TypeMovieResponse;
 import movieservice.entity.CinemaRoom;
 import movieservice.entity.Movie;
 import movieservice.entity.MovieActionLog;
@@ -60,79 +62,67 @@ public class MovieService {
     MovieActionLogRepository movieActionLogRepository;
     Cloudinary cloudinary;
 
-    @Transactional
-    public ApiResponse<?> createMovie(CreateMovieRequest request) {
+    public MovieResponse createMovie(CreateMovieRequest request) {
         Movie movie = movieMapper.toMovie(request);
-        movieRepository.save(movie);
+        movie = movieRepository.save(movie);
+
         List<ShowTimeRequest> showTimeRequests = request.getShowTimes();
-        ApiResponse apiResponse = validateShowDates(showTimeRequests);
-        if (apiResponse.getCode() != 200) {
-            return apiResponse;
-        }
-        ApiResponse apiResponse2 = validateStartTimes(showTimeRequests);
-        if (apiResponse2.getCode() != 200) {
-            return apiResponse2;
-        }
-        if (request.getShowTimes() != null) {
-            for (ShowTimeRequest stReq : request.getShowTimes()) {
+        validateShowDates(showTimeRequests);
+        validateStartTimes(showTimeRequests);
+
+        if (showTimeRequests != null && !showTimeRequests.isEmpty()) {
+            List<ShowTime> showTimesToSave = new ArrayList<>(); 
+
+            for (ShowTimeRequest stReq : showTimeRequests) {
                 Optional<CinemaRoom> cinemaRoom = cinemaRoomRepository.findById(stReq.getCinemaRoomId().intValue());
                 if (cinemaRoom.isEmpty()) {
                     throw new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND);
                 }
-                ApiResponse apiResponse3 = validateLocalRequests(showTimeRequests,
-                        request.getDuration());
-                if (apiResponse3.getCode() != 200) {
-                    return apiResponse3;
-                }
-                ShowTime showTime = new ShowTime();
+
+                validateLocalRequests(showTimeRequests, request.getDuration());
+
                 LocalTime startTime = stReq.getStartTime();
                 LocalTime endTime = startTime.plusMinutes(request.getDuration());
+                validateWithDatabase(stReq, startTime, endTime);
 
-                ApiResponse apiResponse4 = validateWithDatabase(stReq, startTime,
-                        endTime);
-                if (apiResponse4.getCode() != 200) {
-                    return apiResponse4;
-                }
+                ShowTime showTime = new ShowTime();
                 showTime.setShowDate(stReq.getShowDate());
-                showTime.setStartTime(stReq.getStartTime());
-                showTime.setEndTime(stReq.getStartTime().plusMinutes(request.getDuration()));
-
+                showTime.setStartTime(startTime);
+                showTime.setEndTime(endTime);
                 showTime.setMovie(movie);
-
                 showTime.setCinemaRoom(cinemaRoom.get());
-                showTimeRepository.save(showTime);
+
+                showTimesToSave.add(showTime); 
             }
+
+            List<ShowTime> savedShowTimes = showTimeRepository.saveAll(showTimesToSave);
+            movie.setShowTimes(savedShowTimes);
         }
-        if (request.getTypeIds() != null) {
-            List<TypeMovie> types = new ArrayList<>();
 
-            for (Long typeId : request.getTypeIds()) {
-                Optional<TypeMovie> type = typeRepository.findById(typeId);
-                if (type.isEmpty()) {
-                    throw new AppException(MovieErrorCode.MOVIE_TYPE_NOT_FOUND);
-                }
+        if (request.getTypeIds() != null && !request.getTypeIds().isEmpty()) {
+            List<TypeMovie> types = typeRepository.findAllById(request.getTypeIds());
 
-                types.add(type.get());
+            if (types.size() != request.getTypeIds().size()) {
+                throw new AppException(MovieErrorCode.MOVIE_TYPE_NOT_FOUND);
             }
             movie.setTypes(types);
         }
+
         try {
             Map uploadSmallImage = uploadImage(request.getSmallImage());
             Map uploadLagreImage = uploadImage(request.getLargeImage());
-            movie.setLargeImage(uploadSmallImage.get("url").toString());
+            movie.setSmallImage(uploadSmallImage.get("url").toString());
             movie.setLargeImage(uploadLagreImage.get("url").toString());
         } catch (Exception e) {
             throw new AppException(MovieErrorCode.UPLOAD_IMAGE_FAILED);
         }
-        Movie movie2 = movieRepository.save(movie);
-        logAction("1", "Admin System","movie - id:" + String.valueOf(movie2.getMovieId()), "Created new movie: " + movie2.getMovieNameEnglish());
 
-        
-        return ApiResponse.builder()
-                .code(200)
-                .message("Movie created successfully")
-                .result("OK")
-                .build();
+        Movie finalSavedMovie = movieRepository.save(movie);
+
+        logAction("1", "Admin System", "movie - id:" + finalSavedMovie.getMovieId(),
+                "Created new movie: " + finalSavedMovie.getMovieNameEnglish());
+
+        return movieMapper.toResponse(finalSavedMovie);
     }
 
     public void logAction(String accountId, String actor, String note, String content) {
@@ -150,7 +140,7 @@ public class MovieService {
         return movieMapper.toResponse(movie);
     }
 
-    private ApiResponse<?> validateStartTimes(List<ShowTimeRequest> requests) {
+    private void validateStartTimes(List<ShowTimeRequest> requests) {
         LocalTime openingTime = LocalTime.of(8, 0);
         LocalTime closingTime = LocalTime.of(23, 0);
 
@@ -161,14 +151,9 @@ public class MovieService {
             }
 
         }
-        return ApiResponse.builder()
-                .code(200)
-                .message("Successful")
-                .result("OK")
-                .build();
     }
 
-    private ApiResponse<?> validateLocalRequests(List<ShowTimeRequest> requests,
+    private void validateLocalRequests(List<ShowTimeRequest> requests,
             int duration) {
         for (int i = 0; i < requests.size(); i++) {
             ShowTimeRequest current = requests.get(i);
@@ -190,14 +175,9 @@ public class MovieService {
                 }
             }
         }
-        return ApiResponse.builder()
-                .code(200)
-                .message("Successful")
-                .result("OK")
-                .build();
     }
 
-    private ApiResponse<?> validateShowDates(List<ShowTimeRequest> requests) {
+    private void validateShowDates(List<ShowTimeRequest> requests) {
         LocalDate minAllowedDate = LocalDate.now().plusDays(3);
 
         for (ShowTimeRequest stReq : requests) {
@@ -205,14 +185,9 @@ public class MovieService {
                 throw new AppException(MovieErrorCode.INVALID_SHOWDATE);
             }
         }
-        return ApiResponse.builder()
-                .code(200)
-                .message("Successful")
-                .result("OK")
-                .build();
     }
 
-    private ApiResponse<?> validateWithDatabase(ShowTimeRequest stReq, LocalTime startTime,
+    private void validateWithDatabase(ShowTimeRequest stReq, LocalTime startTime,
             LocalTime endTime) {
         boolean isOverlapped = showTimeRepository.existsByCinemaRoomAndOverlappingTime(
                 stReq.getCinemaRoomId(),
@@ -222,33 +197,18 @@ public class MovieService {
         if (isOverlapped) {
             throw new AppException(MovieErrorCode.SHOWTIME_CONFLICT_IN_DATABASE);
         }
-        return ApiResponse.builder()
-                .code(200)
-                .message("Successful")
-                .result("OK")
-                .build();
     }
 
-    public ApiResponse<Page<MovieResponse>> findPageMovie(int page, int size) {
-
+    public Page<MovieResponse> findPageMovie(int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
 
         Page<Movie> moviePage = movieRepository.findAll(pageable);
-        Page<MovieResponse> movieResponses = moviePage.map(movieMapper::toResponse);
-        boolean isEmpty = movieResponses.isEmpty();
 
-        ApiResponse<Page<MovieResponse>> response = ApiResponse.<Page<MovieResponse>>builder()
-                .code(isEmpty ? 404 : 200)
-                .message(isEmpty
-                        ? "No movies found"
-                        : "Movie list retrieved successfully")
-                .result(isEmpty ? null : movieResponses)
-                .build();
-
-        return response;
+        return moviePage.map(movieMapper::toResponse);
     }
 
-    public ApiResponse<?> createCinemaRoom(CinemaRoomRequest cinemaRoomRequest) {
+    @Transactional
+    public CinemaRoomResponse createCinemaRoom(CinemaRoomRequest cinemaRoomRequest) {
         if (cinemaRoomRepository.existsByCinemaRoomName(cinemaRoomRequest.getCinemaRoomName())) {
 
             throw new AppException(MovieErrorCode.CINEMA_ROOM_NAME_EXISTED);
@@ -256,15 +216,11 @@ public class MovieService {
 
         CinemaRoom cinemaRoom = movieMapper.toCinemaRoom(cinemaRoomRequest);
         CinemaRoom room = cinemaRoomRepository.save(cinemaRoom);
-
+        CinemaRoomResponse cinemaRoomResponse = movieMapper.toCinemaResponse(cinemaRoom);
         generateSeatsForRoom(room.getCinemaRoomId(), room.getSeatQuantity(), room);
-        logAction("1", "Admin System", "cinema - id:" + String.valueOf(room.getCinemaRoomId()), "Created new cinema: " + room.getCinemaRoomName());
-
-        return ApiResponse.builder()
-                .code(200)
-                .message("Cinema room created successfully")
-                .result("OK")
-                .build();
+        logAction("1", "Admin System", "cinema - id:" + String.valueOf(room.getCinemaRoomId()),
+                "Created new cinema: " + room.getCinemaRoomName());
+        return cinemaRoomResponse;
     }
 
     public void generateSeatsForRoom(Long cinemaRoomId, int quantity, CinemaRoom cinemaRoom) {
@@ -284,19 +240,17 @@ public class MovieService {
     }
 
     @Transactional
-    public ApiResponse<?> createTypeMovie(TypeRequest typeRequest) {
+    public TypeMovieResponse createTypeMovie(TypeRequest typeRequest) {
         if (typeRepository.existsByTypeName(typeRequest.getTypeName())) {
             throw new AppException(MovieErrorCode.MOVIE_TYPE_NAME_EXISTED);
         }
         TypeMovie type = movieMapper.toType(typeRequest);
         TypeMovie typeTmp = typeRepository.save(type);
-        logAction("1", "Admin System", "type - id:" + String.valueOf(typeTmp.getTypeId()), "Created new type movie: " + typeTmp.getTypeName());
+        logAction("1", "Admin System", "type - id:" + String.valueOf(typeTmp.getTypeId()),
+                "Created new type movie: " + typeTmp.getTypeName());
+        TypeMovieResponse typeMovieResponse = movieMapper.toMovieResponse(typeTmp);
+        return typeMovieResponse;
 
-        return ApiResponse.builder()
-                .code(200)
-                .message("Movie type created successfully")
-                .result("OK")
-                .build();
     }
 
     public Map uploadImage(String fileUrlOrPath) throws IOException {

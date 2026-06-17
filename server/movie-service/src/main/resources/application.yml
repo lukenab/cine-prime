@@ -5,12 +5,16 @@ spring:
   application:
     name: movie-service
 
+  # datasource:
+  #   url: jdbc:postgresql://localhost:5433/user_db
+  #   username: postgres
+  #   password: "123456"
+  #   driver-class-name: org.postgresql.Driver
   datasource:
-    url: jdbc:postgresql://localhost:5433/user_db
+    url: jdbc:postgresql://localhost:5432/movie_db
     username: postgres
-    password: "123456"
+    password: "db12345"
     driver-class-name: org.postgresql.Driver
-
   jpa:
     hibernate:
       ddl-auto: update
