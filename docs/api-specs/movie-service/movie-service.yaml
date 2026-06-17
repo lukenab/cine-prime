@@ -1,0 +1,305 @@
+openapi: 3.0.0
+info:
+  title: CinePrime Movie Service API (Update & Delete)
+  description: OpenAPI specification for the CinePrime movie service updates and soft delete endpoints.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8081
+    description: Local Development Server
+tags:
+  - name: Movie Controller
+    description: APIs for managing movies in the Cinema system
+paths:
+  /api/movie/update/{id}:
+    put:
+      tags:
+        - Movie Controller
+      summary: Cập nhật thông tin phim
+      description: API cập nhật các trường thông tin của phim.
+      operationId: updateMovie
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The ID of the movie to update
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMovieRequest'
+      responses:
+        '200':
+          description: Movie updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseWithData'
+              example:
+                code: "200"
+                message: "Lấy movie thành công"
+                status: "OK"
+                data:
+                  movieId: 1
+                  actor: "Luffy, Uta"
+                  content: "Câu chuyện..."
+                  director: "Goro Taniguchi"
+                  duration: 115
+                  movieProductionCompany: "Toei Animation"
+                  version: "2D"
+                  movieNameEnglish: "One Piece Film Red"
+                  movieNameVn: "One Piece Film Red"
+                  largeImage: "https://cloudinary.com/movie-large.jpg"
+                  smallImage: "https://cloudinary.com/movie-small.jpg"
+                  status: true
+                  movieTypes:
+                    - "Action"
+                    - "Anime"
+                  createAt: "15-06-2026 22:00"
+        '400':
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              examples:
+                ValidationError:
+                  summary: Tên phim tiếng Việt trống
+                  value:
+                    code: "400"
+                    message: "Tên phim tiếng Việt không được để trống"
+                    status: "BAD_REQUEST"
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              examples:
+                MovieNotFound:
+                  summary: Phim cần cập nhật không tồn tại
+                  value:
+                    code: "404"
+                    message: "Không tìm thấy phim với ID: 999"
+                    status: "NOT_FOUND"
+                GenreNotFound:
+                  summary: Thể loại phim liên kết không tồn tại
+                  value:
+                    code: "404"
+                    message: "Không tìm thấy thể loại với ID: 999"
+                    status: "NOT_FOUND"
+        '409':
+          description: Data conflict error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              examples:
+                UniqueConstraintConflict:
+                  summary: Tên phim đã tồn tại
+                  value:
+                    code: "409"
+                    message: "Tên phim tiếng Việt đã tồn tại trong hệ thống"
+                    status: "CONFLICT"
+        '500':
+          description: Lỗi máy chủ hệ thống
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: "500"
+                message: "Lỗi máy chủ nội bộ"
+                status: "INTERNAL_SERVER_ERROR"
+
+  /api/movie/delete/{id}:
+    delete:
+      tags:
+        - Movie Controller
+      summary: Xóa mềm phim
+      description: API cập nhật trạng thái phim thành ngưng hoạt động (soft delete)
+      operationId: deleteMovie
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The ID of the movie to delete
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Movie deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: "200"
+                message: "Xóa movie thành công"
+                status: "OK"
+        '404':
+          description: Movie not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: "404"
+                message: "Không tìm thấy phim với ID: 999"
+                status: "NOT_FOUND"
+        '409':
+          description: Business rule conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: "409"
+                message: "Không thể xóa phim vì vẫn còn suất chiếu hoạt động trong tương lai"
+                status: "CONFLICT"
+        '500':
+          description: Lỗi máy chủ hệ thống
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: "500"
+                message: "Lỗi máy chủ nội bộ"
+                status: "INTERNAL_SERVER_ERROR"
+
+components:
+  schemas:
+    UpdateMovieRequest:
+      type: object
+      required:
+        - movieNameVn
+        - movieNameEnglish
+        - director
+        - actor
+        - duration
+        - content
+        - version
+        - status
+        - movieProductionCompany
+      properties:
+        movieNameVn:
+          type: string
+          example: "One Piece Film Red"
+        movieNameEnglish:
+          type: string
+          example: "One Piece Film Red"
+        director:
+          type: string
+          example: "Goro Taniguchi"
+        actor:
+          type: string
+          example: "Luffy, Uta, Shanks"
+        content:
+          type: string
+          example: "Câu chuyện về Uta..."
+        duration:
+          type: integer
+          example: 115
+        version:
+          type: string
+          example: "2D"
+        status:
+          type: boolean
+          example: true
+        movieProductionCompany:
+          type: string
+          example: "Toei Animation"
+        largeImage:
+          type: string
+          example: "https://cloudinary.com/movie-large.jpg"
+        smallImage:
+          type: string
+          example: "https://cloudinary.com/movie-small.jpg"
+        typeIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+          example: [1, 2, 3]
+
+    MovieResponse:
+      type: object
+      properties:
+        movieId:
+          type: integer
+          format: int64
+          example: 1
+        actor:
+          type: string
+          example: "Luffy, Uta"
+        content:
+          type: string
+          example: "Câu chuyện..."
+        director:
+          type: string
+          example: "Goro Taniguchi"
+        duration:
+          type: integer
+          example: 115
+        movieProductionCompany:
+          type: string
+          example: "Toei Animation"
+        version:
+          type: string
+          example: "2D"
+        movieNameEnglish:
+          type: string
+          example: "One Piece Film Red"
+        movieNameVn:
+          type: string
+          example: "One Piece Film Red"
+        largeImage:
+          type: string
+          example: "https://cloudinary.com/movie-large.jpg"
+        smallImage:
+          type: string
+          example: "https://cloudinary.com/movie-small.jpg"
+        status:
+          type: boolean
+          example: true
+        movieTypes:
+          type: array
+          items:
+            type: string
+          example: ["Action", "Anime"]
+        createAt:
+          type: string
+          example: "15-06-2026 22:00"
+
+    ApiResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "200"
+        message:
+          type: string
+          example: "Operation successful"
+        status:
+          type: string
+          example: "OK"
+
+    ApiResponseWithData:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "200"
+        message:
+          type: string
+          example: "Successful"
+        status:
+          type: string
+          example: "OK"
+        data:
+          $ref: '#/components/schemas/MovieResponse'

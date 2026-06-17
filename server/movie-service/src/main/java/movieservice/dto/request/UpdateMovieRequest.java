@@ -1,6 +1,5 @@
 package movieservice.dto.request;
 
-import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import lombok.Data;
 
@@ -10,8 +9,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import movieservice.constant.ApiConstants;
 
 @Data
-@Schema(description = "Thông tin tạo mới phim và lịch chiếu")
-public class CreateMovieRequest {
+@Schema(description = "Thông tin cập nhật phim")
+public class UpdateMovieRequest {
 
     @Schema(
         description = ApiConstants.MOVIE_VN_NAME_DESC,
@@ -47,35 +46,36 @@ public class CreateMovieRequest {
         description = ApiConstants.DURATION_DESC,
         example = ApiConstants.DURATION_EXAMPLE
     )
-    @NotNull
+    @NotNull(message = "Thời lượng không được để trống")
+    @Min(value = 1, message = "Thời lượng phải lớn hơn 0")
     private Integer duration;
 
     @Schema(
         description = ApiConstants.CONTENT_DESC,
         example = ApiConstants.CONTENT_EXAMPLE
     )
-    @NotBlank
+    @NotBlank(message = "Nội dung không được để trống")
     private String content;
 
     @Schema(
         description = ApiConstants.VERSION_DESC,
         example = ApiConstants.VERSION_EXAMPLE
     )
-    @NotBlank
+    @NotBlank(message = "Phiên bản không được để trống")
     private String version;
 
     @Schema(
         description = ApiConstants.STATUS_DESC,
         example = ApiConstants.STATUS_EXAMPLE
     )
-    @NotNull
+    @NotNull(message = "Trạng thái không được để trống")
     private Boolean status;
 
     @Schema(
         description = ApiConstants.PRODUCTION_COMPANY_DESC,
         example = ApiConstants.PRODUCTION_COMPANY_EXAMPLE
     )
-    @NotBlank
+    @NotBlank(message = "Hãng sản xuất không được để trống")
     private String movieProductionCompany;
 
     @Schema(
@@ -95,10 +95,4 @@ public class CreateMovieRequest {
         example = ApiConstants.TYPE_IDS_EXAMPLE
     )
     private List<Long> typeIds;
-
-    @Schema(
-        description = ApiConstants.SHOWTIMES_DESC
-    )
-    @Valid
-    private List<ShowTimeRequest> showTimes;
 }

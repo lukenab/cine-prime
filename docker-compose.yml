@@ -140,7 +140,7 @@ services:
     build: ./server/api-gateway
     container_name: api-gateway
     ports:
-      - "8085:8085"
+      - "8080:8080"
     environment:
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
     depends_on:

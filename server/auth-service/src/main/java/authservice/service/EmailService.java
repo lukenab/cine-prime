@@ -66,7 +66,7 @@ public class EmailService {
             javaMailSender.send(message);
             log.info("Successfully sent HTML OTP email to: {}", email);
 
-        } catch (MessagingException e) {
+        } catch (Exception e) {
             log.error("Error sending email to: {}", email, e);
             // Can throw an AppException here if you want to report the error to the Frontend
             // throw new AppException(ErrorCode.EMAIL_SEND_FAILED);

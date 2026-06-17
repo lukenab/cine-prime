@@ -52,7 +52,7 @@ public interface MovieRepository extends JpaRepository<Movie, Integer> {
         @Modifying
         @Query("""
                             UPDATE Movie m
-                            SET m.status = true
+                            SET m.status = false
                             WHERE m.movieId = :movieId
                         """)
         int softDeleteMovie(@Param("movieId") Integer movieId);
