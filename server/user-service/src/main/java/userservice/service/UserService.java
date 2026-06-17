@@ -1,6 +1,5 @@
 package userservice.service;
 
-import java.security.Security;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -8,7 +7,6 @@ import jakarta.transaction.Transactional;
 
 import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.exception.AppException;
-import org.mapstruct.control.MappingControl;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -22,13 +20,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.web.client.RestClient;
 import userservice.dto.PageResponse;
-import userservice.dto.UserCreationRequest;
 import userservice.dto.UserResponse;
 import userservice.dto.UserUpdateRequest;
 import userservice.entity.User;
+import userservice.event.UserRegisteredEvent;
 import userservice.exception.ErrorCode;
 import userservice.mapper.UserMapper;
-import userservice.repository.AuditLogRepository;
 import userservice.repository.UserRepository;
 
 @Service
@@ -42,21 +39,30 @@ public class UserService {
     private final RestClient.Builder builder;
 
     @Transactional
-    public UserResponse create(UserCreationRequest creationRequest) {
+    public void createUserProfile(UserRegisteredEvent event) {
 
-        if (userRepository.existsByPhoneNumber(creationRequest.getPhoneNumber())) {
-            throw new AppException(ErrorCode.PHONE_EXISTED);
+        if (userRepository.findById(event.getAccountId()).isPresent()) {
+            log.warn("Profile for Account ID {} already exists. Skipping event to avoid duplication.", event.getAccountId());
+            return;
         }
 
-        if (userRepository.existsByIdentityCard(creationRequest.getIdentityCard())) {
-            throw new AppException(ErrorCode.IDENTITY_CARD_EXISTED);
+        if (userRepository.existsByPhoneNumber(event.getPhoneNumber())) {
+            log.error("Phone number {} already exists. Skipping event.", event.getPhoneNumber());
+            return;
         }
 
-        if (userRepository.existsByEmail(creationRequest.getEmail())){
-            throw new AppException(ErrorCode.EMAIL_EXISTED);
+        if (userRepository.existsByIdentityCard(event.getIdentityCard())) {
+            log.error("Identity card {} already exists. Skipping event.", event.getIdentityCard());
+            return;
         }
 
-        User user = userMapper.toUser(creationRequest);
+        if (userRepository.existsByEmail(event.getEmail())){
+            log.error("Email {} already exists. Skipping event.", event.getEmail());
+            return;
+        }
+
+        User user = userMapper.toUser(event);
+        user.setAccountId(event.getAccountId()); // Ensure ID is synchronized with auth-service
         user.setCreatedAt(LocalDateTime.now());
         user.setIsActive(true);
 
@@ -64,7 +70,7 @@ public class UserService {
         User savedUser = userRepository.save(user);
         auditLogService.log("User", savedUser.getAccountId(), "CREATE", null, savedUser, getCurrentAccountId());
 
-        return userMapper.toUserResponse(savedUser);
+        log.info("Successfully created Profile for Account ID: {}", savedUser.getAccountId());
     }
 
     @Transactional
@@ -82,8 +88,8 @@ public class UserService {
     public UserResponse updateUser(String id, UserUpdateRequest request){
         User user = userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
         if(request.getPhoneNumber() != null
-           && !request.getPhoneNumber().equals(user.getPhoneNumber())
-           && userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
+                && !request.getPhoneNumber().equals(user.getPhoneNumber())
+                && userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
             throw  new AppException(ErrorCode.PHONE_EXISTED);
         }
 
