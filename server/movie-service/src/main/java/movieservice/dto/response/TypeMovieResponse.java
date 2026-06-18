@@ -1,20 +1,19 @@
-package movieservice.dto;
+package movieservice.dto.response;
 
-import jakarta.persistence.Column;
 import lombok.AllArgsConstructor;
+import lombok.Data;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-
+@Data
 @Getter
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class TypeDTO {
-    @Column(name = "type_id")
+public class TypeMovieResponse {
+   
     private Long typeId;
 
-    @Column(name = "type_name", length = 255)
-    private String typeName; 
+    private String typeName;
 }

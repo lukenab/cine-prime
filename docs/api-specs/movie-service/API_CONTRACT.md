@@ -33,21 +33,35 @@ To ensure parallel development and prevent blockers, all team members must stric
 
 ## 3. Current API Inventory
 
-Below is a summary of the primary API workflows. For detailed payloads, please refer to the YAML file or Swagger UI.
+All endpoints listed below belong to the **Movie Controller** tag (Managing movies, showtimes, cinema rooms, and movie genres).
 
-| Status | Method | Endpoint | Use Case | Assignee |
-| :---: | :--- | :--- | :--- | :--- |
-| Ready | `PUT` | `/api/movie/update/{id}` | Cập nhật thông tin chi tiết phim | Nguyễn Mạnh Khải|
-| Ready | `DELETE` | `/api/movie/delete/{id}` | Xóa mềm phim (soft delete) | Nguyễn Mạnh Khải |
+|    Status   | Method   | Endpoint                    | Use Case                          | Assignee         |
+| :---------: | :------- | :-------------------------- | :-------------------------------- | :--------------- |
+| **In Prog** | `POST`   | `/api/movie`                | Create a new movie with showtimes | Lê Tấn Lộc       |
+|  **Ready**  | `GET`    | `/api/movie/{id}`           | Get movie details by ID           | Lê Tấn Lộc       |
+|  **Ready**  | `GET`    | `/api/movie?page=1&size=10` | Get paginated movie list          | Lê Tấn Lộc       |
+| **In Prog** | `POST`   | `/api/movie/room`           | Create a cinema room              | Lê Tấn Lộc       |
+| **In Prog** | `POST`   | `/api/movie/type`           | Create a movie genre/type         | Lê Tấn Lộc       |
+|  **Ready**  | `PUT`    | `/api/movie/update/{id}`    | Update movie information          | Nguyễn Mạnh Khải |
+|  **Ready**  | `DELETE` | `/api/movie/delete/{id}`    | Soft delete a movie               | Nguyễn Mạnh Khải |
 
----
 
 ## 4. Standardized Error Codes
 
-The Frontend team must handle the returned `code` and `status` attributes to render the corresponding UI accurately:
+The Frontend team must rely on the returned `code` attribute to render the corresponding UI accurately:
 
-| Error Code | HTTP Status | Origin Service | Message / Meaning |
-| :--- | :--- | :--- | :--- |
+| Error Code | HTTP Status | Origin Service | Message / Meaning                                                        |
+| :--------- | :---------- | :------------- | :----------------------------------------------------------------------- |
+| `400`      | 400         | Movie          | Invalid input data (e.g., movie name or director is blank)               |
+| `404`      | 404         | Movie          | Movie not found with the provided ID                                     |
+| `404`      | 404         | Movie Type     | Movie genre not found with the provided ID                               |
+| `409`      | 409         | Movie Type     | Movie type name already exists                                           |
+| `409`      | 409         | Room           | Room name already exists                                                 |
+| `900`      | 400         | Showtime       | Invalid showtime! The cinema only operates from 08:00 AM to 11:00 PM     |
+| `901`      | 409         | Showtime       | A movie schedule already exists in this room                             |
+| `902`      | 400         | Showtime       | Invalid showdate! Showtimes must be scheduled at least 3 days in advance |
+| `903`      | 409         | Showtime       | The room has been booked for another showtime                            |
+| `904`      | 404         | Room           | Cinema room does not exist                                               |
 | `400` | 400 | Movie | Dữ liệu yêu cầu không hợp lệ (ví dụ: tên phim trống, thời lượng âm, v.v.) |
 | `404` | 404 | Movie | Không tìm thấy phim với ID yêu cầu |
 | `404` | 404 | Movie | Không tìm thấy thể loại phim với ID liên kết |
@@ -55,7 +69,6 @@ The Frontend team must handle the returned `code` and `status` attributes to ren
 | `409` | 409 | Movie | Không thể xóa phim vì vẫn còn suất chiếu hoạt động trong tương lai (Khi xóa mềm) |
 | `500` | 500 | Movie | Lỗi máy chủ nội bộ hoặc lỗi kết nối database |
 
----
 
 ## 5. Standard Response Format
 

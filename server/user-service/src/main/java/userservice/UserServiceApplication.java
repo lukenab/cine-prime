@@ -3,10 +3,12 @@ package userservice;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+import org.springframework.context.annotation.ComponentScan;
 
 import java.util.TimeZone;
 
-@SpringBootApplication(scanBasePackages = {"userservice", "com.cineprime.common"})
+@SpringBootApplication
+@ComponentScan(basePackages = {"userservice", "movie.theater.common"})
 @EnableDiscoveryClient
 public class UserServiceApplication {
 

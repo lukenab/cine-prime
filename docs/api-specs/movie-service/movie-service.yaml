@@ -1,16 +1,234 @@
 openapi: 3.0.0
 info:
-  title: CinePrime Movie Service API (Update & Delete)
-  description: OpenAPI specification for the CinePrime movie service updates and soft delete endpoints.
+  title: Movie Service API
+  description: APIs for managing movies, cinema rooms, and movie types in the Cinema system. CinePrime movie service updates and soft delete
   version: 1.0.0
-servers:
-  - url: http://localhost:8081
-    description: Local Development Server
+
 tags:
   - name: Movie Controller
     description: APIs for managing movies in the Cinema system
+
 paths:
-  /api/movie/update/{id}:
+  /api/movie:
+    post:
+      tags:
+        - Movie Controller
+      summary: Create a new movie
+      description: API to create a movie along with its showtimes.
+      operationId: createMovie
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMovieRequest"
+      responses:
+        "200":
+          description: Movie created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      result:
+                        $ref: "#/components/schemas/MovieDetailResponse"
+              example:
+                code: "202"
+                result:
+                  movieId: 11
+                  actor: "Robert Downey Jr., Chris Evans, Scarlett Johansson"
+                  content: "Sau sự kiện Infinity War, các siêu anh hùng còn sống sót tìm cách đảo ngược hậu quả do Thanos gây ra."
+                  director: "Anthony Russo, Joe Russo"
+                  duration: 181
+                  movieProductionCompany: "Marvel Studios"
+                  version: "2D"
+                  movieNameEnglish: "Avengers: Endgame"
+                  movieNameVn: "Avengers: Hồi Kết"
+                  largeImage: "http://res.cloudinary.com/dzlfgmtbc/image/upload/v1781710885/gyy9rdenyjcoaqmem1uq.jpg"
+                  smallImage: "http://res.cloudinary.com/dzlfgmtbc/image/upload/v1781710882/zrolvj5bfzpde3b3jc8e.jpg"
+                  status: true
+                  movieType:
+                    - "Hành động"
+                  showTimes:
+                    - showTimeId: 1
+                      showDate: "2026-11-30"
+                      startTime: "08:00:00"
+                      endTime: "11:01:00"
+                      updateAt: null
+                    - showTimeId: 2
+                      showDate: "2026-10-30"
+                      startTime: "08:00:00"
+                      endTime: "11:01:00"
+                      updateAt: null
+                  createAt: "2026-06-17T22:41:18.435793Z"
+        "400":
+          description: Bad Request - Invalid request data format or business rules.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseError"
+              examples:
+                INVALID_SHOWTIME:
+                  summary: Invalid Showtime (2006)
+                  value:
+                    code: "2006"
+                    message: "Invalid showtime! The cinema only operates from 8:00 AM to 11:00 PM"
+                INVALID_SHOWDATE:
+                  summary: Invalid Showdate (2008)
+                  value:
+                    code: "2008"
+                    message: "Invalid showdate! Showtimes must be scheduled at least 3 days in advance from today."
+        "404":
+          description: Not Found - The requested resource does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseError"
+              examples:
+                MOVIE_TYPE_NOT_FOUND:
+                  summary: Movie Genre Not Found (2001)
+                  value:
+                    code: "2001"
+                    message: "Movie genre not found with the provided ID."
+                MOVIE_NOT_FOUND:
+                  summary: Movie Not Found (2002)
+                  value:
+                    code: "2002"
+                    message: "Movie not found."
+                CINEMA_ROOM_NOT_FOUND:
+                  summary: Cinema Room Not Found (2003)
+                  value:
+                    code: "2003"
+                    message: "Cinema room does not exist."
+        "409":
+          description: Conflict - Data duplication or scheduling conflict.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseError"
+              examples:
+                SHOWTIME_CONFLICT_IN_REQUEST:
+                  summary: Showtime Conflict In Request (2007)
+                  value:
+                    code: "2007"
+                    message: "Conflict: A movie schedule already exists in this room"
+                SHOWTIME_CONFLICT_IN_DATABASE:
+                  summary: Showtime Conflict In Database (2009)
+                  value:
+                    code: "2009"
+                    message: "The room has been booked for another showtime."
+        "500":
+          description: Internal Server Error - Server-side exception.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseError"
+              examples:
+                INTERNAL_SERVER_ERROR:
+                  summary: Internal Server Error (5000)
+                  value:
+                    code: "5000"
+                    message: "Internal server error"
+                UPLOAD_IMAGE_FAILED:
+                  summary: Upload Image Failed (5001)
+                  value:
+                    code: "5001"
+                    message: "Failed to upload image to Cloudinary"
+    get:
+      tags:
+        - Movie Controller
+      summary: Get movies with pagination
+      description: Returns paginated movies.
+      operationId: getPageMovies
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Movies retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponsePageMovie"
+        "404":
+          description: No movies found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseError"
+              example:
+                code: "404"
+                message: "No movies found"
+
+  /api/movie/{id}:
+    get:
+      tags:
+        - Movie Controller
+      summary: Get movie by ID
+      description: Returns a single movie object if it exists.
+      operationId: getMovieById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The ID of the movie to retrieve
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Movie retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      result:
+                        $ref: "#/components/schemas/MovieDetailResponse"
+              example:
+                code: "200"
+                status: "OK"
+                message: "Movie retrieved successfully"
+                result:
+                  movieId: 1
+                  actor: "Robert Downey Jr., Chris Evans, Scarlett Johansson"
+                  content: "Following the events of Infinity War, the surviving superheroes seek to reverse the damage caused by Thanos."
+                  director: "Anthony Russo, Joe Russo"
+                  duration: 181
+                  movieProductionCompany: "Marvel Studios"
+                  version: "2D"
+                  movieNameEnglish: "Avengers: Endgame"
+                  movieNameVn: "Avengers: Hồi Kết"
+                  largeImage: "https://example.com/images/avengers-large.jpg"
+                  smallImage: "https://example.com/images/avengers-small.jpg"
+                  status: true
+                  movieType:
+                    - "Action"
+                  showTimes:
+                    - showTimeId: 1
+                      showDate: "2026-11-30"
+                      startTime: "08:00:00"
+                      endTime: "11:01:00"
+                      updateAt: null
+                    - showTimeId: 2
+                      showDate: "2026-10-30"
+                      startTime: "08:00:00"
+                      endTime: "11:01:00"
+                      updateAt: null
+                  createAt: "2026-06-15T02:51:46.966967Z"
     put:
       tags:
         - Movie Controller
@@ -64,7 +282,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
+                $ref: "#/components/schemas/ApiResponse"
               examples:
                 ValidationError:
                   summary: Tên phim tiếng Việt trống
@@ -114,8 +332,6 @@ paths:
                 code: "500"
                 message: "Lỗi máy chủ nội bộ"
                 status: "INTERNAL_SERVER_ERROR"
-
-  /api/movie/delete/{id}:
     delete:
       tags:
         - Movie Controller
@@ -172,8 +388,142 @@ paths:
                 message: "Lỗi máy chủ nội bộ"
                 status: "INTERNAL_SERVER_ERROR"
 
+  /api/movie/room:
+    post:
+      tags:
+        - Movie Controller
+      summary: Create a cinema room
+      description: Creates a new cinema room and returns the operation status.
+      operationId: createCinemaRoom
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CinemaRoomRequest"
+      responses:
+        "200":
+          description: Cinema room created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      result:
+                        $ref: "#/components/schemas/CinemaRoomResponse"
+              example:
+                code: "200"
+                result:
+                  cinemaRoomId: 1
+                  cinemaRoomName: "Room 2"
+                  seatQuantity: 100
+        "409":
+          description: Cinema room conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseError"
+              example:
+                code: "2004"
+                message: "Room name already exists!!!"
+
+  /api/movie/type:
+    post:
+      tags:
+        - Movie Controller
+      summary: Create a movie type
+      description: Creates a new movie type and returns the operation status.
+      operationId: createTypeMovie
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TypeRequest"
+      responses:
+        "200":
+          description: Movie type created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      result:
+                        $ref: "#/components/schemas/TypeMovieResponse"
+              example:
+                code: "202"
+                result:
+                  typeId: 1
+                  typeName: "Action"
+        "409":
+          description: Movie type conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseError"
+              example:
+                code: "2005"
+                message: "Movie type name already exists!!!"
+
 components:
   schemas:
+    CreateMovieRequest:
+      type: object
+      required:
+        - movieNameVn
+        - director
+        - typeIds
+        - showTimes
+      properties:
+        movieNameVn:
+          type: string
+          example: "Avengers: Hồi Kết"
+        movieNameEnglish:
+          type: string
+          example: "Avengers: Endgame"
+        director:
+          type: string
+          example: "Anthony Russo, Joe Russo"
+        actor:
+          type: string
+          example: "Robert Downey Jr., Chris Evans, Scarlett Johansson"
+        content:
+          type: string
+          example: "Following the events of Infinity War, the surviving superheroes seek to reverse the damage caused by Thanos."
+        duration:
+          type: integer
+          example: 181
+        version:
+          type: string
+          example: "2D"
+        movieProductionCompany:
+          type: string
+          example: "Marvel Studios"
+        smallImage:
+          type: string
+          example: "https://example.com/images/avengers-small.jpg"
+        largeImage:
+          type: string
+          example: "https://example.com/images/avengers-large.jpg"
+        status:
+          type: integer
+          description: "False = Active, True = Inactive"
+          example: 1
+        typeIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+          example: [1, 2, 3]
+        showTimes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShowTimeRequest"
+
     UpdateMovieRequest:
       type: object
       required:
@@ -224,8 +574,81 @@ components:
           type: array
           items:
             type: integer
-            format: int64
-          example: [1, 2, 3]
+          example: [1]
+        showTimes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShowTimeRequest"
+          example:
+            - cinemaRoomId: 1
+              showDate: "2026-11-30"
+              startTime: "08:00:00"
+            - cinemaRoomId: 1
+              showDate: "2026-10-30"
+              startTime: "08:00:00"
+
+    ShowTimeRequest:
+      type: object
+      required:
+        - cinemaRoomId
+        - showDate
+        - startTime
+      properties:
+        cinemaRoomId:
+          type: integer
+          example: 1
+        showDate:
+          type: string
+          format: date
+          example: "2026-11-30"
+        startTime:
+          type: string
+          example: "08:00:00"
+
+    CinemaRoomRequest:
+      type: object
+      required:
+        - cinemaRoomName
+        - seatQuantity
+      properties:
+        cinemaRoomName:
+          type: string
+          example: "Room 2"
+        seatQuantity:
+          type: integer
+          example: 100
+
+    CinemaRoomResponse:
+      type: object
+      properties:
+        cinemaRoomId:
+          type: integer
+          example: 1
+        cinemaRoomName:
+          type: string
+          example: "Room 2"
+        seatQuantity:
+          type: integer
+          example: 100
+
+    TypeRequest:
+      type: object
+      required:
+        - typeName
+      properties:
+        typeName:
+          type: string
+          example: "Action"
+
+    TypeMovieResponse:
+      type: object
+      properties:
+        typeId:
+          type: integer
+          example: 1
+        typeName:
+          type: string
+          example: "Action"
 
     MovieResponse:
       type: object
@@ -282,6 +705,20 @@ components:
         code:
           type: string
           example: "200"
+
+    ApiResponseError:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "400"
+        message:
+          type: string
+          example: "Error message details"
+
+    ApiResponseWithList:
+      type: object
+      properties:
         message:
           type: string
           example: "Operation successful"
@@ -302,4 +739,150 @@ components:
           type: string
           example: "OK"
         data:
-          $ref: '#/components/schemas/MovieResponse'
+          $ref: "#/components/schemas/MovieResponse"
+        result:
+          type: array
+          items:
+            $ref: "#/components/schemas/MovieDetailResponse"
+
+    MovieDetailResponse:
+      type: object
+      properties:
+        movieId:
+          type: integer
+          example: 1
+        actor:
+          type: string
+          example: "Robert Downey Jr., Chris Evans, Scarlett Johansson"
+        content:
+          type: string
+          example: "Following the events of Infinity War, the surviving superheroes seek to reverse the damage caused by Thanos."
+        director:
+          type: string
+          example: "Anthony Russo, Joe Russo"
+        duration:
+          type: integer
+          example: 181
+        movieProductionCompany:
+          type: string
+          example: "Marvel Studios"
+        version:
+          type: string
+          example: "2D"
+        movieNameEnglish:
+          type: string
+          example: "Avengers: Endgame"
+        movieNameVn:
+          type: string
+          example: "Avengers: Hồi Kết"
+        largeImage:
+          type: string
+          example: "https://example.com/images/avengers-large.jpg"
+        smallImage:
+          type: string
+          example: "https://example.com/images/avengers-small.jpg"
+        status:
+          type: boolean
+          example: true
+        movieType:
+          type: array
+          items:
+            type: string
+          example:
+            - "Action"
+        showTimes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShowTimeResponse"
+          example:
+            - showTimeId: 1
+              showDate: "2026-11-30"
+              startTime: "08:00:00"
+              endTime: "11:01:00"
+              updateAt: null
+            - showTimeId: 2
+              showDate: "2026-10-30"
+              startTime: "08:00:00"
+              endTime: "11:01:00"
+              updateAt: null
+        createAt:
+          type: string
+          format: date-time
+          example: "2026-06-15T02:51:46.966967Z"
+
+    ShowTimeResponse:
+      type: object
+      properties:
+        showTimeId:
+          type: integer
+          example: 1
+        showDate:
+          type: string
+          format: date
+          example: "2026-11-30"
+        startTime:
+          type: string
+          example: "08:00:00"
+        endTime:
+          type: string
+          example: "11:01:00"
+        updateAt:
+          type: string
+          nullable: true
+          example: null
+
+    PageMovieResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/MovieDetailResponse'
+        pageable:
+          type: object
+          properties:
+            pageNumber:
+              type: integer
+              example: 0
+            pageSize:
+              type: integer
+              example: 10
+        totalPages:
+          type: integer
+          example: 5
+        totalElements:
+          type: integer
+          example: 48
+        last:
+          type: boolean
+          example: false
+        first:
+          type: boolean
+          example: true
+        size:
+          type: integer
+          example: 10
+        number:
+          type: integer
+          example: 0
+        numberOfElements:
+          type: integer
+          example: 10
+        empty:
+          type: boolean
+          example: false
+
+    ApiResponsePageMovie:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "200"
+        message:
+          type: string
+          example: "Movies retrieved successfully"
+        status:
+          type: string
+          example: "OK"
+        result:
+          $ref: '#/components/schemas/PageMovieResponse'

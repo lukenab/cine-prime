@@ -1,14 +1,15 @@
 package movieservice.entity;
 
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
 
+import org.hibernate.annotations.UpdateTimestamp;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 
 import jakarta.persistence.Column;
@@ -18,6 +19,9 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -27,20 +31,21 @@ import movieservice.constant.ApiConstants;
 
 import org.hibernate.annotations.SQLRestriction;
 
-@Getter
-@Setter
+
 @Entity
 @Table(name = "movie")
 @SQLRestriction("status = true")
 @Schema(name = "Movie", description = "Thông tin phim trả về từ movie-service")
 @EntityListeners(AuditingEntityListener.class)
+@Getter
+@Setter
 public class Movie {
 
         @Id
         @GeneratedValue(strategy = GenerationType.IDENTITY)
         @Column(name = "movie_id")
         @Schema(description = ApiConstants.MOVIE_ID_DESC, example = ApiConstants.MOVIE_ID_EXAMPLE)
-        private Integer movieId;
+        private Long movieId;
 
         @Column(name = "actor")
         @Schema(description = ApiConstants.MOVIE_ACTOR_DESC, example = ApiConstants.ACTOR_EXAMPLE)
@@ -53,7 +58,6 @@ public class Movie {
         @Column(name = "director")
         @Schema(description = ApiConstants.MOVIE_DIRECTOR_DESC, example = ApiConstants.DIRECTOR_EXAMPLE)
         private String director;
-
         @Column(name = "duration")
         @Schema(description = ApiConstants.DURATION_DESC, example = ApiConstants.DURATION_EXAMPLE)
         private Long duration;
@@ -83,21 +87,20 @@ public class Movie {
         private String smallImage;
         @Schema(description = ApiConstants.STATUS_DESC, example = ApiConstants.STATUS_EXAMPLE)
         private Boolean status;
-        // movie type
-        @OneToMany(mappedBy = "movie", fetch = FetchType.LAZY)
+        @ManyToMany
         @JsonManagedReference
         @Schema(description = ApiConstants.MOVIE_TYPES_DESC)
-        private List<MovieType> movieTypes;
+        private List<MovieType> movieTypes; // chỗ này tui để movieTypes bên ông để gì á, dô folder nén lúc nảy coi thử 
 
-        @OneToMany(mappedBy = "movie", fetch = FetchType.LAZY)
+        @OneToMany(mappedBy = "movie", fetch = FetchType.EAGER)
         @JsonManagedReference
-        @Schema(description = ApiConstants.SHOWTIMES_DESC)
+        @JsonIgnore
         private List<ShowTime> showTimes;
 
         @CreatedDate
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy HH:mm", timezone = "Asia/Ho_Chi_Minh")
         @Schema(description = ApiConstants.CREATE_AT_DESC, example = ApiConstants.CREATE_AT_EXAMPLE)
-        private LocalDateTime createAt; // Đổi từ LocalTime sang LocalDateTime
+        private LocalDateTime createAt; 
 
         @LastModifiedDate
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy HH:mm", timezone = "Asia/Ho_Chi_Minh")

@@ -3,102 +3,53 @@ package movieservice.dto.request;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import lombok.Data;
-
 import java.util.List;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import movieservice.constant.ApiConstants;
 
 @Data
-@Schema(description = "Thông tin tạo mới phim và lịch chiếu")
 public class CreateMovieRequest {
 
-    @Schema(
-        description = ApiConstants.MOVIE_VN_NAME_DESC,
-        example = ApiConstants.MOVIE_NAME_EXAMPLE
-    )
-    @NotBlank(message = "Tên phim tiếng Việt không được để trống")
-    @Size(max = 255)
+    @NotBlank(message = "Vietnamese movie name cannot be blank")
+    @Size(max = 255, message = "Vietnamese movie name must not exceed 255 characters")
     private String movieNameVn;
 
-    @Schema(
-        description = ApiConstants.MOVIE_EN_NAME_DESC,
-        example = ApiConstants.MOVIE_NAME_EXAMPLE
-    )
-    @NotBlank(message = "Tên phim tiếng Anh không được để trống")
-    @Size(max = 255)
+    @NotBlank(message = "English movie name cannot be blank")
+    @Size(max = 255, message = "English movie name must not exceed 255 characters")
     private String movieNameEnglish;
 
-    @Schema(
-        description = ApiConstants.DIRECTOR_DESC,
-        example = ApiConstants.DIRECTOR_EXAMPLE
-    )
-    @NotBlank(message = "Đạo diễn không được để trống")
+    @NotBlank(message = "Director cannot be blank")
     private String director;
 
-    @Schema(
-        description = ApiConstants.ACTOR_DESC,
-        example = ApiConstants.ACTOR_EXAMPLE
-    )
-    @NotBlank(message = "Diễn viên không được để trống")
+    @NotBlank(message = "Actors cannot be blank")
     private String actor;
 
-    @Schema(
-        description = ApiConstants.DURATION_DESC,
-        example = ApiConstants.DURATION_EXAMPLE
-    )
-    @NotNull
+    @NotNull(message = "Duration cannot be null")
     private Integer duration;
 
-    @Schema(
-        description = ApiConstants.CONTENT_DESC,
-        example = ApiConstants.CONTENT_EXAMPLE
-    )
-    @NotBlank
+    @NotBlank(message = "Content cannot be blank")
     private String content;
 
-    @Schema(
-        description = ApiConstants.VERSION_DESC,
-        example = ApiConstants.VERSION_EXAMPLE
-    )
-    @NotBlank
+    @NotBlank(message = "Version cannot be blank")
     private String version;
 
-    @Schema(
-        description = ApiConstants.STATUS_DESC,
-        example = ApiConstants.STATUS_EXAMPLE
-    )
-    @NotNull
+    @NotNull(message = "Status cannot be null")
     private Boolean status;
 
-    @Schema(
-        description = ApiConstants.PRODUCTION_COMPANY_DESC,
-        example = ApiConstants.PRODUCTION_COMPANY_EXAMPLE
-    )
-    @NotBlank
+    @NotBlank(message = "Movie production company cannot be blank")
     private String movieProductionCompany;
 
-    @Schema(
-        description = ApiConstants.LARGE_IMAGE_DESC,
-        example = ApiConstants.LARGE_IMAGE_EXAMPLE
-    )
+    @NotBlank(message = "Large image URL must not be blank")
     private String largeImage;
 
-    @Schema(
-        description = ApiConstants.SMALL_IMAGE_DESC,
-        example = ApiConstants.SMALL_IMAGE_EXAMPLE
-    )
+    @NotBlank(message = "Small image URL must not be blank")
     private String smallImage;
 
-    @Schema(
-        description = ApiConstants.TYPE_IDS_DESC,
-        example = ApiConstants.TYPE_IDS_EXAMPLE
-    )
+    @NotEmpty(message = "At least one type ID must be selected")
     private List<Long> typeIds;
 
-    @Schema(
-        description = ApiConstants.SHOWTIMES_DESC
-    )
     @Valid
+    @NotEmpty(message = "Show times list must not be empty")
     private List<ShowTimeRequest> showTimes;
 }

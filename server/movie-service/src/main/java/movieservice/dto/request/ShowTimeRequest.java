@@ -10,14 +10,14 @@ import java.time.LocalTime;
 @Data
 public class ShowTimeRequest {
 
-    @NotNull(message = "Ngày chiếu không được để trống")
-    @FutureOrPresent(message = "Ngày chiếu phải từ hôm nay trở đi")
+    @NotNull(message = "Show date cannot be blank")
     private LocalDate showDate;
 
-    @NotNull(message = "Giờ bắt đầu không được để trống")
+    @NotNull(message = "Start time cannot be blank")
     private LocalTime startTime;
+
     private LocalTime endTime;
 
-    @NotNull(message = "Phòng chiếu không được để trống")
+    @NotNull(message = "Cinema room ID cannot be blank")
     private Long cinemaRoomId;
 }

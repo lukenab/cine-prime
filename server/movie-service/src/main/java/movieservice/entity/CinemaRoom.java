@@ -24,7 +24,7 @@ public class CinemaRoom {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "cinema_room_id")
-    private Integer cinemaRoomId;
+    private Long cinemaRoomId;
 
     @Column(name = "cinema_room_name")
     private String cinemaRoomName;
@@ -33,11 +33,11 @@ public class CinemaRoom {
     private Integer seatQuantity;
 
     @Column(name = "status")
-    private Integer status;
+    private Boolean status;
 
     @OneToMany(mappedBy = "cinemaRoom", fetch = FetchType.LAZY)
     private List<Seat> seats;
 
-    @OneToMany(mappedBy = "cinemaRoom", fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "cinemaRoom", fetch = FetchType.EAGER)
     private List<ShowTime> showTimes;
 }

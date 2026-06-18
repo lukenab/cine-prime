@@ -14,16 +14,7 @@ import movieservice.entity.Movie;
 
 @Repository
 
-public interface MovieRepository extends JpaRepository<Movie, Integer> {
-        Movie findByMovieId(Integer movieId);
-
-        @Modifying
-        @Transactional
-        @Query("UPDATE Movie m SET m.status = true " +
-                        "WHERE m.status = false " +
-                        "AND m.createAt <= :sixMonthsAgo")
-        int autoSoftDeleteExpiredMovies(@Param("sixMonthsAgo") LocalDateTime sixMonthsAgo);
-
+public interface MovieRepository extends JpaRepository<Movie, Long> {
         List<Movie> findByStatusTrue();
 
         // Tự sinh query: DELETE FROM Movie WHERE createAt <= :time
@@ -55,6 +46,6 @@ public interface MovieRepository extends JpaRepository<Movie, Integer> {
                             SET m.status = false
                             WHERE m.movieId = :movieId
                         """)
-        int softDeleteMovie(@Param("movieId") Integer movieId);
+        int softDeleteMovie(@Param("movieId") Long movieId);
 
 }

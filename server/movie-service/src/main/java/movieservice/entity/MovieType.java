@@ -1,36 +1,30 @@
 package movieservice.entity;
 
+import java.util.List;
 
-import com.fasterxml.jackson.annotation.JsonBackReference;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-
-import jakarta.persistence.EmbeddedId;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.MapsId;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.Table;
-import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
+
 @Getter
 @Setter
 @Entity
-@Table(name = "movie_type")
+@Table(name = "type")
 public class MovieType {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "type_id")
+    private Long typeId;
 
-    @EmbeddedId
-    private MovieTypeId id = new MovieTypeId();
+    @Column(name = "type_name", length = 255)
+    private String typeName;
 
-    @ManyToOne
-    @MapsId("movieId") // Khớp với 'movieId' trong MovieTypeId
-    @JoinColumn(name = "movie_id")
-    @JsonIgnore
-    private Movie movie;
-
-    @ManyToOne // 🌟 ĐÃ SỬA: Không để thuộc tính cascade ở đây nữa!
-    @MapsId("typeId")
-    @JoinColumn(name = "type_id")
-    @JsonBackReference
-    private Type type;
+    @ManyToMany(mappedBy = "movieTypes")
+    private List<Movie> movies;
 }

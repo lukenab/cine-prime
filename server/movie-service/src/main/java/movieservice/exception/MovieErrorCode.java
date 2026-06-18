@@ -12,10 +12,39 @@ import org.springframework.http.HttpStatusCode;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @AllArgsConstructor
 public enum MovieErrorCode implements BaseErrorCode {
-    MOVIE_NOT_FOUND(1014, "Movie not found!", HttpStatus.NOT_FOUND),
+
+        MOVIE_TYPE_NOT_FOUND(2001, "Movie genre not found with the provided ID.", HttpStatus.NOT_FOUND),
+        MOVIE_NOT_FOUND(2002, "Movie not found.", HttpStatus.NOT_FOUND),
+
+        CINEMA_ROOM_NOT_FOUND(2003, "Cinema room does not exist.", HttpStatus.NOT_FOUND),
+        CINEMA_ROOM_NAME_EXISTED(2004, "Room name already exists!!!", HttpStatus.CONFLICT),
+
+        MOVIE_TYPE_NAME_EXISTED(2005, "Movie type name already exists!!!", HttpStatus.CONFLICT),
+
+        INVALID_SHOWTIME(2006,
+                        "Invalid showtime! The cinema only operates from 8:00 AM to 11:00 PM",
+                        HttpStatus.BAD_REQUEST),
+
+        SHOWTIME_CONFLICT_IN_REQUEST(2007,
+                        "Conflict: A movie schedule already exists in this room",
+                        HttpStatus.CONFLICT),
+
+        INVALID_SHOWDATE(2008,
+                        "Invalid showdate! Showtimes must be scheduled at least 3 days in advance from today.",
+                        HttpStatus.BAD_REQUEST),
+
+        SHOWTIME_CONFLICT_IN_DATABASE(2009,
+                        "The room has been booked for another showtime.",
+                        HttpStatus.CONFLICT),
+        UPLOAD_IMAGE_FAILED(5001, "Failed to upload image to Cloudinary", HttpStatus.INTERNAL_SERVER_ERROR),
+
+        INTERNAL_SERVER_ERROR(5000,
+                        "Internal server error",
+                        HttpStatus.INTERNAL_SERVER_ERROR),
+
+
     GENRE_NOT_FOUND(2002, "Không tìm thấy thể loại phim", HttpStatus.NOT_FOUND),
-    ACTIVE_SHOWTIMES_EXIST(2003, "Không thể xóa phim vì vẫn còn suất chiếu hoạt động trong tương lai", HttpStatus.CONFLICT)
-    ;
+    ACTIVE_SHOWTIMES_EXIST(2003, "Không thể xóa phim vì vẫn còn suất chiếu hoạt động trong tương lai", HttpStatus.CONFLICT);
 
     int code;
     String message;
