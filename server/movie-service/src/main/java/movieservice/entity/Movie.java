@@ -58,8 +58,6 @@ public class Movie {
         @Column(name = "director")
         @Schema(description = ApiConstants.MOVIE_DIRECTOR_DESC, example = ApiConstants.DIRECTOR_EXAMPLE)
         private String director;
-        @Column(name = "accoountId")
-        private String accoountId;
         @Column(name = "duration")
         @Schema(description = ApiConstants.DURATION_DESC, example = ApiConstants.DURATION_EXAMPLE)
         private Long duration;
@@ -92,7 +90,7 @@ public class Movie {
         @ManyToMany
         @JsonManagedReference
         @Schema(description = ApiConstants.MOVIE_TYPES_DESC)
-        private List<MovieType> movieTypes;
+        private List<MovieType> movieTypes; // chỗ này tui để movieTypes bên ông để gì á, dô folder nén lúc nảy coi thử 
 
         @OneToMany(mappedBy = "movie", fetch = FetchType.EAGER)
         @JsonManagedReference
@@ -102,7 +100,7 @@ public class Movie {
         @CreatedDate
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy HH:mm", timezone = "Asia/Ho_Chi_Minh")
         @Schema(description = ApiConstants.CREATE_AT_DESC, example = ApiConstants.CREATE_AT_EXAMPLE)
-        private LocalDateTime createAt; // Đổi từ LocalTime sang LocalDateTime
+        private LocalDateTime createAt; 
 
         @LastModifiedDate
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy HH:mm", timezone = "Asia/Ho_Chi_Minh")

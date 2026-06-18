@@ -229,8 +229,6 @@ paths:
                       endTime: "11:01:00"
                       updateAt: null
                   createAt: "2026-06-15T02:51:46.966967Z"
-
-  /api/movie/update/{id}:
     put:
       tags:
         - Movie Controller
@@ -334,8 +332,6 @@ paths:
                 code: "500"
                 message: "Lỗi máy chủ nội bộ"
                 status: "INTERNAL_SERVER_ERROR"
-
-  /api/movie/delete/{id}:
     delete:
       tags:
         - Movie Controller

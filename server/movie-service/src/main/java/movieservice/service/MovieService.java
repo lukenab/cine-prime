@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.cloudinary.Cloudinary;
+import com.cloudinary.api.exceptions.ApiException;
 import com.cloudinary.utils.ObjectUtils;
 
 import jakarta.transaction.Transactional;
@@ -26,6 +27,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.dto.ApiResponse;
 import movie.theater.common.exception.AppException;
+import movie.theater.common.exception.BaseErrorCode;
 import movieservice.dto.request.CinemaRoomRequest;
 import movieservice.dto.request.CreateMovieRequest;
 import movieservice.dto.request.ShowTimeRequest;
@@ -141,7 +143,9 @@ public class MovieService {
     }
 
     public MovieResponse getMovie(Long id) {
-        Movie movie = movieRepository.findById(id).orElseThrow(() -> new RuntimeException("error"));
+        Movie movie = movieRepository.findById(id)
+                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+
         return movieMapper.toResponse(movie);
     }
 
@@ -269,33 +273,21 @@ public class MovieService {
 
     @Transactional
     public MovieResponse updateMovie(Long id, UpdateMovieRequest request) {
-        // 1. Tìm Movie cũ, nếu không có trả về lỗi
         Movie movie = movieRepository.findById(id)
                 .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
 
-        // 2. Dùng Mapper cập nhật các trường thông tin cơ bản (Tên, đạo diễn, diễn
-        // viên,...)
         movieMapper.updateMovieFromRequest(request, movie);
 
-        // 3. Xử lý cập nhật danh sách Thể loại (MovieType) nếu request có truyền lên
         if (request.getTypeIds() != null) {
             List<MovieType> updatedMovieTypes = new ArrayList<>();
 
             for (Long typeId : request.getTypeIds()) {
-                // Thay vì tự tạo bảng trung gian lỗi, ta tìm thẳng thực thể MovieType từ DB
                 MovieType type = typeRepository.findById(typeId)
                         .orElseThrow(() -> new AppException(MovieErrorCode.GENRE_NOT_FOUND));
                 updatedMovieTypes.add(type);
             }
-
-            // Cập nhật lại list mới cho Movie. JPA/Hibernate sẽ tự động clear bảng trung
-            // gian cũ
-            // và chèn dữ liệu mới vào bảng trung gian `@ManyToMany` cho bạn.
             movie.setMovieTypes(updatedMovieTypes);
         }
-
-        // Do có @Transactional, không cần gọi repo.save() hay repo.findById() nữa.
-        // Các thay đổi trên đối tượng `movie` sẽ tự động được commit xuống DB.
         return movieMapper.toResponse(movie);
     }
 
@@ -308,7 +300,7 @@ public class MovieService {
         LocalTime currentTime = LocalTime.now();
         boolean hasFutureShowTimes = showTimeRepository.existsByMovieMovieIdAndFutureShowTime(
                 movie.getMovieId(), currentDate, currentTime);
-        if (hasFutureShowTimes) {
+        if (!hasFutureShowTimes) {
             throw new AppException(MovieErrorCode.ACTIVE_SHOWTIMES_EXIST);
         }
 
