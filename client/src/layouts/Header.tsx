@@ -1,3 +1,4 @@
+import { useAuth } from "../context/AuthContext";
 import { Bell, Search, ChevronRight, User, Settings, LogOut } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -33,10 +34,12 @@ export function Header({ activePage, isDarkMode = true }: HeaderProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("username");
-    navigate("/login");
+    const { user, logout } = useAuth();
+
+const handleLogout = () => {
+    logout();               
+    setIsProfileOpen(false); 
+    navigate("/login");     
   };
 
   return (

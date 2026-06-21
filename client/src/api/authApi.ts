@@ -17,4 +17,13 @@ export const authApi = {
   verifyRegister: (payload: { otp: string, registerRequest: any }) => {
     return axiosClient.post('/api/auth/register/verify', payload);
   }
+  ,
+  resendOtp: (payload: { email: string }) => {
+    return axiosClient.post('/api/auth/resend-otp', payload);
+  },
+  
+  createAccount: (payload: any) => {
+        return axiosClient.post('/api/accounts', payload); 
+    }
+  
 }

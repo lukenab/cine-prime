@@ -30,7 +30,7 @@ spring:
       properties:
         spring.json.trusted.packages: "*"
         spring.json.use.type.headers: false
-        spring.json.value.default.type: userservice.event.UserRegisteredEvent # Default fallback
+        spring.json.value.default.type: userservice.event.UserRegisteredEvent
 
 jwt:
   signerKey: 873bcf3b6023c6cfac735831cc01cbd59c6f64c2341050f12e5f0224d7edea62
@@ -42,4 +42,3 @@ eureka:
   client:
     service-url:
       defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
-

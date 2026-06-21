@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Search, Plus, SlidersHorizontal, Download } from "lucide-react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 
-// Lưu ý: Đảm bảo đường dẫn import trỏ đúng vào thư mục chứa Component của cậu
 import { StatsCards } from "../../layouts/StatsCards";
 import { UserTable } from "../../layouts/UserTable";
 import { UserModal, type UserData } from "../../layouts/UserModal";
@@ -23,9 +22,36 @@ const avatarGradients = [
 ];
 
 const initialUsers: UserData[] = [
-  { id: 1, name: "Sophia Anderson", email: "sophia.a@company.com", role: "Admin", status: "Active", department: "Engineering", avatar: avatarGradients[0], joined: "Jan 15, 2024" },
-  { id: 2, name: "Marcus Chen", email: "marcus.c@company.com", role: "Developer", status: "Active", department: "Engineering", avatar: avatarGradients[1], joined: "Feb 3, 2024" },
-  { id: 3, name: "Isabelle Moreau", email: "isabelle.m@company.com", role: "Manager", status: "Active", department: "Marketing", avatar: avatarGradients[2], joined: "Mar 22, 2023" },
+  {
+    id: 1,
+    name: "Sophia Anderson",
+    email: "sophia.a@company.com",
+    role: "Admin",
+    status: "Active",
+    department: "Engineering",
+    avatar: avatarGradients[0],
+    joined: "Jan 15, 2024",
+  },
+  {
+    id: 2,
+    name: "Marcus Chen",
+    email: "marcus.c@company.com",
+    role: "Developer",
+    status: "Active",
+    department: "Engineering",
+    avatar: avatarGradients[1],
+    joined: "Feb 3, 2024",
+  },
+  {
+    id: 3,
+    name: "Isabelle Moreau",
+    email: "isabelle.m@company.com",
+    role: "Manager",
+    status: "Active",
+    department: "Marketing",
+    avatar: avatarGradients[2],
+    joined: "Mar 22, 2023",
+  },
   // ... Cậu có thể paste lại mảng dữ liệu mẫu đầy đủ của cậu vào đây
 ];
 
@@ -33,7 +59,7 @@ const roles = ["Admin", "Editor", "Viewer", "Manager", "Developer"];
 
 export default function ManageUserPage() {
   const navigate = useNavigate();
-  
+
   // 🌟 ĐIỂM QUAN TRỌNG: Nhận isDarkMode từ AdminLayout truyền xuống
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
 
@@ -44,12 +70,11 @@ export default function ManageUserPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editUser, setEditUser] = useState<UserData | null>(null);
   const [showFilters, setShowFilters] = useState(false);
-  
+
   let nextId = users.length > 0 ? Math.max(...users.map((u) => u.id)) + 1 : 1;
 
   const handleAddUser = () => {
-    setEditUser(null);
-    setModalOpen(true);
+    navigate("/admin/users/create");
   };
 
   const handleEditUser = (user: UserData) => {
@@ -61,17 +86,44 @@ export default function ManageUserPage() {
     setUsers((prev) => prev.filter((u) => u.id !== id));
   };
 
-  const handleSaveUser = (data: Omit<UserData, "id" | "joined" | "avatar">) => {
+  const handleSaveUser = async (data: Omit<UserData, "id" | "joined" | "avatar">) => {
     if (editUser) {
+      // Logic xử lý Update User (Sẽ làm sau)
       setUsers((prev) => prev.map((u) => (u.id === editUser.id ? { ...u, ...data } : u)));
     } else {
-      const newUser: UserData = {
-        ...data,
-        id: nextId++,
-        avatar: avatarGradients[Math.floor(Math.random() * avatarGradients.length)],
-        joined: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-      };
-      setUsers((prev) => [newUser, ...prev]);
+      // LOGIC TẠO USER MỚI DÀNH CHO ADMIN
+      try {
+        const payload = {
+          email: data.email,
+          username: data.email.split("@")[0], // Tự gen username từ email nếu modal không có ô nhập
+          password: "DefaultPassword123!", // Đặt pass mặc định hoặc lấy từ modal
+          fullName: data.name,
+          role: data.role,
+          // Bổ sung các trường khác (phone, dob, cccd...) nếu UserModal của cậu có
+        };
+
+        // 2. Gọi API lên Backend (Thay bằng hàm fetch/axios thực tế của dự án cậu)
+        // const response = await fetch('/api/admin/accounts', { method: 'POST', body: JSON.stringify(payload) });
+        // const result = await response.json();
+
+        // --- ĐOẠN NÀY LÀ MÔ PHỎNG NẾU GỌI API THÀNH CÔNG ---
+        const newUser: UserData = {
+          ...data,
+          id: nextId++, // Thực tế sẽ lấy result.id từ backend trả về
+          avatar: avatarGradients[Math.floor(Math.random() * avatarGradients.length)],
+          joined: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+        };
+
+        // 3. Cập nhật lại UI bảng
+        setUsers((prev) => [newUser, ...prev]);
+
+        // 4. Đóng Modal và báo thành công
+        setModalOpen(false);
+        // toast.success("User created successfully!");
+      } catch (error) {
+        console.error("Failed to create user:", error);
+        // toast.error("Failed to create user. Email might already exist.");
+      }
     }
   };
 
@@ -90,9 +142,7 @@ export default function ManageUserPage() {
         >
           User Management
         </h1>
-        <p style={{ color: "var(--text-sub)", fontSize: "13px", transition: "color 0.2s ease" }}>
-          Manage accounts, roles, and permissions
-        </p>
+        <p style={{ color: "var(--text-sub)", fontSize: "13px", transition: "color 0.2s ease" }}>Manage accounts, roles, and permissions</p>
       </div>
 
       {/* KPI Cards */}
@@ -140,7 +190,7 @@ export default function ManageUserPage() {
         </button>
 
         <button
-          onClick={handleAddUser}
+          onClick={handleAddUser} 
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all shadow-sm"
           style={{ fontSize: "14px", fontWeight: 500, background: isDarkMode ? "#3b82f6" : "#2563eb" }}
         >
@@ -161,7 +211,11 @@ export default function ManageUserPage() {
               All Roles
             </button>
             {roles.map((r) => (
-              <button key={r} onClick={() => setRoleFilter(roleFilter === r ? "" : r)} className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${roleFilter === r ? "active" : ""}`}>
+              <button
+                key={r}
+                onClick={() => setRoleFilter(roleFilter === r ? "" : r)}
+                className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${roleFilter === r ? "active" : ""}`}
+              >
                 {r}
               </button>
             ))}
@@ -170,13 +224,22 @@ export default function ManageUserPage() {
           <div className="w-px h-5 mx-1" style={{ background: "var(--border-color)" }} />
 
           <div className="flex items-center gap-1 filter-btns">
-            <button onClick={() => setStatusFilter("")} className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${!statusFilter ? "active" : ""}`}>
+            <button
+              onClick={() => setStatusFilter("")}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${!statusFilter ? "active" : ""}`}
+            >
               All Status
             </button>
-            <button onClick={() => setStatusFilter(statusFilter === "Active" ? "" : "Active")} className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${statusFilter === "Active" ? "active-green" : ""}`}>
+            <button
+              onClick={() => setStatusFilter(statusFilter === "Active" ? "" : "Active")}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${statusFilter === "Active" ? "active-green" : ""}`}
+            >
               Active
             </button>
-            <button onClick={() => setStatusFilter(statusFilter === "Inactive" ? "" : "Inactive")} className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${statusFilter === "Inactive" ? "active-gray" : ""}`}>
+            <button
+              onClick={() => setStatusFilter(statusFilter === "Inactive" ? "" : "Inactive")}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${statusFilter === "Inactive" ? "active-gray" : ""}`}
+            >
               Inactive
             </button>
           </div>
@@ -185,7 +248,7 @@ export default function ManageUserPage() {
 
       {/* User Table Component */}
       <UserTable users={users} onEdit={handleEditUser} onDelete={handleDeleteUser} searchQuery={searchQuery} roleFilter={roleFilter} statusFilter={statusFilter} />
-      
+
       {/* Edit/Add Modal */}
       <UserModal open={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSaveUser} editUser={editUser} />
 

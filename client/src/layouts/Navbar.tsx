@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Film, Ticket, Menu, X, User, LogOut } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -10,10 +11,10 @@ export function Navbar() {
   const username = localStorage.getItem("username") || "User";
   const isLogged = !!token;
 
+      const { user, logout } = useAuth();
+
   const handleLogout = () => {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("username");
-    navigate("/login"); 
+    logout();
   };
 
   return (

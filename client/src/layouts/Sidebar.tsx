@@ -1,3 +1,4 @@
+import { useAuth } from "../context/AuthContext";
 import { LayoutDashboard, Film, Calendar, Ticket, Users, BarChart2, Settings, Clapperboard, LogOut } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom"; // 1. Thêm import useLocation
 
@@ -20,10 +21,11 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation(); 
 
+  const { user, logout } = useAuth();
+
   const handleLogout = () => {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("username");
-    navigate("/login");
+    logout();
+    navigate("/login", { replace: true });
   };
 
   return (

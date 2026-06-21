@@ -15,18 +15,20 @@ spring:
               - POST
               - PUT
               - DELETE
-              - OPTIONS 
+              - OPTIONS
             allowedHeaders: "*"
             allowCredentials: true
       routes:
         - id: movie-service
-          uri: lb://movie-service 
+          uri: lb://movie-service
           predicates:
-            - Path=/api/movies/**, /api/cinemas/**, /api/shows/** - id: booking-service
-          uri: lb://booking-service 
+            - Path=/api/movies/**, /api/cinemas/**, /api/shows/**
+
+        - id: booking-service
+          uri: lb://booking-service
           predicates:
             - Path=/api/bookings/**, /api/tickets/**
-            
+
         - id: user-service
           uri: lb://user-service
           predicates:
@@ -36,7 +38,7 @@ spring:
           uri: lb://auth-service
           predicates:
             - Path=/api/auth/**, /api/permissions/**, /api/roles/**, /api/accounts/**
-            
+
 eureka:
   instance:
     hostname: localhost

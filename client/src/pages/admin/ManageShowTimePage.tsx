@@ -2,9 +2,9 @@ import { useState } from "react";
 import { Search, Plus, SlidersHorizontal, Calendar } from "lucide-react";
 import { useOutletContext } from "react-router-dom";
 
-import { ShowtimeStatsCards } from "../../layouts/ShowtimeStatsCards";
-import { ShowtimeTable } from "../../layouts/ShowtimeTable";
-import { ShowtimeModal, type ShowtimeData } from "../../layouts/ShowtimeModal";
+import { ShowtimeStatsCards } from "../../layouts/ShowTimeStatsCards";
+import { ShowtimeTable } from "../../layouts/ShowTimeTable";
+import { ShowtimeModal, type ShowtimeData } from "../../layouts/ShowTimeModal";
 
 const initialShowtimes: ShowtimeData[] = [
   { id: 1, movieName: "Dune: Part Two", roomName: "Cinema 1 (IMAX)", showDate: "2024-06-20", startTime: "09:00", endTime: "11:46", status: "Completed" },

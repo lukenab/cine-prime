@@ -2,6 +2,7 @@ package authservice.controller;
 
 import authservice.dto.request.AuthenticationRequest;
 import authservice.dto.request.RegisterRequest;
+import authservice.dto.request.ResendOtpRequest;
 import authservice.dto.request.VerifyOtpRequest;
 import authservice.dto.response.AuthenticationResponse;
 import authservice.dto.response.AccountResponse;
@@ -41,16 +42,12 @@ public class AuthenticationController {
                 .result(authenticationService.authenticate(request))
                 .build();
     }
-//
-//    @GetMapping("/myInfo")
-//    ApiResponse<RegisterResponse> myInfo() {
-//        return ApiResponse.<RegisterResponse>builder()
-//                .result(authenticationService.myInfo())
-//                .build();
-//    }
-//
-//    @GetMapping("/accounts")
-//    List<Account> getAll(){
-//        return authenticationService.getAllAccount();
-//    }
+
+    @PostMapping("/resend-otp")
+    public ApiResponse<?> resendOtp(@Valid @RequestBody ResendOtpRequest request){
+        authenticationService.resendOtp(request);
+        return ApiResponse.builder()
+                .message("New otp has been sent to your email!")
+                .build();
+    }
 }

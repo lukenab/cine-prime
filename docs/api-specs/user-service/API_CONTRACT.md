@@ -9,7 +9,7 @@ This document describes the API contract for the User Service, which manages use
 - **Development (Direct)**: `http://localhost:8084`
 
 ## Authentication
-Most endpoints in this service are internal and called by other services (e.g., auth-service). Future versions may require JWT token authentication for direct client access.
+Most endpoints in this service are internal. Note: user profile creation is performed asynchronously via Kafka by `auth-service` (see "Create User Profile — Event-driven" below). Future versions may require JWT token authentication for direct client access.
 
 ## Common Response Format
 
@@ -56,71 +56,31 @@ Most endpoints in this service are internal and called by other services (e.g., 
 
 ## Endpoints
 
-### 1. Create User Profile
-**POST** `/api/users/profile`
+### 1. Create User Profile — Event-driven
 
-Creates a new user profile. Called by auth-service after account creation.
+User profile creation is handled asynchronously via Kafka. Instead of calling an internal HTTP POST, `auth-service` publishes a `UserRegisteredEvent` to the Kafka topic `user-register-topic`. `user-service` consumes that event (consumer group `user-service-group`) and creates the profile in its database.
 
-**Request Body:**
+Key points:
+- Topic: `user-register-topic`
+- Consumer group: `user-service-group`
+- Idempotency: `user-service` MUST check `accountId` existence before persisting to avoid duplicate processing
+- Validation: `auth-service` is responsible for primary validation (email/phone/identity format and uniqueness). `user-service` should still handle DB constraint errors and idempotency.
+
+Event payload (JSON example):
 ```json
 {
-  "accountId": "550e8400-e29b-41d4-a716-446655440000",
-  "fullName": "Nguyen Van A",
-  "phoneNumber": "0912345678",
-  "dateOfBirth": "1995-05-15",
-  "gender": "Male",
-  "address": "123 Nguyen Hue, District 1, HCMC",
-  "identityCard": "079095001234",
-  "email": "nguyenvana@gmail.com"
+  "accountId": "b41fac5d-aa57-461d-88f6-28192cfbd64a",
+  "fullName": "Nguyen An Binh",
+  "phoneNumber": "0812154005",
+  "dateOfBirth": "1995-10-15",
+  "email": "anbinh200@gmail.com",
+  "gender": "MALE",
+  "address": "123 Main St, City",
+  "identityCard": "123456789012"
 }
 ```
 
-**Success Response (200):**
-```json
-{
-  "code": 1000,
-  "result": {
-    "accountId": "550e8400-e29b-41d4-a716-446655440000",
-    "fullName": "Nguyen Van A",
-    "phoneNumber": "0912345678",
-    "dateOfBirth": "1995-05-15",
-    "gender": "Male",
-    "address": "123 Nguyen Hue, District 1, HCMC",
-    "identityCard": "079095001234",
-    "email": "nguyenvana@gmail.com",
-    "avatarUrl": null,
-    "createdAt": "2026-06-15T19:00:00",
-    "updatedAt": null,
-    "isActive": true
-  }
-}
-```
-
-**Error Responses:**
-
-*400 Bad Request - Phone Existed:*
-```json
-{
-  "code": 2001,
-  "message": "Phone number already exists!"
-}
-```
-
-*400 Bad Request - Email Existed:*
-```json
-{
-  "code": 2005,
-  "message": "Email already exists!"
-}
-```
-
-*400 Bad Request - Identity Card Existed:*
-```json
-{
-  "code": 2002,
-  "message": "Identity card already exists!"
-}
-```
+On successful consumption the service responds to internal callers via its usual data model (no immediate synchronous HTTP response to the producer). For details about message format, error handling, retries, and DLT, see [docs/kafka-user-registration-contract.md](kafka-user-registration-contract.md).
 
 ---
 
@@ -386,41 +346,32 @@ GET /api/users?page=1&size=5
 
 ## Integration Notes
 
-### Called by Auth Service
-When a user registers through auth-service, the flow is:
+### Produced by Auth Service (Kafka)
 
-1. Auth service creates account in `auth_db`
-2. Auth service generates `accountId` (UUID)
-3. Auth service calls `POST /api/users/profile` with account details
-4. If user creation **fails**, auth service should handle rollback
-5. If user creation **succeeds**, registration is complete
+User profile creation is performed asynchronously. When a user successfully registers, `auth-service` publishes a `UserRegisteredEvent` to Kafka (topic: `user-register-topic`). `user-service` consumes events using consumer group `user-service-group` and persists the profile.
 
-**Example Integration Flow:**
+Integration flow (event-driven):
+
 ```
 Client → Auth Service (register/verify)
          ↓
          Creates Account
          ↓
-         User Service (POST /profile) 
-         ↓
-         Returns success/error
-         ↓
-Client ← Auth Service (registration response)
+         Publishes UserRegisteredEvent → Kafka (user-register-topic)
+                    ↓
+         User Service (consumer user-service-group) consumes event and creates profile
 ```
 
-### Error Handling
-Services calling this API should handle:
-
-- **Network failures**: Implement retry logic with exponential backoff
-- **Validation errors** (400): Display field-specific errors to user
-- **Conflict errors** (400): Inform user of duplicate data
-- **Not found errors** (404): Handle gracefully
-- **Server errors** (500): Log and notify support team
+Guidelines for integrators:
+- Retry: The producer (`auth-service`) should retry event publish on transient errors. Configure producer acks and retries as appropriate.
+- Idempotency: `user-service` MUST check for existing `accountId` before insertion and acknowledge duplicates to avoid duplicate processing.
+- Validation responsibilities: `auth-service` performs primary validations (email/phone/identity). `user-service` should still handle DB constraint violations and log/forward to DLT when necessary.
+- Error handling: Use a DLT (dead-letter topic) or retry mechanism for messages that fail deserialization or processing after retries.
 
 ### Timeout Recommendations
-- **Create/Update operations**: 5 seconds
+- **Event processing**: N/A (async). Ensure consumer processing timeouts are tuned to avoid excessive reprocessing.
 - **Get operations**: 2 seconds
-- **Delete operations**: 3 seconds
+- **Update/Delete operations**: 3 seconds
 
 ---
 

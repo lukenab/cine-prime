@@ -1,6 +1,8 @@
 package authservice.service;
 
 import authservice.dto.request.AccountUpdateRequest;
+import authservice.dto.request.RegisterRequest;
+import authservice.event.UserRegisteredEvent;
 import authservice.event.UserUpdatedEvent;
 import authservice.dto.response.AccountResponse;
 import authservice.entity.Account;
@@ -25,6 +27,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -73,6 +76,51 @@ public class AccountService {
                 .build();
 
         userEventProducer.sendUpdatedEvent(userUpdatedEvent);
+
+        return accountMapper.toAccountResponse(account);
+    }
+
+    @Transactional
+    public AccountResponse createAccount(RegisterRequest request) {
+        String emailKey = request.getEmail().trim().toLowerCase();
+
+        if (accountRepository.existsByUsername(request.getUsername())) {
+            throw new AppException(AuthErrorCode.USERNAME_EXISTED);
+        }
+        if (accountRepository.existsByEmail(emailKey)) {
+            throw new AppException(AuthErrorCode.EMAIL_EXISTED);
+        }
+
+        Account account = accountMapper.toAccount(request);
+        account.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        account.setStatus(1);
+
+        String requestedRole = (request.getRole() != null && !request.getRole().isBlank())
+                ? request.getRole().toUpperCase().trim()
+                : "USER";
+
+        Role accountRole = roleRepository.findById(requestedRole)
+                .orElseThrow(() -> new AppException(AuthErrorCode.ROLE_NOT_FOUND));
+        
+        HashSet<Role> roles = new HashSet<>();
+        roles.add(accountRole);
+        account.setRoles(roles);
+
+        account = accountRepository.saveAndFlush(account);
+
+        // 5. Bắn Event sang cho user-service tạo Profile
+        UserRegisteredEvent userRegisteredEvent = UserRegisteredEvent.builder()
+                .accountId(account.getAccountId())
+                .fullName(request.getFullName())
+                .phoneNumber(request.getPhoneNumber())
+                .address(request.getAddress())
+                .gender(request.getGender())
+                .dateOfBirth(request.getDateOfBirth())
+                .email(emailKey)
+                .identityCard(request.getIdentityCard())
+                .build();
+
+        userEventProducer.sendRegisteredEvent(userRegisteredEvent);
 
         return accountMapper.toAccountResponse(account);
     }
