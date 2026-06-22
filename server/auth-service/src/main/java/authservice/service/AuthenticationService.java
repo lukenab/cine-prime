@@ -1,7 +1,9 @@
 package authservice.service;
 
+import authservice.client.UserClient;
 import authservice.dto.request.AuthenticationRequest;
 import authservice.dto.request.RegisterRequest;
+import authservice.dto.request.ResendOtpRequest; // DTO mới thêm
 import authservice.event.UserRegisteredEvent;
 import authservice.dto.request.VerifyOtpRequest;
 import authservice.dto.response.AuthenticationResponse;
@@ -12,6 +14,7 @@ import authservice.mapper.AccountMapper;
 import authservice.producer.UserEventProducer;
 import authservice.repository.AccountRepository;
 import authservice.repository.RoleRepository;
+import feign.FeignException;
 import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -40,10 +43,11 @@ public class AuthenticationService {
     JwtService jwtService;
     EmailService emailService;
     UserEventProducer userEventProducer;
+    UserClient userClient;
 
     StringRedisTemplate redisTemplate;
 
-    private static final String DEFAULT_USER_ROLE = "ROLE_USER";
+    private static final String DEFAULT_USER_ROLE = "USER";
 
     public void initiateRegistration(RegisterRequest request) {
         String emailKey = request.getEmail().trim().toLowerCase();
@@ -55,12 +59,47 @@ public class AuthenticationService {
             throw new AppException(AuthErrorCode.EMAIL_EXISTED);
         }
 
+        try{
+            var response = userClient.checkExistence(request.getPhoneNumber(), request.getIdentityCard());
+            var existenceData = response.getResult();
+
+            if(existenceData.isPhoneExists()){
+                throw new AppException(AuthErrorCode.PHONE_EXISTED);
+            }
+
+            if(existenceData.isIdentityCardExists()){
+                throw new AppException(AuthErrorCode.IDENTITY_CARD_EXISTED);
+            }
+        } catch (FeignException e){
+            log.warn("User-service is currently unavailable.");
+        }
+
         String otp = String.format("%06d", new Random().nextInt(999999));
-
         redisTemplate.opsForValue().set(emailKey, otp, 5, TimeUnit.MINUTES);
-
         emailService.sendOtpEmail(emailKey, otp);
         log.info("Saved OTP [{}] in redis for email: {}", otp, emailKey);
+    }
+
+
+    public void resendOtp(ResendOtpRequest request) {
+        String emailKey = request.getEmail().trim().toLowerCase();
+
+        if (accountRepository.existsByEmail(emailKey)) {
+            throw new AppException(AuthErrorCode.EMAIL_EXISTED);
+        }
+        
+        String cooldownKey = "cooldown:otp:" + emailKey;
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(cooldownKey))) {
+            throw new AppException(AuthErrorCode.RESEND_OTP_TOO_FAST);
+        }
+
+        String newOtp = String.format("%06d", new Random().nextInt(999999));
+        redisTemplate.opsForValue().set(emailKey, newOtp, 5, TimeUnit.MINUTES);
+
+        redisTemplate.opsForValue().set(cooldownKey, "locked", 60, TimeUnit.SECONDS);
+
+        emailService.sendOtpEmail(emailKey, newOtp);
+        log.info("Resent new OTP [{}] for email: {}", newOtp, emailKey);
     }
 
     @Transactional
@@ -72,7 +111,11 @@ public class AuthenticationService {
 
         String cachedOtp = redisTemplate.opsForValue().get(emailKey);
 
-        if (cachedOtp == null || !cachedOtp.equals(inputOtp)) {
+        if (cachedOtp == null) {
+            throw new AppException(AuthErrorCode.OTP_EXPIRED);
+        }
+
+        if (!cachedOtp.equals(inputOtp)) {
             throw new AppException(AuthErrorCode.INVALID_OTP);
         }
 

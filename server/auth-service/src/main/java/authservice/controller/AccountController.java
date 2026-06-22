@@ -1,9 +1,11 @@
 package authservice.controller;
 
 import authservice.dto.request.AccountUpdateRequest;
+import authservice.dto.request.RegisterRequest;
 import authservice.dto.response.AccountResponse;
 import authservice.entity.Account;
 import authservice.service.AccountService;
+import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -34,5 +36,10 @@ public class AccountController {
                 .build();
     }
 
-
+    @PostMapping
+    ApiResponse<AccountResponse> createAccount(@RequestBody @Valid RegisterRequest request){
+        return ApiResponse.<AccountResponse>builder()
+                .result(accountService.createAccount(request))
+                .build();
+    }
 }

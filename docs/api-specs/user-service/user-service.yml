@@ -1,7 +1,10 @@
 openapi: 3.0.1
 info:
   title: CinePrime User Service API
-  description: OpenAPI specification for the CinePrime user profile management service. This document defines the endpoints for user profile CRUD operations including create, read, update, and soft delete.
+  description: |
+    OpenAPI specification for the CinePrime user profile management service. This document defines the endpoints for user profile CRUD operations including create, read, update, and soft delete.
+    
+    NOTE: This service consumes user registration events produced by auth-service over Kafka (event-driven). See the `KafkaUserRegisteredEvent` schema in components for the expected event payload. User profile creation is performed by a Kafka consumer rather than a direct HTTP call from auth-service.
   version: 1.0.0
 servers:
   - url: http://localhost:8080
@@ -41,55 +44,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponsePageResponseUserResponse'
 
-  /api/users/profile:
-    post:
-      tags:
-        - User Management
-      summary: Create user profile
-      description: Creates a new user profile. This endpoint is typically called by auth-service after successful account registration. Validates phone number, email, and identity card uniqueness.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UserCreationRequest'
-      responses:
-        '200':
-          description: User profile created successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponseUserResponse'
-        '400':
-          description: Bad Request - Validation failures
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-              examples:
-                PhoneExisted:
-                  summary: "Error 2001: Phone Number Existed"
-                  value:
-                    code: 2001
-                    message: "Phone number already exists!"
-                IdentityCardExisted:
-                  summary: "Error 2002: Identity Card Existed"
-                  value:
-                    code: 2002
-                    message: "Identity card already exists!"
-                EmailExisted:
-                  summary: "Error 2005: Email Existed"
-                  value:
-                    code: 2005
-                    message: "Email already exists!"
-                InvalidInput:
-                  summary: "Error 2004: Invalid Input Data"
-                  value:
-                    code: 2004
-                    message: "Invalid input data!"
-                    result:
-                      phoneNumber: "Invalid phone number format"
-                      dateOfBirth: "Date of birth must be in the past"
+  # Creation is performed via Kafka consumer; no HTTP POST endpoint is exposed for profile creation.
 
   /api/users/{id}:
     get:
@@ -230,7 +185,7 @@ components:
       properties:
         accountId:
           type: string
-          description: Account ID from auth service (UUID format)
+          description: Account ID provided by auth-service (UUID format). When created from Kafka, this value is taken from the `KafkaUserCreatedEvent.accountId` field.
           example: "550e8400-e29b-41d4-a716-446655440000"
         fullName:
           type: string
@@ -302,6 +257,63 @@ components:
           format: uri
           description: URL to user's avatar image
           example: "https://example.com/avatars/user123.jpg"
+
+    KafkaUserRegisteredEvent:
+      type: object
+      description: Event payload produced by auth-service on Kafka topic `user-register-topic` when a user registers. Consumer (`user-service`) must handle idempotency by `accountId`.
+      properties:
+        accountId:
+          type: string
+          description: Account ID provided by auth-service (UUID)
+          example: "b41fac5d-aa57-461d-88f6-28192cfbd64a"
+        fullName:
+          type: string
+          description: User's full name
+          example: "Nguyen An Binh"
+        phoneNumber:
+          type: string
+          description: Phone number in Vietnamese format
+          example: "0812154005"
+        dateOfBirth:
+          oneOf:
+            - type: string
+              format: date
+              description: ISO date string (preferred)
+              example: "1995-10-15"
+            - type: array
+              items:
+                type: integer
+              description: Alternate array format [YYYY, MM, DD] as used in some producers
+              example: [1995, 10, 15]
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: "anbinh200@gmail.com"
+        gender:
+          type: string
+          enum: [MALE, FEMALE, OTHER]
+          description: Gender value emitted by auth-service
+          example: "MALE"
+        address:
+          type: string
+          nullable: true
+          description: Residential address
+          example: "123 Main St, City"
+        identityCard:
+          type: string
+          nullable: true
+          description: Identity card number (12 digits)
+          example: "123456789012"
+      example:
+        accountId: "b41fac5d-aa57-461d-88f6-28192cfbd64a"
+        fullName: "Nguyen An Binh"
+        phoneNumber: "0812154005"
+        dateOfBirth: "1995-10-15"
+        email: "anbinh200@gmail.com"
+        gender: "MALE"
+        address: "123 Main St, City"
+        identityCard: "123456789012"
 
     # --- CORE RESPONSE SCHEMAS ---
     UserResponse:

@@ -11,6 +11,9 @@ import userservice.service.UserService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+
+import java.util.Map;
+
 @RestController
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -47,6 +50,18 @@ public class UserController {
     ){
         return ApiResponse.<PageResponse<UserResponse>>builder()
                 .result(userService.getAllUser(page, size))
+                .build();
+    }
+
+    @GetMapping("/check-existence")
+    public ApiResponse<Map<String, Boolean>> checkExistence(
+            @RequestParam("phoneNumber") String phoneNumber,
+            @RequestParam("identityCard") String identityCard) {
+
+        Map<String, Boolean> result = userService.checkUserExistence(phoneNumber, identityCard);
+
+        return ApiResponse.<Map<String, Boolean>>builder()
+                .result(result)
                 .build();
     }
 }

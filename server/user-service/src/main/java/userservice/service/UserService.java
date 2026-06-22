@@ -2,7 +2,9 @@ package userservice.service;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import jakarta.transaction.Transactional;
 
@@ -156,6 +158,20 @@ public class UserService {
                 .build();
 
 
+    }
+
+    public Map<String, Boolean> checkUserExistence(String phoneNumber, String identityCard) {
+        String processedPhone = phoneNumber != null ? phoneNumber.trim() : "";
+        String processedCccd = identityCard != null ? identityCard.trim() : "";
+
+        boolean phoneExists = userRepository.existsByPhoneNumber(processedPhone);
+        boolean cccdExists = userRepository.existsByIdentityCard(processedCccd);
+
+        Map<String, Boolean> result = new HashMap<>();
+        result.put("phoneExists", phoneExists);
+        result.put("identityCardExists", cccdExists);
+
+        return result;
     }
 
   

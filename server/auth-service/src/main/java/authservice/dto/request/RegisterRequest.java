@@ -1,5 +1,6 @@
 package authservice.dto.request;
 
+import authservice.validator.DobConstraint;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -37,8 +38,7 @@ public class RegisterRequest {
     @Pattern(regexp = "^(0[3|5|7|8|9])+([0-9]{8})$", message = "Invalid phone number format!")
     String phoneNumber;
 
-    @NotNull(message = "Date of birth cannot be null!")
-    @Past(message = "Date of birth must be in the past!")
+    @DobConstraint(min = 2)
     LocalDate dateOfBirth;
 
     @NotBlank(message = "Gender cannot be blank!")
@@ -50,4 +50,6 @@ public class RegisterRequest {
     @NotBlank(message = "Identity card cannot be blank!")
     @Pattern(regexp = "^[0-9]{12}$", message = "Identity card must contain exactly 12 digits!")
     String identityCard;
+    
+    String role;
 }

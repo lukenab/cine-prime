@@ -61,7 +61,7 @@ paths:
       tags:
         - Authentication
       summary: Verify OTP and register user
-      description: Verifies OTP and creates the account. Note that this API communicates with `user-service` to create the profile.
+      description: Verifies OTP and creates the account. After successful account creation, a `UserRegisteredEvent` is published to Kafka topic `user-register-topic` for async user profile creation in `user-service`.
       requestBody:
         required: true
         content:
@@ -70,7 +70,7 @@ paths:
               $ref: '#/components/schemas/VerifyOtpRequest'
       responses:
         '200':
-          description: User successfully registered
+          description: User successfully registered and event published to Kafka
           content:
             application/json:
               schema:
@@ -92,16 +92,6 @@ paths:
                   value:
                     code: 1012
                     message: "Default role not found!"
-                PhoneExisted:
-                  summary: "Error 2001: Phone Existed (From User Service)"
-                  value:
-                    code: 2001
-                    message: "Phone number already exists!"
-                IdentityCardExisted:
-                  summary: "Error 2002: Identity Card Existed (From User Service)"
-                  value:
-                    code: 2002
-                    message: "Identity card already exists!"
 
   /api/auth/login:
     post:

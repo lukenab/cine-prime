@@ -7,8 +7,7 @@ import org.springframework.context.annotation.ComponentScan;
 
 import java.util.TimeZone;
 
-@SpringBootApplication
-@ComponentScan(basePackages = {"userservice", "movie.theater.common"})
+@SpringBootApplication(scanBasePackages = {"userservice", "movie.theater.common"})
 @EnableDiscoveryClient
 public class UserServiceApplication {
 
