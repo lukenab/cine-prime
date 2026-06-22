@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Pencil, Trash2, ChevronLeft, ChevronRight, MoreHorizontal, Mail, Shield } from "lucide-react";
+import { Pencil, Trash2, ChevronLeft, ChevronRight, Mail, Shield } from "lucide-react";
 import type { UserData } from "./UserModal";
 
 type Props = {
   users: UserData[];
   onEdit: (user: UserData) => void;
-  onDelete: (id: number) => void;
+  // 🟢 Đổi kiểu dữ liệu của ID sang string để khớp với Backend
+  onDelete: (id: string) => void; 
   searchQuery: string;
   roleFilter: string;
   statusFilter: string;
@@ -19,6 +20,9 @@ const roleColors: Record<string, string> = {
   Viewer: "bg-gray-100 text-gray-600 border-gray-200",
   Manager: "bg-amber-50 text-amber-700 border-amber-100",
   Developer: "bg-emerald-50 text-emerald-700 border-emerald-100",
+  // 🟢 Thêm màu cho Role USER mặc định của hệ thống cậu
+  USER: "bg-emerald-50 text-emerald-700 border-emerald-100",
+  ADMIN: "bg-purple-50 text-purple-700 border-purple-100",
 };
 
 function Avatar({ name, avatar }: { name: string; avatar: string }) {
@@ -34,12 +38,16 @@ function Avatar({ name, avatar }: { name: string; avatar: string }) {
 
 export function UserTable({ users, onEdit, onDelete, searchQuery, roleFilter, statusFilter }: Props) {
   const [page, setPage] = useState(1);
-  const [openMenu, setOpenMenu] = useState<number | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const filtered = users.filter((u) => {
     const q = searchQuery.toLowerCase();
-    const matchSearch = !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.role.toLowerCase().includes(q) || u.department.toLowerCase().includes(q);
+    // Bỏ tìm kiếm theo department, thay bằng phoneNumber
+    const matchSearch = !q || 
+                        u.name.toLowerCase().includes(q) || 
+                        u.email.toLowerCase().includes(q) || 
+                        u.role.toLowerCase().includes(q) || 
+                        (u.phoneNumber && u.phoneNumber.includes(q));
     const matchRole = !roleFilter || u.role === roleFilter;
     const matchStatus = !statusFilter || u.status === statusFilter;
     return matchSearch && matchRole && matchStatus;
@@ -49,7 +57,7 @@ export function UserTable({ users, onEdit, onDelete, searchQuery, roleFilter, st
   const safePage = Math.min(page, totalPages);
   const pageUsers = filtered.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE);
 
-  const handleDelete = (id: number) => {
+  const handleDelete = (id: string) => {
     if (deleteConfirm === id) {
       onDelete(id);
       setDeleteConfirm(null);
@@ -64,7 +72,8 @@ export function UserTable({ users, onEdit, onDelete, searchQuery, roleFilter, st
         <table className="w-full">
           <thead>
             <tr className="border-b" style={{ borderColor: "var(--border-color)", backgroundColor: "rgba(128,128,128,0.04)" }}>
-              {["User", "Role", "Department", "Status", "Joined"].map((head) => (
+              {/* 🟢 Thay thế Department bằng Phone Number */}
+              {["User", "Role", "Phone Number", "Status", "Joined"].map((head) => (
                 <th key={head} className="px-5 py-3.5 text-left">
                   <span style={{ color: "var(--text-sub)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>{head}</span>
                 </th>
@@ -107,8 +116,9 @@ export function UserTable({ users, onEdit, onDelete, searchQuery, roleFilter, st
                     </div>
                   </td>
 
+                  {/* 🟢 Hiển thị Số điện thoại thay cho Department */}
                   <td className="px-5 py-3.5">
-                    <span style={{ fontSize: "13px", color: "var(--text-main)" }}>{user.department}</span>
+                    <span style={{ fontSize: "13px", color: "var(--text-main)" }}>{user.phoneNumber}</span>
                   </td>
 
                   <td className="px-5 py-3.5">
