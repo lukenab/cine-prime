@@ -7,7 +7,7 @@ import { Sun, Moon } from "lucide-react";
 export default function AdminLayout() {
   // 1. Logic tự động nhận diện trang hiện tại để bôi sáng Menu
   const location = useLocation();
-  const activeNav = location.pathname.includes("users") ? "users" : "dashboard";
+  const activeNav = location.pathname.split("/")[2] || "dashboard";
 
   // 2. Logic Theme Dark/Light
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -57,7 +57,7 @@ export default function AdminLayout() {
       </button>
 
       {/* Sidebar cố định bên trái */}
-      <Sidebar activeItem={activeNav} isDarkMode={isDarkMode} />
+      <Sidebar isDarkMode={isDarkMode} />
 
       {/* Vùng chứa nội dung chính */}
       <div
