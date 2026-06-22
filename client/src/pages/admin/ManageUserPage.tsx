@@ -1,10 +1,24 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, Plus, SlidersHorizontal, Download } from "lucide-react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 
 import { StatsCards } from "../../layouts/StatsCards";
 import { UserTable } from "../../layouts/UserTable";
-import { UserModal, type UserData } from "../../layouts/UserModal";
+
+import { userApi } from "../../api/userApi";
+import { authApi } from "../../api/authApi";
+
+// 🟢 Đưa Interface UserData vào đây vì chúng ta không còn dùng UserModal nữa
+export interface UserData {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  phoneNumber: string;
+  avatar: string;
+  joined: string;
+}
 
 const avatarGradients = [
   "linear-gradient(135deg, #3b82f6, #6366f1)",
@@ -21,108 +35,83 @@ const avatarGradients = [
   "linear-gradient(135deg, #a855f7, #6366f1)",
 ];
 
-const initialUsers: UserData[] = [
-  {
-    id: 1,
-    name: "Sophia Anderson",
-    email: "sophia.a@company.com",
-    role: "Admin",
-    status: "Active",
-    department: "Engineering",
-    avatar: avatarGradients[0],
-    joined: "Jan 15, 2024",
-  },
-  {
-    id: 2,
-    name: "Marcus Chen",
-    email: "marcus.c@company.com",
-    role: "Developer",
-    status: "Active",
-    department: "Engineering",
-    avatar: avatarGradients[1],
-    joined: "Feb 3, 2024",
-  },
-  {
-    id: 3,
-    name: "Isabelle Moreau",
-    email: "isabelle.m@company.com",
-    role: "Manager",
-    status: "Active",
-    department: "Marketing",
-    avatar: avatarGradients[2],
-    joined: "Mar 22, 2023",
-  },
-  // ... Cậu có thể paste lại mảng dữ liệu mẫu đầy đủ của cậu vào đây
-];
-
 const roles = ["Admin", "Editor", "Viewer", "Manager", "Developer"];
 
 export default function ManageUserPage() {
   const navigate = useNavigate();
-
-  // 🌟 ĐIỂM QUAN TRỌNG: Nhận isDarkMode từ AdminLayout truyền xuống
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
 
-  const [users, setUsers] = useState<UserData[]>(initialUsers);
+  const [users, setUsers] = useState<UserData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editUser, setEditUser] = useState<UserData | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
-  let nextId = users.length > 0 ? Math.max(...users.map((u) => u.id)) + 1 : 1;
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      setIsLoading(true);
+
+      const [userResponse, authResponse] = await Promise.all([
+        userApi.getAllUsers(1, 100).catch(() => ({ result: { data: [] } })),
+        authApi.getAllAccounts().catch(() => ({ result: [] })),
+      ]);
+
+      const profiles = userResponse?.result?.data || [];
+      const accounts = authResponse?.result || [];
+
+      const mappedUsers: UserData[] = accounts.map((acc: any) => {
+        const profile = profiles.find((p: any) => p.accountId === acc.accountId) || {};
+
+        let rawRole = "USER"; 
+        if (acc.roles && acc.roles.length > 0) {
+          rawRole = acc.roles[0].name || "USER";
+        }
+        
+       let userRole = String(rawRole).charAt(0).toUpperCase() + String(rawRole).slice(1).toLowerCase();
+
+        return {
+          id: acc.accountId,
+          name: profile.fullName || acc.username || "Unknown",
+          email: acc.email || "No Email",
+          role: userRole,
+          status: profile.isActive === false ? "Inactive" : "Active",
+          phoneNumber: profile.phoneNumber || "No Phone",
+          avatar: profile.avatarUrl || avatarGradients[Math.floor(Math.random() * avatarGradients.length)],
+          joined: new Date(acc.createdAt || Date.now()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+        };
+      });
+
+      setUsers(mappedUsers);
+    } catch (error) {
+      console.error("Lỗi khi tải và ghép danh sách User:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleAddUser = () => {
     navigate("/admin/users/create");
   };
 
+  // 🟢 CẬP NHẬT: Điều hướng thẳng sang trang Edit, truyền theo ID của User
   const handleEditUser = (user: UserData) => {
-    setEditUser(user);
-    setModalOpen(true);
+    navigate(`/admin/users/edit/${user.id}`);
   };
 
-  const handleDeleteUser = (id: number) => {
-    setUsers((prev) => prev.filter((u) => u.id !== id));
-  };
-
-  const handleSaveUser = async (data: Omit<UserData, "id" | "joined" | "avatar">) => {
-    if (editUser) {
-      // Logic xử lý Update User (Sẽ làm sau)
-      setUsers((prev) => prev.map((u) => (u.id === editUser.id ? { ...u, ...data } : u)));
-    } else {
-      // LOGIC TẠO USER MỚI DÀNH CHO ADMIN
+  const handleDeleteUser = async (id: number | string) => {
+    if (window.confirm("Are you sure you want to disable this user?")) {
       try {
-        const payload = {
-          email: data.email,
-          username: data.email.split("@")[0], // Tự gen username từ email nếu modal không có ô nhập
-          password: "DefaultPassword123!", // Đặt pass mặc định hoặc lấy từ modal
-          fullName: data.name,
-          role: data.role,
-          // Bổ sung các trường khác (phone, dob, cccd...) nếu UserModal của cậu có
-        };
-
-        // 2. Gọi API lên Backend (Thay bằng hàm fetch/axios thực tế của dự án cậu)
-        // const response = await fetch('/api/admin/accounts', { method: 'POST', body: JSON.stringify(payload) });
-        // const result = await response.json();
-
-        // --- ĐOẠN NÀY LÀ MÔ PHỎNG NẾU GỌI API THÀNH CÔNG ---
-        const newUser: UserData = {
-          ...data,
-          id: nextId++, // Thực tế sẽ lấy result.id từ backend trả về
-          avatar: avatarGradients[Math.floor(Math.random() * avatarGradients.length)],
-          joined: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-        };
-
-        // 3. Cập nhật lại UI bảng
-        setUsers((prev) => [newUser, ...prev]);
-
-        // 4. Đóng Modal và báo thành công
-        setModalOpen(false);
-        // toast.success("User created successfully!");
+        await userApi.deleteUser(id.toString());
+        setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, status: "Inactive" } : u)));
       } catch (error) {
-        console.error("Failed to create user:", error);
-        // toast.error("Failed to create user. Email might already exist.");
+        console.error("Lỗi khi xóa User:", error);
+        alert("Có lỗi xảy ra khi xóa user!");
       }
     }
   };
@@ -190,7 +179,7 @@ export default function ManageUserPage() {
         </button>
 
         <button
-          onClick={handleAddUser} 
+          onClick={handleAddUser}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all shadow-sm"
           style={{ fontSize: "14px", fontWeight: 500, background: isDarkMode ? "#3b82f6" : "#2563eb" }}
         >
@@ -246,18 +235,25 @@ export default function ManageUserPage() {
         </div>
       )}
 
-      {/* User Table Component */}
-      <UserTable users={users} onEdit={handleEditUser} onDelete={handleDeleteUser} searchQuery={searchQuery} roleFilter={roleFilter} statusFilter={statusFilter} />
+      {/* 🟢 Hiển thị Loading Spinner hoặc Bảng Dữ liệu */}
+      {isLoading ? (
+        <div className="flex justify-center items-center py-20">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+      ) : (
+        <UserTable 
+          users={users} 
+          onEdit={handleEditUser} 
+          onDelete={handleDeleteUser} 
+          searchQuery={searchQuery} 
+          roleFilter={roleFilter} 
+          statusFilter={statusFilter} 
+        />
+      )}
 
-      {/* Edit/Add Modal */}
-      <UserModal open={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSaveUser} editUser={editUser} />
-
-      {/* CSS đặc thù cho riêng trang này (Các biến màu --bg-main đã được chuyển ra AdminLayout) */}
       <style>{`
-        /* Hover effect cho bảng trong Dark Mode */
         .theme-dark .hover\\:bg-gray-50\\/50:hover { background-color: rgba(255, 255, 255, 0.03) !important; }
 
-        /* Style cho nút Filters */
         .filter-btns button {
            background: transparent;
            color: var(--text-muted);

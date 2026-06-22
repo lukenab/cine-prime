@@ -29,10 +29,12 @@ import userservice.dto.UserResponse;
 import userservice.dto.UserUpdateRequest;
 import userservice.entity.User;
 import userservice.event.UserRegisteredEvent;
+import userservice.event.UserUpdatedEvent;
 import userservice.exception.ErrorCode;
 import userservice.mapper.UserMapper;
 import userservice.repository.UserRepository;
 import movie.theater.common.exception.AppException;
+
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -61,7 +63,7 @@ public class UserService {
             return;
         }
 
-        if (userRepository.existsByEmail(event.getEmail())){
+        if (userRepository.existsByEmail(event.getEmail())) {
             log.error("Email {} already exists. Skipping event.", event.getEmail());
             return;
         }
@@ -79,10 +81,10 @@ public class UserService {
     }
 
     @Transactional
-    public UserResponse getUserById(String id){
+    public UserResponse getUserById(String id) {
         User user = userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
-        if(!user.getIsActive()) {
+        if (!user.getIsActive()) {
             throw new AppException(ErrorCode.USER_NOT_FOUND);
         }
 
@@ -90,12 +92,12 @@ public class UserService {
     }
 
     @Transactional
-    public UserResponse updateUser(String id, UserUpdateRequest request){
+    public UserResponse updateUser(String id, UserUpdateRequest request) {
         User user = userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
-        if(request.getPhoneNumber() != null
+        if (request.getPhoneNumber() != null
                 && !request.getPhoneNumber().equals(user.getPhoneNumber())
                 && userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
-            throw  new AppException(ErrorCode.PHONE_EXISTED);
+            throw new AppException(ErrorCode.PHONE_EXISTED);
         }
 
         UserResponse oldData = userMapper.toUserResponse(user);
@@ -111,11 +113,11 @@ public class UserService {
     }
 
     @Transactional
-    public void softDeleteUser(String id){
+    public void softDeleteUser(String id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
-        if(!user.getIsActive()) {
+        if (!user.getIsActive()) {
             throw new AppException(ErrorCode.USER_ALREADY_INACTIVE);
         }
 
@@ -129,18 +131,47 @@ public class UserService {
 
     }
 
-    private String getCurrentAccountId(){
+    private String getCurrentAccountId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         // Check đã login và đã có token là JWT hay chưa
-        if(authentication != null && authentication.getPrincipal() instanceof Jwt jwt) {
+        if (authentication != null && authentication.getPrincipal() instanceof Jwt jwt) {
             return jwt.getClaimAsString("accountId");
         }
 
         return "SYSTEM";
     }
 
-    public PageResponse<UserResponse> getAllUser(int page, int size){
+    @Transactional
+    public void updateUserProfile(UserUpdatedEvent event) {
+        log.info("Processing update event for Account ID: {}", event.getAccountId());
+        try {
+            if (!userRepository.existsById(event.getAccountId())) {
+                log.warn("User profile not found for Account ID: {}. Skipping update.", event.getAccountId());
+                return;
+            }
+
+            UserUpdateRequest request = UserUpdateRequest.builder()
+                    .fullName(event.getFullName())
+                    .phoneNumber(event.getPhoneNumber())
+                    .dateOfBirth(event.getDateOfBirth())
+                    .gender(event.getGender())
+                    .address(event.getAddress())
+                    .identityCard(event.getIdentityCard())
+                    .build();
+
+            this.updateUser(event.getAccountId(), request);
+
+            log.info("Successfully updated Profile for Account ID: {}", event.getAccountId());
+        } catch (AppException e) {
+            log.error("Business logic error during Kafka update for Account ID {}: {}", event.getAccountId(), e.getMessage());
+        } catch (Exception e) {
+            log.error("Unexpected error updating profile from Kafka event for Account ID: {}", event.getAccountId(), e);
+            throw new RuntimeException("Kafka event processing failed, trigger retry", e);
+        }
+    }
+
+    public PageResponse<UserResponse> getAllUser(int page, int size) {
         Pageable pageable = PageRequest.of(page - 1, size);
 
         Page<User> pageData = userRepository.findAll(pageable);
@@ -174,5 +205,5 @@ public class UserService {
         return result;
     }
 
-  
+
 }

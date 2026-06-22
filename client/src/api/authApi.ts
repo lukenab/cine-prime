@@ -11,19 +11,26 @@ export const authApi = {
     },
 
     initiateRegister: (payload: any) => {
-    return axiosClient.post('/api/auth/register/initiate', payload);
-  },
+        return axiosClient.post('/api/auth/register/initiate', payload);
+    },
 
-  verifyRegister: (payload: { otp: string, registerRequest: any }) => {
-    return axiosClient.post('/api/auth/register/verify', payload);
-  }
-  ,
-  resendOtp: (payload: { email: string }) => {
-    return axiosClient.post('/api/auth/resend-otp', payload);
-  },
+    verifyRegister: (payload: { otp: string, registerRequest: any }) => {
+        return axiosClient.post('/api/auth/register/verify', payload);
+    },
+    
+    resendOtp: (payload: { email: string }) => {
+        return axiosClient.post('/api/auth/resend-otp', payload);
+    },
   
-  createAccount: (payload: any) => {
+    createAccount: (payload: any) => {
         return axiosClient.post('/api/accounts', payload); 
-    }
-  
+    },
+
+    getAllAccounts: () => {
+        return axiosClient.get('/api/accounts'); 
+    },
+
+    updateAccount: (accountId: string | undefined, payload: any) => {
+      return axiosClient.put(`/api/accounts/${accountId}`, payload);
+  }
 }

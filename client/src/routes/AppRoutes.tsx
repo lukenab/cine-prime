@@ -10,6 +10,7 @@ import ManageUserPage from "../pages/admin/ManageUserPage";
 import RegisterPage from "../pages/auth/RegisterPage";
 import ManageMoviePage from "../pages/admin/ManageMoviePage";
 import CreateUserPage from "../pages/admin/CreateUserPage";
+import EditUserPage from "../pages/admin/EditUserPage";
 
 export default function AppRoutes() {
   return (
@@ -29,6 +30,7 @@ export default function AppRoutes() {
 
             <Route path="users" element={<ManageUserPage/>}/>
             <Route path="users/create" element={<CreateUserPage/>}/>
+            <Route path="users/edit/:id" element={<EditUserPage/>}/>
 
             <Route path="movies" element={<ManageMoviePage/>}/>
         </Route>

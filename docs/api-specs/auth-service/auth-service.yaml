@@ -1,8 +1,8 @@
 openapi: 3.0.1
 info:
   title: CinePrime Auth Service API
-  description: OpenAPI specification for the CinePrime authentication service. Defines endpoints for user registration, authentication, and RBAC (Roles & Permissions) management.
-  version: 1.1.0
+  description: OpenAPI specification for the CinePrime authentication service. Defines endpoints for user registration, authentication, account management, and RBAC (Roles & Permissions) management.
+  version: 1.2.0
 servers:
   - url: http://localhost:8088
     description: Auth Service Local Server
@@ -11,6 +11,8 @@ servers:
 tags:
   - name: Authentication
     description: Endpoints for user registration and login
+  - name: Account
+    description: Endpoints for managing accounts (admin)
   - name: Permission
     description: Endpoints for managing system permissions
   - name: Role
@@ -38,6 +40,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseString'
+              example:
+                code: 1000
+                result: "OTP has been sent to your email"
         '400':
           description: Bad Request - Username or Email already exists
           content:
@@ -55,6 +60,16 @@ paths:
                   value:
                     code: 1011
                     message: "Email already exists!"
+                PhoneExisted:
+                  summary: "Error 1017: Phone Existed"
+                  value:
+                    code: 1017
+                    message: "Phone number already exists in the system!"
+                IdentityCardExisted:
+                  summary: "Error 1018: Identity Card Existed"
+                  value:
+                    code: 1018
+                    message: "Identity card (CCCD) already exists in the system!"
 
   /api/auth/register/verify:
     post:
@@ -74,7 +89,18 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponseRegisterResponse'
+                $ref: '#/components/schemas/ApiResponseAccountResponse'
+              example:
+                code: 1000
+                result:
+                  accountId: "acc-uuid-1234-5678"
+                  username: "john_doe"
+                  email: "johndoe@example.com"
+                  createdAt: "2026-06-14T15:00:00"
+                  roles:
+                    - roleName: "USER"
+                      description: "Default user role"
+                      permissions: []
         '400':
           description: Bad Request - Validation failures
           content:
@@ -87,6 +113,11 @@ paths:
                   value:
                     code: 1013
                     message: "Otp invalid"
+                OtpExpired:
+                  summary: "Error 1015: OTP Expired"
+                  value:
+                    code: 1015
+                    message: "Otp has expired"
                 DefaultRoleNotFound:
                   summary: "Error 1012: Default Role Not Found"
                   value:
@@ -112,6 +143,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseAuthenticationResponse'
+              example:
+                code: 1000
+                result:
+                  authenticate: true
+                  token: "eyJhbGciOiJIUzUxMiJ9..."
         '401':
           description: Unauthorized - Invalid credentials
           content:
@@ -125,6 +161,146 @@ paths:
                     code: 1008
                     message: "Unauthenticated"
 
+  /api/auth/resend-otp:
+    post:
+      tags:
+        - Authentication
+      summary: Resend OTP to email
+      description: Resends a new 6-digit OTP to the provided email address. Rate-limited to prevent abuse.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendOtpRequest'
+      responses:
+        '200':
+          description: New OTP sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseMessage'
+              example:
+                code: 1000
+                message: "New otp has been sent to your email!"
+        '400':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              examples:
+                AccountNotFound:
+                  summary: "Error 1014: Account Not Found"
+                  value:
+                    code: 1014
+                    message: "Account not found!"
+        '429':
+          description: Too many requests - resend rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              examples:
+                ResendTooFast:
+                  summary: "Error 1016: Resend OTP Too Fast"
+                  value:
+                    code: 1016
+                    message: "Resend Otp too fast"
+
+  # ==========================================
+  # ACCOUNT ENDPOINTS
+  # ==========================================
+  /api/accounts:
+    get:
+      tags:
+        - Account
+      summary: Get all accounts
+      description: Retrieves a list of all registered accounts. Requires ADMIN role.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of accounts retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseListAccountResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              example:
+                code: 1009
+                message: "You do not have permission"
+    post:
+      tags:
+        - Account
+      summary: Create account directly (admin)
+      description: Creates a new account directly without OTP verification. Intended for admin use.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: Account successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseAccountResponse'
+        '400':
+          description: Validation error or duplicate data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+
+  /api/accounts/{accountId}:
+    put:
+      tags:
+        - Account
+      summary: Update account
+      description: Updates an existing account's information by account ID. Requires ADMIN role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          description: The UUID of the account to update
+          schema:
+            type: string
+            example: "acc-uuid-1234-5678"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountUpdateRequest'
+      responses:
+        '200':
+          description: Account updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseAccountResponse'
+        '400':
+          description: Account not found or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              example:
+                code: 1014
+                message: "Account not found!"
+
   # ==========================================
   # PERMISSION ENDPOINTS
   # ==========================================
@@ -133,7 +309,9 @@ paths:
       tags:
         - Permission
       summary: Create a new permission
-      description: Creates a new system permission to be used in RBAC.
+      description: Creates a new system permission to be used in RBAC. Requires ADMIN role.
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -147,11 +325,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponsePermissionResponse'
+              example:
+                code: 1000
+                result:
+                  name: "UPDATE_DATA"
+                  description: "Update data permission"
     get:
       tags:
         - Permission
       summary: Get all permissions
-      description: Retrieves a list of all existing permissions in the system.
+      description: Retrieves a list of all existing permissions in the system. Requires ADMIN role.
+      security:
+        - bearerAuth: []
       responses:
         '200':
           description: List of permissions retrieved
@@ -159,18 +344,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseListPermissionResponse'
+              example:
+                code: 1000
+                result:
+                  - name: "UPDATE_DATA"
+                    description: "Update data permission"
+                  - name: "CREATE_USER"
+                    description: "Create user permission"
 
   /api/permissions/{permissionId}:
     delete:
       tags:
         - Permission
       summary: Delete a permission
-      description: Removes a permission from the system using its ID (name).
+      description: Removes a permission from the system using its name. Requires ADMIN role.
+      security:
+        - bearerAuth: []
       parameters:
         - name: permissionId
           in: path
           required: true
-          description: The unique name of the permission
+          description: The unique name of the permission (e.g. UPDATE_DATA)
           schema:
             type: string
             example: "UPDATE_DATA"
@@ -181,13 +375,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseVoid'
+              example:
+                code: 1000
 
+  # ==========================================
+  # ROLE ENDPOINTS
+  # ==========================================
   /api/roles:
     post:
       tags:
         - Role
       summary: Create a new role with assigned permissions
-      description: Creates a new role and assigns permission names for RBAC.
+      description: Creates a new role and assigns permission names for RBAC. Requires ADMIN role.
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -201,11 +402,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseRoleResponse'
+              example:
+                code: 1000
+                result:
+                  roleName: "ADMIN"
+                  description: "Administrator Role"
+                  permissions:
+                    - name: "UPDATE_DATA"
+                      description: "Update data permission"
     get:
       tags:
         - Role
       summary: Get all roles
-      description: Retrieves all roles and their assigned permissions.
+      description: Retrieves all roles and their assigned permissions. Requires ADMIN role.
+      security:
+        - bearerAuth: []
       responses:
         '200':
           description: List of roles retrieved
@@ -213,21 +424,51 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseListRoleResponse'
+              example:
+                code: 1000
+                result:
+                  - roleName: "ADMIN"
+                    description: "Administrator Role"
+                    permissions:
+                      - name: "UPDATE_DATA"
+                        description: "Update data permission"
+                  - roleName: "USER"
+                    description: "Default user role"
+                    permissions: []
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
     # --- REQUEST SCHEMAS ---
     RegisterRequest:
       type: object
-      required: [username, password, email]
+      required:
+        - username
+        - password
+        - email
+        - fullName
+        - phoneNumber
+        - gender
+        - address
+        - identityCard
       properties:
         username:
           type: string
+          minLength: 5
+          maxLength: 50
           example: "john_doe"
+          description: "5–50 characters"
         password:
           type: string
           format: password
-          example: "Password123@"
+          minLength: 6
+          example: "Password123"
+          description: "Minimum 6 characters"
         email:
           type: string
           format: email
@@ -237,7 +478,92 @@ components:
           example: "John Doe"
         phoneNumber:
           type: string
-          example: "0123456789"
+          pattern: "^(0[3|5|7|8|9])+([0-9]{8})$"
+          example: "0912345678"
+          description: "Vietnamese phone format: 0[3/5/7/8/9]XXXXXXXX"
+        dateOfBirth:
+          type: string
+          format: date
+          example: "1995-10-15"
+          description: "Format YYYY-MM-DD, must be at least 2 years in the past"
+        gender:
+          type: string
+          example: "MALE"
+          description: "Enum: MALE, FEMALE, OTHER"
+        address:
+          type: string
+          example: "123 Main Street, Tech City"
+        identityCard:
+          type: string
+          pattern: "^[0-9]{12}$"
+          example: "079012345678"
+          description: "Exactly 12 digits"
+        role:
+          type: string
+          example: "USER"
+          description: "Optional — if omitted, default role is assigned"
+
+    VerifyOtpRequest:
+      type: object
+      required:
+        - otp
+        - registerRequest
+      properties:
+        otp:
+          type: string
+          example: "654321"
+          description: "6-digit OTP sent to email"
+        registerRequest:
+          $ref: '#/components/schemas/RegisterRequest'
+
+    AuthenticationRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          example: "john_doe"
+        password:
+          type: string
+          format: password
+          example: "Password123"
+
+    ResendOtpRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          example: "johndoe@example.com"
+
+    AccountUpdateRequest:
+      type: object
+      description: "All fields are optional — only provided fields will be updated"
+      properties:
+        email:
+          type: string
+          format: email
+          example: "newemail@example.com"
+        password:
+          type: string
+          format: password
+          example: "NewPassword123"
+        roles:
+          type: array
+          items:
+            type: string
+          example: ["ADMIN", "USER"]
+        fullName:
+          type: string
+          example: "John Doe Updated"
+        phoneNumber:
+          type: string
+          pattern: "^(0[3|5|7|8|9])+([0-9]{8})$"
+          example: "0987654321"
         dateOfBirth:
           type: string
           format: date
@@ -247,47 +573,31 @@ components:
           example: "MALE"
         address:
           type: string
-          example: "123 Main Street, Tech City"
+          example: "456 New Street, City"
         identityCard:
           type: string
+          pattern: "^[0-9]{12}$"
           example: "079012345678"
-
-    VerifyOtpRequest:
-      type: object
-      required: [otp, registerRequest]
-      properties:
-        otp:
-          type: string
-          example: "654321"
-        registerRequest:
-          $ref: '#/components/schemas/RegisterRequest'
-
-    AuthenticationRequest:
-      type: object
-      required: [username, password]
-      properties:
-        username:
-          type: string
-          example: "john_doe"
-        password:
-          type: string
-          format: password
-          example: "Password123@"
 
     PermissionRequest:
       type: object
-      required: [name, description]
+      required:
+        - name
+        - description
       properties:
         name:
           type: string
           example: "UPDATE_DATA"
+          description: "Convention: UPPER_SNAKE_CASE"
         description:
           type: string
           example: "Update data permission"
 
     RoleRequest:
       type: object
-      required: [roleName, description]
+      required:
+        - roleName
+        - description
       properties:
         roleName:
           type: string
@@ -297,6 +607,7 @@ components:
           example: "Administrator Role"
         permissions:
           type: array
+          uniqueItems: true
           items:
             type: string
           example: ["UPDATE_DATA", "CREATE_USER"]
@@ -312,7 +623,7 @@ components:
           type: string
           example: "eyJhbGciOiJIUzUxMiJ9..."
 
-    RegisterResponse:
+    AccountResponse:
       type: object
       properties:
         accountId:
@@ -327,7 +638,12 @@ components:
         createdAt:
           type: string
           format: date-time
-          example: "2026-06-14T15:00:00Z"
+          example: "2026-06-14T15:00:00"
+        roles:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/RoleResponse'
 
     PermissionResponse:
       type: object
@@ -350,10 +666,11 @@ components:
           example: "Administrator Role"
         permissions:
           type: array
+          uniqueItems: true
           items:
             $ref: '#/components/schemas/PermissionResponse'
 
-    # --- WRAPPER RESPONSES (API RESPONSE STANDARD) ---
+    # --- WRAPPER RESPONSES ---
     ApiResponseString:
       type: object
       properties:
@@ -362,12 +679,12 @@ components:
           example: 1000
         message:
           type: string
-          example: "Success"
+          nullable: true
         result:
           type: string
           example: "OTP has been sent to your email"
 
-    ApiResponseRegisterResponse:
+    ApiResponseMessage:
       type: object
       properties:
         code:
@@ -375,9 +692,33 @@ components:
           example: 1000
         message:
           type: string
-          example: "Success"
+          example: "New otp has been sent to your email!"
+
+    ApiResponseAccountResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 1000
+        message:
+          type: string
+          nullable: true
         result:
-          $ref: '#/components/schemas/RegisterResponse'
+          $ref: '#/components/schemas/AccountResponse'
+
+    ApiResponseListAccountResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 1000
+        message:
+          type: string
+          nullable: true
+        result:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountResponse'
 
     ApiResponseAuthenticationResponse:
       type: object
@@ -387,7 +728,7 @@ components:
           example: 1000
         message:
           type: string
-          example: "Success"
+          nullable: true
         result:
           $ref: '#/components/schemas/AuthenticationResponse'
 
@@ -399,7 +740,7 @@ components:
           example: 1000
         message:
           type: string
-          example: "Success"
+          nullable: true
         result:
           $ref: '#/components/schemas/PermissionResponse'
 
@@ -411,7 +752,7 @@ components:
           example: 1000
         message:
           type: string
-          example: "Success"
+          nullable: true
         result:
           type: array
           items:
@@ -425,7 +766,7 @@ components:
           example: 1000
         message:
           type: string
-          example: "Success"
+          nullable: true
         result:
           $ref: '#/components/schemas/RoleResponse'
 
@@ -437,7 +778,7 @@ components:
           example: 1000
         message:
           type: string
-          example: "Success"
+          nullable: true
         result:
           type: array
           items:
@@ -451,7 +792,7 @@ components:
           example: 1000
         message:
           type: string
-          example: "Success"
+          nullable: true
 
     # --- ERROR RESPONSE SCHEMA ---
     ApiErrorResponse:

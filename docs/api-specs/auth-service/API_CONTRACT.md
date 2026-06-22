@@ -1,9 +1,9 @@
-    # API Contract - CinePrime Auth Service
+# API Contract - CinePrime Auth Service
 
 > **Source of Truth:** This is the single, official document defining the APIs for the Auth Service. Any modifications to Input/Output schemas must be updated and agreed upon here before actual implementation.
 
-**Version:** v1.1.0
-**Last Updated:** June 15, 2026
+**Version:** v1.2.0
+**Last Updated:** June 22, 2026
 
 ---
 
@@ -12,8 +12,6 @@
 For API testing and UI integration, the team should utilize the following resources:
 
 * **OpenAPI Specification (Source File):** [`./auth-service.yaml`](./auth-service.yaml)
-* **Swagger UI (API Gateway):** `http://localhost:8085/webjars/swagger-ui/index.html`
-* **Swagger UI (Auth Service):** `http://localhost:8088/swagger-ui/index.html`
 
 ---
 
@@ -24,7 +22,7 @@ To ensure parallel development and prevent blockers, all team members must stric
 ### For the Frontend Team
 1. **Independent Development:** Do not wait for the Backend implementation. Open `auth-service.yaml` in Swagger Editor or Local Swagger UI to review the JSON schemas.
 2. **API Mocking:** Utilize Postman Mock Server or hardcode mock data directly into the React components based on the `example` tags provided in this contract.
-3. **Error Handling:** It is mandatory to handle all defined HTTP error codes (e.g., `1008`, `1009`, `1010`, `1011`, `1013`) and display appropriate UI feedback.
+3. **Error Handling:** It is mandatory to handle all defined HTTP error codes (e.g., `1008`, `1009`, `1010`, `1011`, `1013`, `1015`, `1016`) and display appropriate UI feedback.
 
 ### For the Backend Team
 1. **API-First Approach:** Strictly adhere to the Request/Response schemas defined in the YAML file. 
@@ -35,16 +33,32 @@ To ensure parallel development and prevent blockers, all team members must stric
 
 ## 3. Current API Inventory
 
-Below is a summary of the primary API workflows. For detailed payloads, please refer to the YAML file or Swagger UI.
+Below is a summary of all API endpoints. For detailed payloads, please refer to the YAML file.
+
+**Authentication**
 
 | Status | Method | Endpoint | Use Case | Assignee |
 | :---: | :--- | :--- | :--- | :--- |
 | Ready | `POST` | `/api/auth/login` | Authenticate user and retrieve JWT Token | Nguyễn An Bình |
 | Ready | `POST` | `/api/auth/register/initiate` | Send 6-digit OTP to initiate registration | Nguyễn An Bình |
-| Ready | `POST` | `/api/auth/register/verify` | Verify OTP and call User Service to create profile | Nguyễn An Bình |
+| Ready | `POST` | `/api/auth/register/verify` | Verify OTP and create account + publish Kafka event | Nguyễn An Bình |
+| Ready | `POST` | `/api/auth/resend-otp` | Resend OTP to email (rate-limited) | Nguyễn An Bình |
+
+**Account Management**
+
+| Status | Method | Endpoint | Use Case | Assignee |
+| :---: | :--- | :--- | :--- | :--- |
+| Ready | `GET` | `/api/accounts` | Get list of all accounts (Admin) | Nguyễn An Bình |
+| Ready | `POST` | `/api/accounts` | Create account directly without OTP (Admin) | Nguyễn An Bình |
+| Ready | `PUT` | `/api/accounts/{accountId}` | Update account information (Admin) | Nguyễn An Bình |
+
+**Permission & Role**
+
+| Status | Method | Endpoint | Use Case | Assignee |
+| :---: | :--- | :--- | :--- | :--- |
 | Ready | `POST` | `/api/permissions` | Create a new system permission | Nguyễn An Bình |
 | Ready | `GET` | `/api/permissions` | Get a list of all permissions | Nguyễn An Bình |
-| Ready | `DELETE` | `/api/permissions/{permissionId}` | Delete a permission by ID | Nguyễn An Bình |
+| Ready | `DELETE` | `/api/permissions/{permissionId}` | Delete a permission by name | Nguyễn An Bình |
 | Ready | `POST` | `/api/roles` | Create a new role with assigned permissions | Nguyễn An Bình |
 | Ready | `GET` | `/api/roles` | Get a list of all roles and their permissions | Nguyễn An Bình |
 
@@ -64,6 +78,11 @@ The Frontend team must rely on the returned `code` attribute to render the corre
 | `1011` | 400 | Auth | Email already exists! |
 | `1012` | 400 | Auth | Default role not found! |
 | `1013` | 400 | Auth | Otp invalid |
+| `1014` | 400 | Auth | Account not found! |
+| `1015` | 400 | Auth | Otp has expired |
+| `1016` | 429 | Auth | Resend Otp too fast |
+| `1017` | 400 | Auth | Phone number already exists in the system! |
+| `1018` | 400 | Auth | Identity card (CCCD) already exists in the system! |
 | `2001` | 400 | User | Phone number already exists! |
 | `2002` | 400 | User | Identity card already exists! |
 | `2003` | 404 | User | User profile not found! |
@@ -82,3 +101,675 @@ All successful and failed responses share a unified JSON structure. The Frontend
       // Varies per endpoint
   } 
 }
+```
+
+---
+
+## 6. Endpoint Details
+
+### 6.1 Authentication
+
+---
+
+#### POST `/api/auth/register/initiate`
+
+Validates registration payload and sends a 6-digit OTP to the user's email if the username and email are available.
+
+**Request Body:**
+```json
+{
+  "username": "john_doe",
+  "password": "Password123@",
+  "email": "johndoe@example.com",
+  "fullName": "John Doe",
+  "phoneNumber": "0123456789",
+  "dateOfBirth": "1995-10-15",
+  "gender": "MALE",
+  "address": "123 Main Street, Tech City",
+  "identityCard": "079012345678"
+}
+```
+
+| Field | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| `username` | string | ✅ | 5–50 chars |
+| `password` | string | ✅ | Min 6 chars |
+| `email` | string | ✅ | Valid email format, must be unique |
+| `fullName` | string | ✅ | Display name |
+| `phoneNumber` | string | ✅ | Pattern: `0[3/5/7/8/9]XXXXXXXX` (10 digits) |
+| `dateOfBirth` | string (date) | ❌ | Format `YYYY-MM-DD`, at least 2 years in the past |
+| `gender` | string | ✅ | Enum: `MALE`, `FEMALE`, `OTHER` |
+| `address` | string | ✅ | Max 255 chars |
+| `identityCard` | string | ✅ | Exactly 12 digits |
+| `role` | string | ❌ | Role name to assign; defaults to `USER` if omitted |
+
+**Success Response (200):**
+```json
+{
+  "code": 1000,
+  "message": "Success",
+  "result": "OTP has been sent to your email"
+}
+```
+
+**Error Responses:**
+
+*400 — Username already exists:*
+```json
+{
+  "code": 1010,
+  "message": "Username already exists!"
+}
+```
+
+*400 — Email already exists:*
+```json
+{
+  "code": 1011,
+  "message": "Email already exists!"
+}
+```
+
+*400 — Phone number already exists:*
+```json
+{
+  "code": 1017,
+  "message": "Phone number already exists in the system!"
+}
+```
+
+*400 — Identity card already exists:*
+```json
+{
+  "code": 1018,
+  "message": "Identity card (CCCD) already exists in the system!"
+}
+```
+
+---
+
+#### POST `/api/auth/register/verify`
+
+Verifies OTP and creates the account. After successful account creation, a `UserRegisteredEvent` is published to Kafka topic `user-register-topic` for async user profile creation in `user-service`.
+
+**Request Body:**
+```json
+{
+  "otp": "654321",
+  "registerRequest": {
+    "username": "john_doe",
+    "password": "Password123@",
+    "email": "johndoe@example.com",
+    "fullName": "John Doe",
+    "phoneNumber": "0123456789",
+    "dateOfBirth": "1995-10-15",
+    "gender": "MALE",
+    "address": "123 Main Street, Tech City",
+    "identityCard": "079012345678"
+  }
+}
+```
+
+| Field | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| `otp` | string | ✅ | 6-digit OTP sent to email |
+| `registerRequest` | object | ✅ | Same payload used in `/register/initiate` |
+
+**Success Response (200):**
+```json
+{
+  "code": 1000,
+  "result": {
+    "accountId": "acc-uuid-1234-5678",
+    "username": "john_doe",
+    "email": "johndoe@example.com",
+    "createdAt": "2026-06-14T15:00:00",
+    "roles": [
+      {
+        "roleName": "USER",
+        "description": "Default user role",
+        "permissions": []
+      }
+    ]
+  }
+}
+```
+
+**Error Responses:**
+
+*400 — OTP invalid:*
+```json
+{
+  "code": 1013,
+  "message": "Otp invalid"
+}
+```
+
+*400 — OTP expired:*
+```json
+{
+  "code": 1015,
+  "message": "Otp has expired"
+}
+```
+
+*400 — Default role not configured in system:*
+```json
+{
+  "code": 1012,
+  "message": "Default role not found!"
+}
+```
+
+---
+
+#### POST `/api/auth/login`
+
+Authenticates user using username and password. Returns a signed JWT token.
+
+**Request Body:**
+```json
+{
+  "username": "john_doe",
+  "password": "Password123@"
+}
+```
+
+| Field | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| `username` | string | ✅ | Registered username |
+| `password` | string | ✅ | Account password |
+
+**Success Response (200):**
+```json
+{
+  "code": 1000,
+  "message": "Success",
+  "result": {
+    "authenticate": true,
+    "token": "eyJhbGciOiJIUzUxMiJ9..."
+  }
+}
+```
+
+**Error Response:**
+
+*401 — Invalid credentials:*
+```json
+{
+  "code": 1008,
+  "message": "Unauthenticated"
+}
+```
+
+---
+
+#### POST `/api/auth/resend-otp`
+
+Resends a new 6-digit OTP to the provided email. Rate-limited to prevent abuse.
+
+**Request Body:**
+```json
+{
+  "email": "johndoe@example.com"
+}
+```
+
+| Field | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| `email` | string | ✅ | Email address of the pending registration |
+
+**Success Response (200):**
+```json
+{
+  "code": 1000,
+  "message": "New otp has been sent to your email!"
+}
+```
+
+**Error Responses:**
+
+*400 — Account not found:*
+```json
+{
+  "code": 1014,
+  "message": "Account not found!"
+}
+```
+
+*429 — Resend too fast:*
+```json
+{
+  "code": 1016,
+  "message": "Resend Otp too fast"
+}
+```
+
+---
+
+### 6.2 Account Management
+
+> **Note:** These endpoints require `ADMIN` role. Include the JWT token in the `Authorization` header.
+
+**Header:**
+```
+Authorization: Bearer <token>
+```
+
+---
+
+#### GET `/api/accounts`
+
+Retrieves a list of all registered accounts.
+
+**No request body or query parameters required.**
+
+**Success Response (200):**
+```json
+{
+  "code": 1000,
+  "result": [
+    {
+      "accountId": "acc-uuid-1234-5678",
+      "username": "john_doe",
+      "email": "johndoe@example.com",
+      "createdAt": "2026-06-14T15:00:00",
+      "roles": [
+        {
+          "roleName": "USER",
+          "description": "Default user role",
+          "permissions": []
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+#### POST `/api/accounts`
+
+Creates a new account directly without OTP verification. Intended for admin use.
+
+**Request Body:** Same schema as `RegisterRequest` (see Section 6.1 `/register/initiate`).
+
+**Success Response (200):**
+```json
+{
+  "code": 1000,
+  "result": {
+    "accountId": "acc-uuid-1234-5678",
+    "username": "john_doe",
+    "email": "johndoe@example.com",
+    "createdAt": "2026-06-14T15:00:00",
+    "roles": [
+      {
+        "roleName": "USER",
+        "description": "Default user role",
+        "permissions": []
+      }
+    ]
+  }
+}
+```
+
+---
+
+#### PUT `/api/accounts/{accountId}`
+
+Updates an existing account's information. All fields are optional — only provided fields will be updated.
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| `accountId` | string | ✅ | UUID of the account to update |
+
+**Request Body:**
+```json
+{
+  "email": "newemail@example.com",
+  "password": "NewPassword123",
+  "roles": ["ADMIN"],
+  "fullName": "John Doe Updated",
+  "phoneNumber": "0987654321",
+  "dateOfBirth": "1995-10-15",
+  "gender": "MALE",
+  "address": "456 New Street, City",
+  "identityCard": "079012345678"
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "code": 1000,
+  "result": {
+    "accountId": "acc-uuid-1234-5678",
+    "username": "john_doe",
+    "email": "newemail@example.com",
+    "createdAt": "2026-06-14T15:00:00",
+    "roles": [
+      {
+        "roleName": "ADMIN",
+        "description": "Administrator Role",
+        "permissions": []
+      }
+    ]
+  }
+}
+```
+
+**Error Response:**
+
+*400 — Account not found:*
+```json
+{
+  "code": 1014,
+  "message": "Account not found!"
+}
+```
+
+---
+
+### 6.3 Permission Management
+
+> **Note:** These endpoints require `ADMIN` role. Include the JWT token in the `Authorization` header.
+
+**Header:**
+```
+Authorization: Bearer <token>
+```
+
+---
+
+#### POST `/api/permissions`
+
+Creates a new system permission for use in RBAC.
+
+**Request Body:**
+```json
+{
+  "name": "UPDATE_DATA",
+  "description": "Update data permission"
+}
+```
+
+| Field | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| `name` | string | ✅ | Unique permission identifier (UPPER_SNAKE_CASE) |
+| `description` | string | ✅ | Human-readable description |
+
+**Success Response (200):**
+```json
+{
+  "code": 1000,
+  "message": "Success",
+  "result": {
+    "name": "UPDATE_DATA",
+    "description": "Update data permission"
+  }
+}
+```
+
+---
+
+#### GET `/api/permissions`
+
+Retrieves a list of all permissions in the system.
+
+**No request body or query parameters required.**
+
+**Success Response (200):**
+```json
+{
+  "code": 1000,
+  "message": "Success",
+  "result": [
+    {
+      "name": "UPDATE_DATA",
+      "description": "Update data permission"
+    },
+    {
+      "name": "CREATE_USER",
+      "description": "Create user permission"
+    }
+  ]
+}
+```
+
+---
+
+#### DELETE `/api/permissions/{permissionId}`
+
+Removes a permission from the system by its name.
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| `permissionId` | string | ✅ | The permission `name` (e.g. `UPDATE_DATA`) |
+
+**Example Request:**
+```
+DELETE /api/permissions/UPDATE_DATA
+```
+
+**Success Response (200):**
+```json
+{
+  "code": 1000,
+  "message": "Success"
+}
+```
+
+---
+
+### 6.4 Role Management
+
+> **Note:** These endpoints require `ADMIN` role. Include the JWT token in the `Authorization` header.
+
+**Header:**
+```
+Authorization: Bearer <token>
+```
+
+---
+
+#### POST `/api/roles`
+
+Creates a new role and assigns permissions to it.
+
+**Request Body:**
+```json
+{
+  "roleName": "ADMIN",
+  "description": "Administrator Role",
+  "permissions": ["UPDATE_DATA", "CREATE_USER"]
+}
+```
+
+| Field | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| `roleName` | string | ✅ | Unique role name |
+| `description` | string | ✅ | Human-readable description |
+| `permissions` | string[] | ❌ | List of permission `name` values to assign |
+
+**Success Response (200):**
+```json
+{
+  "code": 1000,
+  "message": "Success",
+  "result": {
+    "roleName": "ADMIN",
+    "description": "Administrator Role",
+    "permissions": [
+      {
+        "name": "UPDATE_DATA",
+        "description": "Update data permission"
+      },
+      {
+        "name": "CREATE_USER",
+        "description": "Create user permission"
+      }
+    ]
+  }
+}
+```
+
+---
+
+#### GET `/api/roles`
+
+Retrieves all roles and their assigned permissions.
+
+**No request body or query parameters required.**
+
+**Success Response (200):**
+```json
+{
+  "code": 1000,
+  "message": "Success",
+  "result": [
+    {
+      "roleName": "ADMIN",
+      "description": "Administrator Role",
+      "permissions": [
+        {
+          "name": "UPDATE_DATA",
+          "description": "Update data permission"
+        }
+      ]
+    },
+    {
+      "roleName": "USER",
+      "description": "Default user role",
+      "permissions": []
+    }
+  ]
+}
+```
+
+---
+
+## 7. Validation Rules
+
+### Username
+- **Min length:** 5 characters, **Max length:** 50 characters
+- **Validation message:** `Username must be between 5 and 50 characters!`
+- **Must be unique** across all accounts
+
+### Password
+- **Min length:** 6 characters
+- **Validation message:** `Password must be at least 6 characters!`
+
+### Email
+- **Format:** Valid email — `user@domain.tld`
+- **Validation message:** `Invalid email format (e.g., example@gmail.com)!`
+- **Must be unique** across all accounts
+
+### Phone Number
+- **Pattern:** `^(0[3|5|7|8|9])+([0-9]{8})$` (Vietnamese mobile numbers only)
+- **Valid prefixes:** `03x`, `05x`, `07x`, `08x`, `09x`
+- **Total length:** 10 digits
+- **Examples (valid):** `0912345678`, `0387654321`
+- **Validation message:** `Invalid phone number format!`
+
+### Date of Birth
+- **Format:** `YYYY-MM-DD`
+- **Rule:** Must be at least **2 years** in the past (`@DobConstraint(min = 2)`)
+
+### Gender
+- **Allowed values:** `MALE`, `FEMALE`, `OTHER`
+- Case-sensitive, must not be blank
+
+### Identity Card
+- **Format:** Exactly 12 digits
+- **Pattern:** `^[0-9]{12}$`
+- **Example:** `079012345678`
+- **Validation message:** `Identity card must contain exactly 12 digits!`
+
+### OTP
+- **Format:** 6-digit string
+- **Validity:** Time-limited (configured server-side); error `1015` returned if expired
+
+### Permission Name
+- **Convention:** `UPPER_SNAKE_CASE`
+- **Examples:** `UPDATE_DATA`, `CREATE_USER`, `DELETE_MOVIE`
+
+---
+
+## 8. Business Rules
+
+### Registration Flow (2-step)
+1. Client calls `/register/initiate` → system validates uniqueness, sends OTP to email
+2. Client calls `/register/verify` with OTP → system creates account, publishes `UserRegisteredEvent` to Kafka
+3. `user-service` consumes the event and creates the user profile asynchronously
+
+### Token
+- JWT token returned by `/login` must be attached to all protected endpoints as `Authorization: Bearer <token>`
+- Token carries role/permission claims used by the gateway and each service for access control
+
+### Default Role
+- Every newly registered user is automatically assigned a default role (e.g., `USER`)
+- If the default role is not configured in the database, `/register/verify` returns error `1012`
+
+### Permission Name as ID
+- A permission's `name` (e.g., `UPDATE_DATA`) is its unique identifier — used as the path parameter in `DELETE /api/permissions/{permissionId}`
+
+---
+
+## 9. Integration Notes
+
+### Kafka Event (after `/register/verify`)
+
+On successful registration, `auth-service` publishes the following event:
+
+- **Topic:** `user-register-topic`
+- **Consumer:** `user-service` (group: `user-service-group`)
+
+**Event Payload:**
+```json
+{
+  "accountId": "acc-uuid-1234-5678",
+  "fullName": "John Doe",
+  "phoneNumber": "0123456789",
+  "dateOfBirth": "1995-10-15",
+  "email": "johndoe@example.com",
+  "gender": "MALE",
+  "address": "123 Main Street, Tech City",
+  "identityCard": "079012345678"
+}
+```
+
+For full Kafka contract details (retries, DLT, idempotency), see [docs/kafka-user-registration-contract.md](../../kafka-user-registration-contract.md).
+
+### Timeout Recommendations
+
+| Operation | Recommended Timeout |
+| :--- | :--- |
+| `/login` | 3 seconds |
+| `/register/initiate` (sends email) | 5 seconds |
+| `/register/verify` | 5 seconds |
+| Permission / Role CRUD | 2 seconds |
+
+---
+
+## 10. Changelog
+
+### Version 1.2.0 (2026-06-22)
+- Added `POST /api/auth/resend-otp` endpoint
+- Added `AccountController`: `GET /api/accounts`, `POST /api/accounts`, `PUT /api/accounts/{accountId}`
+- Updated `RegisterRequest`: all fields required (except `dateOfBirth`, `role`), corrected phone pattern, corrected username min length to 5
+- Updated `/register/verify` response to return `AccountResponse` with `roles` (replaced old `RegisterResponse`)
+- Added error codes: `1014` (account not found), `1015` (OTP expired), `1016` (resend too fast), `1017` (phone existed), `1018` (identity card existed)
+
+### Version 1.1.0 (2026-06-15)
+- Added OTP-based 2-step registration flow (`/register/initiate`, `/register/verify`)
+- Added RBAC endpoints for Permission and Role management
+- Standardized error codes (`1008`–`1013`)
+
+### Version 1.0.0
+- Initial API specification
+- Basic login endpoint
