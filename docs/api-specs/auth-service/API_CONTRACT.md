@@ -49,6 +49,7 @@ Below is a summary of all API endpoints. For detailed payloads, please refer to 
 | Status | Method | Endpoint | Use Case | Assignee |
 | :---: | :--- | :--- | :--- | :--- |
 | Ready | `GET` | `/api/accounts` | Get list of all accounts (Admin) | Nguyễn An Bình |
+| Ready | `GET` | `/api/accounts/{accountId}` | Get a single account by ID (Admin) | Nguyễn An Bình |
 | Ready | `POST` | `/api/accounts` | Create account directly without OTP (Admin) | Nguyễn An Bình |
 | Ready | `PUT` | `/api/accounts/{accountId}` | Update account information (Admin) | Nguyễn An Bình |
 
@@ -383,6 +384,53 @@ Retrieves a list of all registered accounts.
       ]
     }
   ]
+}
+```
+
+---
+
+#### GET `/api/accounts/{accountId}`
+
+Retrieves a single account's details by account ID.
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| `accountId` | string | ✅ | UUID of the account |
+
+**Example Request:**
+```
+GET /api/accounts/acc-uuid-1234-5678
+```
+
+**Success Response (200):**
+```json
+{
+  "code": 1000,
+  "result": {
+    "accountId": "acc-uuid-1234-5678",
+    "username": "john_doe",
+    "email": "johndoe@example.com",
+    "createdAt": "2026-06-14T15:00:00",
+    "roles": [
+      {
+        "roleName": "USER",
+        "description": "Default user role",
+        "permissions": []
+      }
+    ]
+  }
+}
+```
+
+**Error Response:**
+
+*400 — Account not found:*
+```json
+{
+  "code": 1014,
+  "message": "Account not found!"
 }
 ```
 

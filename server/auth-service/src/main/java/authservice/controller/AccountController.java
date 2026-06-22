@@ -29,6 +29,13 @@ public class AccountController {
                 .build();
     }
 
+    @GetMapping("/{accountId}")
+    ApiResponse<AccountResponse> getAccountById(@PathVariable String accountId){
+        return ApiResponse.<AccountResponse>builder()
+                .result(accountService.getAccountById(accountId))
+                .build();
+    }
+
     @PutMapping("/{accountId}")
     ApiResponse<AccountResponse> updateAccount(@PathVariable String accountId, @RequestBody AccountUpdateRequest request){
         return ApiResponse.<AccountResponse>builder()

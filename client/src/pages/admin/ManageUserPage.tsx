@@ -70,7 +70,7 @@ export default function ManageUserPage() {
 
         let rawRole = "USER"; 
         if (acc.roles && acc.roles.length > 0) {
-          rawRole = acc.roles[0].name || "USER";
+          rawRole = acc.roles[0].roleName || "USER";
         }
         
        let userRole = String(rawRole).charAt(0).toUpperCase() + String(rawRole).slice(1).toLowerCase();
@@ -82,7 +82,7 @@ export default function ManageUserPage() {
           role: userRole,
           status: profile.isActive === false ? "Inactive" : "Active",
           phoneNumber: profile.phoneNumber || "No Phone",
-          avatar: profile.avatarUrl || avatarGradients[Math.floor(Math.random() * avatarGradients.length)],
+          avatar: profile.avatarUrl || avatarGradients[acc.accountId.charCodeAt(0) % avatarGradients.length],
           joined: new Date(acc.createdAt || Date.now()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
         };
       });
@@ -100,19 +100,29 @@ export default function ManageUserPage() {
   };
 
   // 🟢 CẬP NHẬT: Điều hướng thẳng sang trang Edit, truyền theo ID của User
+  const handleViewUser = (id: string) => {
+    navigate(`/admin/users/${id}`);
+  };
+
   const handleEditUser = (user: UserData) => {
     navigate(`/admin/users/edit/${user.id}`);
   };
 
-  const handleDeleteUser = async (id: number | string) => {
-    if (window.confirm("Are you sure you want to disable this user?")) {
-      try {
-        await userApi.deleteUser(id.toString());
+  const handleDeleteUser = async (id: string) => {
+    try {
+      await userApi.deleteUser(id);
+      setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, status: "Inactive" } : u)));
+    } catch (error: any) {
+      const code = error?.response?.data?.code;
+      if (error?.response?.status === 404 || code === 2003) {
+        alert("Không tìm thấy hồ sơ người dùng này trong hệ thống.\nTài khoản có thể chưa hoàn tất đăng ký (profile chưa được tạo).");
+      } else if (error?.response?.status === 400 || code === 2008) {
+        alert("Người dùng này đã bị vô hiệu hóa trước đó.");
         setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, status: "Inactive" } : u)));
-      } catch (error) {
-        console.error("Lỗi khi xóa User:", error);
-        alert("Có lỗi xảy ra khi xóa user!");
+      } else {
+        alert("Có lỗi xảy ra khi vô hiệu hóa người dùng. Vui lòng thử lại.");
       }
+      console.error("Lỗi khi xóa User:", error);
     }
   };
 
@@ -241,13 +251,14 @@ export default function ManageUserPage() {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
       ) : (
-        <UserTable 
-          users={users} 
-          onEdit={handleEditUser} 
-          onDelete={handleDeleteUser} 
-          searchQuery={searchQuery} 
-          roleFilter={roleFilter} 
-          statusFilter={statusFilter} 
+        <UserTable
+          users={users}
+          onView={handleViewUser}
+          onEdit={handleEditUser}
+          onDelete={handleDeleteUser}
+          searchQuery={searchQuery}
+          roleFilter={roleFilter}
+          statusFilter={statusFilter}
         />
       )}
 
