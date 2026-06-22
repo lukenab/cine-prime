@@ -271,6 +271,14 @@ public class MovieService {
         return movieMapper.toResponseList(movies);
     }
 
+    public List<CinemaRoomResponse> getAllRooms() {
+        return movieMapper.toCinemaResponseList(cinemaRoomRepository.findAll());
+    }
+
+    public List<TypeMovieResponse> getAllTypes() {
+        return movieMapper.toTypeResponseList(typeRepository.findAll());
+    }
+
     @Transactional
     public MovieResponse updateMovie(Long id, UpdateMovieRequest request) {
         Movie movie = movieRepository.findById(id)
@@ -288,7 +296,9 @@ public class MovieService {
             }
             movie.setMovieTypes(updatedMovieTypes);
         }
-        return movieMapper.toResponse(movie);
+
+        Movie savedMovie = movieRepository.save(movie);
+        return movieMapper.toResponse(savedMovie);
     }
 
     @Transactional
@@ -300,7 +310,7 @@ public class MovieService {
         LocalTime currentTime = LocalTime.now();
         boolean hasFutureShowTimes = showTimeRepository.existsByMovieMovieIdAndFutureShowTime(
                 movie.getMovieId(), currentDate, currentTime);
-        if (!hasFutureShowTimes) {
+        if (hasFutureShowTimes) {
             throw new AppException(MovieErrorCode.ACTIVE_SHOWTIMES_EXIST);
         }
 
