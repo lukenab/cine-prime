@@ -1,16 +1,17 @@
 import { useAuth } from "../context/AuthContext";
-import { LayoutDashboard, Film, Calendar, Ticket, Users, BarChart2, Settings, Clapperboard, LogOut } from "lucide-react";
-import { useNavigate, useLocation } from "react-router-dom"; // 1. Thêm import useLocation
+import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, Users, BarChart2, Settings, Clapperboard, LogOut } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom";
 
-// 1. Thêm 'path' chuẩn cho từng mục menu
 const navItems = [
-  { icon: LayoutDashboard, label: "Dashboard", id: "dashboard", path: "/admin" },
-  { icon: Film, label: "Movies", id: "movies", path: "/admin/movies" },
-  { icon: Calendar, label: "Showtimes", id: "showtimes", path: "/admin/showtimes" },
-  { icon: Ticket, label: "Bookings", id: "bookings", path: "/admin/bookings" },
-  { icon: Users, label: "Users", id: "users", path: "/admin/users" },
-  { icon: BarChart2, label: "Reports", id: "reports", path: "/admin/reports" },
-  { icon: Settings, label: "Settings", id: "settings", path: "/admin/settings" },
+  { icon: LayoutDashboard, label: "Dashboard",    id: "dashboard", path: "/admin",          group: "main" },
+  { icon: Film,            label: "Movies",        id: "movies",    path: "/admin/movies",    group: "catalog" },
+  { icon: Building2,       label: "Cinema Rooms",  id: "rooms",     path: "/admin/rooms",     group: "catalog" },
+  { icon: Tags,            label: "Genres",        id: "genres",    path: "/admin/genres",    group: "catalog" },
+  { icon: Calendar,        label: "Showtimes",     id: "showtimes", path: "/admin/showtimes", group: "ops" },
+  { icon: Ticket,          label: "Bookings",      id: "bookings",  path: "/admin/bookings",  group: "ops" },
+  { icon: Users,           label: "Users",         id: "users",     path: "/admin/users",     group: "ops" },
+  { icon: BarChart2,       label: "Reports",       id: "reports",   path: "/admin/reports",   group: "system" },
+  { icon: Settings,        label: "Settings",      id: "settings",  path: "/admin/settings",  group: "system" },
 ];
 
 interface SidebarProps {
@@ -115,16 +116,28 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
 
       {/* Nav items */}
       <nav style={{ padding: "0 10px", flex: 1 }}>
-        {navItems.map(({ icon: Icon, label, id, path }) => {
-          // 3. Logic check active thông minh dựa trên URL
+        {navItems.map(({ icon: Icon, label, id, path, group }, idx) => {
           const isActive =
             path === "/admin"
-              ? location.pathname === "/admin" // Trang Dashboard phải khớp chính xác để không bị sáng ở mọi trang
-              : location.pathname.startsWith(path); // Các trang con thì chỉ cần khớp phần đầu
+              ? location.pathname === "/admin"
+              : location.pathname.startsWith(path);
+
+          const prevGroup = idx > 0 ? navItems[idx - 1].group : group;
+          const showSectionLabel = group !== prevGroup;
+          const sectionLabels: Record<string, string> = {
+            catalog: "Catalog",
+            ops: "Operations",
+            system: "System",
+          };
 
           return (
+            <div key={id}>
+              {showSectionLabel && group !== "main" && (
+                <div style={{ padding: "14px 12px 4px", fontSize: "10px", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-sub)", transition: "color 0.25s ease" }}>
+                  {sectionLabels[group] ?? group}
+                </div>
+              )}
             <button
-              key={id}
               onClick={() => navigate(path)}
               style={{
                 width: "100%",
@@ -177,6 +190,7 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
               <Icon size={16} style={isActive && isDarkMode ? { filter: "drop-shadow(0 0 4px rgba(59, 130, 246, 0.5))" } : {}} />
               {label}
             </button>
+            </div>
           );
         })}
       </nav>

@@ -11,6 +11,8 @@ interface HeaderProps {
 const pageTitles: Record<string, string> = {
   dashboard: "Dashboard",
   movies: "Movies",
+  rooms: "Cinema Rooms",
+  genres: "Movie Genres",
   showtimes: "Showtimes",
   bookings: "Bookings",
   users: "Users",
