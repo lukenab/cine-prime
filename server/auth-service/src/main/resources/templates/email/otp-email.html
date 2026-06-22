@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+</head>
+<body style="margin: 0; padding: 0; background-color: #0a0a0a;">
+
+<div style="font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #050505; padding: 40px 20px; text-align: center; border-radius: 12px; max-width: 600px; margin: 0 auto;">
+
+    <h1 style="color: #ffffff; font-size: 28px; font-weight: 800; letter-spacing: 2px; margin-bottom: 5px;">
+        CINE<span style="color: #FFD700;">PRIME</span>
+    </h1>
+    <p style="color: rgba(255,255,255,0.6); font-size: 14px; margin-top: 0; text-transform: uppercase; letter-spacing: 1px;">
+        Verify your account
+    </p>
+
+    <div style="background-color: #141414; border: 1px solid rgba(255,215,0,0.3); border-radius: 10px; padding: 30px 20px; margin: 30px auto; max-width: 400px; box-shadow: 0 4px 20px rgba(255,215,0,0.1);">
+        <p style="margin: 0 0 15px 0; color: rgba(255,255,255,0.8); font-size: 15px;">Your OTP code is:</p>
+
+        <h2 th:text="${otp}"
+            style="color: #FFD700; font-size: 42px; font-weight: 700; letter-spacing: 8px; margin: 0;">
+            000000
+        </h2>
+    </div>
+
+    <p style="color: #FF4B4B; font-size: 13px; margin-bottom: 20px;">
+        &#9888;&#65039; This code will expire in <strong th:text="${expiryMinutes}">5</strong> minutes.
+        Please do not share this code with anyone.
+    </p>
+
+    <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 30px 0 20px 0;"/>
+    <p style="color: rgba(255,255,255,0.3); font-size: 12px; line-height: 1.5;">
+        If you did not request this code, please ignore this email.<br/>
+        &copy; 2026 CinePrime. All rights reserved.
+    </p>
+
+</div>
+
+</body>
+</html>

@@ -27,7 +27,11 @@ export const authApi = {
     },
 
     getAllAccounts: () => {
-        return axiosClient.get('/api/accounts'); 
+        return axiosClient.get('/api/accounts');
+    },
+
+    getAccountById: (accountId: string) => {
+        return axiosClient.get(`/api/accounts/${accountId}`);
     },
 
     updateAccount: (accountId: string | undefined, payload: any) => {

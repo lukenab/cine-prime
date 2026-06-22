@@ -47,6 +47,12 @@ public class AccountService {
         return accountMapper.toAccountResponseList(accountRepository.findAll());
     }
 
+    public AccountResponse getAccountById(String accountId) {
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new AppException(AuthErrorCode.ACCOUNT_NOT_FOUND));
+        return accountMapper.toAccountResponse(account);
+    }
+
     @Transactional
     public AccountResponse updateAccount(String accountId, AccountUpdateRequest request) {
         Account account = accountRepository.findById(accountId)

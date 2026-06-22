@@ -263,6 +263,48 @@ paths:
                 $ref: '#/components/schemas/ApiErrorResponse'
 
   /api/accounts/{accountId}:
+    get:
+      tags:
+        - Account
+      summary: Get account by ID
+      description: Retrieves a single account's details by account ID. Requires ADMIN role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          description: The UUID of the account
+          schema:
+            type: string
+            example: "acc-uuid-1234-5678"
+      responses:
+        '200':
+          description: Account retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseAccountResponse'
+              example:
+                code: 1000
+                result:
+                  accountId: "acc-uuid-1234-5678"
+                  username: "john_doe"
+                  email: "johndoe@example.com"
+                  createdAt: "2026-06-14T15:00:00"
+                  roles:
+                    - roleName: "USER"
+                      description: "Default user role"
+                      permissions: []
+        '400':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              example:
+                code: 1014
+                message: "Account not found!"
     put:
       tags:
         - Account

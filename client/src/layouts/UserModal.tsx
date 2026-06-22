@@ -2,12 +2,13 @@ import { X, User } from "lucide-react";
 import { useState, useEffect } from "react";
 
 export type UserData = {
-  id: number;
+  id: string;
   name: string;
   email: string;
   role: string;
   status: "Active" | "Inactive";
   department: string;
+  phoneNumber: string;
   avatar: string;
   joined: string;
 };

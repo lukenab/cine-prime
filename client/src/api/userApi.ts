@@ -5,6 +5,10 @@ export const userApi = {
     return axiosClient.get(`/api/users?page=${page}&size=${size}`);
   },
   
+  getUserById: (id: string) => {
+    return axiosClient.get(`/api/users/${id}`);
+  },
+
   deleteUser: (id: string) => {
     return axiosClient.delete(`/api/users/${id}`);
   }

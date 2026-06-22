@@ -20,7 +20,8 @@ public enum AuthErrorCode implements BaseErrorCode {
     OTP_EXPIRED(1015, "Otp has expired", HttpStatus.BAD_REQUEST),
     RESEND_OTP_TOO_FAST(1016, "Resend Otp too fast", HttpStatus.TOO_MANY_REQUESTS),
     PHONE_EXISTED(1017, "Phone number already exists in the system!", HttpStatus.BAD_REQUEST),
-    IDENTITY_CARD_EXISTED(1018, "Identity card (CCCD) already exists in the system!", HttpStatus.BAD_REQUEST);
+    IDENTITY_CARD_EXISTED(1018, "Identity card (CCCD) already exists in the system!", HttpStatus.BAD_REQUEST),
+    EMAIL_SEND_FAILED(1019, "Failed to send OTP email. Please try again.", HttpStatus.INTERNAL_SERVER_ERROR);
 
     int code;
     String message;
