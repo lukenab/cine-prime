@@ -43,8 +43,8 @@ public enum MovieErrorCode implements BaseErrorCode {
                         HttpStatus.INTERNAL_SERVER_ERROR),
 
 
-    GENRE_NOT_FOUND(2002, "Không tìm thấy thể loại phim", HttpStatus.NOT_FOUND),
-    ACTIVE_SHOWTIMES_EXIST(2003, "Không thể xóa phim vì vẫn còn suất chiếu hoạt động trong tương lai", HttpStatus.CONFLICT);
+    GENRE_NOT_FOUND(2010, "Movie genre not found.", HttpStatus.NOT_FOUND),
+    ACTIVE_SHOWTIMES_EXIST(2011, "Cannot delete movie because it still has upcoming showtimes.", HttpStatus.CONFLICT);
 
     int code;
     String message;

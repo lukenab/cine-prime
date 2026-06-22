@@ -84,6 +84,30 @@ public class MovieController {
                 .build();
     }
 
+    @GetMapping("/all")
+    public ApiResponse<List<MovieResponse>> getAllMovies() {
+        return ApiResponse.<List<MovieResponse>>builder()
+                .code(HttpStatus.SC_ACCEPTED)
+                .result(movieService.findAll())
+                .build();
+    }
+
+    @GetMapping("/rooms")
+    public ApiResponse<List<CinemaRoomResponse>> getAllRooms() {
+        return ApiResponse.<List<CinemaRoomResponse>>builder()
+                .code(HttpStatus.SC_ACCEPTED)
+                .result(movieService.getAllRooms())
+                .build();
+    }
+
+    @GetMapping("/types")
+    public ApiResponse<List<TypeMovieResponse>> getAllTypes() {
+        return ApiResponse.<List<TypeMovieResponse>>builder()
+                .code(HttpStatus.SC_ACCEPTED)
+                .result(movieService.getAllTypes())
+                .build();
+    }
+
     @PostMapping("/room")
     public ApiResponse<CinemaRoomResponse> createTypeRoom(@Valid @RequestBody CinemaRoomRequest cinemaRoomRequest) {
         return ApiResponse.<CinemaRoomResponse>builder()

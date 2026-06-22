@@ -31,8 +31,11 @@ public interface MovieMapper {
 
     CinemaRoom toCinemaRoom(CinemaRoomRequest cinemaRoomRequest);
     CinemaRoomResponse toCinemaResponse(CinemaRoom cinemaRoom);
+    List<CinemaRoomResponse> toCinemaResponseList(List<CinemaRoom> cinemaRooms);
+
     MovieType toType(TypeRequest typeRequest);
     TypeMovieResponse toMovieResponse(MovieType typeMovie);
+    List<TypeMovieResponse> toTypeResponseList(List<MovieType> movieTypes);
     // ông coi cái hàm dưới đây để gì v
     @Named("mapTypesToGenreNames")
     default List<String> mapTypesToGenreNames(List<MovieType> types) {
