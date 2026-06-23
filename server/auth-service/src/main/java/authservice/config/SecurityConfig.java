@@ -23,7 +23,7 @@ import java.nio.charset.StandardCharsets;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    public final String [] END_POINTS = {"/api/auth/register/initiate", "/api/auth/login", "/api/auth/introspect", "/api/auth/register/verify"};
+    public final String [] END_POINTS = {"/api/auth/register/initiate", "/api/auth/login", "/api/auth/introspect", "/api/auth/register/verify", "/api/auth/resend-otp"};
 
     @Value("${jwt.signerKey}")
     private String SIGNER_KEY;
