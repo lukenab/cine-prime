@@ -4,7 +4,6 @@ import java.util.List;
 
 import org.apache.hc.core5.http.HttpStatus;
 import org.springframework.data.domain.Page;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -15,14 +14,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import movie.theater.common.dto.ApiResponse;
 import movieservice.service.MovieService;
-import movieservice.dto.request.CinemaRoomRequest;
 import movieservice.dto.request.CreateMovieRequest;
-import movieservice.dto.request.TypeRequest;
 import movieservice.dto.request.UpdateMovieRequest;
-import movieservice.dto.response.CinemaRoomResponse;
 import movieservice.dto.response.MovieResponse;
-import movieservice.dto.response.TypeMovieResponse;
-import movieservice.entity.CinemaRoom;
 
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -37,12 +31,12 @@ import org.springframework.web.bind.annotation.PathVariable;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class MovieController {
-    private MovieService movieService;
+     MovieService movieService;
 
     @PostMapping
     public ApiResponse<MovieResponse> createMovie(@Valid @RequestBody CreateMovieRequest createMovieRequest) {
         return ApiResponse.<MovieResponse>builder()
-                .code(HttpStatus.SC_ACCEPTED)
+                .code(HttpStatus.SC_OK)
                 .result(movieService.createMovie(createMovieRequest))
                 .build();
     }
@@ -50,7 +44,7 @@ public class MovieController {
     @GetMapping("/{id}")
     public ApiResponse<MovieResponse> findById(@PathVariable("id") Long movieId) {
         return ApiResponse.<MovieResponse>builder()
-                .code(HttpStatus.SC_ACCEPTED)
+                .code(HttpStatus.SC_OK)
                 .result(movieService.getMovie(movieId))
                 .build();
     }
@@ -60,7 +54,7 @@ public class MovieController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size) {
         return ApiResponse.<Page<MovieResponse>>builder()
-                .code(HttpStatus.SC_ACCEPTED)
+                .code(HttpStatus.SC_OK)
                 .result(movieService.findPageMovie(page - 1, size))
                 .build();
     }
@@ -70,7 +64,7 @@ public class MovieController {
             @Valid @RequestBody UpdateMovieRequest updateMovieRequest) {
         MovieResponse movieResponse = movieService.updateMovie(movieId, updateMovieRequest);
         return movie.theater.common.dto.ApiResponse.<MovieResponse>builder()
-                .code(1000)
+                .code(HttpStatus.SC_OK)
                 .message("Movie successfully updated")
                 .result(movieResponse)
                 .build();
@@ -79,7 +73,7 @@ public class MovieController {
     public movie.theater.common.dto.ApiResponse<Void> deleteMovie(@PathVariable("movieId") Long movieId) {
         movieService.deleteMovie(movieId);
         return movie.theater.common.dto.ApiResponse.<Void>builder()
-                .code(1000)
+                .code(HttpStatus.SC_OK)
                 .message("Movie successfully deleted")
                 .build();
     }
@@ -87,41 +81,12 @@ public class MovieController {
     @GetMapping("/all")
     public ApiResponse<List<MovieResponse>> getAllMovies() {
         return ApiResponse.<List<MovieResponse>>builder()
-                .code(HttpStatus.SC_ACCEPTED)
+                .code(HttpStatus.SC_OK)
                 .result(movieService.findAll())
                 .build();
     }
 
-    @GetMapping("/rooms")
-    public ApiResponse<List<CinemaRoomResponse>> getAllRooms() {
-        return ApiResponse.<List<CinemaRoomResponse>>builder()
-                .code(HttpStatus.SC_ACCEPTED)
-                .result(movieService.getAllRooms())
-                .build();
-    }
-
-    @GetMapping("/types")
-    public ApiResponse<List<TypeMovieResponse>> getAllTypes() {
-        return ApiResponse.<List<TypeMovieResponse>>builder()
-                .code(HttpStatus.SC_ACCEPTED)
-                .result(movieService.getAllTypes())
-                .build();
-    }
-
-    @PostMapping("/room")
-    public ApiResponse<CinemaRoomResponse> createTypeRoom(@Valid @RequestBody CinemaRoomRequest cinemaRoomRequest) {
-        return ApiResponse.<CinemaRoomResponse>builder()
-                .code(HttpStatus.SC_ACCEPTED)
-                .result(movieService.createCinemaRoom(cinemaRoomRequest))
-                .build();
-    }
-
-    @PostMapping("/type")
-    public ApiResponse<TypeMovieResponse> createTypeMovie(@Valid @RequestBody TypeRequest typeRequest) {
-        return ApiResponse.<TypeMovieResponse>builder()
-                .code(HttpStatus.SC_ACCEPTED)
-                .result(movieService.createTypeMovie(typeRequest))
-                .build();
-    }
+    
+    
 
 }
