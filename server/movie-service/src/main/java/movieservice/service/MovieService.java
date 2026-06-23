@@ -241,8 +241,8 @@ public class MovieService {
             Seat seat = new Seat();
             seat.setSeatCode(seatCode);
             seat.setCinemaRoom(cinemaRoom);
-            seat.setPrice(100000.0);
-            seat.setSeatStatus("AVAILABLE");
+//            seat.setPrice(100000.0);
+//            seat.setSeatStatus("AVAILABLE");
             seat.setSeatType("STANDARD");
             seatRepository.save(seat);
         }

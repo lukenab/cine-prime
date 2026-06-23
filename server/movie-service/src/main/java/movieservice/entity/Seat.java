@@ -12,6 +12,9 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+
 @Getter
 @Setter
 @Entity
@@ -29,12 +32,19 @@ public class Seat {
     @Column(name = "seat_type")
     private String seatType;
 
-    @Column(name = "seat_status")
-    private String seatStatus;
+    @Column(name = "seat_status", nullable = false)
+    private Integer seatStatus = 1;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cinema_room_id")
     private CinemaRoom cinemaRoom;
 
-    private Double price;
+    @Column(name = "price", nullable = false, precision = 10, scale = 2)
+    private BigDecimal price;
+
+    @Column(name = "created_at", updatable = false)
+    private OffsetDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private OffsetDateTime updatedAt;
 }

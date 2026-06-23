@@ -1,24 +1,4 @@
-ALTER TABLE show_time
-    ADD COLUMN IF NOT EXISTS status        VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE',
-    ADD COLUMN IF NOT EXISTS total_seats   INT          NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS sold_seats    INT          NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS created_at    TIMESTAMP             DEFAULT NOW();
-
-CREATE TABLE IF NOT EXISTS showtime_seat (
-    showtime_seat_id      BIGSERIAL     PRIMARY KEY,
-    showtime_id           BIGINT        NOT NULL REFERENCES show_time(showtime_id) ON DELETE CASCADE,
-    seat_id               BIGINT        NOT NULL REFERENCES seat(seat_id),
-    seat_code             VARCHAR(10)   NOT NULL,
-    seat_type             VARCHAR(20)   NOT NULL,
-    price                 DECIMAL(10,2) NOT NULL,
-    status                VARCHAR(20)   NOT NULL DEFAULT 'AVAILABLE',
-    reserved_at           TIMESTAMP,
-    reserved_expires_at   TIMESTAMP,
-    CONSTRAINT uq_showtime_seat UNIQUE (showtime_id, seat_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_showtime_seat_showtime ON showtime_seat(showtime_id);
-CREATE INDEX IF NOT EXISTS idx_showtime_seat_status   ON showtime_seat(showtime_id, status);
+\c booking_db;
 
 CREATE TABLE IF NOT EXISTS booking (
     booking_id        VARCHAR(36)   PRIMARY KEY,
