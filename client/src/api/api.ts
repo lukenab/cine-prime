@@ -19,8 +19,19 @@ axiosClient.interceptors.request.use(
 );
 
 axiosClient.interceptors.response.use(
-  (response) => response.data, 
-  (error) => Promise.reject(error)
+  (response) => response.data,
+  (error) => {
+    if (error?.response?.status === 401) {
+      const url: string = error.config?.url ?? "";
+      const isPublicAuthCall = ["auth/login", "auth/register", "auth/resend"].some((s) => url.includes(s));
+      if (!isPublicAuthCall) {
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("role");
+        window.location.href = "/login";
+      }
+    }
+    return Promise.reject(error);
+  }
 );
 
 export default axiosClient;

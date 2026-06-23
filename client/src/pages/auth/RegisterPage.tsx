@@ -152,6 +152,7 @@ export default function RegisterPage() {
     loading,
     resendLoading,
     resendMessage,
+    countdown,
     errors,
     generalError,
     form,
@@ -436,14 +437,20 @@ export default function RegisterPage() {
             </button>
             <div style={{ marginTop: "12px", display: "flex", justifyContent: "center", alignItems: "center", gap: "12px" }}>
               <span style={{ color: "rgba(255,255,255,0.45)", fontSize: "14px" }}>Didn't receive the code?</span>
-              <button
-                type="button"
-                onClick={handleResendOtp}
-                disabled={resendLoading}
-                style={{ background: "none", border: "none", color: "#FFD700", cursor: resendLoading ? "not-allowed" : "pointer", fontWeight: 700 }}
-              >
-                {resendLoading ? "Sending..." : "Resend code"}
-              </button>
+              {countdown > 0 ? (
+                <span style={{ color: "rgba(255,215,0,0.5)", fontSize: "14px", fontWeight: 700 }}>
+                  Resend in {countdown}s
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={resendLoading}
+                  style={{ background: "none", border: "none", color: "#FFD700", cursor: resendLoading ? "not-allowed" : "pointer", fontWeight: 700, fontSize: "14px", padding: 0 }}
+                >
+                  {resendLoading ? "Sending..." : "Resend code"}
+                </button>
+              )}
             </div>
             {resendMessage && <div style={{ marginTop: "12px", textAlign: "center", color: "rgba(255,255,255,0.8)", fontSize: "13px" }}>{resendMessage}</div>}
           </form>
