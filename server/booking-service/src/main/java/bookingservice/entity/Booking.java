@@ -4,7 +4,6 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -12,32 +11,28 @@ import java.time.LocalTime;
 import java.util.List;
 
 @Entity
-@Table(name = "booking", indexes = {
-    @Index(name = "idx_booking_account",  columnList = "account_id"),
-    @Index(name = "idx_booking_member",   columnList = "member_id"),
-    @Index(name = "idx_booking_showtime", columnList = "showtime_id"),
-    @Index(name = "idx_booking_status",   columnList = "status"),
-})
+@Table(name = "booking")
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor
 @Builder
 public class Booking {
 
     @Id
-    @Column(name = "booking_id", length = 36)
-    private String bookingId;                   // UUID, sinh trong service
+    @Column(name = "booking_id", length = 50)
+    private String bookingId;
 
-    @Column(name = "account_id", nullable = false, length = 36)
-    private String accountId;                   // ref auth_db.account
+    // --- PLAIN FIELDS (Không map quan hệ ra ngoài service) ---
+    @Column(name = "account_id", length = 50)
+    private String accountId;
 
-    @Column(name = "member_id", length = 10)
-    private String memberId;                    // nullable — khách vãng lai
+    @Column(name = "member_id", length = 50)
+    private String memberId;
 
-    @Column(name = "showtime_id", nullable = false)
-    private Long showtimeId;                    // ref movie_db.show_time
+    @Column(name = "showtime_id")
+    private Long showtimeId;
+    // ---------------------------------------------------------
 
-    // ── Snapshot lịch chiếu ──────────────────────────────────
-    @Column(name = "movie_name", length = 255)
+    @Column(name = "movie_name")
     private String movieName;
 
     @Column(name = "show_date")
@@ -46,39 +41,32 @@ public class Booking {
     @Column(name = "start_time")
     private LocalTime startTime;
 
-    @Column(name = "cinema_room_name", length = 100)
+    @Column(name = "cinema_room_name")
     private String cinemaRoomName;
 
-    // ── Tài chính ────────────────────────────────────────────
-    @Column(name = "total_amount", nullable = false, precision = 10, scale = 2)
+    @Column(name = "total_amount", precision = 12, scale = 2)
     private BigDecimal totalAmount;
 
-    @Column(name = "points_used", nullable = false)
-    @Builder.Default
-    private Integer pointsUsed = 0;
+    @Column(name = "points_used")
+    private Integer pointsUsed;
 
-    @Column(name = "points_discount", nullable = false, precision = 10, scale = 2)
-    @Builder.Default
-    private BigDecimal pointsDiscount = BigDecimal.ZERO;
+    @Column(name = "points_discount", precision = 12, scale = 2)
+    private BigDecimal pointsDiscount;
 
-    @Column(name = "final_amount", nullable = false, precision = 10, scale = 2)
+    @Column(name = "final_amount", precision = 12, scale = 2)
     private BigDecimal finalAmount;
 
-    // ── Metadata ─────────────────────────────────────────────
-    @Enumerated(EnumType.STRING)
-    @Column(name = "booking_type", nullable = false, length = 20)
-    private BookingType bookingType;            // ONLINE | COUNTER
+    @Column(name = "booking_type")
+    private String bookingType;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
-    @Builder.Default
-    private BookingStatus status = BookingStatus.PENDING;
+    @Column(name = "status", length = 20)
+    private String status;
 
-    @Column(name = "created_by", length = 36)
+    @Column(name = "created_by")
     private String createdBy;
 
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
     @UpdateTimestamp
@@ -86,22 +74,12 @@ public class Booking {
     private LocalDateTime updatedAt;
 
     @Column(name = "expires_at")
-    private LocalDateTime expiresAt;            // PENDING tự hủy nếu quá thời hạn
+    private LocalDateTime expiresAt;
 
-    // ── Quan hệ ──────────────────────────────────────────────
-    @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<BookingDetail> details;
+    // QUAN HỆ NỘI BỘ TRONG SERVICE
+    @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<BookingItem> bookingDetails;
 
-    @OneToMany(mappedBy = "booking", fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL)
     private List<Ticket> tickets;
-
-    // ── Enum inner ───────────────────────────────────────────
-    public enum BookingType  { ONLINE, COUNTER }
-    public enum BookingStatus {
-        PENDING,    // đang giữ ghế, chưa xác nhận
-        CONFIRMED,  // đã xác nhận tại quầy
-        CANCELLED,  // đã hủy
-        EXPIRED,    // quá 15 phút không xác nhận
-        CONVERTED   // đã phát hành ticket
-    }
 }
