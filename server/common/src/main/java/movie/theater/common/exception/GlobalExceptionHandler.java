@@ -22,12 +22,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(value = RuntimeException.class)
     ResponseEntity<ApiResponse<?>> handlingRuntimeException(RuntimeException exception){
-        exception.printStackTrace();
+        log.error("Unhandled exception: ", exception);
+        GlobalErrorCode errorCode = GlobalErrorCode.UNCATEGORIZED_EXCEPTION;
         ApiResponse<?> apiResponse = ApiResponse.builder()
-                .code(GlobalErrorCode.UNCATEGORIZED_EXCEPTION.getCode())
-                .message(GlobalErrorCode.UNCATEGORIZED_EXCEPTION.getMessage())
+                .code(errorCode.getCode())
+                .message(errorCode.getMessage())
                 .build();
-        return ResponseEntity.badRequest().body(apiResponse);
+        return ResponseEntity.status(errorCode.getStatusCode()).body(apiResponse);
     }
 
     @ExceptionHandler(value = AppException.class)
@@ -60,6 +61,7 @@ public class GlobalExceptionHandler {
             log.info(attributes.toString());
 
         } catch (IllegalArgumentException e) {
+            log.warn("Unrecognized validation message key: {}", enumKey);
         }
         ApiResponse<?> apiResponse = ApiResponse.builder()
                 .code(errorCode.getCode())

@@ -54,17 +54,12 @@ public class UserService {
         }
 
         if (userRepository.existsByPhoneNumber(event.getPhoneNumber())) {
-            log.error("Phone number {} already exists. Skipping event.", event.getPhoneNumber());
+            log.error("[DATA_INCONSISTENCY] Phone number {} already exists for accountId {}. Auth account created but profile skipped.", event.getPhoneNumber(), event.getAccountId());
             return;
         }
 
         if (userRepository.existsByIdentityCard(event.getIdentityCard())) {
-            log.error("Identity card {} already exists. Skipping event.", event.getIdentityCard());
-            return;
-        }
-
-        if (userRepository.existsByEmail(event.getEmail())) {
-            log.error("Email {} already exists. Skipping event.", event.getEmail());
+            log.error("[DATA_INCONSISTENCY] Identity card {} already exists for accountId {}. Auth account created but profile skipped.", event.getIdentityCard(), event.getAccountId());
             return;
         }
 

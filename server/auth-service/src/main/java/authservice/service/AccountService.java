@@ -122,7 +122,6 @@ public class AccountService {
                 .address(request.getAddress())
                 .gender(request.getGender())
                 .dateOfBirth(request.getDateOfBirth())
-                .email(emailKey)
                 .identityCard(request.getIdentityCard())
                 .build();
 

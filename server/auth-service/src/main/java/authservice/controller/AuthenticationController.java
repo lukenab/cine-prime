@@ -22,6 +22,14 @@ import java.text.ParseException;
 public class AuthenticationController {
     AuthenticationService authenticationService;
 
+    @GetMapping("/check")
+    ApiResponse<Void> checkFieldAvailability(
+            @RequestParam(required = false) String username,
+            @RequestParam(required = false) String email) {
+        authenticationService.checkFieldAvailability(username, email);
+        return ApiResponse.<Void>builder().message("Available").build();
+    }
+
     @PostMapping("/register/initiate")
     ApiResponse<String> initiateRegistration(@Valid @RequestBody RegisterRequest request) {
         authenticationService.initiateRegistration(request);
@@ -61,7 +69,7 @@ public class AuthenticationController {
     }
 
     @PostMapping("/introspect")
-    public ApiResponse<IntrospectResponse> introspect(@RequestBody IntrospectRequest request) throws ParseException, JOSEException {
+    public ApiResponse<IntrospectResponse> introspect(@RequestBody IntrospectRequest request) {
         return ApiResponse.<IntrospectResponse>builder()
                 .result(authenticationService.introspect(request))
                 .build();

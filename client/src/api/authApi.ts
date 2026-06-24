@@ -10,6 +10,10 @@ export const authApi = {
         return axiosClient.post('api/auth/login', data);
     },
 
+    checkAvailability: (params: { username?: string; email?: string }) => {
+        return axiosClient.get('/api/auth/check', { params });
+    },
+
     initiateRegister: (payload: any) => {
         return axiosClient.post('/api/auth/register/initiate', payload);
     },

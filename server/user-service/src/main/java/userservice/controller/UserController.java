@@ -12,7 +12,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
-import java.util.Map;
+import userservice.dto.UserExistenceResponse;
 
 @RestController
 @RequiredArgsConstructor
@@ -54,14 +54,17 @@ public class UserController {
     }
 
     @GetMapping("/check-existence")
-    public ApiResponse<Map<String, Boolean>> checkExistence(
+    public ApiResponse<UserExistenceResponse> checkExistence(
             @RequestParam("phoneNumber") String phoneNumber,
             @RequestParam("identityCard") String identityCard) {
 
-        Map<String, Boolean> result = userService.checkUserExistence(phoneNumber, identityCard);
+        var result = userService.checkUserExistence(phoneNumber, identityCard);
 
-        return ApiResponse.<Map<String, Boolean>>builder()
-                .result(result)
+        return ApiResponse.<UserExistenceResponse>builder()
+                .result(UserExistenceResponse.builder()
+                        .phoneExists(Boolean.TRUE.equals(result.get("phoneExists")))
+                        .identityCardExists(Boolean.TRUE.equals(result.get("identityCardExists")))
+                        .build())
                 .build();
     }
 }
