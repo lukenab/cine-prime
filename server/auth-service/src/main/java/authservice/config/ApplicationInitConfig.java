@@ -27,10 +27,17 @@ public class ApplicationInitConfig {
     @Bean
     ApplicationRunner applicationRunner(){
         return args -> {
+            if(roleRepository.findById("USER").isEmpty()) {
+                roleRepository.save(Role.builder()
+                        .roleName("USER")
+                        .description("Default user role")
+                        .build());
+            }
+
             if(roleRepository.findById("ADMIN").isEmpty()) {
                 roleRepository.save(Role.builder()
-                                .roleName("ADMIN")
-                                .description("Administrator role")
+                        .roleName("ADMIN")
+                        .description("Administrator role")
                         .build());
             }
 

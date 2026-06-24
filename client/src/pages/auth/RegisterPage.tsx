@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Eye, EyeOff, ArrowLeft, Mail, CheckCircle } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { authApi } from "../../api/authApi.ts";
 import { useRegister } from "../../hooks/useRegister.ts";
+import { authApi } from "../../api/authApi.ts";
 
-// --- CÁC COMPONENT DÙNG CHUNG CỦA FORM ---
 function FormLabel({ children }: { children: React.ReactNode }) {
   return (
     <label
@@ -45,7 +44,11 @@ function FormInput({
 
   return (
     <div style={{ position: "relative" }}>
-      {error && <span style={{ color: "#FF4B4B", fontSize: "12px", display: "block", marginBottom: "6px", fontWeight: 500 }}>{error}</span>}
+      {error && (
+        <span style={{ color: "#FF4B4B", fontSize: "12px", display: "block", marginBottom: "6px", fontWeight: 500 }}>
+          {error}
+        </span>
+      )}
       <input
         type={type}
         name={name}
@@ -66,11 +69,25 @@ function FormInput({
           outline: "none",
           boxSizing: "border-box",
           transition: "border-color 0.2s ease, box-shadow 0.2s ease",
-          boxShadow: focused ? (error ? "0 0 0 3px rgba(255, 75, 75, 0.15)" : "0 0 0 3px rgba(255,215,0,0.12)") : "none",
+          boxShadow: focused
+            ? error
+              ? "0 0 0 3px rgba(255, 75, 75, 0.15)"
+              : "0 0 0 3px rgba(255,215,0,0.12)"
+            : "none",
         }}
       />
       {rightElement && (
-        <div style={{ position: "absolute", right: "14px", top: error ? "70%" : "50%", transform: "translateY(-50%)", transition: "top 0.2s ease" }}>{rightElement}</div>
+        <div
+          style={{
+            position: "absolute",
+            right: "14px",
+            top: error ? "70%" : "50%",
+            transform: "translateY(-50%)",
+            transition: "top 0.2s ease",
+          }}
+        >
+          {rightElement}
+        </div>
       )}
     </div>
   );
@@ -95,7 +112,11 @@ function FormSelect({
 
   return (
     <div>
-      {error && <span style={{ color: "#FF4B4B", fontSize: "12px", display: "block", marginBottom: "6px", fontWeight: 500 }}>{error}</span>}
+      {error && (
+        <span style={{ color: "#FF4B4B", fontSize: "12px", display: "block", marginBottom: "6px", fontWeight: 500 }}>
+          {error}
+        </span>
+      )}
       <select
         name={name}
         value={value}
@@ -115,7 +136,11 @@ function FormSelect({
           boxSizing: "border-box",
           cursor: "pointer",
           transition: "border-color 0.2s ease, box-shadow 0.2s ease",
-          boxShadow: focused ? (error ? "0 0 0 3px rgba(255, 75, 75, 0.15)" : "0 0 0 3px rgba(255,215,0,0.12)") : "none",
+          boxShadow: focused
+            ? error
+              ? "0 0 0 3px rgba(255, 75, 75, 0.15)"
+              : "0 0 0 3px rgba(255,215,0,0.12)"
+            : "none",
           appearance: "none",
           WebkitAppearance: "none",
           backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='rgba(255,255,255,0.4)' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
@@ -139,11 +164,77 @@ function FormSelect({
   );
 }
 
+function StepProgress({ current }: { current: 1 | 2 }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", marginBottom: "28px" }}>
+      <div
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: "50%",
+          background: "#FFD700",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "13px",
+          fontWeight: 800,
+          color: "#050505",
+          flexShrink: 0,
+        }}
+      >
+        1
+      </div>
+      <div
+        style={{
+          flex: 1,
+          height: 2,
+          background: current === 2 ? "#FFD700" : "rgba(255,255,255,0.08)",
+          margin: "0 10px",
+          transition: "background 0.4s ease",
+        }}
+      />
+      <div
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: "50%",
+          background: current === 2 ? "#FFD700" : "transparent",
+          border: `2px solid ${current === 2 ? "#FFD700" : "rgba(255,255,255,0.15)"}`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "13px",
+          fontWeight: 800,
+          color: current === 2 ? "#050505" : "rgba(255,255,255,0.3)",
+          flexShrink: 0,
+          transition: "all 0.3s ease",
+        }}
+      >
+        2
+      </div>
+    </div>
+  );
+}
+
+const submitButtonBase: React.CSSProperties = {
+  width: "100%",
+  color: "#050505",
+  border: "none",
+  borderRadius: "9999px",
+  padding: "14px",
+  fontSize: "15px",
+  fontWeight: 700,
+  fontFamily: "Inter, sans-serif",
+  letterSpacing: "0.02em",
+  transition: "transform 0.15s ease, box-shadow 0.15s ease",
+};
+
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
+  const [formPage, setFormPage] = useState<1 | 2>(1);
+  const [localErrors, setLocalErrors] = useState<Record<string, string>>({});
   const navigate = useNavigate();
 
-  // Gọi hook và lấy ra những thứ cần thiết
   const {
     step,
     setStep,
@@ -162,155 +253,164 @@ export default function RegisterPage() {
     handleResendOtp,
   } = useRegister();
 
+  // Backend field errors for account-info fields while on page 2 → go back to page 1
+  useEffect(() => {
+    if (formPage === 2 && (errors.fullName || errors.username || errors.email || errors.password)) {
+      setFormPage(1);
+    }
+  }, [errors, formPage]);
+
+  const handleChangeWrapped = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    handleChange(e);
+    setLocalErrors((prev) => ({ ...prev, [e.target.name]: "" }));
+  };
+
+  const [nextLoading, setNextLoading] = useState(false);
+
+  const handleNextPage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const errs: Record<string, string> = {};
+    if (!form.fullName.trim()) errs.fullName = "Full name is required";
+    if (!form.username.trim()) errs.username = "Username is required";
+    if (!form.email.trim()) errs.email = "Email is required";
+    if (!form.password.trim()) errs.password = "Password is required";
+    setLocalErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
+    setNextLoading(true);
+    try {
+      await authApi.checkAvailability({ username: form.username, email: form.email });
+      setFormPage(2);
+    } catch (error: any) {
+      const message = error.response?.data?.message || "";
+      const low = message.toLowerCase();
+      if (low.includes("username")) {
+        setLocalErrors((prev) => ({ ...prev, username: message }));
+      } else if (low.includes("email")) {
+        setLocalErrors((prev) => ({ ...prev, email: message }));
+      }
+    } finally {
+      setNextLoading(false);
+    }
+  };
+
   return (
     <>
-      {step === 1 && (
+      {/* ── Step 1A: Account Info ── */}
+      {step === 1 && formPage === 1 && (
         <>
-          <h2 style={{ color: "#ffffff", fontSize: "28px", fontWeight: 700, marginBottom: "6px", letterSpacing: "-0.01em" }}>Create an account</h2>
-          <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px", marginBottom: "32px", lineHeight: 1.5 }}>
+          <h2
+            style={{
+              color: "#ffffff",
+              fontSize: "26px",
+              fontWeight: 700,
+              marginBottom: "6px",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            Create account
+          </h2>
+          <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px", marginBottom: "24px", lineHeight: 1.5 }}>
             Join CinePrime to book seats and manage your watchlist.
           </p>
 
-          <form onSubmit={handleInitiate}>
-            {generalError && (
-              <div
-                style={{
-                  background: "rgba(255, 75, 75, 0.1)",
-                  border: "1px solid rgba(255, 75, 75, 0.3)",
-                  borderRadius: "10px",
-                  padding: "12px 16px",
-                  color: "#FF4B4B",
-                  fontSize: "13px",
-                  fontWeight: 500,
-                  marginBottom: "20px",
-                  lineHeight: 1.4,
-                }}
-              >
-                {generalError}
-              </div>
-            )}
+          <StepProgress current={1} />
 
-            <div style={{ marginBottom: "18px" }}>
+          <form onSubmit={handleNextPage}>
+            <div style={{ marginBottom: "16px" }}>
               <FormLabel>Full Name</FormLabel>
-              <FormInput name="fullName" placeholder="e.g. Alex Johnson" value={form.fullName} onChange={handleChange} error={errors.fullName} />
+              <FormInput
+                name="fullName"
+                placeholder="e.g. Alex Johnson"
+                value={form.fullName}
+                onChange={handleChangeWrapped}
+                error={localErrors.fullName || errors.fullName}
+              />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "18px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" }}>
               <div>
                 <FormLabel>Username</FormLabel>
-                <FormInput name="username" placeholder="@yourname" value={form.username} onChange={handleChange} error={errors.username} />
+                <FormInput
+                  name="username"
+                  placeholder="@yourname"
+                  value={form.username}
+                  onChange={handleChangeWrapped}
+                  error={localErrors.username || errors.username}
+                />
               </div>
               <div>
                 <FormLabel>Email Address</FormLabel>
-                <FormInput type="email" name="email" placeholder="you@email.com" value={form.email} onChange={handleChange} error={errors.email} />
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "18px" }}>
-              <div>
-                <FormLabel>Password</FormLabel>
                 <FormInput
-                  type={showPassword ? "text" : "password"}
-                  name="password"
-                  placeholder="Min. 8 characters"
-                  value={form.password}
-                  onChange={handleChange}
-                  error={errors.password}
-                  rightElement={
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((v) => !v)}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        padding: 0,
-                        color: "rgba(255,255,255,0.35)",
-                        display: "flex",
-                        alignItems: "center",
-                      }}
-                    >
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  }
-                />
-              </div>
-              <div>
-                <FormLabel>Phone Number</FormLabel>
-                <FormInput type="tel" name="phone" placeholder="0901234567" value={form.phone} onChange={handleChange} error={errors.phone} />
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "18px" }}>
-              <div>
-                <FormLabel>Date of Birth</FormLabel>
-                <FormInput type="date" name="dob" placeholder="" value={form.dob} onChange={handleChange} error={errors.dob} />
-              </div>
-              <div>
-                <FormLabel>Gender</FormLabel>
-                <FormSelect
-                  name="gender"
-                  value={form.gender}
-                  onChange={handleChange}
-                  placeholder="Select gender"
-                  error={errors.gender}
-                  options={[
-                    { value: "Male", label: "Male" },
-                    { value: "Female", label: "Female" },
-                    { value: "Other", label: "Other" },
-                  ]}
+                  type="email"
+                  name="email"
+                  placeholder="you@email.com"
+                  value={form.email}
+                  onChange={handleChangeWrapped}
+                  error={localErrors.email || errors.email}
                 />
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "28px" }}>
-              <div>
-                <FormLabel>Identity Card</FormLabel>
-                <FormInput name="identityCard" placeholder="Exactly 12 digits" value={form.identityCard} onChange={handleChange} error={errors.identityCard} />
-              </div>
-              <div>
-                <FormLabel>Address</FormLabel>
-                <FormInput name="address" placeholder="City, Country" value={form.address} onChange={handleChange} error={errors.address} />
-              </div>
+            <div style={{ marginBottom: "28px" }}>
+              <FormLabel>Password</FormLabel>
+              <FormInput
+                type={showPassword ? "text" : "password"}
+                name="password"
+                placeholder="Min. 8 characters"
+                value={form.password}
+                onChange={handleChangeWrapped}
+                error={localErrors.password || errors.password}
+                rightElement={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      padding: 0,
+                      color: "rgba(255,255,255,0.35)",
+                      display: "flex",
+                      alignItems: "center",
+                    }}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                }
+              />
             </div>
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={nextLoading}
               style={{
-                width: "100%",
-                background: loading ? "rgba(255,215,0,0.5)" : "#FFD700",
-                color: "#050505",
-                border: "none",
-                borderRadius: "9999px",
-                padding: "14px",
-                fontSize: "15px",
-                fontWeight: 700,
-                fontFamily: "Inter, sans-serif",
-                letterSpacing: "0.02em",
-                cursor: loading ? "not-allowed" : "pointer",
-                boxShadow: loading ? "none" : "0 4px 24px rgba(255,215,0,0.35), 0 2px 8px rgba(255,215,0,0.2)",
-                transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                ...submitButtonBase,
+                background: nextLoading ? "rgba(255,215,0,0.5)" : "#FFD700",
+                cursor: nextLoading ? "not-allowed" : "pointer",
+                boxShadow: nextLoading ? "none" : "0 4px 24px rgba(255,215,0,0.35), 0 2px 8px rgba(255,215,0,0.2)",
               }}
               onMouseEnter={(e) => {
-                if (!loading) {
+                if (!nextLoading) {
                   e.currentTarget.style.transform = "translateY(-1px)";
                   e.currentTarget.style.boxShadow = "0 6px 32px rgba(255,215,0,0.45), 0 2px 12px rgba(255,215,0,0.3)";
                 }
               }}
               onMouseLeave={(e) => {
-                if (!loading) {
+                if (!nextLoading) {
                   e.currentTarget.style.transform = "translateY(0)";
                   e.currentTarget.style.boxShadow = "0 4px 24px rgba(255,215,0,0.35), 0 2px 8px rgba(255,215,0,0.2)";
                 }
               }}
             >
-              {loading ? "Sending Code..." : "Continue"}
+              {nextLoading ? "Checking..." : "Next →"}
             </button>
 
             <div style={{ display: "flex", alignItems: "center", gap: "12px", margin: "22px 0" }}>
               <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.08)" }} />
-              <span style={{ color: "rgba(255,255,255,0.3)", fontSize: "12px", fontWeight: 500, letterSpacing: "0.05em" }}>or</span>
+              <span style={{ color: "rgba(255,255,255,0.3)", fontSize: "12px", fontWeight: 500, letterSpacing: "0.05em" }}>
+                or
+              </span>
               <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.08)" }} />
             </div>
 
@@ -329,6 +429,150 @@ export default function RegisterPage() {
         </>
       )}
 
+      {/* ── Step 1B: Personal Details ── */}
+      {step === 1 && formPage === 2 && (
+        <>
+          <button
+            onClick={() => setFormPage(1)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "rgba(255,255,255,0.5)",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              cursor: "pointer",
+              marginBottom: "20px",
+              padding: 0,
+              fontSize: "14px",
+              fontFamily: "Inter, sans-serif",
+            }}
+          >
+            <ArrowLeft size={16} /> Back
+          </button>
+
+          <h2
+            style={{
+              color: "#ffffff",
+              fontSize: "26px",
+              fontWeight: 700,
+              marginBottom: "6px",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            Personal details
+          </h2>
+          <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px", marginBottom: "24px" }}>
+            Almost there — just a few more details.
+          </p>
+
+          <StepProgress current={2} />
+
+          <form onSubmit={handleInitiate}>
+            {generalError && (
+              <div
+                style={{
+                  background: "rgba(255, 75, 75, 0.1)",
+                  border: "1px solid rgba(255, 75, 75, 0.3)",
+                  borderRadius: "10px",
+                  padding: "12px 16px",
+                  color: "#FF4B4B",
+                  fontSize: "13px",
+                  fontWeight: 500,
+                  marginBottom: "16px",
+                  lineHeight: 1.4,
+                }}
+              >
+                {generalError}
+              </div>
+            )}
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" }}>
+              <div>
+                <FormLabel>Phone Number</FormLabel>
+                <FormInput
+                  type="tel"
+                  name="phone"
+                  placeholder="0901234567"
+                  value={form.phone}
+                  onChange={handleChange}
+                  error={errors.phone}
+                />
+              </div>
+              <div>
+                <FormLabel>Date of Birth</FormLabel>
+                <FormInput type="date" name="dob" value={form.dob} onChange={handleChange} error={errors.dob} />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" }}>
+              <div>
+                <FormLabel>Gender</FormLabel>
+                <FormSelect
+                  name="gender"
+                  value={form.gender}
+                  onChange={handleChange}
+                  placeholder="Select gender"
+                  error={errors.gender}
+                  options={[
+                    { value: "Male", label: "Male" },
+                    { value: "Female", label: "Female" },
+                    { value: "Other", label: "Other" },
+                  ]}
+                />
+              </div>
+              <div>
+                <FormLabel>Identity Card</FormLabel>
+                <FormInput
+                  name="identityCard"
+                  placeholder="Exactly 12 digits"
+                  value={form.identityCard}
+                  onChange={handleChange}
+                  error={errors.identityCard}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: "28px" }}>
+              <FormLabel>Address</FormLabel>
+              <FormInput
+                name="address"
+                placeholder="City, Country"
+                value={form.address}
+                onChange={handleChange}
+                error={errors.address}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                ...submitButtonBase,
+                background: loading ? "rgba(255,215,0,0.5)" : "#FFD700",
+                cursor: loading ? "not-allowed" : "pointer",
+                boxShadow: loading ? "none" : "0 4px 24px rgba(255,215,0,0.35), 0 2px 8px rgba(255,215,0,0.2)",
+              }}
+              onMouseEnter={(e) => {
+                if (!loading) {
+                  e.currentTarget.style.transform = "translateY(-1px)";
+                  e.currentTarget.style.boxShadow = "0 6px 32px rgba(255,215,0,0.45), 0 2px 12px rgba(255,215,0,0.3)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!loading) {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 4px 24px rgba(255,215,0,0.35), 0 2px 8px rgba(255,215,0,0.2)";
+                }
+              }}
+            >
+              {loading ? "Sending Code..." : "Continue"}
+            </button>
+          </form>
+        </>
+      )}
+
+      {/* ── Step 2: OTP Verification ── */}
       {step === 2 && (
         <div style={{ animation: "popIn 0.4s cubic-bezier(0.16, 1, 0.3, 1)" }}>
           <button
@@ -366,8 +610,18 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          <h2 style={{ color: "#ffffff", fontSize: "28px", fontWeight: 700, marginBottom: "8px", textAlign: "center" }}>Verify your email</h2>
-          <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px", marginBottom: "32px", textAlign: "center", lineHeight: 1.5 }}>
+          <h2 style={{ color: "#ffffff", fontSize: "28px", fontWeight: 700, marginBottom: "8px", textAlign: "center" }}>
+            Verify your email
+          </h2>
+          <p
+            style={{
+              color: "rgba(255,255,255,0.4)",
+              fontSize: "14px",
+              marginBottom: "32px",
+              textAlign: "center",
+              lineHeight: 1.5,
+            }}
+          >
             We've sent a 6-digit code to <br />
             <strong style={{ color: "white" }}>{form.email}</strong>
           </p>
@@ -410,6 +664,7 @@ export default function RegisterPage() {
                   outline: "none",
                   fontFamily: "Inter, sans-serif",
                   fontWeight: 600,
+                  boxSizing: "border-box",
                 }}
                 onFocus={(e) => (e.target.style.borderColor = "#FFD700")}
                 onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}
@@ -420,22 +675,24 @@ export default function RegisterPage() {
               type="submit"
               disabled={loading}
               style={{
-                width: "100%",
+                ...submitButtonBase,
                 background: loading ? "rgba(255,215,0,0.5)" : "#FFD700",
-                color: "#050505",
-                border: "none",
-                borderRadius: "9999px",
-                padding: "14px",
-                fontSize: "15px",
-                fontWeight: 700,
-                fontFamily: "Inter, sans-serif",
                 cursor: loading ? "not-allowed" : "pointer",
                 boxShadow: loading ? "none" : "0 4px 24px rgba(255,215,0,0.35)",
               }}
             >
               {loading ? "Verifying..." : "Verify & Create Account"}
             </button>
-            <div style={{ marginTop: "12px", display: "flex", justifyContent: "center", alignItems: "center", gap: "12px" }}>
+
+            <div
+              style={{
+                marginTop: "12px",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: "12px",
+              }}
+            >
               <span style={{ color: "rgba(255,255,255,0.45)", fontSize: "14px" }}>Didn't receive the code?</span>
               {countdown > 0 ? (
                 <span style={{ color: "rgba(255,215,0,0.5)", fontSize: "14px", fontWeight: 700 }}>
@@ -446,17 +703,33 @@ export default function RegisterPage() {
                   type="button"
                   onClick={handleResendOtp}
                   disabled={resendLoading}
-                  style={{ background: "none", border: "none", color: "#FFD700", cursor: resendLoading ? "not-allowed" : "pointer", fontWeight: 700, fontSize: "14px", padding: 0 }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#FFD700",
+                    cursor: resendLoading ? "not-allowed" : "pointer",
+                    fontWeight: 700,
+                    fontSize: "14px",
+                    padding: 0,
+                  }}
                 >
                   {resendLoading ? "Sending..." : "Resend code"}
                 </button>
               )}
             </div>
-            {resendMessage && <div style={{ marginTop: "12px", textAlign: "center", color: "rgba(255,255,255,0.8)", fontSize: "13px" }}>{resendMessage}</div>}
+
+            {resendMessage && (
+              <div
+                style={{ marginTop: "12px", textAlign: "center", color: "rgba(255,255,255,0.8)", fontSize: "13px" }}
+              >
+                {resendMessage}
+              </div>
+            )}
           </form>
         </div>
       )}
 
+      {/* ── Step 3: Success ── */}
       {step === 3 && (
         <div
           style={{
@@ -468,13 +741,38 @@ export default function RegisterPage() {
             padding: "20px 0",
           }}
         >
-          <div style={{ marginBottom: "24px", padding: "20px", background: "rgba(255, 215, 0, 0.08)", borderRadius: "50%" }}>
+          <div
+            style={{
+              marginBottom: "24px",
+              padding: "20px",
+              background: "rgba(255, 215, 0, 0.08)",
+              borderRadius: "50%",
+            }}
+          >
             <CheckCircle size={72} color="#FFD700" strokeWidth={1.5} />
           </div>
 
-          <h2 style={{ color: "#ffffff", fontSize: "32px", fontWeight: 800, marginBottom: "12px", letterSpacing: "-0.02em" }}>Welcome to CinePrime!</h2>
+          <h2
+            style={{
+              color: "#ffffff",
+              fontSize: "32px",
+              fontWeight: 800,
+              marginBottom: "12px",
+              letterSpacing: "-0.02em",
+            }}
+          >
+            Welcome to CinePrime!
+          </h2>
 
-          <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "15px", marginBottom: "40px", lineHeight: 1.6, maxWidth: "340px" }}>
+          <p
+            style={{
+              color: "rgba(255,255,255,0.5)",
+              fontSize: "15px",
+              marginBottom: "40px",
+              lineHeight: 1.6,
+              maxWidth: "340px",
+            }}
+          >
             Your account has been successfully created. Get ready to experience cinema like never before.
           </p>
 

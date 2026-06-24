@@ -24,6 +24,7 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(request -> request
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/users/check-existence").permitAll()
                         .anyRequest().authenticated()
                 );
 
