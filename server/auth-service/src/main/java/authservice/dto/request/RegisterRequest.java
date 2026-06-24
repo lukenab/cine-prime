@@ -38,7 +38,7 @@ public class RegisterRequest {
     @Pattern(regexp = "^(0[3|5|7|8|9])+([0-9]{8})$", message = "Invalid phone number format!")
     String phoneNumber;
 
-    @DobConstraint(min = 2)
+    @DobConstraint(min = 18, message = "INVALID_AGE")
     LocalDate dateOfBirth;
 
     @NotBlank(message = "Gender cannot be blank!")

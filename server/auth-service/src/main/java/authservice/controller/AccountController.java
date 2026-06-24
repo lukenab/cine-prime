@@ -1,6 +1,7 @@
 package authservice.controller;
 
 import authservice.dto.request.AccountUpdateRequest;
+import authservice.dto.request.LogoutRequest;
 import authservice.dto.request.RegisterRequest;
 import authservice.dto.response.AccountResponse;
 import authservice.entity.Account;
