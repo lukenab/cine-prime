@@ -1,18 +1,19 @@
 package authservice.controller;
 
-import authservice.dto.request.AuthenticationRequest;
-import authservice.dto.request.RegisterRequest;
-import authservice.dto.request.ResendOtpRequest;
-import authservice.dto.request.VerifyOtpRequest;
+import authservice.dto.request.*;
 import authservice.dto.response.AuthenticationResponse;
 import authservice.dto.response.AccountResponse;
+import authservice.dto.response.IntrospectResponse;
 import authservice.service.AuthenticationService;
+import com.nimbusds.jose.JOSEException;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import movie.theater.common.dto.ApiResponse;
 import org.springframework.web.bind.annotation.*;
+
+import java.text.ParseException;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -48,6 +49,28 @@ public class AuthenticationController {
         authenticationService.resendOtp(request);
         return ApiResponse.builder()
                 .message("New otp has been sent to your email!")
+                .build();
+    }
+
+    @PostMapping("/logout")
+    ApiResponse<Void> logout(@RequestBody LogoutRequest request) throws ParseException, JOSEException {
+        authenticationService.logout(request);
+        return ApiResponse.<Void>builder()
+                .message("Logged out successfully")
+                .build();
+    }
+
+    @PostMapping("/introspect")
+    public ApiResponse<IntrospectResponse> introspect(@RequestBody IntrospectRequest request) throws ParseException, JOSEException {
+        return ApiResponse.<IntrospectResponse>builder()
+                .result(authenticationService.introspect(request))
+                .build();
+    }
+
+    @PostMapping("/refresh")
+    public ApiResponse<AuthenticationResponse> refreshToken(@RequestBody RefreshRequest request) throws ParseException, JOSEException {
+        return ApiResponse.<AuthenticationResponse>builder()
+                .result(authenticationService.refreshToken(request))
                 .build();
     }
 }
