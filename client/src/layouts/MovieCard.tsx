@@ -104,6 +104,7 @@ export function MovieCard({ movie }: MovieCardProps) {
         style={{ backdropFilter: "blur(0px)" }}
       >
         <button
+          onClick={() => window.open("http://localhost:3001", "_blank")}
           className="flex items-center gap-2 px-5 py-2.5 rounded-full"
           style={{
             background: "linear-gradient(135deg, #FFD700, #FFA500)",

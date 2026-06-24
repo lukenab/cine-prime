@@ -89,6 +89,7 @@ export function HeroSection() {
         {/* CTA buttons */}
         <div className="flex flex-wrap gap-4 justify-center" style={{ marginTop: "8px" }}>
           <button
+            onClick={() => window.open("http://localhost:3001", "_blank")}
             className="flex items-center gap-3 px-8 py-4 rounded-full transition-all duration-300 hover:scale-105 hover:shadow-2xl"
             style={{
               background: "linear-gradient(135deg, #FFD700, #FFA500)",

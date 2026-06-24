@@ -9,6 +9,15 @@ services:
     networks:
       - cinema-network
 
+  admin-client:
+    build: ./admin-client
+    container_name: admin-client
+    ports:
+      - "3001:3001" 
+    tty: true
+    networks:
+      - cinema-network
+
   # ===== MICROSERVICES DISCOVERY SERVER =====
   discovery-server:
     build: ./server/discovery-server
