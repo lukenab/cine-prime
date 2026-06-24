@@ -9,6 +9,7 @@ import org.mapstruct.Named;
 import org.mapstruct.MappingTarget;
 import movieservice.dto.request.CinemaRoomRequest;
 import movieservice.dto.request.CreateMovieRequest;
+import movieservice.dto.request.SeatRequest;
 import movieservice.dto.request.TypeRequest;
 import movieservice.dto.response.CinemaRoomResponse;
 import movieservice.dto.request.UpdateMovieRequest;
@@ -17,11 +18,11 @@ import movieservice.dto.response.TypeMovieResponse;
 import movieservice.entity.CinemaRoom;
 import movieservice.entity.Movie;
 import movieservice.entity.MovieType;
+import movieservice.entity.Seat;
 
 @Mapper(componentModel = "spring")
 public interface MovieMapper {
     Movie toMovie(CreateMovieRequest request);
-    // cái này nảy tui sửa k đc, có s phía cuối hong, k bt nữa
     void updateMovieFromRequest(UpdateMovieRequest request, @MappingTarget Movie movie);
 
     @Mapping(target = "movieType", source = "movieTypes", qualifiedByName = "mapTypesToGenreNames")
@@ -36,7 +37,7 @@ public interface MovieMapper {
     MovieType toType(TypeRequest typeRequest);
     TypeMovieResponse toMovieResponse(MovieType typeMovie);
     List<TypeMovieResponse> toTypeResponseList(List<MovieType> movieTypes);
-    // ông coi cái hàm dưới đây để gì v
+    Seat toSeat(SeatRequest request);
     @Named("mapTypesToGenreNames")
     default List<String> mapTypesToGenreNames(List<MovieType> types) {
         if (types == null) {

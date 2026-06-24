@@ -9,22 +9,25 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.experimental.FieldDefaults;
 
 @Getter
 @Setter
 @Entity
 @Table(name = "type")
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class MovieType {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "type_id")
-    private Long typeId;
+    Long typeId;
 
     @Column(name = "type_name", length = 255)
-    private String typeName;
+    String typeName;
 
     @ManyToMany(mappedBy = "movieTypes")
-    private List<Movie> movies;
+    List<Movie> movies;
 }

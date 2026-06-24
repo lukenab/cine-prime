@@ -1,40 +1,43 @@
 package movieservice.dto.response;
 
+import lombok.AccessLevel;
 import lombok.Data;
+import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class MovieResponse {
 
-    private Long movieId;
+    Long movieId;
 
-    private String actor;
+    String actor;
 
-    private String content;
+    String content;
 
-    private String director;
+    String director;
 
-    private Integer duration;
+    Integer duration;
 
-    private String movieProductionCompany;
+    String movieProductionCompany;
 
-    private String version;
+    String version;
 
-    private String movieNameEnglish;
+    String movieNameEnglish;
 
-    private String movieNameVn;
+    String movieNameVn;
 
-    private String largeImage;
+    String largeImage;
 
-    private String smallImage;
+    String smallImage;
 
-    private Boolean status;
+    Boolean status;
 
-    private List<String> movieType;
+    List<String> movieType;
 
-    private List<ShowTimeResponse> showTimes;
+    List<ShowTimeResponse> showTimes;
 
-    private LocalDateTime createAt;
+    LocalDateTime createAt;
 }

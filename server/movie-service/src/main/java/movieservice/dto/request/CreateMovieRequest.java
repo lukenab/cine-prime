@@ -2,54 +2,55 @@ package movieservice.dto.request;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
+import lombok.AccessLevel;
 import lombok.Data;
+import lombok.experimental.FieldDefaults;
+
 import java.util.List;
 
-import io.swagger.v3.oas.annotations.media.Schema;
-import movieservice.constant.ApiConstants;
-
 @Data
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class CreateMovieRequest {
 
     @NotBlank(message = "Vietnamese movie name cannot be blank")
     @Size(max = 255, message = "Vietnamese movie name must not exceed 255 characters")
-    private String movieNameVn;
+    String movieNameVn;
 
     @NotBlank(message = "English movie name cannot be blank")
     @Size(max = 255, message = "English movie name must not exceed 255 characters")
-    private String movieNameEnglish;
+    String movieNameEnglish;
 
     @NotBlank(message = "Director cannot be blank")
-    private String director;
+    String director;
 
     @NotBlank(message = "Actors cannot be blank")
-    private String actor;
+    String actor;
 
     @NotNull(message = "Duration cannot be null")
-    private Integer duration;
+    Integer duration;
 
     @NotBlank(message = "Content cannot be blank")
-    private String content;
+    String content;
 
     @NotBlank(message = "Version cannot be blank")
-    private String version;
+    String version;
 
     @NotNull(message = "Status cannot be null")
-    private Boolean status;
+    Boolean status;
 
     @NotBlank(message = "Movie production company cannot be blank")
-    private String movieProductionCompany;
+    String movieProductionCompany;
 
     @NotBlank(message = "Large image URL must not be blank")
-    private String largeImage;
+    String largeImage;
 
     @NotBlank(message = "Small image URL must not be blank")
-    private String smallImage;
+    String smallImage;
 
     @NotEmpty(message = "At least one type ID must be selected")
-    private List<Long> typeIds;
+    List<Long> typeIds;
 
     @Valid
     @NotEmpty(message = "Show times list must not be empty")
-    private List<ShowTimeRequest> showTimes;
+    List<ShowTimeRequest> showTimes;
 }

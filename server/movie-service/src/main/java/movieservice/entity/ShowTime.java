@@ -15,36 +15,39 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.experimental.FieldDefaults;
 
 @Getter
 @Setter
 @Entity
 @Table(name = "show_time")
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class ShowTime {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "showtime_id")
-    private Long showTimeId;
+    Long showTimeId;
 
     @Column(name = "show_date")
-    private LocalDate showDate;
+    LocalDate showDate;
 
     @Column(name = "start_time")
-    private LocalTime startTime;
+    LocalTime startTime;
 
     @Column(name = "end_time")
-    private LocalTime endTime;
+    LocalTime endTime;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "movie_id")
     @JsonBackReference
-    private Movie movie;
-    private LocalDateTime updateAt;
+    Movie movie;
+    LocalDateTime updateAt;
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cinema_room_id")
     @JsonBackReference
-    private CinemaRoom cinemaRoom;
+    CinemaRoom cinemaRoom;
 }
