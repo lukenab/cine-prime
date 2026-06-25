@@ -2,6 +2,17 @@ import { useAuth } from "../context/AuthContext";
 import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, Users, BarChart2, Settings, Clapperboard, LogOut } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 
+const roleLabels: Record<string, string> = {
+  ROLE_ADMIN: "Admin",
+  ROLE_EMPLOYEE: "Employee",
+  ROLE_MEMBER: "Member",
+  ROLE_USER: "User",
+};
+
+function getInitials(username: string): string {
+  return username.slice(0, 2).toUpperCase();
+}
+
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard",    id: "dashboard", path: "/admin",          group: "main" },
   { icon: Film,            label: "Movies",        id: "movies",    path: "/admin/movies",    group: "catalog" },
@@ -235,7 +246,7 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
               boxShadow: isDarkMode ? "0 0 10px rgba(59, 130, 246, 0.4)" : "0 2px 6px rgba(37, 99, 235, 0.3)",
             }}
           >
-            JD
+            {getInitials(user?.username ?? "?")}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
@@ -249,9 +260,11 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
                 transition: "color 0.25s ease",
               }}
             >
-              James Donovan
+              {user?.username ?? "—"}
             </div>
-            <div style={{ color: "var(--text-sub)", fontSize: "10.5px", transition: "color 0.25s ease" }}>Super Admin</div>
+            <div style={{ color: "var(--text-sub)", fontSize: "10.5px", transition: "color 0.25s ease" }}>
+              {roleLabels[user?.role ?? ""] ?? user?.role ?? ""}
+            </div>
           </div>
           <button
             onClick={handleLogout}

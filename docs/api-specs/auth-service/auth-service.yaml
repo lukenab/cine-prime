@@ -1,8 +1,8 @@
 openapi: 3.0.1
 info:
   title: CinePrime Auth Service API
-  description: OpenAPI specification for the CinePrime authentication service. Defines endpoints for user registration, authentication, account management, and RBAC (Roles & Permissions) management.
-  version: 1.2.0
+  description: OpenAPI specification for the CinePrime authentication service. Defines endpoints for user registration, authentication, token management, account management, and RBAC (Roles & Permissions) management.
+  version: 1.3.0
 servers:
   - url: http://localhost:8088
     description: Auth Service Local Server
@@ -10,7 +10,7 @@ servers:
     description: API Gateway
 tags:
   - name: Authentication
-    description: Endpoints for user registration and login
+    description: Endpoints for user registration, login, logout, token management
   - name: Account
     description: Endpoints for managing accounts (admin)
   - name: Permission
@@ -21,12 +21,60 @@ paths:
   # ==========================================
   # AUTHENTICATION ENDPOINTS
   # ==========================================
+  /api/auth/check:
+    get:
+      tags:
+        - Authentication
+      summary: Pre-check username/email availability
+      description: Checks whether a username or email is already taken. Designed for real-time validation on the registration form (Step 1) before sending OTP. Does NOT require authentication.
+      parameters:
+        - name: username
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "john_doe"
+        - name: email
+          in: query
+          required: false
+          schema:
+            type: string
+            format: email
+            example: "johndoe@example.com"
+      responses:
+        '200':
+          description: Both username and email are available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+              example:
+                code: 1000
+                message: "Available"
+        '400':
+          description: Username or email already taken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              examples:
+                UsernameExisted:
+                  summary: "Error 1010: Username Existed"
+                  value:
+                    code: 1010
+                    message: "Username already exists!"
+                EmailExisted:
+                  summary: "Error 1011: Email Existed"
+                  value:
+                    code: 1011
+                    message: "Email already exists!"
+
   /api/auth/register/initiate:
     post:
       tags:
         - Authentication
       summary: Initiate registration by sending OTP
-      description: Validates the registration payload and sends a 6-digit OTP to the user's email if the username and email are available.
+      description: Validates the registration payload (uniqueness of username, email, phone, identity card) and sends a 6-digit OTP to the user's email.
       requestBody:
         required: true
         content:
@@ -44,7 +92,7 @@ paths:
                 code: 1000
                 result: "OTP has been sent to your email"
         '400':
-          description: Bad Request - Username or Email already exists
+          description: Duplicate field detected
           content:
             application/json:
               schema:
@@ -70,13 +118,25 @@ paths:
                   value:
                     code: 1018
                     message: "Identity card (CCCD) already exists in the system!"
+        '500':
+          description: Internal error — failed to send OTP email
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              example:
+                code: 1019
+                message: "Failed to send OTP email. Please try again."
 
   /api/auth/register/verify:
     post:
       tags:
         - Authentication
-      summary: Verify OTP and register user
-      description: Verifies OTP and creates the account. After successful account creation, a `UserRegisteredEvent` is published to Kafka topic `user-register-topic` for async user profile creation in `user-service`.
+      summary: Verify OTP and create account
+      description: >
+        Verifies the OTP submitted by the user and creates the account.
+        After successful creation, a `UserRegisteredEvent` is published to Kafka topic
+        `user-register-topic` for async profile creation in `user-service`.
       requestBody:
         required: true
         content:
@@ -85,7 +145,7 @@ paths:
               $ref: '#/components/schemas/VerifyOtpRequest'
       responses:
         '200':
-          description: User successfully registered and event published to Kafka
+          description: Account created — Kafka event published
           content:
             application/json:
               schema:
@@ -102,7 +162,7 @@ paths:
                       description: "Default user role"
                       permissions: []
         '400':
-          description: Bad Request - Validation failures
+          description: OTP validation failure
           content:
             application/json:
               schema:
@@ -112,24 +172,71 @@ paths:
                   summary: "Error 1013: Invalid OTP"
                   value:
                     code: 1013
-                    message: "Otp invalid"
+                    message: "OTP is invalid!"
                 OtpExpired:
                   summary: "Error 1015: OTP Expired"
                   value:
                     code: 1015
-                    message: "Otp has expired"
-                DefaultRoleNotFound:
-                  summary: "Error 1012: Default Role Not Found"
-                  value:
-                    code: 1012
-                    message: "Default role not found!"
+                    message: "OTP has expired!"
+        '500':
+          description: Default role not configured in database
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              example:
+                code: 1012
+                message: "An internal error occurred. Please contact support."
+
+  /api/auth/resend-otp:
+    post:
+      tags:
+        - Authentication
+      summary: Resend OTP to email
+      description: Resends a new 6-digit OTP to the provided email address. Rate-limited — a cooldown period applies between requests.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendOtpRequest'
+      responses:
+        '200':
+          description: New OTP sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseMessage'
+              example:
+                code: 1000
+                message: "New otp has been sent to your email!"
+        '404':
+          description: No pending registration found for the given email
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              example:
+                code: 1014
+                message: "Account not found!"
+        '429':
+          description: Resend rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              example:
+                code: 1016
+                message: "Please wait before requesting another OTP!"
 
   /api/auth/login:
     post:
       tags:
         - Authentication
-      summary: Authenticate user and return token
-      description: Authenticates the user using username and password. Returns a JWT token.
+      summary: Authenticate user and return JWT token
+      description: >
+        Authenticates the user using username and password. Verifies account status before issuing token.
+        The returned token is stored in the whitelist (`auth_token` table) with `is_revoked = false`.
       requestBody:
         required: true
         content:
@@ -149,64 +256,131 @@ paths:
                   authenticate: true
                   token: "eyJhbGciOiJIUzUxMiJ9..."
         '401':
-          description: Unauthorized - Invalid credentials
+          description: Invalid username or password
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
-              examples:
-                Unauthenticated:
-                  summary: "Error 1008: Unauthenticated"
-                  value:
-                    code: 1008
-                    message: "Unauthenticated"
+              example:
+                code: 1008
+                message: "Unauthenticated!"
+        '403':
+          description: Account has been deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              example:
+                code: 1020
+                message: "Your account has been deactivated. Please contact support."
 
-  /api/auth/resend-otp:
+  /api/auth/logout:
     post:
       tags:
         - Authentication
-      summary: Resend OTP to email
-      description: Resends a new 6-digit OTP to the provided email address. Rate-limited to prevent abuse.
+      summary: Revoke the current JWT token
+      description: >
+        Marks the provided token as revoked in the whitelist. After this call the token
+        will be rejected by all services even if the JWT signature is still technically valid.
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ResendOtpRequest'
+              $ref: '#/components/schemas/TokenRequest'
       responses:
         '200':
-          description: New OTP sent successfully
+          description: Token successfully revoked
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponseMessage'
+                $ref: '#/components/schemas/ApiResponseVoid'
               example:
                 code: 1000
-                message: "New otp has been sent to your email!"
-        '400':
-          description: Account not found
+                message: "Logged out successfully"
+        '401':
+          description: Token invalid or already revoked
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
-              examples:
-                AccountNotFound:
-                  summary: "Error 1014: Account Not Found"
-                  value:
-                    code: 1014
-                    message: "Account not found!"
-        '429':
-          description: Too many requests - resend rate limit exceeded
+              example:
+                code: 1008
+                message: "Unauthenticated!"
+
+  /api/auth/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Rotate JWT — revoke old token, issue new one
+      description: >
+        Issues a new JWT using the current (still-valid) token. The old token is immediately
+        revoked atomically (token rotation). Clients must replace the stored token with the
+        new one returned in the response.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRequest'
+      responses:
+        '200':
+          description: New token issued — old token revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseAuthenticationResponse'
+              example:
+                code: 1000
+                result:
+                  authenticate: true
+                  token: "eyJhbGciOiJIUzUxMiJ9...<new_token>"
+        '401':
+          description: Token invalid, expired, or already revoked
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
+              example:
+                code: 1008
+                message: "Unauthenticated!"
+
+  /api/auth/introspect:
+    post:
+      tags:
+        - Authentication
+      summary: Validate a JWT token
+      description: >
+        Checks whether a JWT token is currently active (valid signature, not expired, not revoked).
+        Returns `valid: true` if active, `valid: false` otherwise — no exception is thrown for inactive tokens.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRequest'
+      responses:
+        '200':
+          description: Introspection result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseIntrospectResponse'
               examples:
-                ResendTooFast:
-                  summary: "Error 1016: Resend OTP Too Fast"
+                Valid:
+                  summary: Token is active
                   value:
-                    code: 1016
-                    message: "Resend Otp too fast"
+                    code: 1000
+                    result:
+                      valid: true
+                Invalid:
+                  summary: Token is expired or revoked
+                  value:
+                    code: 1000
+                    result:
+                      valid: false
 
   # ==========================================
   # ACCOUNT ENDPOINTS
@@ -227,14 +401,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseListAccountResponse'
         '403':
-          description: Forbidden - insufficient permissions
+          description: Forbidden — insufficient permissions
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
               example:
                 code: 1009
-                message: "You do not have permission"
+                message: "You do not have permission!"
     post:
       tags:
         - Account
@@ -296,7 +470,7 @@ paths:
                     - roleName: "USER"
                       description: "Default user role"
                       permissions: []
-        '400':
+        '404':
           description: Account not found
           content:
             application/json:
@@ -309,7 +483,7 @@ paths:
       tags:
         - Account
       summary: Update account
-      description: Updates an existing account's information by account ID. Requires ADMIN role.
+      description: Updates an existing account's information. All fields are optional — only provided fields will be updated. Requires ADMIN role.
       security:
         - bearerAuth: []
       parameters:
@@ -333,8 +507,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseAccountResponse'
-        '400':
-          description: Account not found or validation error
+        '404':
+          description: Account not found
           content:
             application/json:
               schema:
@@ -351,7 +525,7 @@ paths:
       tags:
         - Permission
       summary: Create a new permission
-      description: Creates a new system permission to be used in RBAC. Requires ADMIN role.
+      description: Creates a new system permission for use in RBAC. Requires ADMIN role.
       security:
         - bearerAuth: []
       requestBody:
@@ -522,7 +696,7 @@ components:
           type: string
           pattern: "^(0[3|5|7|8|9])+([0-9]{8})$"
           example: "0912345678"
-          description: "Vietnamese phone format: 0[3/5/7/8/9]XXXXXXXX"
+          description: "Vietnamese mobile format: 0[3/5/7/8/9]XXXXXXXX (10 digits)"
         dateOfBirth:
           type: string
           format: date
@@ -534,6 +708,7 @@ components:
           description: "Enum: MALE, FEMALE, OTHER"
         address:
           type: string
+          maxLength: 255
           example: "123 Main Street, Tech City"
         identityCard:
           type: string
@@ -543,7 +718,7 @@ components:
         role:
           type: string
           example: "USER"
-          description: "Optional — if omitted, default role is assigned"
+          description: "Optional — if omitted, default role USER is assigned"
 
     VerifyOtpRequest:
       type: object
@@ -581,6 +756,16 @@ components:
           type: string
           format: email
           example: "johndoe@example.com"
+
+    TokenRequest:
+      type: object
+      required:
+        - token
+      description: "Used by /logout, /refresh, and /introspect"
+      properties:
+        token:
+          type: string
+          example: "eyJhbGciOiJIUzUxMiJ9..."
 
     AccountUpdateRequest:
       type: object
@@ -664,6 +849,13 @@ components:
         token:
           type: string
           example: "eyJhbGciOiJIUzUxMiJ9..."
+
+    IntrospectResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+          example: true
 
     AccountResponse:
       type: object
@@ -774,6 +966,18 @@ components:
         result:
           $ref: '#/components/schemas/AuthenticationResponse'
 
+    ApiResponseIntrospectResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 1000
+        message:
+          type: string
+          nullable: true
+        result:
+          $ref: '#/components/schemas/IntrospectResponse'
+
     ApiResponsePermissionResponse:
       type: object
       properties:
@@ -845,4 +1049,4 @@ components:
           example: 1003
         message:
           type: string
-          example: "Uncategorized error!"
+          example: "An unexpected error occurred. Please try again later."

@@ -2,6 +2,16 @@ import { authApi } from "../api/authApi";
 import { jwtDecode } from "jwt-decode";
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
+const ROLE_PRIORITY = ["ROLE_ADMIN", "ROLE_EMPLOYEE", "ROLE_MEMBER", "ROLE_USER"];
+
+function extractPrimaryRole(rolesClaim: string): string {
+    const roles = (rolesClaim || "").split(" ").filter(r => r.startsWith("ROLE_"));
+    for (const r of ROLE_PRIORITY) {
+        if (roles.includes(r)) return r;
+    }
+    return roles[0] || "";
+}
+
 interface User {
     username: string;
     role: string;
@@ -27,7 +37,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
                 setUser({
                     username: decoded.sub,
-                    role: decoded.role
+                    role: extractPrimaryRole(decoded.role ?? decoded.scope)
                 });
             } catch (error) {
                 console.error("Fail to get token", error);
@@ -53,11 +63,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         const decoded: any = jwtDecode(token);
 
-        localStorage.setItem("role", decoded.role);
+        const primaryRole = extractPrimaryRole(decoded.role ?? decoded.scope);
+        localStorage.setItem("role", primaryRole);
 
         setUser({
             username: decoded.sub,
-            role: decoded.role
+            role: primaryRole
         });
     };
 
