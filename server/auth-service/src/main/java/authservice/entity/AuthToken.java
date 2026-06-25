@@ -34,7 +34,7 @@ public class AuthToken {
     @Column(name = "jwt_id", nullable = false, unique = true, length = 100)
     String jwtId;
 
-    @Column(name = "token", nullable = false, length = 500)
+    @Column(name = "token", nullable = false, columnDefinition = "TEXT")
     String token;
 
     @Column(name = "expires_at", nullable = false)

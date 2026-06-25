@@ -3,6 +3,17 @@ import { Bell, Search, ChevronRight, User, Settings, LogOut } from "lucide-react
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
+const roleLabels: Record<string, string> = {
+  ROLE_ADMIN: "Admin",
+  ROLE_EMPLOYEE: "Employee",
+  ROLE_MEMBER: "Member",
+  ROLE_USER: "User",
+};
+
+function getInitials(username: string): string {
+  return username.slice(0, 2).toUpperCase();
+}
+
 interface HeaderProps {
   activePage: string;
   isDarkMode?: boolean;
@@ -123,7 +134,7 @@ const handleLogout = () => {
               userSelect: "none",
             }}
           >
-            JD
+            {getInitials(user?.username ?? "?")}
           </div>
 
           {/* Menu thả xuống */}
@@ -145,8 +156,12 @@ const handleLogout = () => {
             >
               {/* Thông tin nhanh */}
               <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-color)", marginBottom: "4px" }}>
-                <p style={{ color: "var(--text-main)", fontSize: "13.5px", fontWeight: 600, margin: "0 0 2px 0" }}>James Donovan</p>
-                <p style={{ color: "var(--text-sub)", fontSize: "11px", margin: 0 }}>james.d@cineprime.com</p>
+                <p style={{ color: "var(--text-main)", fontSize: "13.5px", fontWeight: 600, margin: "0 0 2px 0" }}>
+                  {user?.username ?? "—"}
+                </p>
+                <p style={{ color: "var(--text-sub)", fontSize: "11px", margin: 0 }}>
+                  {roleLabels[user?.role ?? ""] ?? user?.role ?? ""}
+                </p>
               </div>
 
               {/* Các nút bấm */}

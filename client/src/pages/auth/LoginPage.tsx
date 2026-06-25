@@ -29,9 +29,11 @@ export default function LoginPage() {
     try {
       await login({ username, password });
     } catch (err: any) {
-      const status = err?.response?.status;
-      if (status === 401 || status === 400) {
+      const code = err?.response?.data?.code;
+      if (code === 1008) {
         setError("Incorrect username or password. Please try again.");
+      } else if (code === 1020) {
+        setError("Your account has been deactivated. Please contact support.");
       } else {
         setError("Something went wrong. Please try again later.");
       }
