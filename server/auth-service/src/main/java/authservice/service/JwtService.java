@@ -59,7 +59,7 @@ public class JwtService {
                 .issuer("cineprime.com")
                 .claim("accountId", account.getAccountId())
                 .claim("scope", buildScope(account))
-                .claim("role", buildScope(account))
+                .claim("role", buildRole(account))
                 .jwtID(UUID.randomUUID().toString())
                 .build();
 
@@ -86,7 +86,14 @@ public class JwtService {
                 }
             });
         }
+        return stringJoiner.toString();
+    }
 
+    private String buildRole(Account account) {
+        StringJoiner stringJoiner = new StringJoiner(" ");
+        if (!CollectionUtils.isEmpty(account.getRoles())) {
+            account.getRoles().forEach(role -> stringJoiner.add("ROLE_" + role.getRoleName()));
+        }
         return stringJoiner.toString();
     }
 

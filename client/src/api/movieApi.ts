@@ -31,9 +31,18 @@ export type TypeResponse = {
   typeName: string;
 };
 
+export type RoomType = "STANDARD" | "LARGE" | "IMAX";
+
+export const ROOM_TYPE_CONFIG: Record<RoomType, { maxSeats: number; seatsPerRow: number; label: string; description: string }> = {
+  STANDARD: { maxSeats: 100, seatsPerRow: 10, label: "Standard",  description: "Up to 100 seats · 10 per row" },
+  LARGE:    { maxSeats: 200, seatsPerRow: 10, label: "Large",     description: "Up to 200 seats · 10 per row" },
+  IMAX:     { maxSeats: 300, seatsPerRow: 15, label: "IMAX",      description: "Up to 300 seats · 15 per row" },
+};
+
 export type RoomResponse = {
   cinemaRoomId: number;
   cinemaRoomName: string;
+  roomType: RoomType;
   seatQuantity: number;
 };
 
@@ -76,7 +85,26 @@ export type UpdateMoviePayload = {
 
 export type CreateRoomPayload = {
   cinemaRoomName: string;
+  roomType: RoomType;
   seatQuantity: number;
+  defaultPrice: number;
+};
+
+export type SeatResponse = {
+  seatId: number;
+  seatCode: string;
+  seatType: string;
+  seatStatus: number;
+  price: number;
+  cinemaRoomId: number;
+  cinemaRoomName: string;
+};
+
+export type SeatTypeValue = "STANDARD" | "VIP" | "COUPLE";
+
+export type UpdateSeatPayload = {
+  seatType: SeatTypeValue;
+  price: number;
 };
 
 export type CreateTypePayload = {
@@ -102,10 +130,16 @@ export const movieApi = {
     axiosClient.get('/api/movies/types') as Promise<ApiWrapper<TypeResponse[]>>,
 
   getRooms: () =>
-    axiosClient.get('/api/movies/rooms') as Promise<ApiWrapper<RoomResponse[]>>,
+    axiosClient.get('/api/cinema-rooms') as Promise<ApiWrapper<RoomResponse[]>>,
 
   createRoom: (payload: CreateRoomPayload) =>
-    axiosClient.post('/api/movies/room', payload) as Promise<ApiWrapper<RoomResponse>>,
+    axiosClient.post('/api/cinema-rooms', payload) as Promise<ApiWrapper<RoomResponse>>,
+
+  getSeatsByRoom: (roomId: number) =>
+    axiosClient.get(`/api/seats/room/${roomId}`) as Promise<ApiWrapper<SeatResponse[]>>,
+
+  updateSeat: (seatId: number, payload: UpdateSeatPayload) =>
+    axiosClient.put(`/api/seats/${seatId}`, payload) as Promise<ApiWrapper<SeatResponse>>,
 
   createType: (payload: CreateTypePayload) =>
     axiosClient.post('/api/movies/type', payload) as Promise<ApiWrapper<TypeResponse>>,

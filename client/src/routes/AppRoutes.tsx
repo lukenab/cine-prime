@@ -10,6 +10,7 @@ import ManageUserPage from "../pages/admin/ManageUserPage";
 import RegisterPage from "../pages/auth/RegisterPage";
 import ManageMoviePage from "../pages/admin/ManageMoviePage";
 import ManageCinemaRoomsPage from "../pages/admin/ManageCinemaRoomsPage";
+import RoomDetailPage from "../pages/admin/RoomDetailPage";
 import ManageGenresPage from "../pages/admin/ManageGenresPage";
 import ManageShowTimePage from "../pages/admin/ManageShowTimePage";
 import CreateUserPage from "../pages/admin/CreateUserPage";
@@ -39,6 +40,7 @@ export default function AppRoutes() {
 
             <Route path="movies" element={<ManageMoviePage/>}/>
             <Route path="rooms" element={<ManageCinemaRoomsPage/>}/>
+            <Route path="rooms/:id" element={<RoomDetailPage/>}/>
             <Route path="genres" element={<ManageGenresPage/>}/>
             <Route path="showtimes" element={<ManageShowTimePage/>}/>
         </Route>

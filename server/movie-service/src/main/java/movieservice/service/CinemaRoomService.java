@@ -25,20 +25,25 @@ public class CinemaRoomService {
     CinemaRoomRepository cinemaRoomRepository;
     MovieMapper movieMapper;
     AuditLogService auditLogService;
+    SeatService seatService;
 
     @Transactional
     public CinemaRoomResponse createCinemaRoom(CinemaRoomRequest cinemaRoomRequest) {
         if (cinemaRoomRepository.existsByCinemaRoomName(cinemaRoomRequest.getCinemaRoomName())) {
-
             throw new AppException(MovieErrorCode.CINEMA_ROOM_NAME_EXISTED);
+        }
+
+        int maxSeats = cinemaRoomRequest.getRoomType().getMaxSeats();
+        if (cinemaRoomRequest.getSeatQuantity() > maxSeats) {
+            throw new AppException(MovieErrorCode.SEAT_QUANTITY_EXCEEDS_LIMIT);
         }
 
         CinemaRoom cinemaRoom = movieMapper.toCinemaRoom(cinemaRoomRequest);
         CinemaRoom room = cinemaRoomRepository.save(cinemaRoom);
-        CinemaRoomResponse cinemaRoomResponse = movieMapper.toCinemaResponse(cinemaRoom);
-        auditLogService.logAction("1", "Admin System", "cinema - id:" + String.valueOf(room.getCinemaRoomId()),
+        seatService.generateSeatsForRoom(room, cinemaRoomRequest.getDefaultPrice());
+        auditLogService.logAction("1", "Admin System", "cinema - id:" + room.getCinemaRoomId(),
                 "Created new cinema: " + room.getCinemaRoomName());
-        return cinemaRoomResponse;
+        return movieMapper.toCinemaResponse(room);
     }
 
    
