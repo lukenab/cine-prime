@@ -17,6 +17,10 @@ import CreateUserPage from "../pages/admin/CreateUserPage";
 import EditUserPage from "../pages/admin/EditUserPage";
 import UserDetailPage from "../pages/admin/UserDetailPage";
 import ManageBookingPage from "../pages/admin/ManageBookingPage";
+import ManageEmployeePage from "../pages/admin/ManageEmployeePage";
+import CreateEmployeePage from "../pages/admin/CreateEmployeePage";
+import EmployeeDetailPage from "../pages/admin/EmployeeDetailPage";
+import EditEmployeePage from "../pages/admin/EditEmployeePage";
 
 export default function AppRoutes() {
   return (
@@ -42,6 +46,10 @@ export default function AppRoutes() {
 
           {/* ADMIN only */}
           <Route element={<ProtectedRoute allowedRoles={["ROLE_ADMIN"]}/>}>
+            <Route path="employees"              element={<ManageEmployeePage/>}/>
+            <Route path="employees/create"       element={<CreateEmployeePage/>}/>
+            <Route path="employees/:id"          element={<EmployeeDetailPage/>}/>
+            <Route path="employees/edit/:id"     element={<EditEmployeePage/>}/>
             <Route path="users"          element={<ManageUserPage/>}/>
             <Route path="users/create"   element={<CreateUserPage/>}/>
             <Route path="users/edit/:id" element={<EditUserPage/>}/>

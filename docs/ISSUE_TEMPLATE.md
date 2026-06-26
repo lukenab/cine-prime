@@ -137,22 +137,78 @@ Copy and fill in the sections below when creating a new issue.
 When creating a Merge Request, use this structure:
 
 ```markdown
-## Summary
-<!-- What does this MR do? -->
+## Overview / Objective
 
-## Changes
-<!-- List of files changed and what was done -->
+<!-- What does this MR do and why? 2–3 sentences. -->
+
+Related Issue: Closes #<issue-number>
+
+---
+
+## Changes Introduced
+
+<!-- Break down by layer. Remove sections that don't apply. -->
+
+**Controllers / Routes:**
+- 
+
+**Services / Logic:**
+- 
+
+**DTOs / Mappers / Components:**
+- 
+
+**Database / JPA / Migration:**
+- 
+
+**Exception Handling / Error Codes:**
+- 
+
+---
+
+## Key Architectural Decisions
+
+<!-- Explain non-obvious choices made. Why Set vs List? Why this pattern? -->
+<!-- Remove this section if no significant decisions were made. -->
+
+- 
+
+---
 
 ## How to Test
-<!-- Steps to verify the changes work -->
+
+<!-- Step-by-step for reviewer to manually verify. -->
+
+1. 
+2. 
+3. 
+
+---
 
 ## Checklist
-- [ ] Code follows project conventions
-- [ ] No console.log / debug code left
-- [ ] API calls use axiosClient with Bearer token
-- [ ] Loading and error states handled
-- [ ] Tested locally
 
-## Related Issue
-Closes #<issue-number>
+**General**
+- [ ] Code compiles, no errors
+- [ ] No debug / console.log code left
+- [ ] Follows project coding conventions
+
+**Backend (if applicable)**
+- [ ] No N+1 query issues (check Hibernate console output)
+- [ ] Exception handling uses correct error codes
+- [ ] Endpoints tested via Postman / API client
+- [ ] API contract / Postman collection updated
+
+**Frontend (if applicable)**
+- [ ] Loading and error states handled
+- [ ] axiosClient attaches Bearer token correctly (no "null"/"undefined")
+- [ ] Tested on both dark and light mode
+
+---
+
+## Reviewer Notes
+
+<!-- Anything specific the reviewer should pay close attention to. -->
+<!-- E.g., JPA mappings, token expiry behavior, edge cases. -->
+
+- 
 ```

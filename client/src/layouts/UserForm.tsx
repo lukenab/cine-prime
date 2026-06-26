@@ -59,7 +59,7 @@ export function UserForm({
       }}
     >
       <h2 className="text-base font-bold mb-5 transition-colors" style={{ color: "var(--text-main)" }}>
-        User Information
+        Customer Information
       </h2>
 
       {/* Avatar Placeholder */}
@@ -96,8 +96,8 @@ export function UserForm({
               className="px-3.5 py-2.5 text-sm rounded-xl border outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
               style={{ background: "transparent", color: "var(--text-main)", borderColor: "var(--border-color)" }}
             >
-              <option value="USER" style={{ background: "var(--bg-card)" }}>User</option>
-              <option value="ADMIN" style={{ background: "var(--bg-card)" }}>Admin</option>
+              <option value="USER"   style={{ background: "var(--bg-card)" }}>User</option>
+              <option value="MEMBER" style={{ background: "var(--bg-card)" }}>Member</option>
             </select>
           </div>
           <div className="flex flex-col gap-1.5">
@@ -285,7 +285,7 @@ export function UserForm({
             {isLoading ? "Saving..." : (
               <>
                 <Save size={16} />
-                {isEditMode ? "Update User" : "Add New User"}
+                {isEditMode ? "Update Customer" : "Add New Customer"}
               </>
             )}
           </button>
