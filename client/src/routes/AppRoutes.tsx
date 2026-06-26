@@ -27,6 +27,7 @@ import EditPromotionPage from "../pages/admin/EditPromotionPage";
 import PromotionDetailPage from "../pages/admin/PromotionDetailPage";
 import ReportPage from "../pages/admin/ReportPage";
 import SettingsPage from "../pages/admin/SettingsPage";
+import TicketSalePage from "../pages/admin/TicketSalePage";
 
 export default function AppRoutes() {
   return (
@@ -49,6 +50,7 @@ export default function AppRoutes() {
           <Route path="movies"    element={<ManageMoviePage/>}/>
           <Route path="showtimes" element={<ManageShowTimePage/>}/>
           <Route path="bookings"  element={<ManageBookingPage/>}/>
+          <Route path="sell"      element={<TicketSalePage/>}/>
 
           {/* ADMIN only */}
           <Route element={<ProtectedRoute allowedRoles={["ROLE_ADMIN"]}/>}>
