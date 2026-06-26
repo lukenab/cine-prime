@@ -79,7 +79,7 @@ ON CONFLICT DO NOTHING;
 -- password: 123456 (BCrypt strength 10)
 -- ================================
 INSERT INTO account (account_id, username, email, password_hash, status, created_at) VALUES
-(gen_random_uuid(), 'admin',    'admin@cineprime.com',    '$2a$10$slYQmyNdgTY18LjhChyOEOYEsEFPxBgUG1BNT/BqOKm0gsxbycv/G', 1, NOW()),
+-- (gen_random_uuid(), 'admin',    'admin@cineprime.com',    '$2a$10$slYQmyNdgTY18LjhChyOEOYEsEFPxBgUG1BNT/BqOKm0gsxbycv/G', 1, NOW()),
 (gen_random_uuid(), 'employee', 'employee@cineprime.com', '$2a$10$slYQmyNdgTY18LjhChyOEOYEsEFPxBgUG1BNT/BqOKm0gsxbycv/G', 1, NOW()),
 (gen_random_uuid(), 'member',   'member@cineprime.com',   '$2a$10$slYQmyNdgTY18LjhChyOEOYEsEFPxBgUG1BNT/BqOKm0gsxbycv/G', 1, NOW()),
 (gen_random_uuid(), 'guest',    'guest@cineprime.com',    '$2a$10$slYQmyNdgTY18LjhChyOEOYEsEFPxBgUG1BNT/BqOKm0gsxbycv/G', 1, NOW())

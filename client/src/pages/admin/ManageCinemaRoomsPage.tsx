@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, RefreshCw, AlertCircle, Building2, Users, Armchair, X } from "lucide-react";
-import { useOutletContext } from "react-router-dom";
-import { movieApi, type RoomResponse, type CreateRoomPayload } from "../../api/movieApi";
+import { Plus, Search, RefreshCw, AlertCircle, Building2, Users, Armchair, X, ChevronRight, Check } from "lucide-react";
+import { useOutletContext, useNavigate } from "react-router-dom";
+import { movieApi, type RoomResponse, type CreateRoomPayload, type RoomType, ROOM_TYPE_CONFIG } from "../../api/movieApi";
 
 // ── Add Room Modal ────────────────────────────────────────────────────────────
 
@@ -12,14 +12,31 @@ type ModalProps = {
   submitting: boolean;
 };
 
+const ROOM_TYPES = Object.keys(ROOM_TYPE_CONFIG) as RoomType[];
+
+const roomTypeBorderActive: Record<RoomType, string> = {
+  STANDARD: "#3b82f6",
+  LARGE:    "#10b981",
+  IMAX:     "#8b5cf6",
+};
+
 function AddRoomModal({ open, onClose, onSave, submitting }: ModalProps) {
-  const [form, setForm] = useState({ cinemaRoomName: "", seatQuantity: 50 });
+  const [form, setForm] = useState<CreateRoomPayload>({
+    cinemaRoomName: "", roomType: "STANDARD", seatQuantity: 50, defaultPrice: 90000,
+  });
 
   useEffect(() => {
-    if (open) setForm({ cinemaRoomName: "", seatQuantity: 50 });
+    if (open) setForm({ cinemaRoomName: "", roomType: "STANDARD", seatQuantity: 50, defaultPrice: 90000 });
   }, [open]);
 
   if (!open) return null;
+
+  const cfg = ROOM_TYPE_CONFIG[form.roomType];
+  const seatsPerRow = cfg.seatsPerRow;
+  const numRows = Math.ceil(form.seatQuantity / seatsPerRow);
+  const lastCol = form.seatQuantity % seatsPerRow || seatsPerRow;
+  const lastRowChar = String.fromCharCode(64 + numRows);
+  const overLimit = form.seatQuantity > cfg.maxSeats;
 
   const inputStyle: React.CSSProperties = {
     fontSize: "14px",
@@ -32,7 +49,7 @@ function AddRoomModal({ open, onClose, onSave, submitting }: ModalProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
       <div
-        className="relative w-full max-w-sm mx-4 rounded-2xl shadow-2xl overflow-hidden"
+        className="relative w-full max-w-md mx-4 rounded-2xl shadow-2xl overflow-hidden"
         style={{ background: "var(--bg-main)" }}
       >
         {/* Header */}
@@ -50,7 +67,7 @@ function AddRoomModal({ open, onClose, onSave, submitting }: ModalProps) {
 
         {/* Form */}
         <form
-          onSubmit={(e) => { e.preventDefault(); onSave(form); }}
+          onSubmit={(e) => { e.preventDefault(); if (!overLimit) onSave(form); }}
           className="px-6 py-5 space-y-4"
         >
           <div>
@@ -58,7 +75,7 @@ function AddRoomModal({ open, onClose, onSave, submitting }: ModalProps) {
               Room Name <span className="text-rose-500">*</span>
             </label>
             <input
-              required type="text" placeholder="e.g. Room A, IMAX Room"
+              required type="text" placeholder="e.g. Room A, IMAX Hall 1"
               minLength={2} maxLength={100}
               value={form.cinemaRoomName}
               onChange={(e) => setForm({ ...form, cinemaRoomName: e.target.value })}
@@ -67,19 +84,84 @@ function AddRoomModal({ open, onClose, onSave, submitting }: ModalProps) {
             />
           </div>
 
+          {/* Room Type Selector */}
+          <div>
+            <label className="block mb-2" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+              Room Type <span className="text-rose-500">*</span>
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {ROOM_TYPES.map((type) => {
+                const c = ROOM_TYPE_CONFIG[type];
+                const active = form.roomType === type;
+                const color = roomTypeBorderActive[type];
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setForm({ ...form, roomType: type, seatQuantity: Math.min(form.seatQuantity, c.maxSeats) })}
+                    style={{
+                      padding: "10px 8px",
+                      borderRadius: "10px",
+                      border: `1.5px solid ${active ? color : "var(--border-color)"}`,
+                      background: active ? `${color}12` : "var(--bg-main)",
+                      cursor: "pointer",
+                      textAlign: "center",
+                      transition: "all 0.15s ease",
+                      position: "relative",
+                    }}
+                  >
+                    {active && (
+                      <span style={{ position: "absolute", top: "6px", right: "6px", color }}>
+                        <Check size={11} />
+                      </span>
+                    )}
+                    <p style={{ fontSize: "13px", fontWeight: 700, color: active ? color : "var(--text-main)", marginBottom: "2px" }}>
+                      {c.label}
+                    </p>
+                    <p style={{ fontSize: "10px", color: "var(--text-sub)", lineHeight: 1.4 }}>
+                      Max {c.maxSeats}<br />{c.seatsPerRow}/row
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div>
             <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
               Seat Quantity <span className="text-rose-500">*</span>
             </label>
             <input
-              required type="number" min={10} placeholder="Min. 10 seats"
+              required type="number" min={10} max={cfg.maxSeats} placeholder={`10 – ${cfg.maxSeats}`}
               value={form.seatQuantity}
               onChange={(e) => setForm({ ...form, seatQuantity: parseInt(e.target.value) || 0 })}
+              className="w-full px-3.5 py-2.5 rounded-xl border outline-none transition-colors"
+              style={{ ...inputStyle, borderColor: overLimit ? "#ef4444" : "var(--border-color)" }}
+            />
+            {overLimit ? (
+              <p style={{ fontSize: "11px", color: "#ef4444", marginTop: "4px" }}>
+                Exceeds {cfg.label} limit of {cfg.maxSeats} seats.
+              </p>
+            ) : (
+              <p style={{ fontSize: "11px", color: "var(--text-sub)", marginTop: "4px" }}>
+                Auto-generated: A1–{lastRowChar}{lastCol} · {numRows} rows × {seatsPerRow} cols
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+              Default Seat Price (VND) <span className="text-rose-500">*</span>
+            </label>
+            <input
+              required type="number" min={1000} step={1000} placeholder="e.g. 90000"
+              value={form.defaultPrice}
+              onChange={(e) => setForm({ ...form, defaultPrice: parseInt(e.target.value) || 0 })}
               className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-blue-400 transition-colors"
               style={inputStyle}
             />
             <p style={{ fontSize: "11px", color: "var(--text-sub)", marginTop: "4px" }}>
-              Seats are auto-generated (A1–{String.fromCharCode(64 + Math.ceil(form.seatQuantity / 10))}{form.seatQuantity % 10 || 10})
+              Applied to all seats. Individual seats can be updated later.
             </p>
           </div>
 
@@ -109,6 +191,7 @@ function AddRoomModal({ open, onClose, onSave, submitting }: ModalProps) {
 
 export default function ManageCinemaRoomsPage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
+  const navigate = useNavigate();
 
   const [rooms, setRooms] = useState<RoomResponse[]>([]);
   const [loading, setLoading] = useState(false);
@@ -242,7 +325,7 @@ export default function ManageCinemaRoomsPage() {
         <table className="w-full">
           <thead>
             <tr className="border-b" style={{ borderColor: "var(--border-color)", backgroundColor: "rgba(128,128,128,0.04)" }}>
-              {["#", "Room Name", "Seat Quantity", "Seat Layout"].map((h) => (
+              {["#", "Room Name", "Type", "Seat Quantity", "Seat Layout", ""].map((h) => (
                 <th key={h} className="px-5 py-3.5 text-left">
                   <span style={{ color: "var(--text-sub)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>{h}</span>
                 </th>
@@ -265,11 +348,16 @@ export default function ManageCinemaRoomsPage() {
               </tr>
             ) : (
               filtered.map((room, idx) => {
-                const rows = Math.ceil((room.seatQuantity ?? 0) / 10);
+                const numRows = Math.ceil((room.seatQuantity ?? 0) / 10);
                 const lastRowSeats = (room.seatQuantity ?? 0) % 10 || 10;
-                const lastRow = String.fromCharCode(64 + rows);
+                const lastRow = String.fromCharCode(64 + numRows);
                 return (
-                  <tr key={room.cinemaRoomId} className="hover-row border-b transition-colors" style={{ borderColor: "var(--border-color)" }}>
+                  <tr
+                    key={room.cinemaRoomId}
+                    className="hover-row border-b transition-colors"
+                    style={{ borderColor: "var(--border-color)", cursor: "pointer" }}
+                    onClick={() => navigate(`/admin/rooms/${room.cinemaRoomId}`, { state: { room } })}
+                  >
                     <td className="px-5 py-3.5">
                       <span style={{ fontSize: "13px", color: "var(--text-sub)" }}>{idx + 1}</span>
                     </td>
@@ -285,19 +373,32 @@ export default function ManageCinemaRoomsPage() {
                       </div>
                     </td>
                     <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700"
-                        >
-                          <Armchair size={11} />
-                          {room.seatQuantity} seats
-                        </span>
-                      </div>
+                      {room.roomType && (() => {
+                        const colors: Record<string, string> = {
+                          STANDARD: "bg-blue-50 text-blue-700",
+                          LARGE: "bg-emerald-50 text-emerald-700",
+                          IMAX: "bg-purple-50 text-purple-700",
+                        };
+                        return (
+                          <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${colors[room.roomType] ?? "bg-gray-100 text-gray-600"}`}>
+                            {ROOM_TYPE_CONFIG[room.roomType]?.label ?? room.roomType}
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">
+                        <Armchair size={11} />
+                        {room.seatQuantity} seats
+                      </span>
                     </td>
                     <td className="px-5 py-3.5">
                       <span style={{ fontSize: "13px", color: "var(--text-sub)" }}>
                         Rows A–{lastRow} · Last row {lastRowSeats} seats
                       </span>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <ChevronRight size={15} style={{ color: "var(--text-sub)" }} />
                     </td>
                   </tr>
                 );
