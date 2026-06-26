@@ -25,6 +25,7 @@ import ManagePromotionPage from "../pages/admin/ManagePromotionPage";
 import CreatePromotionPage from "../pages/admin/CreatePromotionPage";
 import EditPromotionPage from "../pages/admin/EditPromotionPage";
 import PromotionDetailPage from "../pages/admin/PromotionDetailPage";
+import ReportPage from "../pages/admin/ReportPage";
 
 export default function AppRoutes() {
   return (
@@ -65,6 +66,7 @@ export default function AppRoutes() {
             <Route path="promotions/create"       element={<CreatePromotionPage/>}/>
             <Route path="promotions/:id"          element={<PromotionDetailPage/>}/>
             <Route path="promotions/edit/:id"     element={<EditPromotionPage/>}/>
+            <Route path="reports" element={<ReportPage/>}/>
           </Route>
         </Route>
       </Route>
