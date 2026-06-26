@@ -1,5 +1,5 @@
 import { useAuth } from "../context/AuthContext";
-import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, Users, UserCog, BarChart2, Settings, Clapperboard, LogOut, Gift } from "lucide-react";
+import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, Users, UserCog, BarChart2, Settings, Clapperboard, LogOut, Gift, ShoppingCart } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 
 const roleLabels: Record<string, string> = {
@@ -21,6 +21,7 @@ const navItems = [
   { icon: Tags,            label: "Genres",       id: "genres",    path: "/admin/genres",    group: "catalog",  roles: ["ROLE_ADMIN"] },
   { icon: Calendar,        label: "Showtimes",    id: "showtimes", path: "/admin/showtimes", group: "ops" },
   { icon: Ticket,          label: "Bookings",     id: "bookings",   path: "/admin/bookings",   group: "ops" },
+  { icon: ShoppingCart,    label: "Sell Tickets", id: "sell",       path: "/admin/sell",       group: "ops" },
   { icon: UserCog,         label: "Employees",    id: "employees",  path: "/admin/employees",  group: "ops",      roles: ["ROLE_ADMIN"] },
   { icon: Users,           label: "Users",        id: "users",      path: "/admin/users",      group: "ops",      roles: ["ROLE_ADMIN"] },
   { icon: Gift,            label: "Promotions",   id: "promotions", path: "/admin/promotions", group: "ops",      roles: ["ROLE_ADMIN"] },
