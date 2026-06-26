@@ -21,6 +21,10 @@ import ManageEmployeePage from "../pages/admin/ManageEmployeePage";
 import CreateEmployeePage from "../pages/admin/CreateEmployeePage";
 import EmployeeDetailPage from "../pages/admin/EmployeeDetailPage";
 import EditEmployeePage from "../pages/admin/EditEmployeePage";
+import ManagePromotionPage from "../pages/admin/ManagePromotionPage";
+import CreatePromotionPage from "../pages/admin/CreatePromotionPage";
+import EditPromotionPage from "../pages/admin/EditPromotionPage";
+import PromotionDetailPage from "../pages/admin/PromotionDetailPage";
 
 export default function AppRoutes() {
   return (
@@ -57,6 +61,10 @@ export default function AppRoutes() {
             <Route path="rooms"          element={<ManageCinemaRoomsPage/>}/>
             <Route path="rooms/:id"      element={<RoomDetailPage/>}/>
             <Route path="genres"         element={<ManageGenresPage/>}/>
+            <Route path="promotions"              element={<ManagePromotionPage/>}/>
+            <Route path="promotions/create"       element={<CreatePromotionPage/>}/>
+            <Route path="promotions/:id"          element={<PromotionDetailPage/>}/>
+            <Route path="promotions/edit/:id"     element={<EditPromotionPage/>}/>
           </Route>
         </Route>
       </Route>
