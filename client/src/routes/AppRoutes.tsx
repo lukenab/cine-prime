@@ -1,8 +1,8 @@
 import AuthLayout from "../layouts/AuthLayout";
 import CustomerLayout from "../layouts/CustomerLayout";
 import LoginPage from "../pages/auth/LoginPage";
-import HomePage from "../pages/customer/HomePage";
 import { Route, Routes } from "react-router-dom";
+import RootRedirect from "./RootRedirect";
 import ProtectedRoute from "./ProtectedRoute";
 import AdminLayout from "../layouts/AdminLayout";
 import AdminDashboard from "../pages/admin/AdminDashboardPage";
@@ -16,12 +16,13 @@ import ManageShowTimePage from "../pages/admin/ManageShowTimePage";
 import CreateUserPage from "../pages/admin/CreateUserPage";
 import EditUserPage from "../pages/admin/EditUserPage";
 import UserDetailPage from "../pages/admin/UserDetailPage";
+import ManageBookingPage from "../pages/admin/ManageBookingPage";
 
 export default function AppRoutes() {
   return (
     <Routes>
       <Route element={<CustomerLayout />}>
-        <Route path="/" element={<HomePage />} />
+        <Route path="/" element={<RootRedirect />} />
       </Route>
 
       <Route element={<AuthLayout/>}>
@@ -29,20 +30,26 @@ export default function AppRoutes() {
         <Route path="register" element={<RegisterPage/>}/>
       </Route>
 
-      <Route element={<ProtectedRoute allowedRoles={["ROLE_ADMIN"]}/>}>
+      {/* ADMIN + EMPLOYEE shared */}
+      <Route element={<ProtectedRoute allowedRoles={["ROLE_ADMIN", "ROLE_EMPLOYEE"]}/>}>
         <Route path="/admin" element={<AdminLayout/>}>
-            <Route index element={<AdminDashboard/>}/>
+          <Route index element={<AdminDashboard/>}/>
 
-            <Route path="users" element={<ManageUserPage/>}/>
-            <Route path="users/create" element={<CreateUserPage/>}/>
+          {/* Accessible by both ADMIN and EMPLOYEE */}
+          <Route path="movies"    element={<ManageMoviePage/>}/>
+          <Route path="showtimes" element={<ManageShowTimePage/>}/>
+          <Route path="bookings"  element={<ManageBookingPage/>}/>
+
+          {/* ADMIN only */}
+          <Route element={<ProtectedRoute allowedRoles={["ROLE_ADMIN"]}/>}>
+            <Route path="users"          element={<ManageUserPage/>}/>
+            <Route path="users/create"   element={<CreateUserPage/>}/>
             <Route path="users/edit/:id" element={<EditUserPage/>}/>
-            <Route path="users/:id" element={<UserDetailPage/>}/>
-
-            <Route path="movies" element={<ManageMoviePage/>}/>
-            <Route path="rooms" element={<ManageCinemaRoomsPage/>}/>
-            <Route path="rooms/:id" element={<RoomDetailPage/>}/>
-            <Route path="genres" element={<ManageGenresPage/>}/>
-            <Route path="showtimes" element={<ManageShowTimePage/>}/>
+            <Route path="users/:id"      element={<UserDetailPage/>}/>
+            <Route path="rooms"          element={<ManageCinemaRoomsPage/>}/>
+            <Route path="rooms/:id"      element={<RoomDetailPage/>}/>
+            <Route path="genres"         element={<ManageGenresPage/>}/>
+          </Route>
         </Route>
       </Route>
     </Routes>
