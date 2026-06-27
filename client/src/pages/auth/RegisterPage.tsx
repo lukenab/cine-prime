@@ -60,7 +60,7 @@ function FormInput({
         style={{
           width: "100%",
           background: "#141414",
-          border: `1px solid ${error ? "#FF4B4B" : focused ? "#FFD700" : "rgba(255,255,255,0.1)"}`,
+          border: `1px solid ${error ? "#FF4B4B" : focused ? "#3b82f6" : "rgba(255,255,255,0.1)"}`,
           borderRadius: "10px",
           padding: rightElement ? "12px 44px 12px 14px" : "12px 14px",
           color: "#ffffff",
@@ -72,7 +72,7 @@ function FormInput({
           boxShadow: focused
             ? error
               ? "0 0 0 3px rgba(255, 75, 75, 0.15)"
-              : "0 0 0 3px rgba(255,215,0,0.12)"
+              : "0 0 0 3px rgba(59,130,246,0.12)"
             : "none",
         }}
       />
@@ -126,7 +126,7 @@ function FormSelect({
         style={{
           width: "100%",
           background: "#141414",
-          border: `1px solid ${error ? "#FF4B4B" : focused ? "#FFD700" : "rgba(255,255,255,0.1)"}`,
+          border: `1px solid ${error ? "#FF4B4B" : focused ? "#3b82f6" : "rgba(255,255,255,0.1)"}`,
           borderRadius: "10px",
           padding: "12px 14px",
           color: value ? "#ffffff" : "rgba(255,255,255,0.3)",
@@ -139,7 +139,7 @@ function FormSelect({
           boxShadow: focused
             ? error
               ? "0 0 0 3px rgba(255, 75, 75, 0.15)"
-              : "0 0 0 3px rgba(255,215,0,0.12)"
+              : "0 0 0 3px rgba(59,130,246,0.12)"
             : "none",
           appearance: "none",
           WebkitAppearance: "none",
@@ -172,13 +172,13 @@ function StepProgress({ current }: { current: 1 | 2 }) {
           width: 28,
           height: 28,
           borderRadius: "50%",
-          background: "#FFD700",
+          background: "#3b82f6",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           fontSize: "13px",
           fontWeight: 800,
-          color: "#050505",
+          color: "#ffffff",
           flexShrink: 0,
         }}
       >
@@ -188,7 +188,7 @@ function StepProgress({ current }: { current: 1 | 2 }) {
         style={{
           flex: 1,
           height: 2,
-          background: current === 2 ? "#FFD700" : "rgba(255,255,255,0.08)",
+          background: current === 2 ? "#3b82f6" : "rgba(255,255,255,0.08)",
           margin: "0 10px",
           transition: "background 0.4s ease",
         }}
@@ -198,14 +198,14 @@ function StepProgress({ current }: { current: 1 | 2 }) {
           width: 28,
           height: 28,
           borderRadius: "50%",
-          background: current === 2 ? "#FFD700" : "transparent",
-          border: `2px solid ${current === 2 ? "#FFD700" : "rgba(255,255,255,0.15)"}`,
+          background: current === 2 ? "#3b82f6" : "transparent",
+          border: `2px solid ${current === 2 ? "#3b82f6" : "rgba(255,255,255,0.15)"}`,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           fontSize: "13px",
           fontWeight: 800,
-          color: current === 2 ? "#050505" : "rgba(255,255,255,0.3)",
+          color: current === 2 ? "#ffffff" : "rgba(255,255,255,0.3)",
           flexShrink: 0,
           transition: "all 0.3s ease",
         }}
@@ -218,7 +218,7 @@ function StepProgress({ current }: { current: 1 | 2 }) {
 
 const submitButtonBase: React.CSSProperties = {
   width: "100%",
-  color: "#050505",
+  color: "#ffffff",
   border: "none",
   borderRadius: "9999px",
   padding: "14px",
@@ -386,20 +386,20 @@ export default function RegisterPage() {
               disabled={nextLoading}
               style={{
                 ...submitButtonBase,
-                background: nextLoading ? "rgba(255,215,0,0.5)" : "#FFD700",
+                background: nextLoading ? "rgba(59,130,246,0.5)" : "#3b82f6",
                 cursor: nextLoading ? "not-allowed" : "pointer",
-                boxShadow: nextLoading ? "none" : "0 4px 24px rgba(255,215,0,0.35), 0 2px 8px rgba(255,215,0,0.2)",
+                boxShadow: nextLoading ? "none" : "0 4px 24px rgba(59,130,246,0.35), 0 2px 8px rgba(59,130,246,0.2)",
               }}
               onMouseEnter={(e) => {
                 if (!nextLoading) {
                   e.currentTarget.style.transform = "translateY(-1px)";
-                  e.currentTarget.style.boxShadow = "0 6px 32px rgba(255,215,0,0.45), 0 2px 12px rgba(255,215,0,0.3)";
+                  e.currentTarget.style.boxShadow = "0 6px 32px rgba(59,130,246,0.45), 0 2px 12px rgba(59,130,246,0.3)";
                 }
               }}
               onMouseLeave={(e) => {
                 if (!nextLoading) {
                   e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow = "0 4px 24px rgba(255,215,0,0.35), 0 2px 8px rgba(255,215,0,0.2)";
+                  e.currentTarget.style.boxShadow = "0 4px 24px rgba(59,130,246,0.35), 0 2px 8px rgba(59,130,246,0.2)";
                 }
               }}
             >
@@ -418,7 +418,7 @@ export default function RegisterPage() {
               Already have an account?{" "}
               <Link
                 to="/login"
-                style={{ color: "#FFD700", fontWeight: 700, textDecoration: "none" }}
+                style={{ color: "#3b82f6", fontWeight: 700, textDecoration: "none" }}
                 onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "underline")}
                 onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "none")}
               >
@@ -549,20 +549,20 @@ export default function RegisterPage() {
               disabled={loading}
               style={{
                 ...submitButtonBase,
-                background: loading ? "rgba(255,215,0,0.5)" : "#FFD700",
+                background: loading ? "rgba(59,130,246,0.5)" : "#3b82f6",
                 cursor: loading ? "not-allowed" : "pointer",
-                boxShadow: loading ? "none" : "0 4px 24px rgba(255,215,0,0.35), 0 2px 8px rgba(255,215,0,0.2)",
+                boxShadow: loading ? "none" : "0 4px 24px rgba(59,130,246,0.35), 0 2px 8px rgba(59,130,246,0.2)",
               }}
               onMouseEnter={(e) => {
                 if (!loading) {
                   e.currentTarget.style.transform = "translateY(-1px)";
-                  e.currentTarget.style.boxShadow = "0 6px 32px rgba(255,215,0,0.45), 0 2px 12px rgba(255,215,0,0.3)";
+                  e.currentTarget.style.boxShadow = "0 6px 32px rgba(59,130,246,0.45), 0 2px 12px rgba(59,130,246,0.3)";
                 }
               }}
               onMouseLeave={(e) => {
                 if (!loading) {
                   e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow = "0 4px 24px rgba(255,215,0,0.35), 0 2px 8px rgba(255,215,0,0.2)";
+                  e.currentTarget.style.boxShadow = "0 4px 24px rgba(59,130,246,0.35), 0 2px 8px rgba(59,130,246,0.2)";
                 }
               }}
             >
@@ -599,14 +599,14 @@ export default function RegisterPage() {
               style={{
                 width: "64px",
                 height: "64px",
-                background: "rgba(255,215,0,0.1)",
+                background: "rgba(59,130,246,0.1)",
                 borderRadius: "50%",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Mail size={28} color="#FFD700" />
+              <Mail size={28} color="#3b82f6" />
             </div>
           </div>
 
@@ -657,7 +657,7 @@ export default function RegisterPage() {
                   border: "1px solid rgba(255,255,255,0.1)",
                   borderRadius: "10px",
                   padding: "16px",
-                  color: "#FFD700",
+                  color: "#3b82f6",
                   fontSize: "28px",
                   textAlign: "center",
                   letterSpacing: "0.5em",
@@ -666,7 +666,7 @@ export default function RegisterPage() {
                   fontWeight: 600,
                   boxSizing: "border-box",
                 }}
-                onFocus={(e) => (e.target.style.borderColor = "#FFD700")}
+                onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
                 onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}
               />
             </div>
@@ -676,9 +676,9 @@ export default function RegisterPage() {
               disabled={loading}
               style={{
                 ...submitButtonBase,
-                background: loading ? "rgba(255,215,0,0.5)" : "#FFD700",
+                background: loading ? "rgba(59,130,246,0.5)" : "#3b82f6",
                 cursor: loading ? "not-allowed" : "pointer",
-                boxShadow: loading ? "none" : "0 4px 24px rgba(255,215,0,0.35)",
+                boxShadow: loading ? "none" : "0 4px 24px rgba(59,130,246,0.35)",
               }}
             >
               {loading ? "Verifying..." : "Verify & Create Account"}
@@ -695,7 +695,7 @@ export default function RegisterPage() {
             >
               <span style={{ color: "rgba(255,255,255,0.45)", fontSize: "14px" }}>Didn't receive the code?</span>
               {countdown > 0 ? (
-                <span style={{ color: "rgba(255,215,0,0.5)", fontSize: "14px", fontWeight: 700 }}>
+                <span style={{ color: "rgba(59,130,246,0.5)", fontSize: "14px", fontWeight: 700 }}>
                   Resend in {countdown}s
                 </span>
               ) : (
@@ -706,7 +706,7 @@ export default function RegisterPage() {
                   style={{
                     background: "none",
                     border: "none",
-                    color: "#FFD700",
+                    color: "#3b82f6",
                     cursor: resendLoading ? "not-allowed" : "pointer",
                     fontWeight: 700,
                     fontSize: "14px",
@@ -745,11 +745,11 @@ export default function RegisterPage() {
             style={{
               marginBottom: "24px",
               padding: "20px",
-              background: "rgba(255, 215, 0, 0.08)",
+              background: "rgba(59, 130, 246, 0.08)",
               borderRadius: "50%",
             }}
           >
-            <CheckCircle size={72} color="#FFD700" strokeWidth={1.5} />
+            <CheckCircle size={72} color="#3b82f6" strokeWidth={1.5} />
           </div>
 
           <h2
@@ -780,8 +780,8 @@ export default function RegisterPage() {
             onClick={() => navigate("/login")}
             style={{
               width: "100%",
-              background: "#FFD700",
-              color: "#050505",
+              background: "#3b82f6",
+              color: "#ffffff",
               border: "none",
               borderRadius: "9999px",
               padding: "16px",
@@ -789,7 +789,7 @@ export default function RegisterPage() {
               fontWeight: 700,
               fontFamily: "Inter, sans-serif",
               cursor: "pointer",
-              boxShadow: "0 4px 24px rgba(255,215,0,0.35)",
+              boxShadow: "0 4px 24px rgba(59,130,246,0.35)",
               transition: "transform 0.2s ease",
             }}
             onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.02)")}

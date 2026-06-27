@@ -2,8 +2,8 @@
 
 > **Source of Truth:** This is the single, official document defining the APIs for the Auth Service. Any modifications to Input/Output schemas must be updated and agreed upon here before actual implementation.
 
-**Version:** v1.3.0
-**Last Updated:** June 25, 2026
+**Version:** v1.4.0
+**Last Updated:** June 27, 2026
 
 ---
 
@@ -412,18 +412,20 @@ Resends a new 6-digit OTP to the provided email. Rate-limited to prevent abuse.
 
 Revokes the current JWT token. After this call, the token is marked as revoked in the whitelist and will be rejected by all services.
 
-> **Note:** Requires a valid JWT token in the `Authorization` header.
+**Request Header:**
 
-**Request Body:**
-```json
-{
-  "token": "eyJhbGciOiJIUzUxMiJ9..."
-}
+```
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9...
 ```
 
-| Field | Type | Required | Description |
-| :--- | :--- | :---: | :--- |
-| `token` | string | ✅ | The JWT access token to revoke |
+| Header | Required | Description |
+| :--- | :---: | :--- |
+| `Authorization` | ✅ | Bearer token to revoke. Extracted server-side from the `Authorization` header — no request body needed. |
+
+**Request Body:** none
+
+> **Why header, not body?**
+> Token is identity context, not payload data — it belongs in `Authorization` per RFC 6750. Sending tokens in the request body risks them being captured in server access logs, which typically record body content but redact the `Authorization` header by convention.
 
 **Success Response (200):**
 ```json
@@ -433,9 +435,17 @@ Revokes the current JWT token. After this call, the token is marked as revoked i
 }
 ```
 
-**Error Response:**
+**Error Responses:**
 
-*401 — Token invalid or already revoked:*
+*401 — Missing or malformed Authorization header:*
+```json
+{
+  "code": 1008,
+  "message": "Unauthenticated!"
+}
+```
+
+*401 — Token already revoked or signature invalid:*
 ```json
 {
   "code": 1008,
@@ -924,6 +934,7 @@ Retrieves all roles and their assigned permissions.
 - Token carries role/permission claims used by the gateway and each service for access control
 - **Whitelist model:** every issued token is stored in the `auth_token` table with `is_revoked = false`. On `/logout` or `/refresh`, the old token is marked `is_revoked = true` and rejected immediately — even if the JWT signature is still technically valid
 - **Token rotation:** calling `/refresh` revokes the old token and issues a brand-new one atomically. Never reuse a token after calling `/refresh`
+- **Logout requires Authorization header:** `/logout` reads the token from `Authorization: Bearer <token>` — no request body. Clients must not clear the token from storage until after the server confirms revocation (200 OK). Clearing before the call would cause the axios interceptor to send no Authorization header, and the server would reject the request with 401.
 
 ### Account Status
 - Login checks `account.status`. A value other than `1` (active) returns error `1020` (`ACCOUNT_INACTIVE`)
@@ -976,6 +987,14 @@ For full Kafka contract details (retries, DLT, idempotency), see [docs/kafka-use
 ---
 
 ## 10. Changelog
+
+### Version 1.4.0 (2026-06-27)
+- **Breaking change — `POST /api/auth/logout`:** Token is no longer accepted in the request body. The endpoint now reads the token exclusively from the `Authorization: Bearer <token>` header.
+  - **Before:** `POST /api/auth/logout` with body `{ "token": "eyJ..." }`
+  - **After:** `POST /api/auth/logout` with header `Authorization: Bearer eyJ...` and no body
+  - **Rationale:** Tokens are identity context (RFC 6750), not payload data. Request bodies are more likely to appear in server access logs than the `Authorization` header, which log aggregators typically redact by convention. The axios request interceptor already attaches the token to every outgoing request automatically, making the body field redundant.
+  - **Frontend impact:** `authApi.logout()` no longer accepts a `token` argument. The axios interceptor handles header injection automatically.
+  - **Backend impact:** `AuthenticationController` now reads from `HttpServletRequest.getHeader("Authorization")` and delegates to `AuthenticationService.logoutByToken(String token)`. The old `logout(LogoutRequest)` method is retained as a delegate wrapper for backward compatibility.
 
 ### Version 1.3.0 (2026-06-25)
 - Added `GET /api/auth/check` — pre-check username/email availability (no auth required)

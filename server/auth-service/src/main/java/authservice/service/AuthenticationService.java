@@ -171,7 +171,12 @@ public class AuthenticationService {
 
     @Transactional
     public void logout(LogoutRequest request) throws ParseException, JOSEException {
-        SignedJWT signedToken = jwtService.verifyToken(request.getToken(), false);
+        logoutByToken(request.getToken());
+    }
+
+    @Transactional
+    public void logoutByToken(String token) throws ParseException, JOSEException {
+        SignedJWT signedToken = jwtService.verifyToken(token, false);
         authTokenRepository.revokeByJwtId(
                 signedToken.getJWTClaimsSet().getJWTID(),
                 OffsetDateTime.now()
