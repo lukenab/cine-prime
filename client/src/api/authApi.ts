@@ -39,6 +39,16 @@ export const authApi = {
     },
 
     updateAccount: (accountId: string | undefined, payload: any) => {
-      return axiosClient.put(`/api/accounts/${accountId}`, payload);
-  }
+        return axiosClient.put(`/api/accounts/${accountId}`, payload);
+    },
+
+    logout: () => {
+        // Token đã được interceptor tự đính vào Authorization header
+        // Không cần gửi trong body nữa
+        return axiosClient.post('/api/auth/logout');
+    },
+
+    refresh: (token: string) => {
+        return axiosClient.post('/api/auth/refresh', { token });
+    },
 }
