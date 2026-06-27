@@ -65,27 +65,33 @@ export default function ManageUserPage() {
       const profiles = userResponse?.result?.data || [];
       const accounts = authResponse?.result || [];
 
-      const mappedUsers: UserData[] = accounts.map((acc: any) => {
-        const profile = profiles.find((p: any) => p.accountId === acc.accountId) || {};
+      const mappedUsers: UserData[] = accounts
+        .filter((acc: any) => {
+          const roleName: string = acc.roles?.[0]?.roleName ?? "";
+          // Exclude employees — managed separately in ManageEmployeePage
+          return roleName !== "EMPLOYEE" && roleName !== "ROLE_EMPLOYEE";
+        })
+        .map((acc: any) => {
+          const profile = profiles.find((p: any) => p.accountId === acc.accountId) || {};
 
-        let rawRole = "USER"; 
-        if (acc.roles && acc.roles.length > 0) {
-          rawRole = acc.roles[0].roleName || "USER";
-        }
-        
-       let userRole = String(rawRole).charAt(0).toUpperCase() + String(rawRole).slice(1).toLowerCase();
+          let rawRole = "USER";
+          if (acc.roles && acc.roles.length > 0) {
+            rawRole = acc.roles[0].roleName || "USER";
+          }
 
-        return {
-          id: acc.accountId,
-          name: profile.fullName || acc.username || "Unknown",
-          email: acc.email || "No Email",
-          role: userRole,
-          status: profile.isActive === false ? "Inactive" : "Active",
-          phoneNumber: profile.phoneNumber || "No Phone",
-          avatar: profile.avatarUrl || avatarGradients[acc.accountId.charCodeAt(0) % avatarGradients.length],
-          joined: new Date(acc.createdAt || Date.now()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-        };
-      });
+          const userRole = String(rawRole).charAt(0).toUpperCase() + String(rawRole).slice(1).toLowerCase();
+
+          return {
+            id: acc.accountId,
+            name: profile.fullName || acc.username || "Unknown",
+            email: acc.email || "No Email",
+            role: userRole,
+            status: profile.isActive === false ? "Inactive" : "Active",
+            phoneNumber: profile.phoneNumber || "No Phone",
+            avatar: profile.avatarUrl || avatarGradients[acc.accountId.charCodeAt(0) % avatarGradients.length],
+            joined: new Date(acc.createdAt || Date.now()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+          };
+        });
 
       setUsers(mappedUsers);
     } catch (error) {
@@ -139,9 +145,9 @@ export default function ManageUserPage() {
             transition: "color 0.2s ease",
           }}
         >
-          User Management
+          Customer Management
         </h1>
-        <p style={{ color: "var(--text-sub)", fontSize: "13px", transition: "color 0.2s ease" }}>Manage accounts, roles, and permissions</p>
+        <p style={{ color: "var(--text-sub)", fontSize: "13px", transition: "color 0.2s ease" }}>Manage customer accounts and membership status</p>
       </div>
 
       {/* KPI Cards */}
@@ -194,7 +200,7 @@ export default function ManageUserPage() {
           style={{ fontSize: "14px", fontWeight: 500, background: isDarkMode ? "#3b82f6" : "#2563eb" }}
         >
           <Plus size={16} />
-          Add New User
+          Add New Customer
         </button>
       </div>
 

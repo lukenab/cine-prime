@@ -9,11 +9,11 @@ import org.mapstruct.Named;
 import org.mapstruct.MappingTarget;
 import movieservice.dto.request.CinemaRoomRequest;
 import movieservice.dto.request.CreateMovieRequest;
-import movieservice.dto.request.SeatRequest;
 import movieservice.dto.request.TypeRequest;
-import movieservice.dto.response.CinemaRoomResponse;
 import movieservice.dto.request.UpdateMovieRequest;
+import movieservice.dto.response.CinemaRoomResponse;
 import movieservice.dto.response.MovieResponse;
+import movieservice.dto.response.SeatResponse;
 import movieservice.dto.response.TypeMovieResponse;
 import movieservice.entity.CinemaRoom;
 import movieservice.entity.Movie;
@@ -37,7 +37,12 @@ public interface MovieMapper {
     MovieType toType(TypeRequest typeRequest);
     TypeMovieResponse toMovieResponse(MovieType typeMovie);
     List<TypeMovieResponse> toTypeResponseList(List<MovieType> movieTypes);
-    Seat toSeat(SeatRequest request);
+    @Mapping(target = "cinemaRoomId", source = "cinemaRoom.cinemaRoomId")
+    @Mapping(target = "cinemaRoomName", source = "cinemaRoom.cinemaRoomName")
+    SeatResponse toSeatResponse(Seat seat);
+
+    List<SeatResponse> toSeatResponseList(List<Seat> seats);
+
     @Named("mapTypesToGenreNames")
     default List<String> mapTypesToGenreNames(List<MovieType> types) {
         if (types == null) {

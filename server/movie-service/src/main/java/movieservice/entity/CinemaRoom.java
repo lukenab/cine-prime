@@ -4,6 +4,8 @@ import java.util.List;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -14,6 +16,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
+import movieservice.enums.RoomType;
 
 @Getter
 @Setter
@@ -35,6 +38,10 @@ public class CinemaRoom {
 
     @Column(name = "status")
     Boolean status;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "room_type", columnDefinition = "VARCHAR(20) DEFAULT 'STANDARD'")
+    RoomType roomType;
 
     @OneToMany(mappedBy = "cinemaRoom", fetch = FetchType.LAZY)
     List<Seat> seats;

@@ -1,5 +1,5 @@
 import { useAuth } from "../context/AuthContext";
-import { Bell, Search, ChevronRight, User, Settings, LogOut } from "lucide-react";
+import { Bell, Search, ChevronRight, User, Settings, LogOut, Sun, Moon } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -17,6 +17,7 @@ function getInitials(username: string): string {
 interface HeaderProps {
   activePage: string;
   isDarkMode?: boolean;
+  onToggleTheme?: () => void;
 }
 
 const pageTitles: Record<string, string> = {
@@ -31,7 +32,7 @@ const pageTitles: Record<string, string> = {
   settings: "Settings",
 };
 
-export function Header({ activePage, isDarkMode = true }: HeaderProps) {
+export function Header({ activePage, isDarkMode = true, onToggleTheme }: HeaderProps) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -96,6 +97,23 @@ const handleLogout = () => {
         <div style={{ padding: "5px 12px", background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "6px", color: "var(--text-muted)", fontSize: "11.5px", letterSpacing: "0.02em", transition: "all 0.2s ease" }}>
           Thu, Jun 11 2026
         </div>
+
+        {/* Dark / Light mode toggle */}
+        <button
+          onClick={onToggleTheme}
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "8px", width: "36px", height: "36px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--text-sub)", transition: "all 0.15s ease" }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = isDarkMode ? "rgba(255, 215, 0, 0.4)" : "#ca8a04";
+            e.currentTarget.style.color = isDarkMode ? "#FFD700" : "#ca8a04";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = "var(--border-color)";
+            e.currentTarget.style.color = "var(--text-sub)";
+          }}
+          title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+        >
+          {isDarkMode ? <Sun size={15} style={{ color: "#FFD700" }} /> : <Moon size={15} />}
+        </button>
 
         {/* Notification bell */}
         <button
