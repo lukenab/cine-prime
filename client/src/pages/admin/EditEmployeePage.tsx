@@ -1,39 +1,26 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, Save, Camera, User } from "lucide-react";
+import { ArrowLeft, Save } from "lucide-react";
 import { useNavigate, useParams, useOutletContext } from "react-router-dom";
+import { employeeApi, type EmployeeResponse } from "../../api/employeeApi";
+import { userApi } from "../../api/userApi";
 
 import type { EmployeeFormData } from "./CreateEmployeePage";
 
-const DEPARTMENTS = ["Box Office", "Operations", "Concessions", "IT", "Security", "Housekeeping"];
-
-const POSITIONS: Record<string, string[]> = {
-  "Box Office":   ["Ticket Agent", "Senior Ticket Agent", "Box Office Supervisor"],
-  "Operations":   ["Shift Supervisor", "Operations Manager", "Floor Staff"],
-  "Concessions":  ["F&B Staff", "F&B Supervisor", "Concessions Manager"],
-  "IT":           ["System Admin", "IT Support", "IT Manager"],
-  "Security":     ["Security Guard", "Security Supervisor"],
-  "Housekeeping": ["Housekeeping Staff", "Housekeeping Supervisor"],
-};
-
-// ── Mock fetch — replace with API when employee-service is ready ──────────────
-async function fetchEmployeeById(id: string): Promise<EmployeeFormData> {
-  await new Promise((r) => setTimeout(r, 400));
-  return {
-    username:     "an.nguyen",
-    email:        "an.nguyen@cineprime.vn",
-    password:     "",
-    fullName:     "Nguyen Van An",
-    phoneNumber:  "0912345678",
-    gender:       "MALE",
-    dateOfBirth:  "1998-04-22",
-    identityCard: "012345678901",
-    address:      "123 Nguyen Hue, District 1, HCMC",
-    employeeCode: "EMP001",
-    department:   "Box Office",
-    position:     "Ticket Agent",
-    hireDate:     "2024-01-15",
-  };
-}
+const POSITIONS = [
+  "Ticket Agent",
+  "Senior Ticket Agent",
+  "Box Office Supervisor",
+  "Shift Supervisor",
+  "Operations Manager",
+  "Floor Staff",
+  "F&B Staff",
+  "F&B Supervisor",
+  "Concessions Manager",
+  "System Admin",
+  "IT Support",
+  "Security Guard",
+  "Housekeeping Staff",
+];
 
 // ── Field helpers ─────────────────────────────────────────────────────────────
 function FormField({
@@ -52,7 +39,7 @@ function FormField({
   );
 }
 
-const inputCls  = "px-3.5 py-2.5 text-sm rounded-xl border outline-none focus:ring-2 focus:ring-blue-500/50 transition-all";
+const inputCls   = "px-3.5 py-2.5 text-sm rounded-xl border outline-none focus:ring-2 focus:ring-blue-500/50 transition-all";
 const inputStyle = { background: "transparent", color: "var(--text-main)", borderColor: "var(--border-color)" };
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -64,32 +51,52 @@ export default function EditEmployeePage() {
   const [formData, setFormData] = useState<EmployeeFormData>({
     username: "", email: "", password: "", fullName: "", phoneNumber: "",
     gender: "MALE", dateOfBirth: "", identityCard: "", address: "",
-    employeeCode: "", department: "", position: "", hireDate: "",
+    position: "", hireDate: "",
   });
 
-  const [errors, setErrors]   = useState<Partial<Record<keyof EmployeeFormData, string>>>({});
-  const [fetching, setFetching] = useState(true);
-  const [loading, setLoading]   = useState(false);
-  const [apiError, setApiError] = useState<string | null>(null);
+  // Store accountId separately (needed for user profile update)
+  const [accountId, setAccountId]   = useState<string>("");
+  const [errors, setErrors]         = useState<Partial<Record<keyof EmployeeFormData, string>>>({});
+  const [fetching, setFetching]     = useState(true);
+  const [loading, setLoading]       = useState(false);
+  const [apiError, setApiError]     = useState<string | null>(null);
 
   const accentColor = isDarkMode ? "#3b82f6" : "#2563eb";
 
   // ── Fetch existing data ────────────────────────────────────────────────────
   useEffect(() => {
     if (!id) return;
-    fetchEmployeeById(id)
-      .then((data) => setFormData(data))
-      .catch(() => setApiError("Failed to load employee data."))
-      .finally(() => setFetching(false));
+    const fetchData = async () => {
+      try {
+        const res = await employeeApi.getById(id);
+        const emp: EmployeeResponse = (res as any)?.result;
+        setAccountId(emp.accountId);
+        setFormData({
+          username:     "",           // fetched from auth-service; read-only in form
+          email:        "",
+          password:     "",
+          fullName:     emp.fullName     ?? "",
+          phoneNumber:  emp.phoneNumber  ?? "",
+          gender:       emp.gender       ?? "MALE",
+          dateOfBirth:  emp.dateOfBirth  ?? "",
+          identityCard: emp.identityCard ?? "",
+          address:      emp.address      ?? "",
+          position:     emp.position     ?? "",
+          hireDate:     emp.hireDate     ?? "",
+        });
+      } catch (err: any) {
+        setApiError(err?.response?.data?.message || "Failed to load employee data.");
+      } finally {
+        setFetching(false);
+      }
+    };
+    fetchData();
   }, [id]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => {
-      if (name === "department") return { ...prev, department: value, position: "" };
-      return { ...prev, [name]: value };
-    });
+    setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name as keyof EmployeeFormData]) {
       setErrors((prev) => ({ ...prev, [name]: undefined }));
     }
@@ -98,14 +105,10 @@ export default function EditEmployeePage() {
   const validate = (): boolean => {
     const e: Partial<Record<keyof EmployeeFormData, string>> = {};
     if (!formData.fullName.trim())                             e.fullName     = "Full name is required";
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email))  e.email        = "Invalid email format";
-    if (formData.password && formData.password.length < 8)    e.password     = "Password must be at least 8 characters";
     if (!/^0[35789][0-9]{8}$/.test(formData.phoneNumber))     e.phoneNumber  = "Invalid Vietnamese phone number";
     if (!/^[0-9]{12}$/.test(formData.identityCard))           e.identityCard = "Identity card must be exactly 12 digits";
     if (!formData.dateOfBirth)                                 e.dateOfBirth  = "Date of birth is required";
     if (!formData.address.trim())                              e.address      = "Address is required";
-    if (!formData.employeeCode.trim())                         e.employeeCode = "Employee code is required";
-    if (!formData.department)                                  e.department   = "Department is required";
     if (!formData.position)                                    e.position     = "Position is required";
     if (!formData.hireDate)                                    e.hireDate     = "Hire date is required";
     setErrors(e);
@@ -114,15 +117,28 @@ export default function EditEmployeePage() {
 
   const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
-    if (!validate()) return;
+    if (!validate() || !id) return;
     setLoading(true);
     setApiError(null);
     try {
-      // TODO: Replace with actual API call
-      // const payload = { ...formData };
-      // if (!payload.password) delete payload.password;
-      // await employeeApi.updateEmployee(id, payload);
-      await new Promise((r) => setTimeout(r, 800));
+      // Update employee fields (position + hireDate)
+      await employeeApi.update(id, {
+        position: formData.position,
+        hireDate: formData.hireDate,
+      });
+
+      // Update user profile fields via user-service
+      if (accountId) {
+        await userApi.updateUser(accountId, {
+          fullName:     formData.fullName,
+          phoneNumber:  formData.phoneNumber,
+          gender:       formData.gender,
+          dateOfBirth:  formData.dateOfBirth,
+          identityCard: formData.identityCard,
+          address:      formData.address,
+        });
+      }
+
       navigate(`/admin/employees/${id}`);
     } catch (err: any) {
       setApiError(err.response?.data?.message || err.message || "Failed to update employee.");
@@ -131,9 +147,6 @@ export default function EditEmployeePage() {
     }
   };
 
-  const positions = formData.department ? (POSITIONS[formData.department] ?? []) : [];
-
-  // ── Loading state ──────────────────────────────────────────────────────────
   if (fetching) {
     return (
       <div className="flex justify-center items-center py-24">
@@ -164,25 +177,11 @@ export default function EditEmployeePage() {
       </div>
 
       <form onSubmit={handleSubmit} noValidate>
-        {/* ── Section 1: Account Info ──────────────────────────────────────── */}
+        {/* ── Section 1: Personal Info ─────────────────────────────────────── */}
         <div className="p-6 rounded-2xl border mb-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
           <h2 className="text-sm font-bold mb-5 pb-3 border-b" style={{ color: "var(--text-main)", borderColor: "var(--border-color)" }}>
-            Account Information
+            Personal Information
           </h2>
-
-          {/* Avatar */}
-          <div className="mb-6">
-            <div className="relative w-20 h-20 rounded-full bg-slate-500 flex items-center justify-center shadow-inner">
-              <User size={36} color="#cbd5e1" className="mt-1" />
-              <button
-                type="button"
-                className="absolute bottom-0 right-0 w-7 h-7 rounded-full flex items-center justify-center border-2 hover:opacity-90 transition-all"
-                style={{ background: accentColor, borderColor: "var(--bg-card)" }}
-              >
-                <Camera size={12} color="white" />
-              </button>
-            </div>
-          </div>
 
           {apiError && (
             <div className="mb-5 p-3.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm font-medium">
@@ -194,24 +193,6 @@ export default function EditEmployeePage() {
             <FormField label="Full Name" required error={errors.fullName}>
               <input name="fullName" type="text" value={formData.fullName} onChange={handleChange}
                 className={`${inputCls} ${errors.fullName ? "border-red-400" : ""}`} style={inputStyle} />
-            </FormField>
-
-            {/* Username: disabled — không cho đổi */}
-            <FormField label="Username">
-              <input name="username" type="text" value={formData.username} disabled
-                className={`${inputCls} opacity-50 cursor-not-allowed`} style={inputStyle} />
-            </FormField>
-
-            {/* Email: disabled — không cho đổi */}
-            <FormField label="Email">
-              <input name="email" type="email" value={formData.email} disabled
-                className={`${inputCls} opacity-50 cursor-not-allowed`} style={inputStyle} />
-            </FormField>
-
-            <FormField label="New Password" error={errors.password}>
-              <input name="password" type="password" placeholder="Leave blank to keep current password"
-                autoComplete="new-password" value={formData.password} onChange={handleChange}
-                className={`${inputCls} ${errors.password ? "border-red-400" : ""}`} style={inputStyle} />
             </FormField>
 
             <FormField label="Phone Number" required error={errors.phoneNumber}>
@@ -245,46 +226,27 @@ export default function EditEmployeePage() {
           </div>
         </div>
 
-        {/* ── Section 2: Employee Info ─────────────────────────────────────── */}
+        {/* ── Section 2: Employment Info ──────────────────────────────────── */}
         <div className="p-6 rounded-2xl border mb-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
           <h2 className="text-sm font-bold mb-5 pb-3 border-b" style={{ color: "var(--text-main)", borderColor: "var(--border-color)" }}>
-            Employee Information
+            Employment Information
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <FormField label="Employee Code" required error={errors.employeeCode}>
-              <input name="employeeCode" type="text" value={formData.employeeCode} onChange={handleChange}
-                className={`${inputCls} ${errors.employeeCode ? "border-red-400" : ""}`} style={inputStyle} />
+            <FormField label="Position" required error={errors.position}>
+              <select name="position" value={formData.position} onChange={handleChange}
+                className={`${inputCls} ${errors.position ? "border-red-400" : ""}`}
+                style={{ ...inputStyle, background: "var(--bg-card)" }}>
+                <option value="" style={{ background: "var(--bg-card)" }}>Select position...</option>
+                {POSITIONS.map((p) => (
+                  <option key={p} value={p} style={{ background: "var(--bg-card)" }}>{p}</option>
+                ))}
+              </select>
             </FormField>
 
             <FormField label="Hire Date" required error={errors.hireDate}>
               <input name="hireDate" type="date" value={formData.hireDate} onChange={handleChange}
                 className={`${inputCls} ${errors.hireDate ? "border-red-400" : ""}`} style={inputStyle} />
-            </FormField>
-
-            <FormField label="Department" required error={errors.department}>
-              <select name="department" value={formData.department} onChange={handleChange}
-                className={`${inputCls} ${errors.department ? "border-red-400" : ""}`}
-                style={{ ...inputStyle, background: "var(--bg-card)" }}>
-                <option value="" style={{ background: "var(--bg-card)" }}>Select department...</option>
-                {DEPARTMENTS.map((d) => (
-                  <option key={d} value={d} style={{ background: "var(--bg-card)" }}>{d}</option>
-                ))}
-              </select>
-            </FormField>
-
-            <FormField label="Position" required error={errors.position}>
-              <select name="position" value={formData.position} onChange={handleChange}
-                disabled={!formData.department}
-                className={`${inputCls} ${errors.position ? "border-red-400" : ""} ${!formData.department ? "opacity-50 cursor-not-allowed" : ""}`}
-                style={{ ...inputStyle, background: "var(--bg-card)" }}>
-                <option value="" style={{ background: "var(--bg-card)" }}>
-                  {formData.department ? "Select position..." : "Select department first"}
-                </option>
-                {positions.map((p) => (
-                  <option key={p} value={p} style={{ background: "var(--bg-card)" }}>{p}</option>
-                ))}
-              </select>
             </FormField>
           </div>
         </div>

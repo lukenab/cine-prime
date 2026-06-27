@@ -1,24 +1,23 @@
-import { useState } from "react";
-import { Search, Plus, SlidersHorizontal, RefreshCw, Eye, Pencil, Trash2, Mail, Phone, ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Search, Plus, SlidersHorizontal, RefreshCw, Eye, Pencil, Trash2, Phone, ChevronLeft, ChevronRight } from "lucide-react";
 import { useOutletContext, useNavigate } from "react-router-dom";
+import { employeeApi, type EmployeeResponse } from "../../api/employeeApi";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export type EmployeeStatus = "Active" | "Inactive";
 
 export interface EmployeeData {
   id: string;
-  employeeCode: string;
+  accountId: string;
   fullName: string;
-  email: string;
   phoneNumber: string;
-  department: string;
   position: string;
   status: EmployeeStatus;
-  joinedAt: string;
-  avatar: string; // gradient string or URL
+  hireDate: string;
+  avatar: string;
 }
 
-// ── Mock data — replace with API calls when user-service is ready ─────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 const AVATAR_GRADIENTS = [
   "linear-gradient(135deg, #3b82f6, #6366f1)",
   "linear-gradient(135deg, #10b981, #059669)",
@@ -28,82 +27,27 @@ const AVATAR_GRADIENTS = [
   "linear-gradient(135deg, #f97316, #f59e0b)",
 ];
 
-const MOCK_EMPLOYEES: EmployeeData[] = [
-  {
-    id: "1",
-    employeeCode: "EMP001",
-    fullName: "Nguyen Van An",
-    email: "an.nguyen@cineprime.vn",
-    phoneNumber: "0912 345 678",
-    department: "Box Office",
-    position: "Ticket Agent",
-    status: "Active",
-    joinedAt: "Jan 15, 2024",
-    avatar: AVATAR_GRADIENTS[0],
-  },
-  {
-    id: "2",
-    employeeCode: "EMP002",
-    fullName: "Tran Thi Bich",
-    email: "bich.tran@cineprime.vn",
-    phoneNumber: "0987 654 321",
-    department: "Operations",
-    position: "Shift Supervisor",
-    status: "Active",
-    joinedAt: "Mar 3, 2023",
-    avatar: AVATAR_GRADIENTS[1],
-  },
-  {
-    id: "3",
-    employeeCode: "EMP003",
-    fullName: "Le Minh Duc",
-    email: "duc.le@cineprime.vn",
-    phoneNumber: "0909 111 222",
-    department: "Concessions",
-    position: "F&B Staff",
-    status: "Inactive",
-    joinedAt: "Jun 20, 2022",
-    avatar: AVATAR_GRADIENTS[2],
-  },
-  {
-    id: "4",
-    employeeCode: "EMP004",
-    fullName: "Pham Quynh Anh",
-    email: "anh.pham@cineprime.vn",
-    phoneNumber: "0933 456 789",
-    department: "Box Office",
-    position: "Ticket Agent",
-    status: "Active",
-    joinedAt: "Sep 10, 2023",
-    avatar: AVATAR_GRADIENTS[3],
-  },
-  {
-    id: "5",
-    employeeCode: "EMP005",
-    fullName: "Hoang Van Khanh",
-    email: "khanh.hoang@cineprime.vn",
-    phoneNumber: "0978 888 999",
-    department: "IT",
-    position: "System Admin",
-    status: "Active",
-    joinedAt: "Feb 1, 2024",
-    avatar: AVATAR_GRADIENTS[4],
-  },
-  {
-    id: "6",
-    employeeCode: "EMP006",
-    fullName: "Do Thi My",
-    email: "my.do@cineprime.vn",
-    phoneNumber: "0911 222 333",
-    department: "Operations",
-    position: "Ticket Agent",
-    status: "Active",
-    joinedAt: "Nov 15, 2023",
-    avatar: AVATAR_GRADIENTS[5],
-  },
-];
+function gradientFromId(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) & 0xffffffff;
+  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
+}
 
-const DEPARTMENTS = ["Box Office", "Operations", "Concessions", "IT"];
+function mapResponse(r: EmployeeResponse): EmployeeData {
+  return {
+    id: r.employeeId,
+    accountId: r.accountId,
+    fullName: r.fullName,
+    phoneNumber: r.phoneNumber,
+    position: r.position,
+    status: r.status === "ACTIVE" ? "Active" : "Inactive",
+    hireDate: r.hireDate
+      ? new Date(r.hireDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      : "—",
+    avatar: r.avatarUrl || gradientFromId(r.employeeId),
+  };
+}
+
 const ITEMS_PER_PAGE = 8;
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -139,7 +83,6 @@ function StatusBadge({ status }: { status: EmployeeStatus }) {
   );
 }
 
-// ── Stat cards ────────────────────────────────────────────────────────────────
 function EmployeeStatsCards({ total, active, inactive }: { total: number; active: number; inactive: number }) {
   const cards = [
     { label: "Total Employees", value: total,    color: "#3b82f6", bg: "rgba(59,130,246,0.08)"  },
@@ -159,10 +102,7 @@ function EmployeeStatsCards({ total, active, inactive }: { total: number; active
           </p>
           <div className="flex items-end gap-3">
             <span style={{ fontSize: "28px", fontWeight: 700, color: "var(--text-main)", lineHeight: 1 }}>{value}</span>
-            <span
-              className="px-2 py-0.5 rounded-lg text-xs font-semibold mb-0.5"
-              style={{ color, background: bg }}
-            >
+            <span className="px-2 py-0.5 rounded-lg text-xs font-semibold mb-0.5" style={{ color, background: bg }}>
               employees
             </span>
           </div>
@@ -172,7 +112,6 @@ function EmployeeStatsCards({ total, active, inactive }: { total: number; active
   );
 }
 
-// ── Deactivate confirmation modal ─────────────────────────────────────────────
 function DeactivateModal({ employee, onConfirm, onCancel }: { employee: EmployeeData; onConfirm: () => void; onCancel: () => void }) {
   return (
     <div
@@ -195,7 +134,7 @@ function DeactivateModal({ employee, onConfirm, onCancel }: { employee: Employee
           Are you sure you want to deactivate{" "}
           <span style={{ fontWeight: 600, color: "var(--text-main)" }}>{employee.fullName}</span>?
           <br />
-          This account will no longer be able to log in.
+          Their status will be set to Disabled.
         </p>
         <div className="flex gap-3">
           <button
@@ -223,15 +162,34 @@ export default function ManageEmployeePage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
   const navigate = useNavigate();
 
-  const [employees, setEmployees] = useState<EmployeeData[]>(MOCK_EMPLOYEES);
+  const [employees, setEmployees]         = useState<EmployeeData[]>([]);
+  const [loading, setLoading]             = useState(true);
+  const [apiError, setApiError]           = useState<string | null>(null);
   const [searchQuery, setSearchQuery]     = useState("");
-  const [deptFilter, setDeptFilter]       = useState("");
   const [statusFilter, setStatusFilter]   = useState("");
   const [showFilters, setShowFilters]     = useState(false);
   const [page, setPage]                   = useState(1);
   const [confirmTarget, setConfirmTarget] = useState<EmployeeData | null>(null);
+  const [disabling, setDisabling]         = useState(false);
 
   const accentColor = isDarkMode ? "#3b82f6" : "#2563eb";
+
+  // ── Fetch ──────────────────────────────────────────────────────────────────
+  const fetchEmployees = useCallback(async () => {
+    try {
+      setLoading(true);
+      setApiError(null);
+      const res = await employeeApi.getAll();
+      const data: EmployeeResponse[] = (res as any)?.result?.data ?? [];
+      setEmployees(data.map(mapResponse));
+    } catch (err: any) {
+      setApiError(err.response?.data?.message || "Failed to load employees.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchEmployees(); }, [fetchEmployees]);
 
   // ── Filtering ──────────────────────────────────────────────────────────────
   const filtered = employees.filter((e) => {
@@ -239,14 +197,11 @@ export default function ManageEmployeePage() {
     const matchSearch =
       !q ||
       e.fullName.toLowerCase().includes(q) ||
-      e.email.toLowerCase().includes(q) ||
-      e.employeeCode.toLowerCase().includes(q) ||
-      e.department.toLowerCase().includes(q) ||
       e.position.toLowerCase().includes(q) ||
-      e.phoneNumber.includes(q);
-    const matchDept   = !deptFilter   || e.department === deptFilter;
-    const matchStatus = !statusFilter || e.status     === statusFilter;
-    return matchSearch && matchDept && matchStatus;
+      e.phoneNumber.includes(q) ||
+      e.id.toLowerCase().includes(q);
+    const matchStatus = !statusFilter || e.status === statusFilter;
+    return matchSearch && matchStatus;
   });
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
@@ -254,9 +209,17 @@ export default function ManageEmployeePage() {
   const pageItems  = filtered.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
-  const handleDeactivate = (id: string) => {
-    setEmployees((prev) => prev.map((e) => (e.id === id ? { ...e, status: "Inactive" as const } : e)));
-    setConfirmTarget(null);
+  const handleDeactivate = async (id: string) => {
+    setDisabling(true);
+    try {
+      await employeeApi.disable(id);
+      setEmployees((prev) => prev.map((e) => e.id === id ? { ...e, status: "Inactive" as const } : e));
+    } catch (err: any) {
+      setApiError(err.response?.data?.message || "Failed to deactivate employee.");
+    } finally {
+      setDisabling(false);
+      setConfirmTarget(null);
+    }
   };
 
   const stats = {
@@ -267,53 +230,49 @@ export default function ManageEmployeePage() {
 
   return (
     <>
-      {/* Deactivate modal */}
       {confirmTarget && (
         <DeactivateModal
           employee={confirmTarget}
-          onConfirm={() => handleDeactivate(confirmTarget.id)}
+          onConfirm={() => !disabling && handleDeactivate(confirmTarget.id)}
           onCancel={() => setConfirmTarget(null)}
         />
       )}
 
-      {/* Page header */}
       <div style={{ marginBottom: "28px" }}>
         <h1 style={{ color: "var(--text-main)", fontWeight: 600, fontSize: "22px", letterSpacing: "-0.01em", marginBottom: "5px" }}>
           Employee Management
         </h1>
         <p style={{ color: "var(--text-sub)", fontSize: "13px" }}>
-          Manage staff accounts, departments, and access status.
+          Manage staff accounts, positions, and access status.
         </p>
       </div>
 
-      {/* Stats */}
       <EmployeeStatsCards {...stats} />
+
+      {/* API Error banner */}
+      {apiError && (
+        <div className="mb-4 p-3.5 rounded-xl text-sm font-medium" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.2)" }}>
+          {apiError}
+        </div>
+      )}
 
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap mb-6">
-        {/* Search */}
         <div className="relative flex-1 min-w-64">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-sub)" }} />
           <input
             type="text"
-            placeholder="Search by name, email, code, department..."
+            placeholder="Search by name, position, phone..."
             value={searchQuery}
             onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl outline-none transition-all"
             style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", border: "1px solid var(--border-color)" }}
           />
           {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 hover:text-rose-500"
-              style={{ fontSize: "16px", lineHeight: 1, color: "var(--text-sub)" }}
-            >
-              ×
-            </button>
+            <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 hover:text-rose-500" style={{ fontSize: "16px", lineHeight: 1, color: "var(--text-sub)" }}>×</button>
           )}
         </div>
 
-        {/* Filter toggle */}
         <button
           onClick={() => setShowFilters((v) => !v)}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all hover:opacity-80"
@@ -321,20 +280,19 @@ export default function ManageEmployeePage() {
         >
           <SlidersHorizontal size={15} />
           Filters
-          {(deptFilter || statusFilter) && <span className="w-2 h-2 rounded-full ml-0.5" style={{ background: accentColor }} />}
+          {statusFilter && <span className="w-2 h-2 rounded-full ml-0.5" style={{ background: accentColor }} />}
         </button>
 
-        {/* Refresh */}
         <button
-          onClick={() => { setEmployees(MOCK_EMPLOYEES); setPage(1); }}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all hover:opacity-80"
+          onClick={fetchEmployees}
+          disabled={loading}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all hover:opacity-80 disabled:opacity-50"
           style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
           title="Refresh"
         >
-          <RefreshCw size={15} />
+          <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
         </button>
 
-        {/* Add employee */}
         <button
           onClick={() => navigate("/admin/employees/create")}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all shadow-sm"
@@ -347,41 +305,12 @@ export default function ManageEmployeePage() {
 
       {/* Filter bar */}
       {showFilters && (
-        <div
-          className="flex items-center gap-3 flex-wrap p-4 rounded-xl border mb-6"
-          style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
-        >
-          {/* Department filter */}
-          <p style={{ fontSize: "13px", color: "var(--text-sub)" }}>Department:</p>
-          <div className="flex items-center gap-1 flex-wrap filter-btns">
-            <button onClick={() => { setDeptFilter(""); setPage(1); }} className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${!deptFilter ? "active-blue" : ""}`}>
-              All
-            </button>
-            {DEPARTMENTS.map((d) => (
-              <button
-                key={d}
-                onClick={() => { setDeptFilter(deptFilter === d ? "" : d); setPage(1); }}
-                className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${deptFilter === d ? "active-blue" : ""}`}
-              >
-                {d}
-              </button>
-            ))}
-          </div>
-
-          <div className="w-px h-5 mx-1" style={{ background: "var(--border-color)" }} />
-
-          {/* Status filter */}
+        <div className="flex items-center gap-3 flex-wrap p-4 rounded-xl border mb-6" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
           <p style={{ fontSize: "13px", color: "var(--text-sub)" }}>Status:</p>
           <div className="flex items-center gap-1 filter-btns">
-            <button onClick={() => { setStatusFilter(""); setPage(1); }} className={`px-3 py-1.5 rounded-lg border text-xs font-medium ${!statusFilter ? "active-blue" : ""}`}>
-              All
-            </button>
-            <button onClick={() => { setStatusFilter(statusFilter === "Active" ? "" : "Active"); setPage(1); }} className={`px-3 py-1.5 rounded-lg border text-xs font-medium ${statusFilter === "Active" ? "active-green" : ""}`}>
-              Active
-            </button>
-            <button onClick={() => { setStatusFilter(statusFilter === "Inactive" ? "" : "Inactive"); setPage(1); }} className={`px-3 py-1.5 rounded-lg border text-xs font-medium ${statusFilter === "Inactive" ? "active-gray" : ""}`}>
-              Inactive
-            </button>
+            <button onClick={() => { setStatusFilter(""); setPage(1); }} className={`px-3 py-1.5 rounded-lg border text-xs font-medium ${!statusFilter ? "active-blue" : ""}`}>All</button>
+            <button onClick={() => { setStatusFilter(statusFilter === "Active" ? "" : "Active"); setPage(1); }} className={`px-3 py-1.5 rounded-lg border text-xs font-medium ${statusFilter === "Active" ? "active-green" : ""}`}>Active</button>
+            <button onClick={() => { setStatusFilter(statusFilter === "Inactive" ? "" : "Inactive"); setPage(1); }} className={`px-3 py-1.5 rounded-lg border text-xs font-medium ${statusFilter === "Inactive" ? "active-gray" : ""}`}>Inactive</button>
           </div>
         </div>
       )}
@@ -392,7 +321,7 @@ export default function ManageEmployeePage() {
           <table className="w-full">
             <thead>
               <tr className="border-b" style={{ borderColor: "var(--border-color)", backgroundColor: "rgba(128,128,128,0.04)" }}>
-                {["Employee", "Contact", "Department / Position", "Status", "Joined"].map((h) => (
+                {["Employee", "Phone", "Position", "Status", "Hire Date"].map((h) => (
                   <th key={h} className="px-5 py-3.5 text-left">
                     <span style={{ color: "var(--text-sub)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>{h}</span>
                   </th>
@@ -404,10 +333,18 @@ export default function ManageEmployeePage() {
             </thead>
 
             <tbody>
-              {pageItems.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-16 text-center">
+                    <div className="flex justify-center">
+                      <div className="w-6 h-6 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
+                    </div>
+                  </td>
+                </tr>
+              ) : pageItems.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>
-                    No employees found matching your filters.
+                    {employees.length === 0 ? "No employees yet. Click Add Employee to get started." : "No employees match your filters."}
                   </td>
                 </tr>
               ) : (
@@ -424,29 +361,24 @@ export default function ManageEmployeePage() {
                         <Avatar name={emp.fullName} avatar={emp.avatar} />
                         <div>
                           <p style={{ fontSize: "14px", fontWeight: 500, color: "var(--text-main)" }}>{emp.fullName}</p>
-                          <p style={{ fontSize: "11px", color: "var(--text-sub)", marginTop: "2px" }}>{emp.employeeCode}</p>
+                          <p style={{ fontSize: "11px", color: "var(--text-sub)", marginTop: "2px", fontFamily: "monospace" }}>
+                            {emp.id.slice(0, 8)}…
+                          </p>
                         </div>
                       </div>
                     </td>
 
-                    {/* Contact */}
+                    {/* Phone */}
                     <td className="px-5 py-3.5">
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-1.5" style={{ color: "var(--text-sub)" }}>
-                          <Mail size={11} />
-                          <span style={{ fontSize: "12px" }}>{emp.email}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5" style={{ color: "var(--text-sub)" }}>
-                          <Phone size={11} />
-                          <span style={{ fontSize: "12px" }}>{emp.phoneNumber}</span>
-                        </div>
+                      <div className="flex items-center gap-1.5" style={{ color: "var(--text-sub)" }}>
+                        <Phone size={11} />
+                        <span style={{ fontSize: "12px" }}>{emp.phoneNumber || "—"}</span>
                       </div>
                     </td>
 
-                    {/* Department / Position */}
+                    {/* Position */}
                     <td className="px-5 py-3.5">
-                      <p style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-main)" }}>{emp.department}</p>
-                      <p style={{ fontSize: "12px", color: "var(--text-sub)", marginTop: "2px" }}>{emp.position}</p>
+                      <p style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-main)" }}>{emp.position}</p>
                     </td>
 
                     {/* Status */}
@@ -454,9 +386,9 @@ export default function ManageEmployeePage() {
                       <StatusBadge status={emp.status} />
                     </td>
 
-                    {/* Joined */}
+                    {/* Hire Date */}
                     <td className="px-5 py-3.5">
-                      <span style={{ fontSize: "13px", color: "var(--text-sub)" }}>{emp.joinedAt}</span>
+                      <span style={{ fontSize: "13px", color: "var(--text-sub)" }}>{emp.hireDate}</span>
                     </td>
 
                     {/* Actions */}
@@ -483,7 +415,7 @@ export default function ManageEmployeePage() {
                           disabled={emp.status === "Inactive"}
                           className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-rose-50 disabled:opacity-30 disabled:cursor-not-allowed"
                           style={{ color: "var(--text-sub)" }}
-                          title={emp.status === "Active" ? "Deactivate" : "Already inactive"}
+                          title={emp.status === "Active" ? "Deactivate" : "Already disabled"}
                         >
                           <Trash2 size={14} />
                         </button>
@@ -507,12 +439,7 @@ export default function ManageEmployeePage() {
           </p>
 
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={safePage === 1}
-              className="w-8 h-8 rounded-lg flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
-              style={{ color: "var(--text-sub)" }}
-            >
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage === 1} className="w-8 h-8 rounded-lg flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed" style={{ color: "var(--text-sub)" }}>
               <ChevronLeft size={15} />
             </button>
             {Array.from({ length: totalPages }, (_, i) => i + 1)
@@ -522,22 +449,12 @@ export default function ManageEmployeePage() {
                   key={p}
                   onClick={() => setPage(p)}
                   className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: p === safePage ? 600 : 400,
-                    background: p === safePage ? accentColor : "transparent",
-                    color: p === safePage ? "#fff" : "var(--text-sub)",
-                  }}
+                  style={{ fontSize: "13px", fontWeight: p === safePage ? 600 : 400, background: p === safePage ? accentColor : "transparent", color: p === safePage ? "#fff" : "var(--text-sub)" }}
                 >
                   {p}
                 </button>
               ))}
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={safePage === totalPages}
-              className="w-8 h-8 rounded-lg flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
-              style={{ color: "var(--text-sub)" }}
-            >
+            <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage === totalPages} className="w-8 h-8 rounded-lg flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed" style={{ color: "var(--text-sub)" }}>
               <ChevronRight size={15} />
             </button>
           </div>
@@ -545,15 +462,8 @@ export default function ManageEmployeePage() {
       </div>
 
       <style>{`
-        .filter-btns button {
-          background: transparent;
-          color: var(--text-sub);
-          border-color: var(--border-color);
-        }
-        .filter-btns button:hover {
-          background: rgba(128,128,128,0.1);
-          color: var(--text-main);
-        }
+        .filter-btns button { background: transparent; color: var(--text-sub); border-color: var(--border-color); }
+        .filter-btns button:hover { background: rgba(128,128,128,0.1); color: var(--text-main); }
         .filter-btns button.active-blue  { background: #2563eb !important; color: #fff !important; border-color: #2563eb !important; }
         .filter-btns button.active-green { background: #059669 !important; color: #fff !important; border-color: #059669 !important; }
         .filter-btns button.active-gray  { background: #4b5563 !important; color: #fff !important; border-color: #4b5563 !important; }
