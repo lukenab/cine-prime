@@ -41,11 +41,11 @@ public class EmployeeService {
 
     @Transactional
     public EmployeeResponse createEmployee(EmployeeCreateRequest request) {
-        // Verify user profile exists
+        // Verify user profile exists before linking it to an employee.
         User user = userRepository.findById(request.getAccountId())
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
-        // Prevent duplicate employee for same account
+        // Prevent duplicate employee for same account.
         if (employeeRepository.existsByUser_AccountId(request.getAccountId())) {
             throw new AppException(ErrorCode.ACCOUNT_ALREADY_EMPLOYEE);
         }

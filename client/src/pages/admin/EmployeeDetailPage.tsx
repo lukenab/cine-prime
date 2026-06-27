@@ -1,61 +1,20 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import {
-  ArrowLeft, User, Mail, Phone, MapPin, CreditCard,
-  Calendar, Shield, Clock, Copy, Check, Briefcase, Building2, Hash,
+  ArrowLeft, User, Phone, MapPin, CreditCard,
+  Calendar, Shield, Clock, Copy, Check, Briefcase, Hash,
 } from "lucide-react";
+import { employeeApi, type EmployeeResponse } from "../../api/employeeApi";
+import { authApi } from "../../api/authApi";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-interface EmployeeDetail {
-  // Account (auth-service)
+interface AccountInfo {
   accountId: string;
   username: string;
   email: string;
-  status: number;
   createdAt: string;
   roles: { roleName: string }[];
-  // Profile (user-service)
-  fullName: string;
-  phoneNumber: string;
-  gender: string;
-  dateOfBirth: string;
-  identityCard: string;
-  address: string;
-  // Employee-specific (employee-service)
-  employeeCode: string;
-  department: string;
-  position: string;
-  hireDate: string;
 }
-
-// ── Mock data — replace with API calls when employee-service is ready ─────────
-const MOCK_EMPLOYEE: EmployeeDetail = {
-  accountId: "abc-123-def",
-  username: "an.nguyen",
-  email: "an.nguyen@cineprime.vn",
-  status: 1,
-  createdAt: "2024-01-15T08:00:00",
-  roles: [{ roleName: "EMPLOYEE" }],
-  fullName: "Nguyen Van An",
-  phoneNumber: "0912 345 678",
-  gender: "MALE",
-  dateOfBirth: "1998-04-22",
-  identityCard: "012345678901",
-  address: "123 Nguyen Hue, District 1, HCMC",
-  employeeCode: "EMP001",
-  department: "Box Office",
-  position: "Ticket Agent",
-  hireDate: "2024-01-15",
-};
-
-const AVATAR_GRADIENTS = [
-  "linear-gradient(135deg, #3b82f6, #6366f1)",
-  "linear-gradient(135deg, #10b981, #059669)",
-  "linear-gradient(135deg, #f59e0b, #ef4444)",
-  "linear-gradient(135deg, #8b5cf6, #ec4899)",
-  "linear-gradient(135deg, #06b6d4, #3b82f6)",
-  "linear-gradient(135deg, #f97316, #f59e0b)",
-];
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value?: string }) {
@@ -101,13 +60,28 @@ function CopyableId({ icon, label, value }: { icon: React.ReactNode; label: stri
   );
 }
 
+const AVATAR_GRADIENTS = [
+  "linear-gradient(135deg, #3b82f6, #6366f1)",
+  "linear-gradient(135deg, #10b981, #059669)",
+  "linear-gradient(135deg, #f59e0b, #ef4444)",
+  "linear-gradient(135deg, #8b5cf6, #ec4899)",
+  "linear-gradient(135deg, #06b6d4, #3b82f6)",
+  "linear-gradient(135deg, #f97316, #f59e0b)",
+];
+function gradientFromId(id: string) {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xffffffff;
+  return AVATAR_GRADIENTS[Math.abs(h) % AVATAR_GRADIENTS.length];
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
 
-  const [employee, setEmployee] = useState<EmployeeDetail | null>(null);
+  const [employee, setEmployee] = useState<EmployeeResponse | null>(null);
+  const [account, setAccount]   = useState<AccountInfo | null>(null);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
 
@@ -116,14 +90,19 @@ export default function EmployeeDetailPage() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        // TODO: Replace with actual API calls
-        // const [authRes, profileRes, empRes] = await Promise.all([
-        //   authApi.getAccountById(id),
-        //   userApi.getUserById(id),
-        //   employeeApi.getEmployeeByAccountId(id),
-        // ]);
-        await new Promise((r) => setTimeout(r, 400)); // simulate network
-        setEmployee({ ...MOCK_EMPLOYEE, accountId: id });
+        // Fetch employee (includes user profile fields)
+        const empRes = await employeeApi.getById(id);
+        const emp: EmployeeResponse = (empRes as any)?.result;
+        setEmployee(emp);
+
+        // Fetch account info from auth-service
+        try {
+          const accRes = await authApi.getAccountById(emp.accountId);
+          setAccount((accRes as any)?.result ?? null);
+        } catch {
+          // auth-service unreachable — show what we have
+          setAccount(null);
+        }
       } catch (err: any) {
         setError(err?.response?.data?.message || "Failed to load employee details.");
       } finally {
@@ -133,10 +112,10 @@ export default function EmployeeDetailPage() {
     fetchData();
   }, [id]);
 
-  const accentColor   = isDarkMode ? "#3b82f6" : "#2563eb";
-  const initials      = employee?.fullName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) ?? "??";
-  const avatarGradient = AVATAR_GRADIENTS[(id?.charCodeAt(0) ?? 0) % AVATAR_GRADIENTS.length];
-  const isActive      = employee?.status === 1;
+  const accentColor    = isDarkMode ? "#3b82f6" : "#2563eb";
+  const initials       = employee?.fullName?.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) ?? "??";
+  const avatarGradient = id ? gradientFromId(id) : AVATAR_GRADIENTS[0];
+  const isActive       = employee?.status === "ACTIVE";
 
   return (
     <div>
@@ -150,10 +129,8 @@ export default function EmployeeDetailPage() {
           <ArrowLeft size={16} />
         </button>
         <div>
-          <h1 style={{ fontSize: "22px", fontWeight: 600, color: "var(--text-main)", letterSpacing: "-0.01em" }}>
-            Employee Detail
-          </h1>
-          <p style={{ fontSize: "13px", color: "var(--text-sub)" }}>Account, profile, and employment information</p>
+          <h1 style={{ fontSize: "22px", fontWeight: 600, color: "var(--text-main)", letterSpacing: "-0.01em" }}>Employee Detail</h1>
+          <p style={{ fontSize: "13px", color: "var(--text-sub)" }}>Profile and employment information</p>
         </div>
       </div>
 
@@ -194,14 +171,15 @@ export default function EmployeeDetailPage() {
               <p style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-main)", marginBottom: "2px" }}>
                 {employee.fullName}
               </p>
-              <p style={{ fontSize: "13px", color: "var(--text-sub)", marginBottom: "4px" }}>
-                @{employee.username}
-              </p>
+              {account && (
+                <p style={{ fontSize: "13px", color: "var(--text-sub)", marginBottom: "4px" }}>
+                  @{account.username}
+                </p>
+              )}
               <p style={{ fontSize: "12px", color: "var(--text-sub)", marginBottom: "12px" }}>
-                {employee.position} · {employee.department}
+                {employee.position}
               </p>
 
-              {/* Status */}
               <span
                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium mb-4"
                 style={{
@@ -210,22 +188,23 @@ export default function EmployeeDetailPage() {
                 }}
               >
                 <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-emerald-500" : "bg-gray-400"}`} />
-                {isActive ? "Active" : "Inactive"}
+                {isActive ? "Active" : "Disabled"}
               </span>
 
-              {/* Role badge */}
-              <div className="w-full">
-                <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-sub)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "8px" }}>Role</p>
-                {employee.roles.map((r) => (
-                  <span
-                    key={r.roleName}
-                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg border text-xs font-medium"
-                    style={{ background: "rgba(59,130,246,0.08)", color: "#2563eb", borderColor: "rgba(59,130,246,0.2)" }}
-                  >
-                    <Shield size={10} /> {r.roleName}
-                  </span>
-                ))}
-              </div>
+              {account && (
+                <div className="w-full">
+                  <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-sub)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "8px" }}>Role</p>
+                  {(account.roles ?? []).map((r) => (
+                    <span
+                      key={r.roleName}
+                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg border text-xs font-medium"
+                      style={{ background: "rgba(59,130,246,0.08)", color: "#2563eb", borderColor: "rgba(59,130,246,0.2)" }}
+                    >
+                      <Shield size={10} /> {r.roleName}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Action buttons */}
@@ -253,22 +232,24 @@ export default function EmployeeDetailPage() {
             {/* Employment Info */}
             <div className="rounded-2xl border p-6" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
               <h2 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-main)", marginBottom: "4px" }}>Employment Information</h2>
-              <p style={{ fontSize: "12px", color: "var(--text-sub)", marginBottom: "16px" }}>Department, position, and tenure data</p>
-              <InfoRow icon={<Hash size={15} />}       label="Employee Code" value={employee.employeeCode} />
-              <InfoRow icon={<Building2 size={15} />}  label="Department"    value={employee.department} />
-              <InfoRow icon={<Briefcase size={15} />}  label="Position"      value={employee.position} />
-              <InfoRow icon={<Calendar size={15} />}   label="Hire Date"     value={employee.hireDate} />
+              <p style={{ fontSize: "12px", color: "var(--text-sub)", marginBottom: "16px" }}>Position and tenure data</p>
+              <CopyableId icon={<Hash size={15} />}      label="Employee ID" value={employee.employeeId} />
+              <InfoRow icon={<Briefcase size={15} />}    label="Position"    value={employee.position} />
+              <InfoRow icon={<Calendar size={15} />}     label="Hire Date"   value={employee.hireDate} />
+              <InfoRow icon={<Clock size={15} />}        label="Created At"  value={employee.createdAt ? new Date(employee.createdAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "—"} />
             </div>
 
             {/* Account Info */}
-            <div className="rounded-2xl border p-6" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-              <h2 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-main)", marginBottom: "4px" }}>Account Information</h2>
-              <p style={{ fontSize: "12px", color: "var(--text-sub)", marginBottom: "16px" }}>Login credentials from Auth Service</p>
-              <CopyableId icon={<User size={15} />}   label="Account ID" value={employee.accountId} />
-              <InfoRow icon={<User size={15} />}      label="Username"   value={employee.username} />
-              <InfoRow icon={<Mail size={15} />}      label="Email"      value={employee.email} />
-              <InfoRow icon={<Clock size={15} />}     label="Created At" value={new Date(employee.createdAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })} />
-            </div>
+            {account && (
+              <div className="rounded-2xl border p-6" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+                <h2 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-main)", marginBottom: "4px" }}>Account Information</h2>
+                <p style={{ fontSize: "12px", color: "var(--text-sub)", marginBottom: "16px" }}>Login credentials from Auth Service</p>
+                <CopyableId icon={<User size={15} />}   label="Account ID" value={account.accountId} />
+                <InfoRow icon={<User size={15} />}      label="Username"   value={account.username} />
+                <InfoRow icon={<Hash size={15} />}      label="Email"      value={account.email} />
+                <InfoRow icon={<Clock size={15} />}     label="Registered" value={account.createdAt ? new Date(account.createdAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "—"} />
+              </div>
+            )}
 
             {/* Personal Info */}
             <div className="rounded-2xl border p-6" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
