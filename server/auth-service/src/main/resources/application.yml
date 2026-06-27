@@ -35,9 +35,9 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: create
     defer-datasource-initialization: true   # chạy data.sql SAU khi Hibernate tạo tables
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
         format_sql: true

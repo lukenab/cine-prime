@@ -102,8 +102,10 @@ public class MovieService {
     }
 
     public MovieResponse getMovie(Long id) {
-        Movie movie = movieRepository.findById(id)
-                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+        Movie movie = movieRepository.findByMovieId(id);
+        if (movie == null) {
+           throw new AppException(MovieErrorCode.MOVIE_NOT_FOUND);
+        }
 
         return movieMapper.toResponse(movie);
     }

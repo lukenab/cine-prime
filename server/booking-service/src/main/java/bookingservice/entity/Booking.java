@@ -20,8 +20,6 @@ public class Booking {
     @Id
     @Column(name = "booking_id", length = 50)
     private String bookingId;
-
-    // --- PLAIN FIELDS (Không map quan hệ ra ngoài service) ---
     @Column(name = "account_id", length = 50)
     private String accountId;
 
@@ -30,7 +28,6 @@ public class Booking {
 
     @Column(name = "showtime_id")
     private Long showtimeId;
-    // ---------------------------------------------------------
 
     @Column(name = "movie_name")
     private String movieName;
@@ -75,8 +72,6 @@ public class Booking {
 
     @Column(name = "expires_at")
     private LocalDateTime expiresAt;
-
-    // QUAN HỆ NỘI BỘ TRONG SERVICE
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<BookingItem> bookingDetails;
 

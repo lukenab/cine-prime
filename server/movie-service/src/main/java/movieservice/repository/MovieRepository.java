@@ -2,6 +2,7 @@ package movieservice.repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -16,7 +17,7 @@ import movieservice.entity.Movie;
 
 public interface MovieRepository extends JpaRepository<Movie, Long> {
         List<Movie> findByStatusTrue();
-
+        Movie findByMovieId(Long movieId);
         // Tự sinh query: DELETE FROM Movie WHERE createAt <= :time
         void deleteByCreateAtLessThanEqual(LocalDateTime time);
 
