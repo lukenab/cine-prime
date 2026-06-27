@@ -36,7 +36,6 @@ public class BookingService {
         }
 
         String currentStatus = booking.getStatus();
-        System.out.println(BookingStatus.PENDING.name().equalsIgnoreCase(currentStatus) + " dong 42");
         if (!BookingStatus.PENDING.name().equalsIgnoreCase(currentStatus) &&
                 !BookingStatus.CONFIRMED.name().equalsIgnoreCase(currentStatus)) {
             throw new AppException(BookingErrorCode.INVALID_BOOKING_STATE);
