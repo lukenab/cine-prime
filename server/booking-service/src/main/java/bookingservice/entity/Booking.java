@@ -22,6 +22,7 @@ public class Booking {
 
     @Id
     @Column(name = "booking_id", length = 50)
+    @GeneratedValue(strategy = GenerationType.UUID)
     String bookingId;
     @Column(name = "account_id", length = 50)
     String accountId;

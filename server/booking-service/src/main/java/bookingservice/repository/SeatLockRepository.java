@@ -23,4 +23,15 @@ public interface SeatLockRepository extends JpaRepository<SeatLock, Long> {
         @Param("showtimeId") Long showtimeId, 
         @Param("seatIds") List<String> seatIds
     );
+
+    @Query("SELECT COUNT(s) > 0 FROM SeatLock s WHERE s.showtimeId = :showtimeId " +
+           "AND s.seatId IN :seatIds AND s.expiresAt > :now")
+    boolean existsActiveLocksOrBookings(
+        @Param("showtimeId") Long showtimeId, 
+        @Param("seatIds") List<Long> seatIds, 
+        @Param("now") LocalDateTime now
+    );
+
+    @Query("SELECT s FROM SeatLock s WHERE s.showtimeId = :showtimeId AND s.expiresAt > :now")
+    List<SeatLock> findAllActiveLocks(@Param("showtimeId") Long showtimeId, @Param("now") LocalDateTime now);
 }
