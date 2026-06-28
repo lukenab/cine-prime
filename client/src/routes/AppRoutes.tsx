@@ -11,10 +11,10 @@ import RegisterPage from "../pages/auth/RegisterPage";
 import ManageMoviePage from "../pages/admin/ManageMoviePage";
 import ManageCinemaRoomsPage from "../pages/admin/ManageCinemaRoomsPage";
 import ManageGenresPage from "../pages/admin/ManageGenresPage";
-import ManageShowTimePage from "../pages/admin/ManageShowTimePage";
 import CreateUserPage from "../pages/admin/CreateUserPage";
 import EditUserPage from "../pages/admin/EditUserPage";
 import UserDetailPage from "../pages/admin/UserDetailPage";
+import ManageShowtimePage from "../pages/admin/ManageShowTimePage";
 
 export default function AppRoutes() {
   return (
@@ -40,7 +40,7 @@ export default function AppRoutes() {
             <Route path="movies" element={<ManageMoviePage/>}/>
             <Route path="rooms" element={<ManageCinemaRoomsPage/>}/>
             <Route path="genres" element={<ManageGenresPage/>}/>
-            <Route path="showtimes" element={<ManageShowTimePage/>}/>
+            <Route path="showtimes" element={<ManageShowtimePage/>}/>
         </Route>
       </Route>
     </Routes>

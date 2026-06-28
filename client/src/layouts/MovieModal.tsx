@@ -248,7 +248,7 @@ export function MovieModal({ open, onClose, onCreate, onUpdate, editMovie, types
               <div>
                 <label style={fieldLabel}>Vietnamese Title <span className="text-rose-500">*</span></label>
                 <input
-                  required type="text" placeholder="e.g. Cát Bụi Vũ Trụ"
+                  required type="text" placeholder="e.g. Space Dust"
                   value={form.movieNameVn}
                   onChange={(e) => set("movieNameVn", e.target.value)}
                   className={inputClass} style={inputStyle}

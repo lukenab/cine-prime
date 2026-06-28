@@ -7,7 +7,6 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
 
   const navigate = useNavigate();
 
@@ -25,16 +24,13 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     try {
+
       await login({ username, password });
-    } catch (err: any) {
-      const status = err?.response?.status;
-      if (status === 401 || status === 400) {
-        setError("Incorrect username or password. Please try again.");
-      } else {
-        setError("Something went wrong. Please try again later.");
-      }
+
+    } catch (error) {
+      console.error("Login failed:", error);
+      alert("Incorrect username or password!");
     }
   };
 
@@ -49,29 +45,6 @@ export default function LoginPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-        {error && (
-          <div
-            style={{
-              background: "rgba(255, 75, 75, 0.1)",
-              border: "1px solid rgba(255, 75, 75, 0.3)",
-              borderRadius: "10px",
-              padding: "12px 16px",
-              color: "#FF4B4B",
-              fontSize: "13px",
-              fontWeight: 500,
-              lineHeight: 1.4,
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-              <circle cx="8" cy="8" r="7.5" stroke="#FF4B4B" />
-              <path d="M8 4.5v4M8 10.5v1" stroke="#FF4B4B" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-            {error}
-          </div>
-        )}
         {/* Username field */}
         <div className="flex flex-col gap-2">
           <label htmlFor="username" style={{ color: "rgba(255,255,255,0.6)", fontSize: "12px", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>

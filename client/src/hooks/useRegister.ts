@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { authApi } from "../api/authApi";
+import { useState } from "react";
+import { authApi } from "../api/authApi"; 
 
 export function useRegister() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -7,13 +7,6 @@ export function useRegister() {
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(0);
-
-  useEffect(() => {
-    if (countdown <= 0) return;
-    const id = setTimeout(() => setCountdown((c) => c - 1), 1000);
-    return () => clearTimeout(id);
-  }, [countdown]);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -79,7 +72,6 @@ export function useRegister() {
       if (responseData && responseData.code && responseData.code !== 1000) {
         throw { response: { data: responseData } };
       }
-      setCountdown(60);
       setStep(2);
     } catch (error: any) {
       console.error("Initiate failed:", error);
@@ -139,7 +131,6 @@ export function useRegister() {
         throw { response: { data: responseData } };
       }
       setResendMessage(responseData?.message || "New OTP has been sent to your email.");
-      setCountdown(60);
     } catch (error: any) {
       setResendMessage(error.response?.data?.message || "Unable to resend OTP right now.");
     } finally {
@@ -155,7 +146,6 @@ export function useRegister() {
     loading,
     resendLoading,
     resendMessage,
-    countdown,
     errors,
     generalError,
     form,
