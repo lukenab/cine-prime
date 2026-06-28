@@ -21,16 +21,15 @@ public class BookingController {
         BookingService bookingService;
 
         @PatchMapping("/{id}/cancel")
-        public ResponseEntity<ApiResponse<CancelBookingResponse>> cancelBooking(
-                        @PathVariable("id") String id) {
+        public ApiResponse<CancelBookingResponse> cancelBooking(@PathVariable("id") String id) {
                 String accountId = JwtSecurityUtils.getCurrentAccountId();
                 boolean isAdmin = JwtSecurityUtils.hasRole("ROLE_ADMIN");
+
                 CancelBookingResponse responseData = bookingService.cancelBooking(id, accountId, isAdmin);
-                ApiResponse<CancelBookingResponse> apiResponse = new ApiResponse<>(
+
+                return new ApiResponse<>(
                                 1000,
                                 "Booking cancelled successfully",
                                 responseData);
-
-                return ResponseEntity.ok(apiResponse);
         }
 }
