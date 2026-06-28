@@ -12,25 +12,25 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import movie.theater.common.dto.ApiResponse;
-
+import movie.theater.common.security.JwtSecurityUtils;
 @RestController
 @RequestMapping("/api/bookings")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class BookingController {
-    BookingService bookingService;
+        BookingService bookingService;
 
-    @PatchMapping("/{id}/cancel")
-    public ResponseEntity<ApiResponse<BookingResponse>> cancelBooking(
-            @PathVariable("id") String id) {
-// chỗ này lấy thông tin từ token mà hiện tại chưa có nên tui fix cứng trước
-        BookingResponse responseData = bookingService.cancelBooking(id, "1", true); 
-        ApiResponse<BookingResponse> apiResponse = new ApiResponse<>(
-                1000,
-                "Booking cancelled successfully",
-                responseData
-        );
+        @PatchMapping("/{id}/cancel")
+        public ResponseEntity<ApiResponse<BookingResponse>> cancelBooking(
+                        @PathVariable("id") String id) {
+                String accountId = JwtSecurityUtils.getCurrentAccountId();
+                boolean isAdmin = JwtSecurityUtils.hasRole("ROLE_ADMIN");
+                BookingResponse responseData = bookingService.cancelBooking(id, accountId, isAdmin);
+                ApiResponse<BookingResponse> apiResponse = new ApiResponse<>(
+                                1000,
+                                "Booking cancelled successfully",
+                                responseData);
 
-        return ResponseEntity.ok(apiResponse);
-    }
+                return ResponseEntity.ok(apiResponse);
+        }
 }

@@ -36,7 +36,7 @@ public class SeatLock {
     private Long showtimeId;
 
     @Column(name = "seat_id", nullable = false)
-    private Long seatId;
+    private String seatId;
 
     @Column(name = "locked_by_account_id")
     private String lockedByAccountId;
