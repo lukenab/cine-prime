@@ -227,7 +227,7 @@ export default function UserDetailPage() {
               {profile ? (
                 <>
                   <InfoRow icon={<User size={15} />} label="Full Name" value={profile.fullName} />
-                  <InfoRow icon={<Mail size={15} />} label="Email" value={profile.email} />
+                  <InfoRow icon={<Mail size={15} />} label="Email" value={profile.email ?? account?.email} />
                   <InfoRow icon={<Phone size={15} />} label="Phone Number" value={profile.phoneNumber} />
                   <InfoRow icon={<Calendar size={15} />} label="Date of Birth" value={profile.dateOfBirth ?? "—"} />
                   <InfoRow icon={<User size={15} />} label="Gender" value={profile.gender} />

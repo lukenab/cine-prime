@@ -1,17 +1,32 @@
 import { useAuth } from "../context/AuthContext";
-import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, Users, BarChart2, Settings, Clapperboard, LogOut } from "lucide-react";
+import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, Users, UserCog, BarChart2, Settings, Clapperboard, LogOut, Gift, ShoppingCart } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 
+const roleLabels: Record<string, string> = {
+  ROLE_ADMIN: "Admin",
+  ROLE_EMPLOYEE: "Employee",
+  ROLE_MEMBER: "Member",
+  ROLE_USER: "User",
+};
+
+function getInitials(username: string): string {
+  return username.slice(0, 2).toUpperCase();
+}
+
+// roles: which roles can see this item. undefined = all roles.
 const navItems = [
-  { icon: LayoutDashboard, label: "Dashboard",    id: "dashboard", path: "/admin",          group: "main" },
-  { icon: Film,            label: "Movies",        id: "movies",    path: "/admin/movies",    group: "catalog" },
-  { icon: Building2,       label: "Cinema Rooms",  id: "rooms",     path: "/admin/rooms",     group: "catalog" },
-  { icon: Tags,            label: "Genres",        id: "genres",    path: "/admin/genres",    group: "catalog" },
-  { icon: Calendar,        label: "Showtimes",     id: "showtimes", path: "/admin/showtimes", group: "ops" },
-  { icon: Ticket,          label: "Bookings",      id: "bookings",  path: "/admin/bookings",  group: "ops" },
-  { icon: Users,           label: "Users",         id: "users",     path: "/admin/users",     group: "ops" },
-  { icon: BarChart2,       label: "Reports",       id: "reports",   path: "/admin/reports",   group: "system" },
-  { icon: Settings,        label: "Settings",      id: "settings",  path: "/admin/settings",  group: "system" },
+  { icon: LayoutDashboard, label: "Dashboard",   id: "dashboard", path: "/admin",          group: "main" },
+  { icon: Film,            label: "Movies",       id: "movies",    path: "/admin/movies",    group: "catalog" },
+  { icon: Building2,       label: "Cinema Rooms", id: "rooms",     path: "/admin/rooms",     group: "catalog",  roles: ["ROLE_ADMIN"] },
+  { icon: Tags,            label: "Genres",       id: "genres",    path: "/admin/genres",    group: "catalog",  roles: ["ROLE_ADMIN"] },
+  { icon: Calendar,        label: "Showtimes",    id: "showtimes", path: "/admin/showtimes", group: "ops" },
+  { icon: Ticket,          label: "Bookings",     id: "bookings",   path: "/admin/bookings",   group: "ops" },
+  { icon: ShoppingCart,    label: "Sell Tickets", id: "sell",       path: "/admin/sell",       group: "ops" },
+  { icon: UserCog,         label: "Employees",    id: "employees",  path: "/admin/employees",  group: "ops",      roles: ["ROLE_ADMIN"] },
+  { icon: Users,           label: "Users",        id: "users",      path: "/admin/users",      group: "ops",      roles: ["ROLE_ADMIN"] },
+  { icon: Gift,            label: "Promotions",   id: "promotions", path: "/admin/promotions", group: "ops",      roles: ["ROLE_ADMIN"] },
+  { icon: BarChart2,       label: "Reports",      id: "reports",   path: "/admin/reports",   group: "system",   roles: ["ROLE_ADMIN"] },
+  { icon: Settings,        label: "Settings",     id: "settings",  path: "/admin/settings",  group: "system",   roles: ["ROLE_ADMIN"] },
 ];
 
 interface SidebarProps {
@@ -25,8 +40,7 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
   const { user, logout } = useAuth();
 
   const handleLogout = () => {
-    logout();
-    navigate("/login", { replace: true });
+    void logout();
   };
 
   return (
@@ -116,13 +130,13 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
 
       {/* Nav items */}
       <nav style={{ padding: "0 10px", flex: 1 }}>
-        {navItems.map(({ icon: Icon, label, id, path, group }, idx) => {
+        {navItems.filter(({ roles }) => !roles || roles.includes(user?.role ?? "")).map(({ icon: Icon, label, id, path, group }, idx, visibleItems) => {
           const isActive =
             path === "/admin"
               ? location.pathname === "/admin"
               : location.pathname.startsWith(path);
 
-          const prevGroup = idx > 0 ? navItems[idx - 1].group : group;
+          const prevGroup = idx > 0 ? visibleItems[idx - 1].group : group;
           const showSectionLabel = group !== prevGroup;
           const sectionLabels: Record<string, string> = {
             catalog: "Catalog",
@@ -235,7 +249,7 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
               boxShadow: isDarkMode ? "0 0 10px rgba(59, 130, 246, 0.4)" : "0 2px 6px rgba(37, 99, 235, 0.3)",
             }}
           >
-            JD
+            {getInitials(user?.username ?? "?")}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
@@ -249,9 +263,11 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
                 transition: "color 0.25s ease",
               }}
             >
-              James Donovan
+              {user?.username ?? "—"}
             </div>
-            <div style={{ color: "var(--text-sub)", fontSize: "10.5px", transition: "color 0.25s ease" }}>Super Admin</div>
+            <div style={{ color: "var(--text-sub)", fontSize: "10.5px", transition: "color 0.25s ease" }}>
+              {roleLabels[user?.role ?? ""] ?? user?.role ?? ""}
+            </div>
           </div>
           <button
             onClick={handleLogout}

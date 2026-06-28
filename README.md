@@ -140,12 +140,23 @@ All requests go through `http://localhost:8080`.
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/movies` | Get paginated movies (`?page=1&size=10`) |
+| `GET` | `/api/movies/all` | Get all movies (no pagination) |
 | `GET` | `/api/movies/{id}` | Get movie by ID |
-| `POST` | `/api/movies` | Create movie |
+| `POST` | `/api/movies` | Create movie with showtimes |
 | `PUT` | `/api/movies/{id}` | Update movie |
-| `DELETE` | `/api/movies/{id}` | Delete movie |
-| `POST` | `/api/movies/room` | Create cinema room |
-| `POST` | `/api/movies/type` | Create movie type |
+| `DELETE` | `/api/movies/{id}` | Soft-delete movie |
+
+### Cinema Rooms — `/api/cinema-rooms`
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/cinema-rooms` | Get all cinema rooms |
+| `POST` | `/api/cinema-rooms` | Create cinema room (auto-generates seats) |
+
+### Movie Types — `/api/movie-type`
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/movie-type` | Get all movie genres |
+| `POST` | `/api/movie-type` | Create movie genre |
 
 ---
 
@@ -181,6 +192,7 @@ Init scripts are in `postgres-init/` and run automatically on first container st
 - **Java 21**
 - **Node.js 18+**
 - **Docker Desktop**
+- **Maven 3.8+** (or use the included `mvnw` wrapper)
 
 ### 1. Clone the repository
 ```bash
@@ -189,24 +201,48 @@ cd hcm26_cpl_java_05_group1
 git checkout develop
 ```
 
-### 2. Start all backend services (Docker Compose)
+### 2. Start infrastructure services (Docker Compose)
+
+The `docker-compose.yml` runs only the infrastructure layer. Microservices are started separately through your IDE or Maven.
+
 ```bash
-docker-compose up -d --build
+docker compose up -d
 ```
 
-Wait ~1–2 minutes for all containers to be healthy.
+This starts:
+| Container | Port | Description |
+|---|---|---|
+| `postgres` | 5433 | PostgreSQL — all databases are created automatically via `postgres-init/` |
+| `kafka` | 9092 | Apache Kafka (KRaft mode) |
+| `redis` | 6379 | Redis |
 
-| URL | Description |
-|---|---|
-| http://localhost:8761 | Eureka — verify all services are registered |
-| http://localhost:8080 | API Gateway — all API requests go here |
-
-To stop:
+To stop without losing database data:
 ```bash
-docker-compose down
+docker compose down
 ```
 
-### 3. Run the frontend
+> **Warning:** Do **not** use `docker compose down -v` — the `-v` flag deletes the `postgres_data` volume and all data.
+
+### 3. Run the backend microservices
+
+Start each service in your IDE (IntelliJ / VS Code) or via Maven. Start in this order:
+
+```
+1. discovery-server   (wait until Eureka dashboard is up at http://localhost:8761)
+2. api-gateway
+3. auth-service
+4. movie-service
+5. user-service
+6. booking-service    (WIP)
+```
+
+Or run individually with Maven:
+```bash
+cd server/discovery-server
+./mvnw spring-boot:run
+```
+
+### 4. Run the frontend
 ```bash
 cd client
 npm install
@@ -215,7 +251,15 @@ npm run dev
 
 Open http://localhost:3000.
 
-> **Note:** The single React app serves both the customer-facing homepage (`/`) and the admin dashboard (`/admin`). Admin routes are protected — you must log in with an `ADMIN` role account.
+**Demo accounts** (seeded automatically on first startup via `auth-service/src/main/resources/data.sql`):
+
+| Username | Password | Role |
+|---|---|---|
+| `admin` | `123456` | ADMIN |
+| `employee` | `123456` | EMPLOYEE |
+| `member` | `123456` | MEMBER |
+
+> **Note:** The React app serves both the customer homepage (`/`) and the admin dashboard (`/admin`). Logged-in admin/employee users are automatically redirected to `/admin` when visiting `/`. Admin routes are protected by role.
 
 ---
 

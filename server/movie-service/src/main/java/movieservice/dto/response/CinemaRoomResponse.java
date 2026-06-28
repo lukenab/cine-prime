@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
+import movieservice.enums.RoomType;
 
 @Data
 @Getter
@@ -17,5 +18,6 @@ import lombok.experimental.FieldDefaults;
 public class CinemaRoomResponse {
     Long cinemaRoomId;
     String cinemaRoomName;
+    RoomType roomType;
     Integer seatQuantity;
 }

@@ -1,5 +1,6 @@
 package authservice.service;
 
+import authservice.client.UserClient;
 import authservice.dto.request.AccountUpdateRequest;
 import authservice.dto.request.RegisterRequest;
 import authservice.event.UserRegisteredEvent;
@@ -17,8 +18,9 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import feign.FeignException;
 import movie.theater.common.exception.AppException;
-import org.springframework.security.access.prepost.PreAuthorize;
+import movie.theater.common.exception.GlobalErrorCode;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -27,7 +29,6 @@ import org.springframework.util.StringUtils;
 
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -39,6 +40,7 @@ public class AccountService {
     PasswordEncoder passwordEncoder;
     RoleRepository roleRepository;
     UserEventProducer userEventProducer;
+    UserClient userClient;
 
 
 //    @PreAuthorize("hasRole('ADMIN')")
@@ -90,12 +92,7 @@ public class AccountService {
     public AccountResponse createAccount(RegisterRequest request) {
         String emailKey = request.getEmail().trim().toLowerCase();
 
-        if (accountRepository.existsByUsername(request.getUsername())) {
-            throw new AppException(AuthErrorCode.USERNAME_EXISTED);
-        }
-        if (accountRepository.existsByEmail(emailKey)) {
-            throw new AppException(AuthErrorCode.EMAIL_EXISTED);
-        }
+        validateUniqueFields(request.getUsername(), emailKey, request.getPhoneNumber(), request.getIdentityCard());
 
         Account account = accountMapper.toAccount(request);
         account.setPasswordHash(passwordEncoder.encode(request.getPassword()));
@@ -141,5 +138,27 @@ public class AccountService {
         return accountMapper.toAccountResponse(account);
     }
 
+    private void validateUniqueFields(String username, String emailKey, String phone, String identityCard) {
+        if (accountRepository.existsByUsername(username)) {
+            throw new AppException(AuthErrorCode.USERNAME_EXISTED);
+        }
+        if (accountRepository.existsByEmail(emailKey)) {
+            throw new AppException(AuthErrorCode.EMAIL_EXISTED);
+        }
+
+        try {
+            var response = userClient.checkExistence(phone, identityCard);
+            var data = response.getResult();
+            if (data.isPhoneExists()) {
+                throw new AppException(AuthErrorCode.PHONE_EXISTED);
+            }
+            if (data.isIdentityCardExists()) {
+                throw new AppException(AuthErrorCode.IDENTITY_CARD_EXISTED);
+            }
+        } catch (FeignException e) {
+            log.error("User-service unavailable. Cannot validate phone/identity before account creation.", e);
+            throw new AppException(GlobalErrorCode.UNCATEGORIZED_EXCEPTION);
+        }
+    }
 
 }

@@ -2,6 +2,8 @@ package movieservice.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -9,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import movieservice.enums.SeatType;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
@@ -32,8 +35,9 @@ public class Seat {
     @Column(name = "seat_code", nullable = false)
     String seatCode;
 
-    @Column(name = "seat_type")
-    String seatType;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "seat_type", length = 20)
+    SeatType seatType;
 
     @Column(name = "seat_status", nullable = false)
     Integer seatStatus = 1;

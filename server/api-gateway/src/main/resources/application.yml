@@ -7,22 +7,25 @@ spring:
   cloud:
     gateway:
       globalcors:
-        corsConfigurations:
+        add-to-simple-url-handler-mapping: true
+        cors-configurations:
           '[/**]':
-            allowedOrigins: "http://localhost:3000"
-            allowedMethods:
+            allowed-origins:
+              - "http://localhost:3000"
+            allowed-methods:
               - GET
               - POST
               - PUT
               - DELETE
               - OPTIONS
-            allowedHeaders: "*"
-            allowCredentials: true
+            allowed-headers:
+              - "*"
+            allow-credentials: true
       routes:
         - id: movie-service
           uri: lb://movie-service
           predicates:
-            - Path=/api/movies/**, /api/cinemas/**, /api/shows/**
+            - Path=/api/movies/**, /api/cinema-rooms/**, /api/movie-type/**, /api/seats/**
 
         - id: booking-service
           uri: lb://booking-service
@@ -32,7 +35,7 @@ spring:
         - id: user-service
           uri: lb://user-service
           predicates:
-            - Path=/api/users/**
+            - Path=/api/users/**, /api/employees/**
 
         - id: auth-service
           uri: lb://auth-service

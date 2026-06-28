@@ -2,8 +2,8 @@
 
 > **Source of Truth:** This is the single, official document defining the APIs for the Auth Service. Any modifications to Input/Output schemas must be updated and agreed upon here before actual implementation.
 
-**Version:** v1.2.0
-**Last Updated:** June 22, 2026
+**Version:** v1.4.0
+**Last Updated:** June 27, 2026
 
 ---
 
@@ -39,10 +39,14 @@ Below is a summary of all API endpoints. For detailed payloads, please refer to 
 
 | Status | Method | Endpoint | Use Case | Assignee |
 | :---: | :--- | :--- | :--- | :--- |
-| Ready | `POST` | `/api/auth/login` | Authenticate user and retrieve JWT Token | Nguyễn An Bình |
+| Ready | `GET` | `/api/auth/check` | Pre-check username/email availability (no auth required) | Nguyễn An Bình |
 | Ready | `POST` | `/api/auth/register/initiate` | Send 6-digit OTP to initiate registration | Nguyễn An Bình |
 | Ready | `POST` | `/api/auth/register/verify` | Verify OTP and create account + publish Kafka event | Nguyễn An Bình |
 | Ready | `POST` | `/api/auth/resend-otp` | Resend OTP to email (rate-limited) | Nguyễn An Bình |
+| Ready | `POST` | `/api/auth/login` | Authenticate user and retrieve JWT Token | Nguyễn An Bình |
+| Ready | `POST` | `/api/auth/logout` | Revoke the current JWT token | Nguyễn An Bình |
+| Ready | `POST` | `/api/auth/refresh` | Rotate JWT — revoke old token, issue new one | Nguyễn An Bình |
+| Ready | `POST` | `/api/auth/introspect` | Validate a JWT token and return its active status | Nguyễn An Bình |
 
 **Account Management**
 
@@ -72,18 +76,20 @@ The Frontend team must rely on the returned `code` attribute to render the corre
 
 | Error Code | HTTP Status | Origin Service | Message / Meaning |
 | :--- | :--- | :--- | :--- |
-| `1003` | 500 | Global | Uncategorized error! (Server fallback) |
-| `1008` | 401 | Global | Unauthenticated (Invalid username or password) |
-| `1009` | 403 | Global | You do not have permission (Unauthorized access) |
+| `1003` | 500 | Global | An unexpected error occurred. Please try again later. |
+| `1008` | 401 | Global | Unauthenticated! (Invalid/missing/revoked token) |
+| `1009` | 403 | Global | You do not have permission! (Unauthorized access) |
 | `1010` | 400 | Auth | Username already exists! |
 | `1011` | 400 | Auth | Email already exists! |
-| `1012` | 400 | Auth | Default role not found! |
-| `1013` | 400 | Auth | Otp invalid |
-| `1014` | 400 | Auth | Account not found! |
-| `1015` | 400 | Auth | Otp has expired |
-| `1016` | 429 | Auth | Resend Otp too fast |
+| `1012` | 500 | Auth | An internal error occurred. Please contact support. (Default role missing in DB) |
+| `1013` | 400 | Auth | OTP is invalid! |
+| `1014` | 404 | Auth | Account not found! |
+| `1015` | 400 | Auth | OTP has expired! |
+| `1016` | 429 | Auth | Please wait before requesting another OTP! |
 | `1017` | 400 | Auth | Phone number already exists in the system! |
 | `1018` | 400 | Auth | Identity card (CCCD) already exists in the system! |
+| `1019` | 500 | Auth | Failed to send OTP email. Please try again. |
+| `1020` | 403 | Auth | Your account has been deactivated. Please contact support. |
 | `2001` | 400 | User | Phone number already exists! |
 | `2002` | 400 | User | Identity card already exists! |
 | `2003` | 404 | User | User profile not found! |
@@ -109,6 +115,52 @@ All successful and failed responses share a unified JSON structure. The Frontend
 ## 6. Endpoint Details
 
 ### 6.1 Authentication
+
+---
+
+#### GET `/api/auth/check`
+
+Pre-checks whether a `username` or `email` is already taken. Intended to be called on the first step of the registration form (before OTP is sent) so users get immediate feedback. Does **not** require authentication.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| `username` | string | ❌ | Username to check |
+| `email` | string | ❌ | Email address to check |
+
+At least one parameter must be provided. Both can be provided in the same request.
+
+**Example Request:**
+```
+GET /api/auth/check?username=john_doe&email=johndoe@example.com
+```
+
+**Success Response (200) — both available:**
+```json
+{
+  "code": 1000,
+  "message": "Available"
+}
+```
+
+**Error Responses:**
+
+*400 — Username already exists:*
+```json
+{
+  "code": 1010,
+  "message": "Username already exists!"
+}
+```
+
+*400 — Email already exists:*
+```json
+{
+  "code": 1011,
+  "message": "Email already exists!"
+}
+```
 
 ---
 
@@ -242,7 +294,7 @@ Verifies OTP and creates the account. After successful account creation, a `User
 ```json
 {
   "code": 1013,
-  "message": "Otp invalid"
+  "message": "OTP is invalid!"
 }
 ```
 
@@ -250,15 +302,15 @@ Verifies OTP and creates the account. After successful account creation, a `User
 ```json
 {
   "code": 1015,
-  "message": "Otp has expired"
+  "message": "OTP has expired!"
 }
 ```
 
-*400 — Default role not configured in system:*
+*500 — Default role not configured in system:*
 ```json
 {
   "code": 1012,
-  "message": "Default role not found!"
+  "message": "An internal error occurred. Please contact support."
 }
 ```
 
@@ -293,13 +345,21 @@ Authenticates user using username and password. Returns a signed JWT token.
 }
 ```
 
-**Error Response:**
+**Error Responses:**
 
 *401 — Invalid credentials:*
 ```json
 {
   "code": 1008,
-  "message": "Unauthenticated"
+  "message": "Unauthenticated!"
+}
+```
+
+*403 — Account deactivated:*
+```json
+{
+  "code": 1020,
+  "message": "Your account has been deactivated. Please contact support."
 }
 ```
 
@@ -342,9 +402,123 @@ Resends a new 6-digit OTP to the provided email. Rate-limited to prevent abuse.
 ```json
 {
   "code": 1016,
-  "message": "Resend Otp too fast"
+  "message": "Please wait before requesting another OTP!"
 }
 ```
+
+---
+
+#### POST `/api/auth/logout`
+
+Revokes the current JWT token. After this call, the token is marked as revoked in the whitelist and will be rejected by all services.
+
+**Request Header:**
+
+```
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9...
+```
+
+| Header | Required | Description |
+| :--- | :---: | :--- |
+| `Authorization` | ✅ | Bearer token to revoke. Extracted server-side from the `Authorization` header — no request body needed. |
+
+**Request Body:** none
+
+> **Why header, not body?**
+> Token is identity context, not payload data — it belongs in `Authorization` per RFC 6750. Sending tokens in the request body risks them being captured in server access logs, which typically record body content but redact the `Authorization` header by convention.
+
+**Success Response (200):**
+```json
+{
+  "code": 1000,
+  "message": "Logged out successfully"
+}
+```
+
+**Error Responses:**
+
+*401 — Missing or malformed Authorization header:*
+```json
+{
+  "code": 1008,
+  "message": "Unauthenticated!"
+}
+```
+
+*401 — Token already revoked or signature invalid:*
+```json
+{
+  "code": 1008,
+  "message": "Unauthenticated!"
+}
+```
+
+---
+
+#### POST `/api/auth/refresh`
+
+Issues a new JWT token using the current (still-valid) token. The old token is **immediately revoked** (token rotation). The response format is identical to `/login`.
+
+**Request Body:**
+```json
+{
+  "token": "eyJhbGciOiJIUzUxMiJ9..."
+}
+```
+
+| Field | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| `token` | string | ✅ | A valid (non-revoked, non-expired) JWT token |
+
+**Success Response (200):**
+```json
+{
+  "code": 1000,
+  "result": {
+    "authenticate": true,
+    "token": "eyJhbGciOiJIUzUxMiJ9...<new_token>"
+  }
+}
+```
+
+**Error Response:**
+
+*401 — Token invalid, expired, or already revoked:*
+```json
+{
+  "code": 1008,
+  "message": "Unauthenticated!"
+}
+```
+
+---
+
+#### POST `/api/auth/introspect`
+
+Validates a JWT token and returns whether it is currently active (not revoked, not expired).
+
+**Request Body:**
+```json
+{
+  "token": "eyJhbGciOiJIUzUxMiJ9..."
+}
+```
+
+| Field | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| `token` | string | ✅ | The JWT token to validate |
+
+**Success Response (200):**
+```json
+{
+  "code": 1000,
+  "result": {
+    "valid": true
+  }
+}
+```
+
+> If the token is expired or revoked, `valid` will be `false` (no error thrown).
 
 ---
 
@@ -758,6 +932,13 @@ Retrieves all roles and their assigned permissions.
 ### Token
 - JWT token returned by `/login` must be attached to all protected endpoints as `Authorization: Bearer <token>`
 - Token carries role/permission claims used by the gateway and each service for access control
+- **Whitelist model:** every issued token is stored in the `auth_token` table with `is_revoked = false`. On `/logout` or `/refresh`, the old token is marked `is_revoked = true` and rejected immediately — even if the JWT signature is still technically valid
+- **Token rotation:** calling `/refresh` revokes the old token and issues a brand-new one atomically. Never reuse a token after calling `/refresh`
+- **Logout requires Authorization header:** `/logout` reads the token from `Authorization: Bearer <token>` — no request body. Clients must not clear the token from storage until after the server confirms revocation (200 OK). Clearing before the call would cause the axios interceptor to send no Authorization header, and the server would reject the request with 401.
+
+### Account Status
+- Login checks `account.status`. A value other than `1` (active) returns error `1020` (`ACCOUNT_INACTIVE`)
+- Deactivated accounts cannot log in but their data remains intact
 
 ### Default Role
 - Every newly registered user is automatically assigned a default role (e.g., `USER`)
@@ -784,12 +965,13 @@ On successful registration, `auth-service` publishes the following event:
   "fullName": "John Doe",
   "phoneNumber": "0123456789",
   "dateOfBirth": "1995-10-15",
-  "email": "johndoe@example.com",
   "gender": "MALE",
   "address": "123 Main Street, Tech City",
   "identityCard": "079012345678"
 }
 ```
+
+> **Note:** The `email` field was intentionally removed. Email is owned exclusively by `auth-service` (authentication credential). `user-service` stores only the profile data above.
 
 For full Kafka contract details (retries, DLT, idempotency), see [docs/kafka-user-registration-contract.md](../../kafka-user-registration-contract.md).
 
@@ -805,6 +987,28 @@ For full Kafka contract details (retries, DLT, idempotency), see [docs/kafka-use
 ---
 
 ## 10. Changelog
+
+### Version 1.4.0 (2026-06-27)
+- **Breaking change — `POST /api/auth/logout`:** Token is no longer accepted in the request body. The endpoint now reads the token exclusively from the `Authorization: Bearer <token>` header.
+  - **Before:** `POST /api/auth/logout` with body `{ "token": "eyJ..." }`
+  - **After:** `POST /api/auth/logout` with header `Authorization: Bearer eyJ...` and no body
+  - **Rationale:** Tokens are identity context (RFC 6750), not payload data. Request bodies are more likely to appear in server access logs than the `Authorization` header, which log aggregators typically redact by convention. The axios request interceptor already attaches the token to every outgoing request automatically, making the body field redundant.
+  - **Frontend impact:** `authApi.logout()` no longer accepts a `token` argument. The axios interceptor handles header injection automatically.
+  - **Backend impact:** `AuthenticationController` now reads from `HttpServletRequest.getHeader("Authorization")` and delegates to `AuthenticationService.logoutByToken(String token)`. The old `logout(LogoutRequest)` method is retained as a delegate wrapper for backward compatibility.
+
+### Version 1.3.0 (2026-06-25)
+- Added `GET /api/auth/check` — pre-check username/email availability (no auth required)
+- Added `POST /api/auth/logout` — revokes the current JWT token
+- Added `POST /api/auth/refresh` — token rotation (old revoked, new issued)
+- Added `POST /api/auth/introspect` — validates a JWT token
+- Updated token security model: whitelist-based (`auth_token` table) replacing the old blacklist approach
+- Added error code `1019` — OTP email send failure (500)
+- Added error code `1020` — Account deactivated (403); login now checks `account.status`
+- Fixed error code `1012` HTTP status: 400 → 500 (internal config error, not client error)
+- Fixed error code `1014` HTTP status: 400 → 404
+- Updated error messages to be consistent: `1013`, `1015`, `1016`
+- Removed `email` field from Kafka `UserRegisteredEvent` payload — email is owned by auth-service only
+- Updated Business Rules section: token whitelist model, account status check
 
 ### Version 1.2.0 (2026-06-22)
 - Added `POST /api/auth/resend-otp` endpoint

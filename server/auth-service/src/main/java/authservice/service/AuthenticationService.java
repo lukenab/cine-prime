@@ -171,7 +171,12 @@ public class AuthenticationService {
 
     @Transactional
     public void logout(LogoutRequest request) throws ParseException, JOSEException {
-        SignedJWT signedToken = jwtService.verifyToken(request.getToken(), false);
+        logoutByToken(request.getToken());
+    }
+
+    @Transactional
+    public void logoutByToken(String token) throws ParseException, JOSEException {
+        SignedJWT signedToken = jwtService.verifyToken(token, false);
         authTokenRepository.revokeByJwtId(
                 signedToken.getJWTClaimsSet().getJWTID(),
                 OffsetDateTime.now()
@@ -254,7 +259,7 @@ public class AuthenticationService {
                     .createdIp(ip)
                     .userAgent(userAgent)
                     .build());
-        } catch (ParseException e) {
+        } catch (ParseException | RuntimeException e) {
             log.error("Failed to save auth token record", e);
             throw new AppException(GlobalErrorCode.UNCATEGORIZED_EXCEPTION);
         }
