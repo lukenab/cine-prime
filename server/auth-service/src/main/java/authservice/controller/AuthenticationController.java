@@ -6,11 +6,14 @@ import authservice.dto.response.AccountResponse;
 import authservice.dto.response.IntrospectResponse;
 import authservice.service.AuthenticationService;
 import com.nimbusds.jose.JOSEException;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import movie.theater.common.dto.ApiResponse;
+import movie.theater.common.exception.AppException;
+import movie.theater.common.exception.GlobalErrorCode;
 import org.springframework.web.bind.annotation.*;
 
 import java.text.ParseException;
@@ -62,8 +65,13 @@ public class AuthenticationController {
     }
 
     @PostMapping("/logout")
-    ApiResponse<Void> logout(@RequestBody LogoutRequest request) throws ParseException, JOSEException {
-        authenticationService.logout(request);
+    ApiResponse<Void> logout(HttpServletRequest request) throws ParseException, JOSEException {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new AppException(GlobalErrorCode.UNAUTHENTICATED);
+        }
+        String token = authHeader.substring(7);
+        authenticationService.logoutByToken(token);
         return ApiResponse.<Void>builder()
                 .message("Logged out successfully")
                 .build();

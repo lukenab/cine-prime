@@ -12,6 +12,16 @@ function extractPrimaryRole(rolesClaim: string): string {
     return roles[0] || "";
 }
 
+function isTokenExpired(token: string): boolean {
+    try {
+        const decoded: any = jwtDecode(token);
+        // decoded.exp is in seconds; Date.now() in milliseconds
+        return !decoded.exp || decoded.exp * 1000 < Date.now();
+    } catch {
+        return true;
+    }
+}
+
 interface User {
     username: string;
     role: string;
@@ -20,7 +30,7 @@ interface User {
 interface AuthContextType {
     user: User | null;
     login: (credentials: any) => Promise<void>;
-    logout: () => void;
+    logout: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -31,20 +41,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     useEffect(() => {
         const token = localStorage.getItem("accessToken");
-        if (token) {
-            try {
-                const decoded: any = jwtDecode(token);
+        if (!token) return;
 
-                setUser({
-                    username: decoded.sub,
-                    role: extractPrimaryRole(decoded.role ?? decoded.scope)
-                });
-            } catch (error) {
-                console.error("Fail to get token", error);
+        // Reject expired tokens immediately — don't wait for a 401
+        if (isTokenExpired(token)) {
+            localStorage.removeItem("accessToken");
+            localStorage.removeItem("role");
+            return;
+        }
 
-                localStorage.removeItem("accessToken");
-                localStorage.removeItem("role"); 
-            }
+        try {
+            const decoded: any = jwtDecode(token);
+            setUser({
+                username: decoded.sub,
+                role: extractPrimaryRole(decoded.role ?? decoded.scope),
+            });
+        } catch {
+            localStorage.removeItem("accessToken");
+            localStorage.removeItem("role");
         }
     }, []);
 
@@ -56,25 +70,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const token = resBody?.result?.token || resBody?.token || response?.result?.token;
 
         if (!token) {
-            throw new Error('Login failed: missing token in response');
+            throw new Error("Login failed: missing token in response");
         }
 
         localStorage.setItem("accessToken", token);
 
         const decoded: any = jwtDecode(token);
-
         const primaryRole = extractPrimaryRole(decoded.role ?? decoded.scope);
         localStorage.setItem("role", primaryRole);
 
-        setUser({
-            username: decoded.sub,
-            role: primaryRole
-        });
+        setUser({ username: decoded.sub, role: primaryRole });
     };
 
-    const logout = () => {
+    const logout = async () => {
+        const token = localStorage.getItem("accessToken");
+
+        // Revoke token on the server so it can't be reused even if stolen.
+        // Token được gửi tự động qua Authorization header bởi axios interceptor.
+        if (token) {
+            try {
+                await authApi.logout();
+            } catch {
+                // Ignore — proceed with local cleanup regardless
+            }
+        }
+
         localStorage.removeItem("accessToken");
-        localStorage.removeItem("role"); 
+        localStorage.removeItem("role");
+        localStorage.removeItem("jwt_token"); // clean up legacy key
         setUser(null);
         window.location.href = "/login";
     };

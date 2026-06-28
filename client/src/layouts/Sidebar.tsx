@@ -40,8 +40,7 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
   const { user, logout } = useAuth();
 
   const handleLogout = () => {
-    logout();
-    navigate("/login", { replace: true });
+    void logout();
   };
 
   return (
