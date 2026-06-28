@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import bookingservice.dto.response.BookingResponse;
+import bookingservice.dto.response.CancelBookingResponse;
 import bookingservice.service.BookingService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -21,12 +21,12 @@ public class BookingController {
         BookingService bookingService;
 
         @PatchMapping("/{id}/cancel")
-        public ResponseEntity<ApiResponse<BookingResponse>> cancelBooking(
+        public ResponseEntity<ApiResponse<CancelBookingResponse>> cancelBooking(
                         @PathVariable("id") String id) {
                 String accountId = JwtSecurityUtils.getCurrentAccountId();
                 boolean isAdmin = JwtSecurityUtils.hasRole("ROLE_ADMIN");
-                BookingResponse responseData = bookingService.cancelBooking(id, accountId, isAdmin);
-                ApiResponse<BookingResponse> apiResponse = new ApiResponse<>(
+                CancelBookingResponse responseData = bookingService.cancelBooking(id, accountId, isAdmin);
+                ApiResponse<CancelBookingResponse> apiResponse = new ApiResponse<>(
                                 1000,
                                 "Booking cancelled successfully",
                                 responseData);

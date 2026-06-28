@@ -8,12 +8,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import bookingservice.dto.response.BookingResponse;
+import bookingservice.dto.response.CancelBookingResponse;
 import bookingservice.entity.Booking;
 import bookingservice.entity.BookingItem;
 import bookingservice.entity.BookingStatus;
 import bookingservice.entity.Ticket;
 import bookingservice.exception.BookingErrorCode;
+import bookingservice.mapper.BookingMapper;
 import bookingservice.repository.BookingItemRepository;
 import bookingservice.repository.BookingRepository;
 import bookingservice.repository.SeatLockRepository;
@@ -34,13 +35,13 @@ public class BookingService {
     BookingItemRepository bookingItemRepository;
     SeatLockRepository seatLockRepository;
     TicketRepository ticketRepository;
-
+    BookingMapper bookingMapper;
     @NonFinal
     @Value("${booking.cancel.mins-before-showtime}")
     int minsBeforeShowtime;
 
     @Transactional
-    public BookingResponse cancelBooking(String bookingId, String currentUserId, boolean isAdmin) {
+    public CancelBookingResponse cancelBooking(String bookingId, String currentUserId, boolean isAdmin) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new AppException(BookingErrorCode.BOOKING_NOT_FOUND));
         if (!isAdmin && !booking.getAccountId().equals(currentUserId)) {
@@ -56,7 +57,7 @@ public class BookingService {
             LocalDateTime showtime = LocalDateTime.of(booking.getShowDate(), booking.getStartTime());
             System.out.println(showtime + " 57");
             if (LocalDateTime.now().plusMinutes(minsBeforeShowtime).isAfter(showtime)) {
-                throw new AppException(BookingErrorCode.CANCEL_TIME_EXPIRED); 
+                throw new AppException(BookingErrorCode.CANCEL_TIME_EXPIRED);
             }
         }
         List<Ticket> tickets = null;
@@ -83,11 +84,8 @@ public class BookingService {
         }
 
         booking.setStatus(BookingStatus.CANCELLED.name());
-        bookingRepository.save(booking);
+        Booking bookingSave = bookingRepository.save(booking);
 
-        return new BookingResponse(
-                booking.getBookingId(),
-                booking.getStatus(),
-                booking.getUpdatedAt());
+        return bookingMapper.toCancelBookingResponse(bookingSave);
     }
 }
