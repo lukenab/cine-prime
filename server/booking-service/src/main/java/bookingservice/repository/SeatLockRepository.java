@@ -14,8 +14,6 @@ import io.lettuce.core.dynamic.annotation.Param;
 
 @Repository
 public interface SeatLockRepository extends JpaRepository<SeatLock, Long> {
-    Optional<SeatLock> findByShowtimeIdAndSeatId(Long showtimeId, String seatId);
-    void deleteByExpiresAtBefore(LocalDateTime now);
 
     @Modifying
     @Query("DELETE FROM SeatLock s WHERE s.showtimeId = :showtimeId AND s.seatId IN :seatIds")
@@ -34,4 +32,13 @@ public interface SeatLockRepository extends JpaRepository<SeatLock, Long> {
 
     @Query("SELECT s FROM SeatLock s WHERE s.showtimeId = :showtimeId AND s.expiresAt > :now")
     List<SeatLock> findAllActiveLocks(@Param("showtimeId") Long showtimeId, @Param("now") LocalDateTime now);
+
+    boolean existsByShowtimeIdAndSeatIdIn(Long showtimeId, List<String> seatIds);
+    @Query("SELECT s FROM SeatLock s WHERE s.showtimeId = :showtimeId AND s.seatId IN :seatIds AND s.expiresAt > :now")
+    List<SeatLock> findActiveLocks(
+        @Param("showtimeId") Long showtimeId, 
+        @Param("seatIds") List<String> seatIds, 
+        @Param("now") LocalDateTime now
+    );
+
 }
