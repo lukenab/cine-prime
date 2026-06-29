@@ -2,6 +2,7 @@ import AuthLayout from "../layouts/AuthLayout";
 import CustomerLayout from "../layouts/CustomerLayout";
 import LoginPage from "../pages/auth/LoginPage";
 import HomePage from "../pages/customer/HomePage";
+import SeatBookingPage from "../pages/customer/SeatBookingPage";
 import { Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
 import AdminLayout from "../layouts/AdminLayout";
@@ -21,6 +22,7 @@ export default function AppRoutes() {
     <Routes>
       <Route element={<CustomerLayout />}>
         <Route path="/" element={<HomePage />} />
+        <Route path="/booking/:showtimeId" element={<SeatBookingPage />} />
       </Route>
 
       <Route element={<AuthLayout/>}>

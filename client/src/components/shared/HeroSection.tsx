@@ -1,7 +1,10 @@
 import { Ticket, Play, ChevronDown } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import trailerVideo from "../../assets/GattoTeaser.mp4";
 
 export function HeroSection() {
+  const navigate = useNavigate();
+
   return (
     <section className="relative w-full min-h-screen flex flex-col items-center justify-center overflow-hidden">
       {/* 1. Lớp chứa Video MP4 Native */}
@@ -89,7 +92,7 @@ export function HeroSection() {
         {/* CTA buttons */}
         <div className="flex flex-wrap gap-4 justify-center" style={{ marginTop: "8px" }}>
           <button
-            onClick={() => window.open("http://localhost:3001", "_blank")}
+            onClick={() => navigate("/booking/1")}
             className="flex items-center gap-3 px-8 py-4 rounded-full transition-all duration-300 hover:scale-105 hover:shadow-2xl"
             style={{
               background: "linear-gradient(135deg, #FFD700, #FFA500)",

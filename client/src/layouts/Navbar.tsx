@@ -82,7 +82,7 @@ export function Navbar() {
           )}
 
           <button
-            onClick={() => window.open("http://localhost:3001", "_blank")}
+            onClick={() => navigate("/booking/1")}
             className="flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-200 hover:brightness-110"
             style={{ backgroundColor: "#FFD700", color: "#050505", fontSize: "0.85rem", fontWeight: 700 }}
           >
@@ -137,7 +137,7 @@ export function Navbar() {
           )}
 
           <button
-            onClick={() => window.open("http://localhost:3001", "_blank")}
+            onClick={() => navigate("/booking/1")}
             className="flex items-center justify-center gap-2 px-4 py-3 rounded-full w-full mt-2"
             style={{ backgroundColor: "#FFD700", color: "#050505", fontWeight: 700, fontSize: "0.9rem" }}
           >

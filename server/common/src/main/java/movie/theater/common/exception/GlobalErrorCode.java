@@ -17,6 +17,7 @@ public enum GlobalErrorCode implements BaseErrorCode {
     INVALID_KEY(1005, "Invalid message key!", HttpStatus.BAD_REQUEST),
     UNAUTHENTICATED(1008, "Unauthenticated", HttpStatus.UNAUTHORIZED),
     UNAUTHORIZED(1009, "You do not have permission", HttpStatus.FORBIDDEN),
+    INVALID_AGE(2001, "Your age must be at least {min} years old", HttpStatus.BAD_REQUEST),
     ;
 
     int code;

@@ -18,10 +18,13 @@ import movieservice.entity.CinemaRoom;
 import movieservice.entity.Movie;
 import movieservice.entity.MovieType;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", unmappedTargetPolicy = org.mapstruct.ReportingPolicy.IGNORE)
 public interface MovieMapper {
     Movie toMovie(CreateMovieRequest request);
-    // cái này nảy tui sửa k đc, có s phía cuối hong, k bt nữa
+    
+    // TRẢ LỜI: Hàm này MapStruct sẽ tự động ánh xạ các field từ UpdateMovieRequest sang entity Movie đã có sẵn.
+    // Nếu trong UpdateMovieRequest có list id của showTimes thì phải xử lý riêng. Bạn không cần thêm chữ 's'. 
+    // Tôi đã thêm cấu hình unmappedTargetPolicy = IGNORE ở trên để sửa lỗi cho bạn rồi nhé!
     void updateMovieFromRequest(UpdateMovieRequest request, @MappingTarget Movie movie);
 
     @Mapping(target = "movieType", source = "movieTypes", qualifiedByName = "mapTypesToGenreNames")
@@ -36,7 +39,8 @@ public interface MovieMapper {
     MovieType toType(TypeRequest typeRequest);
     TypeMovieResponse toMovieResponse(MovieType typeMovie);
     List<TypeMovieResponse> toTypeResponseList(List<MovieType> movieTypes);
-    // ông coi cái hàm dưới đây để gì v
+    // TRẢ LỜI: Hàm mapTypesToGenreNames dùng để trích xuất tên thể loại phim (typeName) từ Entity MovieType. 
+    // Nhờ hàm này, khi convert sang MovieResponse, danh sách thể loại phim sẽ hiển thị dưới dạng List<String> (ví dụ: ["Hành động", "Kinh dị"]) thay vì List<Object> phức tạp.
     @Named("mapTypesToGenreNames")
     default List<String> mapTypesToGenreNames(List<MovieType> types) {
         if (types == null) {

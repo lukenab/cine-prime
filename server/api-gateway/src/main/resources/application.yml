@@ -9,7 +9,9 @@ spring:
       globalcors:
         corsConfigurations:
           '[/**]':
-            allowedOrigins: "http://localhost:3000"
+            allowedOrigins: 
+              - "http://localhost:3000"
+              - "http://localhost:3001"
             allowedMethods:
               - GET
               - POST
@@ -22,7 +24,7 @@ spring:
         - id: movie-service
           uri: lb://movie-service
           predicates:
-            - Path=/api/movies/**, /api/cinemas/**, /api/shows/**
+            - Path=/api/movies/**, /api/cinemas/**, /api/shows/**, /api/showtimes/**
 
         - id: booking-service
           uri: lb://booking-service

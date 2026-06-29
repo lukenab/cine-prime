@@ -1,5 +1,6 @@
 package authservice.config;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,10 +24,10 @@ import java.nio.charset.StandardCharsets;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    public final String [] END_POINTS = {"/api/auth/register/initiate", "/api/auth/login", "/api/auth/introspect", "/api/auth/register/verify", "/api/auth/resend-otp"};
+    public final String [] END_POINTS = {"/api/auth/register/initiate", "/api/auth/login", "/api/auth/introspect", "/api/auth/register/verify", "/api/auth/resend-otp", "/api/auth/logout", "/api/auth/refresh"};
 
-    @Value("${jwt.signerKey}")
-    private String SIGNER_KEY;
+    @Autowired
+    CustomJwtDecoder customJwtDecoder;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception{
@@ -39,7 +40,7 @@ public class SecurityConfig {
                         .anyRequest().authenticated());
 
         http.oauth2ResourceServer(oath2
-                -> oath2.jwt(jwtConfigurer -> jwtConfigurer.decoder(jwtDecoder()))
+                -> oath2.jwt(jwtConfigurer -> jwtConfigurer.decoder(customJwtDecoder))
                 .authenticationEntryPoint(new JwtAuthEntryPoint())
         );
 
@@ -56,14 +57,6 @@ public class SecurityConfig {
 
 
         return jwtAuthenticationConverter;
-    }
-
-    @Bean
-    public JwtDecoder jwtDecoder() {
-
-        SecretKeySpec secretKeySpec = new SecretKeySpec(SIGNER_KEY.getBytes(StandardCharsets.UTF_8), "HS512");
-
-        return NimbusJwtDecoder.withSecretKey(secretKeySpec).macAlgorithm(MacAlgorithm.HS512).build();
     }
 
     @Bean

@@ -5,15 +5,9 @@ services:
     container_name: cineprime-client
     ports:
       - "3000:3000" 
-    tty: true
-    networks:
-      - cinema-network
-
-  admin-client:
-    build: ./admin-client
-    container_name: admin-client
-    ports:
-      - "3001:3001" 
+    volumes:
+      - ./client/src:/app/src
+      - ./client/public:/app/public
     tty: true
     networks:
       - cinema-network
