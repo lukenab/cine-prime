@@ -64,6 +64,9 @@ public class BookingService {
     @Value("${booking.cancel.mins-before-showtime}")
     int minsBeforeShowtime;
 
+    // 1. Đảm bảo ở DB đã có UNIQUE KEY / UNIQUE INDEX trên 2 cột: (showtime_id,
+    // seat_id)
+
     @Transactional
     public CreateBookingResponse createBookingAndHoldSeats(BookingRequest request, String currentUserId,
             boolean isMember) {
@@ -77,11 +80,10 @@ public class BookingService {
             throw new AppException(BookingErrorCode.DUPLICATE_SEATS_IN_REQUEST);
         }
 
-        holdSeats(request.getShowtimeId(), request.getSeatIds(), currentUserId);
+        cleanExpiredLocksAndHold(request.getShowtimeId(), request.getSeatIds(), currentUserId);
 
         BigDecimal totalPrice = BigDecimal.ZERO;
         List<BookingItemResponse> itemResponses = new ArrayList<>();
-
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime expiredAt = now.plusMinutes(10);
 
@@ -119,35 +121,34 @@ public class BookingService {
         return bookingMapper.toCreateBookingResponse(savedBooking, itemResponses, expiredAt);
     }
 
-    @Transactional(isolation = Isolation.READ_COMMITTED)
-    public void holdSeats(Long showtimeId, List<Long> seatIds, String accountId) {
+    private void cleanExpiredLocksAndHold(Long showtimeId, List<Long> seatIds, String accountId) {
         List<String> seatIdStrs = seatIds.stream()
                 .map(String::valueOf)
                 .collect(Collectors.toList());
 
-        List<SeatLock> existingLocks = seatLockRepository
-                .findByShowtimeIdAndSeatIdInForUpdate(showtimeId, seatIdStrs);
+        LocalDateTime now = LocalDateTime.now();
+
+        List<SeatLock> existingLocks = seatLockRepository.findByShowtimeIdAndSeatIdInForUpdate(showtimeId, seatIdStrs);
 
         for (SeatLock existingLock : existingLocks) {
-            if (existingLock.getExpiresAt().isAfter(LocalDateTime.now())) {
+            if (existingLock.getExpiresAt().isAfter(now)) {
                 throw new AppException(BookingErrorCode.SEAT_ALREADY_LOCKED);
             }
         }
 
-        if (!existingLocks.isEmpty()) {
-            seatLockRepository.deleteAll(existingLocks);
-            seatLockRepository.flush();
-        }
+        seatLockRepository.deleteExpiredLocks(showtimeId, seatIdStrs, now);
+        seatLockRepository.flush(); 
 
         List<SeatLock> newLocks = seatIdStrs.stream().map(seatIdStr -> SeatLock.builder()
                 .showtimeId(showtimeId)
                 .seatId(seatIdStr)
                 .lockedByAccountId(accountId)
-                .expiresAt(LocalDateTime.now().plusMinutes(10))
+                .expiresAt(now.plusMinutes(10))
                 .build()).collect(Collectors.toList());
 
         try {
             seatLockRepository.saveAll(newLocks);
+            seatLockRepository.flush();
         } catch (DataIntegrityViolationException ex) {
             throw new AppException(BookingErrorCode.SEAT_ALREADY_LOCKED);
         }

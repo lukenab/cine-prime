@@ -41,10 +41,15 @@ public interface SeatLockRepository extends JpaRepository<SeatLock, Long> {
                         @Param("seatIds") List<String> seatIds,
                         @Param("now") LocalDateTime now);
 
-
         @Lock(LockModeType.PESSIMISTIC_WRITE)
         @Query("SELECT s FROM SeatLock s WHERE s.showtimeId = :showtimeId AND s.seatId IN :seatIds")
         List<SeatLock> findByShowtimeIdAndSeatIdInForUpdate(
                         @Param("showtimeId") Long showtimeId,
                         @Param("seatIds") List<String> seatIds);
+
+        @Modifying
+        @Query("DELETE FROM SeatLock s WHERE s.showtimeId = :showtimeId AND s.seatId IN :seatIds AND s.expiresAt <= :now")
+        void deleteExpiredLocks(@Param("showtimeId") Long showtimeId,
+                        @Param("seatIds") List<String> seatIds,
+                        @Param("now") LocalDateTime now);
 }
