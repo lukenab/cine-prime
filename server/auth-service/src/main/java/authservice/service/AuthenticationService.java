@@ -56,6 +56,7 @@ public class AuthenticationService {
     UserEventProducer userEventProducer;
     UserClient userClient;
     AuthTokenRepository authTokenRepository;
+    AuthAuditLogService authAuditLogService;
 
 
     StringRedisTemplate redisTemplate;
@@ -79,26 +80,47 @@ public class AuthenticationService {
     public void initiateRegistration(RegisterRequest request) {
         String emailKey = request.getEmail().trim().toLowerCase();
 
-        validateUniqueFields(request.getUsername(), emailKey, request.getPhoneNumber(), request.getIdentityCard());
-        generateAndSendOtp(emailKey);
+        try {
+            validateUniqueFields(request.getUsername(), emailKey, request.getPhoneNumber(), request.getIdentityCard());
+            generateAndSendOtp(emailKey);
+            authAuditLogService.success("REGISTER_INITIATED", null, "Registration OTP sent",
+                    authAuditLogService.metadata(
+                            "username", request.getUsername(),
+                            "email", emailKey,
+                            "phoneNumber", authAuditLogService.maskPhone(request.getPhoneNumber()),
+                            "identityCard", authAuditLogService.maskIdentityCard(request.getIdentityCard())
+                    ));
+        } catch (RuntimeException e) {
+            authAuditLogService.failed("REGISTER_INITIATED", null, e.getMessage(),
+                    authAuditLogService.metadata("username", request.getUsername(), "email", emailKey));
+            throw e;
+        }
     }
 
 
     public void resendOtp(ResendOtpRequest request) {
         String emailKey = request.getEmail().trim().toLowerCase();
 
-        if (accountRepository.existsByEmail(emailKey)) {
-            throw new AppException(AuthErrorCode.EMAIL_EXISTED);
-        }
+        try {
+            if (accountRepository.existsByEmail(emailKey)) {
+                throw new AppException(AuthErrorCode.EMAIL_EXISTED);
+            }
 
-        String cooldownKey = "cooldown:otp:" + emailKey;
-        if (Boolean.TRUE.equals(redisTemplate.hasKey(cooldownKey))) {
-            throw new AppException(AuthErrorCode.RESEND_OTP_TOO_FAST);
-        }
+            String cooldownKey = "cooldown:otp:" + emailKey;
+            if (Boolean.TRUE.equals(redisTemplate.hasKey(cooldownKey))) {
+                throw new AppException(AuthErrorCode.RESEND_OTP_TOO_FAST);
+            }
 
-        redisTemplate.opsForValue().set(cooldownKey, "locked", OTP_COOLDOWN_SECONDS, TimeUnit.SECONDS);
-        generateAndSendOtp(emailKey);
-        log.info("Resent new OTP for email: {}", emailKey);
+            redisTemplate.opsForValue().set(cooldownKey, "locked", OTP_COOLDOWN_SECONDS, TimeUnit.SECONDS);
+            generateAndSendOtp(emailKey);
+            authAuditLogService.success("OTP_RESEND_REQUESTED", null, "Registration OTP resent",
+                    authAuditLogService.metadata("email", emailKey));
+            log.info("Resent new OTP for email: {}", emailKey);
+        } catch (RuntimeException e) {
+            authAuditLogService.failed("OTP_RESEND_REQUESTED", null, e.getMessage(),
+                    authAuditLogService.metadata("email", emailKey));
+            throw e;
+        }
     }
 
     @Transactional
@@ -111,10 +133,14 @@ public class AuthenticationService {
         String cachedOtp = redisTemplate.opsForValue().get(emailKey);
 
         if (cachedOtp == null) {
+            authAuditLogService.failed("REGISTER_OTP_VERIFIED", null, "OTP expired",
+                    authAuditLogService.metadata("email", emailKey));
             throw new AppException(AuthErrorCode.OTP_EXPIRED);
         }
 
         if (!cachedOtp.equals(inputOtp)) {
+            authAuditLogService.failed("REGISTER_OTP_VERIFIED", null, "Invalid OTP",
+                    authAuditLogService.metadata("email", emailKey));
             throw new AppException(AuthErrorCode.INVALID_OTP);
         }
 
@@ -143,6 +169,13 @@ public class AuthenticationService {
                 .build();
 
         userEventProducer.sendRegisteredEvent(userRegisteredEvent);
+        authAuditLogService.success("REGISTER_COMPLETED", account.getAccountId(), "Account registered successfully",
+                authAuditLogService.metadata(
+                        "username", registerRequest.getUsername(),
+                        "email", emailKey,
+                        "phoneNumber", authAuditLogService.maskPhone(registerRequest.getPhoneNumber()),
+                        "identityCard", authAuditLogService.maskIdentityCard(registerRequest.getIdentityCard())
+                ));
 
         return accountMapper.toAccountResponse(account);
     }
@@ -150,13 +183,21 @@ public class AuthenticationService {
     @Transactional
     public AuthenticationResponse authenticate(AuthenticationRequest request) {
         Account account = accountRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new AppException(GlobalErrorCode.UNAUTHENTICATED));
+                .orElseThrow(() -> {
+                    authAuditLogService.failed("LOGIN_FAILED", null, "Account not found",
+                            authAuditLogService.metadata("username", request.getUsername()));
+                    return new AppException(GlobalErrorCode.UNAUTHENTICATED);
+                });
 
         if (!passwordEncoder.matches(request.getPassword(), account.getPasswordHash())) {
+            authAuditLogService.failed("LOGIN_FAILED", account.getAccountId(), "Invalid password",
+                    authAuditLogService.metadata("username", request.getUsername()));
             throw new AppException(GlobalErrorCode.UNAUTHENTICATED);
         }
 
         if (account.getStatus() == null || account.getStatus() != ACCOUNT_STATUS_ACTIVE) {
+            authAuditLogService.failed("LOGIN_FAILED", account.getAccountId(), "Account inactive",
+                    authAuditLogService.metadata("username", request.getUsername()));
             throw new AppException(AuthErrorCode.ACCOUNT_INACTIVE);
         }
 
@@ -165,6 +206,8 @@ public class AuthenticationService {
 
         String token = jwtService.generateToken(account);
         saveAuthToken(account, token);
+        authAuditLogService.success("LOGIN_SUCCESS", account.getAccountId(), "Logged in successfully",
+                authAuditLogService.metadata("username", account.getUsername()));
 
         return AuthenticationResponse.builder().authenticate(true).token(token).build();
     }
@@ -181,6 +224,9 @@ public class AuthenticationService {
                 signedToken.getJWTClaimsSet().getJWTID(),
                 OffsetDateTime.now()
         );
+        authAuditLogService.success("LOGOUT", signedToken.getJWTClaimsSet().getStringClaim("accountId"),
+                "Logged out successfully",
+                authAuditLogService.metadata("username", signedToken.getJWTClaimsSet().getSubject()));
     }
 
     public IntrospectResponse introspect(IntrospectRequest request) {
@@ -195,7 +241,13 @@ public class AuthenticationService {
 
     @Transactional
     public AuthenticationResponse refreshToken(RefreshRequest request) throws ParseException, JOSEException {
-        SignedJWT signedJWT = jwtService.verifyToken(request.getToken(), true);
+        SignedJWT signedJWT;
+        try {
+            signedJWT = jwtService.verifyToken(request.getToken(), true);
+        } catch (AppException | ParseException | JOSEException e) {
+            authAuditLogService.failed("TOKEN_REFRESH_FAILED", null, e.getMessage(), null);
+            throw e;
+        }
 
         authTokenRepository.revokeByJwtId(
                 signedJWT.getJWTClaimsSet().getJWTID(),
@@ -207,6 +259,9 @@ public class AuthenticationService {
 
         String newToken = jwtService.generateToken(account);
         saveAuthToken(account, newToken);
+        authAuditLogService.success("TOKEN_REFRESH_SUCCESS", account.getAccountId(),
+                "Token refreshed successfully",
+                authAuditLogService.metadata("username", account.getUsername()));
 
         return AuthenticationResponse.builder().authenticate(true).token(newToken).build();
     }

@@ -56,3 +56,16 @@ CREATE TABLE password_reset (
     created_ip INET,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE auth_audit_log (
+    audit_id VARCHAR(36) PRIMARY KEY,
+    actor_account_id VARCHAR(36),
+    target_account_id VARCHAR(36),
+    action VARCHAR(100) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    message TEXT,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    metadata TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
