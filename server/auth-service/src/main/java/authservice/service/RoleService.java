@@ -22,6 +22,7 @@ public class RoleService {
     RoleRepository roleRepository;
     PermissionRepository permissionRepository;
     RoleMapper roleMapper;
+    AuthAuditLogService authAuditLogService;
 
     public RoleResponse createRole(RoleRequest request){
         Role role = roleMapper.toRole(request);
@@ -30,6 +31,11 @@ public class RoleService {
         role.setPermissions(new HashSet<>(permissions));
 
         role = roleRepository.save(role);
+        authAuditLogService.success("ROLE_CREATED", null, "Role created",
+                authAuditLogService.metadata(
+                        "roleName", role.getRoleName(),
+                        "permissions", request.getPermissions()
+                ));
 
         return roleMapper.toRoleResponse(role);
     }
