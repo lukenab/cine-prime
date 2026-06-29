@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ArrowLeft, Save, User, Camera } from "lucide-react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { authApi } from "../../api/authApi";
-import { employeeApi } from "../../api/employeeApi";
+import { employeeApi, type EmployeeDepartment, type EmployeePosition, type EmploymentType } from "../../api/employeeApi";
 import { userApi } from "../../api/userApi";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -16,24 +16,34 @@ export interface EmployeeFormData {
   dateOfBirth: string;
   identityCard: string;
   address: string;
-  position: string;
+  cinemaId: string;
+  position: EmployeePosition | "";
+  department: EmployeeDepartment | "";
+  employmentType: EmploymentType | "";
   hireDate: string;
 }
 
-const POSITIONS = [
-  "Ticket Agent",
-  "Senior Ticket Agent",
-  "Box Office Supervisor",
-  "Shift Supervisor",
-  "Operations Manager",
-  "Floor Staff",
-  "F&B Staff",
-  "F&B Supervisor",
-  "Concessions Manager",
-  "System Admin",
-  "IT Support",
-  "Security Guard",
-  "Housekeeping Staff",
+const POSITIONS: { value: EmployeePosition; label: string }[] = [
+  { value: "STAFF", label: "Staff" },
+  { value: "SUPERVISOR", label: "Supervisor" },
+  { value: "MANAGER", label: "Manager" },
+];
+
+const DEPARTMENTS: { value: EmployeeDepartment; label: string }[] = [
+  { value: "BOX_OFFICE", label: "Box Office" },
+  { value: "CONCESSION", label: "Concession" },
+  { value: "FLOOR", label: "Floor" },
+  { value: "PROJECTION", label: "Projection" },
+  { value: "MANAGEMENT", label: "Management" },
+  { value: "CUSTOMER_SERVICE", label: "Customer Service" },
+];
+
+const EMPLOYMENT_TYPES: { value: EmploymentType; label: string }[] = [
+  { value: "FULL_TIME", label: "Full-time" },
+  { value: "PART_TIME", label: "Part-time" },
+  { value: "PROBATION", label: "Probation" },
+  { value: "INTERN", label: "Intern" },
+  { value: "CONTRACT", label: "Contract" },
 ];
 
 // ── Field helpers ─────────────────────────────────────────────────────────────
@@ -55,6 +65,20 @@ function FormField({
 
 const inputCls = "px-3.5 py-2.5 text-sm rounded-xl border outline-none focus:ring-2 focus:ring-blue-500/50 transition-all";
 const inputStyle = { background: "transparent", color: "var(--text-main)", borderColor: "var(--border-color)" };
+const today = new Date().toISOString().slice(0, 10);
+
+function isAtLeastAge(dateValue: string, age: number) {
+  const dob = new Date(`${dateValue}T00:00:00`);
+  const now = new Date();
+  let currentAge = now.getFullYear() - dob.getFullYear();
+  const monthDiff = now.getMonth() - dob.getMonth();
+
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dob.getDate())) {
+    currentAge -= 1;
+  }
+
+  return currentAge >= age;
+}
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -85,12 +109,15 @@ export default function CreateEmployeePage() {
     password: "",
     fullName: "",
     phoneNumber: "",
-    gender: "MALE",
+    gender: "Male",
     dateOfBirth: "",
     identityCard: "",
     address: "",
+    cinemaId: "",
     position: "",
-    hireDate: new Date().toISOString().slice(0, 10),
+    department: "",
+    employmentType: "",
+    hireDate: today,
   });
 
   const [errors, setErrors] = useState<Partial<Record<keyof EmployeeFormData, string>>>({});
@@ -121,9 +148,15 @@ export default function CreateEmployeePage() {
     if (!/^0[35789][0-9]{8}$/.test(formData.phoneNumber))      e.phoneNumber  = "Invalid Vietnamese phone number";
     if (!/^[0-9]{12}$/.test(formData.identityCard))            e.identityCard = "Identity card must be exactly 12 digits";
     if (!formData.dateOfBirth)                                  e.dateOfBirth  = "Date of birth is required";
+    else if (formData.dateOfBirth > today)                      e.dateOfBirth  = "Date of birth cannot be in the future";
+    else if (!isAtLeastAge(formData.dateOfBirth, 18))            e.dateOfBirth  = "Employee must be at least 18 years old";
     if (!formData.address.trim())                               e.address      = "Address is required";
+    if (formData.cinemaId.length > 36)                           e.cinemaId     = "Cinema ID must be at most 36 characters";
     if (!formData.position)                                     e.position     = "Position is required";
+    if (!formData.department)                                    e.department   = "Department is required";
+    if (!formData.employmentType)                                e.employmentType = "Employment type is required";
     if (!formData.hireDate)                                     e.hireDate     = "Hire date is required";
+    else if (formData.hireDate > today)                         e.hireDate     = "Hire date cannot be in the future";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -165,7 +198,10 @@ export default function CreateEmployeePage() {
       setStep("employee");
       await employeeApi.create({
         accountId,
-        position:     formData.position,
+        cinemaId:     formData.cinemaId.trim() || undefined,
+        position:     formData.position || "STAFF",
+        department:   formData.department || undefined,
+        employmentType: formData.employmentType || undefined,
         hireDate:     formData.hireDate,
       });
 
@@ -268,15 +304,15 @@ export default function CreateEmployeePage() {
             <FormField label="Gender" required>
               <select name="gender" value={formData.gender} onChange={handleChange}
                 className={inputCls} style={{ ...inputStyle, background: "var(--bg-card)" }}>
-                <option value="MALE"   style={{ background: "var(--bg-card)" }}>Male</option>
-                <option value="FEMALE" style={{ background: "var(--bg-card)" }}>Female</option>
-                <option value="OTHER"  style={{ background: "var(--bg-card)" }}>Other</option>
+                <option value="Male"   style={{ background: "var(--bg-card)" }}>Male</option>
+                <option value="Female" style={{ background: "var(--bg-card)" }}>Female</option>
+                <option value="Other"  style={{ background: "var(--bg-card)" }}>Other</option>
               </select>
             </FormField>
 
             <FormField label="Date of Birth" required error={errors.dateOfBirth}>
               <input name="dateOfBirth" type="date"
-                value={formData.dateOfBirth} onChange={handleChange}
+                value={formData.dateOfBirth} onChange={handleChange} max={today}
                 className={`${inputCls} ${errors.dateOfBirth ? "border-red-400" : ""}`} style={inputStyle} />
             </FormField>
 
@@ -303,20 +339,48 @@ export default function CreateEmployeePage() {
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <FormField label="Cinema ID" error={errors.cinemaId}>
+              <input name="cinemaId" type="text" placeholder="Optional cinema/branch ID"
+                value={formData.cinemaId} onChange={handleChange}
+                className={`${inputCls} ${errors.cinemaId ? "border-red-400" : ""}`} style={inputStyle} />
+            </FormField>
+
             <FormField label="Position" required error={errors.position}>
               <select name="position" value={formData.position} onChange={handleChange}
                 className={`${inputCls} ${errors.position ? "border-red-400" : ""}`}
                 style={{ ...inputStyle, background: "var(--bg-card)" }}>
                 <option value="" style={{ background: "var(--bg-card)" }}>Select position...</option>
                 {POSITIONS.map((p) => (
-                  <option key={p} value={p} style={{ background: "var(--bg-card)" }}>{p}</option>
+                  <option key={p.value} value={p.value} style={{ background: "var(--bg-card)" }}>{p.label}</option>
+                ))}
+              </select>
+            </FormField>
+
+            <FormField label="Department" required error={errors.department}>
+              <select name="department" value={formData.department} onChange={handleChange}
+                className={`${inputCls} ${errors.department ? "border-red-400" : ""}`}
+                style={{ ...inputStyle, background: "var(--bg-card)" }}>
+                <option value="" style={{ background: "var(--bg-card)" }}>Select department...</option>
+                {DEPARTMENTS.map((d) => (
+                  <option key={d.value} value={d.value} style={{ background: "var(--bg-card)" }}>{d.label}</option>
+                ))}
+              </select>
+            </FormField>
+
+            <FormField label="Employment Type" required error={errors.employmentType}>
+              <select name="employmentType" value={formData.employmentType} onChange={handleChange}
+                className={`${inputCls} ${errors.employmentType ? "border-red-400" : ""}`}
+                style={{ ...inputStyle, background: "var(--bg-card)" }}>
+                <option value="" style={{ background: "var(--bg-card)" }}>Select type...</option>
+                {EMPLOYMENT_TYPES.map((t) => (
+                  <option key={t.value} value={t.value} style={{ background: "var(--bg-card)" }}>{t.label}</option>
                 ))}
               </select>
             </FormField>
 
             <FormField label="Hire Date" required error={errors.hireDate}>
               <input name="hireDate" type="date"
-                value={formData.hireDate} onChange={handleChange}
+                value={formData.hireDate} onChange={handleChange} max={today}
                 className={`${inputCls} ${errors.hireDate ? "border-red-400" : ""}`} style={inputStyle} />
             </FormField>
           </div>

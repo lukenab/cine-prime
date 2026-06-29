@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.exception.AppException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -18,8 +19,8 @@ import userservice.dto.EmployeeResponse;
 import userservice.dto.EmployeeUpdateRequest;
 import userservice.dto.PageResponse;
 import userservice.entity.Employee;
-import userservice.entity.EmployeeStatus;
 import userservice.entity.User;
+import userservice.enums.EmployeeStatus;
 import userservice.exception.ErrorCode;
 import userservice.mapper.EmployeeMapper;
 import userservice.repository.EmployeeRepository;
@@ -52,13 +53,23 @@ public class EmployeeService {
 
         Employee employee = Employee.builder()
                 .employeeId(UUID.randomUUID().toString())
+                .employeeCode(generateEmployeeCode())
                 .user(user)
+                .cinemaId(request.getCinemaId())
                 .position(request.getPosition())
+                .department(request.getDepartment())
+                .employmentType(request.getEmploymentType())
                 .hireDate(request.getHireDate())
                 .status(EmployeeStatus.ACTIVE)
                 .build();
 
-        Employee saved = employeeRepository.save(employee);
+        Employee saved;
+        try {
+            saved = employeeRepository.saveAndFlush(employee);
+        } catch (DataIntegrityViolationException e) {
+            log.warn("Failed to create employee for account {} due to data integrity violation", request.getAccountId(), e);
+            throw new AppException(ErrorCode.ACCOUNT_ALREADY_EMPLOYEE);
+        }
         auditLogService.log("Employee", saved.getEmployeeId(), "CREATE", null, saved, getCurrentAccountId());
 
         log.info("Created employee {} for account {}", saved.getEmployeeId(), request.getAccountId());
@@ -74,6 +85,10 @@ public class EmployeeService {
 
     @Transactional
     public PageResponse<EmployeeResponse> getAllEmployees(int page, int size) {
+        if (page < 1 || size < 1 || size > 200) {
+            throw new AppException(ErrorCode.INVALID_INPUT);
+        }
+
         Pageable pageable = PageRequest.of(page - 1, size);
         Page<Employee> pageData = employeeRepository.findAll(pageable);
 
@@ -132,5 +147,13 @@ public class EmployeeService {
             return jwt.getClaimAsString("accountId");
         }
         return "SYSTEM";
+    }
+
+    private String generateEmployeeCode() {
+        String employeeCode;
+        do {
+            employeeCode = "EMP" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+        } while (employeeRepository.existsByEmployeeCode(employeeCode));
+        return employeeCode;
     }
 }

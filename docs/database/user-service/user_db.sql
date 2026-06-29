@@ -23,11 +23,15 @@ CREATE TABLE member (
 
 -- 3. Bảng EMPLOYEE (Dành cho Nhân viên)
 CREATE TABLE employee (
-    employee_id VARCHAR(10) PRIMARY KEY,
-    account_id VARCHAR(10) NOT NULL UNIQUE REFERENCES users(account_id),
+    employee_id VARCHAR(36) PRIMARY KEY,
+    employee_code VARCHAR(20) UNIQUE,
+    account_id VARCHAR(36) NOT NULL UNIQUE REFERENCES users(account_id),
+    cinema_id VARCHAR(36),
     position VARCHAR(50),
+    department VARCHAR(30),
+    employment_type VARCHAR(30),
     hire_date DATE,
-    status INT DEFAULT 1,
+    status VARCHAR(20) DEFAULT 'ACTIVE',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
