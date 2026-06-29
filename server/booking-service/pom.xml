@@ -9,9 +9,9 @@
 		<relativePath>../pom.xml</relativePath>
 	</parent>
 	<groupId>movie.theater</groupId>
-	<artifactId>auth-service</artifactId>
+	<artifactId>booking-service</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>auth-service</name>
+	<name>booking-service</name>
 	<description/>
 	<url/>
 	<licenses>

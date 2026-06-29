@@ -55,7 +55,6 @@ public class BookingService {
         }
         if (booking.getShowDate() != null && booking.getStartTime() != null) {
             LocalDateTime showtime = LocalDateTime.of(booking.getShowDate(), booking.getStartTime());
-            System.out.println(showtime + " 57");
             if (LocalDateTime.now().plusMinutes(minsBeforeShowtime).isAfter(showtime)) {
                 throw new AppException(BookingErrorCode.CANCEL_TIME_EXPIRED);
             }
