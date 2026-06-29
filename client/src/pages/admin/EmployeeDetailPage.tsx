@@ -74,6 +74,29 @@ function gradientFromId(id: string) {
   return AVATAR_GRADIENTS[Math.abs(h) % AVATAR_GRADIENTS.length];
 }
 
+const DEPARTMENT_LABELS: Record<string, string> = {
+  BOX_OFFICE: "Box Office",
+  CONCESSION: "Concession",
+  FLOOR: "Floor",
+  PROJECTION: "Projection",
+  MANAGEMENT: "Management",
+  CUSTOMER_SERVICE: "Customer Service",
+};
+
+const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
+  FULL_TIME: "Full-time",
+  PART_TIME: "Part-time",
+  PROBATION: "Probation",
+  INTERN: "Intern",
+  CONTRACT: "Contract",
+};
+
+const POSITION_LABELS: Record<string, string> = {
+  STAFF: "Staff",
+  SUPERVISOR: "Supervisor",
+  MANAGER: "Manager",
+};
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -177,7 +200,7 @@ export default function EmployeeDetailPage() {
                 </p>
               )}
               <p style={{ fontSize: "12px", color: "var(--text-sub)", marginBottom: "12px" }}>
-                {employee.position}
+                {POSITION_LABELS[employee.position] ?? employee.position}
               </p>
 
               <span
@@ -234,7 +257,11 @@ export default function EmployeeDetailPage() {
               <h2 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-main)", marginBottom: "4px" }}>Employment Information</h2>
               <p style={{ fontSize: "12px", color: "var(--text-sub)", marginBottom: "16px" }}>Position and tenure data</p>
               <CopyableId icon={<Hash size={15} />}      label="Employee ID" value={employee.employeeId} />
-              <InfoRow icon={<Briefcase size={15} />}    label="Position"    value={employee.position} />
+              <InfoRow icon={<Hash size={15} />}         label="Employee Code" value={employee.employeeCode ?? "—"} />
+              <InfoRow icon={<Briefcase size={15} />}    label="Cinema ID" value={employee.cinemaId ?? "—"} />
+              <InfoRow icon={<Briefcase size={15} />}    label="Position"    value={POSITION_LABELS[employee.position] ?? employee.position} />
+              <InfoRow icon={<Briefcase size={15} />}    label="Department"  value={employee.department ? DEPARTMENT_LABELS[employee.department] ?? employee.department : "—"} />
+              <InfoRow icon={<Briefcase size={15} />}    label="Employment Type" value={employee.employmentType ? EMPLOYMENT_TYPE_LABELS[employee.employmentType] ?? employee.employmentType : "—"} />
               <InfoRow icon={<Calendar size={15} />}     label="Hire Date"   value={employee.hireDate} />
               <InfoRow icon={<Clock size={15} />}        label="Created At"  value={employee.createdAt ? new Date(employee.createdAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "—"} />
             </div>

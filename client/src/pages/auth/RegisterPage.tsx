@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { Eye, EyeOff, ArrowLeft, Mail, CheckCircle } from "lucide-react";
+import { Eye, EyeOff, ArrowLeft, Mail, Check, CheckCircle } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useRegister } from "../../hooks/useRegister.ts";
 import { authApi } from "../../api/authApi.ts";
+import { useIdentityCardAutofill } from "../../hooks/useIdentityCardAutofill.ts";
 
 function FormLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -229,6 +230,21 @@ const submitButtonBase: React.CSSProperties = {
   transition: "transform 0.15s ease, box-shadow 0.15s ease",
 };
 
+const dayOptions = Array.from({ length: 31 }, (_, index) => {
+  const day = String(index + 1);
+  return { value: day, label: day.padStart(2, "0") };
+});
+
+const monthOptions = Array.from({ length: 12 }, (_, index) => {
+  const month = String(index + 1);
+  return { value: month, label: month.padStart(2, "0") };
+});
+
+const yearOptions = Array.from({ length: new Date().getFullYear() - 1899 }, (_, index) => {
+  const year = String(new Date().getFullYear() - index);
+  return { value: year, label: year };
+});
+
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [formPage, setFormPage] = useState<1 | 2>(1);
@@ -247,11 +263,18 @@ export default function RegisterPage() {
     errors,
     generalError,
     form,
+    setForm,
     handleChange,
     handleInitiate,
     handleVerifyOtp,
     handleResendOtp,
   } = useRegister();
+
+  const { identityCardHint, parsedIdentityCard } = useIdentityCardAutofill(form.identityCard, setForm);
+  const birthYearWarning =
+    parsedIdentityCard && form.dobYear && form.dobYear !== String(parsedIdentityCard.birthYear)
+      ? "Birth year does not match the citizen ID. You can continue if your date of birth is correct."
+      : null;
 
   // Backend field errors for account-info fields while on page 2 → go back to page 1
   useEffect(() => {
@@ -500,12 +523,42 @@ export default function RegisterPage() {
                 />
               </div>
               <div>
-                <FormLabel>Date of Birth</FormLabel>
-                <FormInput type="date" name="dob" value={form.dob} onChange={handleChange} error={errors.dob} />
+                <FormLabel>Identity Card</FormLabel>
+                <FormInput
+                  name="identityCard"
+                  placeholder="Exactly 12 digits"
+                  value={form.identityCard}
+                  onChange={handleChange}
+                  error={errors.identityCard}
+                  rightElement={parsedIdentityCard ? <Check size={16} color="#22c55e" /> : undefined}
+                />
+                {identityCardHint && !parsedIdentityCard && (
+                  <p style={{ color: "#FF4B4B", fontSize: "12px", lineHeight: 1.4, marginTop: "6px" }}>
+                    {identityCardHint}
+                  </p>
+                )}
               </div>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" }}>
+              <div>
+                <FormLabel>Date of Birth</FormLabel>
+                {errors.dob && (
+                  <span style={{ color: "#FF4B4B", fontSize: "12px", display: "block", marginBottom: "6px", fontWeight: 500 }}>
+                    {errors.dob}
+                  </span>
+                )}
+                <div style={{ display: "grid", gridTemplateColumns: "0.85fr 0.95fr 1.2fr", gap: "8px" }}>
+                  <FormSelect name="dobDay" value={form.dobDay} onChange={handleChange} placeholder="Day" options={dayOptions} />
+                  <FormSelect name="dobMonth" value={form.dobMonth} onChange={handleChange} placeholder="Month" options={monthOptions} />
+                  <FormSelect name="dobYear" value={form.dobYear} onChange={handleChange} placeholder="Year" options={yearOptions} />
+                </div>
+                {birthYearWarning && (
+                  <p style={{ color: "#f59e0b", fontSize: "12px", lineHeight: 1.4, marginTop: "6px" }}>
+                    {birthYearWarning}
+                  </p>
+                )}
+              </div>
               <div>
                 <FormLabel>Gender</FormLabel>
                 <FormSelect
@@ -519,16 +572,6 @@ export default function RegisterPage() {
                     { value: "Female", label: "Female" },
                     { value: "Other", label: "Other" },
                   ]}
-                />
-              </div>
-              <div>
-                <FormLabel>Identity Card</FormLabel>
-                <FormInput
-                  name="identityCard"
-                  placeholder="Exactly 12 digits"
-                  value={form.identityCard}
-                  onChange={handleChange}
-                  error={errors.identityCard}
                 />
               </div>
             </div>
