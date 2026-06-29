@@ -3,6 +3,8 @@ package bookingservice.dto.response;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -17,5 +19,6 @@ import lombok.experimental.FieldDefaults;
 public class CancelBookingResponse {
     String bookingId;
     String status;
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     LocalDateTime updatedAt;
 }

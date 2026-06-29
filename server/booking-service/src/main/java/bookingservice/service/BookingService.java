@@ -41,50 +41,60 @@ public class BookingService {
     int minsBeforeShowtime;
 
     @Transactional
-    public CancelBookingResponse cancelBooking(String bookingId, String currentUserId, boolean isAdmin) {
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new AppException(BookingErrorCode.BOOKING_NOT_FOUND));
-        if (!isAdmin && !booking.getAccountId().equals(currentUserId)) {
-            throw new AppException(BookingErrorCode.CANCEL_PERMISSION_DENIED);
-        }
+public CancelBookingResponse cancelBooking(String bookingId, String currentUserId, boolean isAdmin) {
+    // 1. Kiểm tra tồn tại của Booking
+    Booking booking = bookingRepository.findById(bookingId)
+            .orElseThrow(() -> new AppException(BookingErrorCode.BOOKING_NOT_FOUND));
 
-        String currentStatus = booking.getStatus();
-        if (!BookingStatus.PENDING.name().equalsIgnoreCase(currentStatus) &&
-                !BookingStatus.CONFIRMED.name().equalsIgnoreCase(currentStatus)) {
-            throw new AppException(BookingErrorCode.INVALID_BOOKING_STATE);
-        }
-        if (booking.getShowDate() != null && booking.getStartTime() != null) {
-            LocalDateTime showtime = LocalDateTime.of(booking.getShowDate(), booking.getStartTime());
-            if (LocalDateTime.now().plusMinutes(minsBeforeShowtime).isAfter(showtime)) {
-                throw new AppException(BookingErrorCode.CANCEL_TIME_EXPIRED);
-            }
-        }
-        List<Ticket> tickets = null;
-        if (BookingStatus.CONFIRMED.name().equalsIgnoreCase(currentStatus)) {
-            tickets = ticketRepository.findByBooking_BookingId(bookingId);
-        }
+    // 2. [Confirm] Phân quyền: Admin hủy mọi booking, Customer chỉ hủy của chính mình
+    if (!isAdmin && !booking.getAccountId().equals(currentUserId)) {
+        throw new AppException(BookingErrorCode.CANCEL_PERMISSION_DENIED);
+    }
 
-        List<BookingItem> details = bookingItemRepository.findByBooking_BookingId(bookingId);
+    // 3. [Confirm] Kiểm tra trạng thái: Chỉ cho phép PENDING hoặc CONFIRMED
+    String currentStatus = booking.getStatus();
+    if (!BookingStatus.PENDING.name().equalsIgnoreCase(currentStatus) &&
+            !BookingStatus.CONFIRMED.name().equalsIgnoreCase(currentStatus)) {
+        throw new AppException(BookingErrorCode.INVALID_BOOKING_STATE);
+    }
 
+    // 4. Kiểm tra thời gian hủy (nếu sát giờ chiếu)
+    if (booking.getShowDate() != null && booking.getStartTime() != null) {
+        LocalDateTime showtime = LocalDateTime.of(booking.getShowDate(), booking.getStartTime());
+        if (LocalDateTime.now().plusMinutes(minsBeforeShowtime).isAfter(showtime)) {
+            throw new AppException(BookingErrorCode.CANCEL_TIME_EXPIRED);
+        }
+    }
+
+    // 5. [Confirm] Chuyển ticket liên quan của booking CONFIRMED sang CANCELLED
+    if (BookingStatus.CONFIRMED.name().equalsIgnoreCase(currentStatus)) {
+        List<Ticket> tickets = ticketRepository.findByBooking_BookingId(bookingId);
         if (tickets != null && !tickets.isEmpty()) {
             tickets.forEach(ticket -> ticket.setStatus(BookingStatus.CANCELLED.name()));
             ticketRepository.saveAll(tickets);
         }
+    }
 
-        if (details != null && !details.isEmpty()) {
-            List<String> seatCodes = details.stream()
+    // 6. [Confirm] Xóa Seat Lock ĐÚNG ghế và KHÔNG xóa nhầm của booking khác
+    List<BookingItem> details = bookingItemRepository.findByBooking_BookingId(bookingId);
+    if (details != null && !details.isEmpty()) {
+        List<String> seatCodes = details.stream()
                     .map(BookingItem::getSeatCode)
                     .filter(code -> code != null)
                     .collect(Collectors.toList());
 
-            if (!seatCodes.isEmpty()) {
-                seatLockRepository.releaseSeatsByList(booking.getShowtimeId(), seatCodes);
-            }
+        if (!seatCodes.isEmpty()) {
+            // SỬA TẠI ĐÂY: Truyền thêm bookingId vào để câu lệnh SQL xóa chính xác bản ghi Lock liên kết với Booking này
+            seatLockRepository.releaseSeatsByBookingAndList(booking.getShowtimeId(), seatCodes, bookingId);
         }
-
-        booking.setStatus(BookingStatus.CANCELLED.name());
-        Booking bookingSave = bookingRepository.save(booking);
-
-        return bookingMapper.toCancelBookingResponse(bookingSave);
     }
+
+    // 7. [Confirm] Cập nhật booking.status = CANCELLED
+    booking.setStatus(BookingStatus.CANCELLED.name());
+    booking.setUpdatedAt(LocalDateTime.now()); // Đảm bảo ghi nhận thời gian update mới nhất
+    Booking bookingSave = bookingRepository.save(booking);
+
+    // 8. [Confirm] Trả về dữ liệu map đúng Format yêu cầu
+    return bookingMapper.toCancelBookingResponse(bookingSave);
+}
 }
