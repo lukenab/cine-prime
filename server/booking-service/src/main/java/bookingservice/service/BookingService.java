@@ -13,17 +13,13 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.security.core.context.SecurityContextHolder; // Đảm bảo đã import đúng để lấy JWT info
-
 import bookingservice.dto.response.BookingDetailResponse;
 import bookingservice.dto.response.BookingItemResponse;
 import bookingservice.dto.response.BookingListResponse;
 import bookingservice.dto.response.CancelBookingResponse;
 import bookingservice.dto.response.CreateBookingResponse;
 import bookingservice.dto.response.SeatAvailabilityResponse;
-import bookingservice.dto.response.SeatHoldResponse;
 import bookingservice.dto.request.BookingRequest;
-import bookingservice.dto.request.HoldSeatRequest;
 import bookingservice.entity.Booking;
 import bookingservice.entity.BookingItem;
 import bookingservice.entity.BookingStatus;
@@ -95,14 +91,25 @@ public class BookingService {
                 .map(SeatAvailabilityResponse::getSeatCode)
                 .collect(Collectors.toList());
 
-        if (seatLockRepository.existsByShowtimeIdAndSeatIdIn(request.getShowtimeId(), seatCodesStr)) {
-            throw new AppException(BookingErrorCode.SEATS_ALREADY_TAKEN);
-        }
-        BigDecimal totalPrice = BigDecimal.ZERO;
-        List<BookingItemResponse> itemResponses = new ArrayList<>();
-
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime expiredAt = now.plusMinutes(10);
+
+        if (bookingItemRepository.existsByShowtimeIdAndSeatCodeInAndStatusConfirmed(request.getShowtimeId(),
+                seatCodesStr)) {
+            throw new AppException(BookingErrorCode.SEATS_ALREADY_TAKEN);
+        }
+
+        if (seatLockRepository.existsByShowtimeIdAndSeatIdInAndExpiresAtAfter(request.getShowtimeId(), seatCodesStr,
+                now)) {
+            throw new AppException(BookingErrorCode.SEATS_ALREADY_TAKEN);
+        }
+
+        // Xóa các lock đã hết hạn của các ghế này để tránh lỗi unique constraint
+        // (uc_showtime_seat)
+        seatLockRepository.releaseSeatsByBookingAndList(request.getShowtimeId(), seatCodesStr, null);
+
+        BigDecimal totalPrice = BigDecimal.ZERO;
+        List<BookingItemResponse> itemResponses = new ArrayList<>();
 
         Booking booking = Booking.builder()
                 .status(BookingStatus.PENDING.name())
@@ -128,49 +135,69 @@ public class BookingService {
 
         Booking savedBooking = bookingRepository.save(booking);
 
+        List<SeatLock> newLocks = seatCodesStr.stream().map(seatCode -> SeatLock.builder()
+                .showtimeId(request.getShowtimeId())
+                .seatId(seatCode)
+                .lockedByAccountId(currentUserId)
+                .expiresAt(expiredAt)
+                .build()).collect(Collectors.toList());
+
+        seatLockRepository.saveAll(newLocks);
+
         return bookingMapper.toCreateBookingResponse(savedBooking, itemResponses, expiredAt);
     }
 
-    @Transactional
-    public SeatHoldResponse holdSeats(HoldSeatRequest request) {
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime expiresAt = now.plusMinutes(10);
-        if (request.getSeatIds() == null || request.getSeatIds().isEmpty()) {
-            throw new AppException(BookingErrorCode.INVALID_SEAT_SELECTION); 
-        }
-        long uniqueSeatsCount = request.getSeatIds().stream()
-                .distinct()
-                .count();
-        if (uniqueSeatsCount != request.getSeatIds().size()) {
-            throw new AppException(BookingErrorCode.DUPLICATE_SEATS_IN_REQUEST);
-        }
-        List<SeatLock> activeLocks = seatLockRepository.findActiveLocks(
-                request.getShowtimeId(),
-                request.getSeatIds(),
-                now);
+    // @Transactional
+    // public SeatHoldResponse holdSeats(HoldSeatRequest request, String accountId)
+    // {
+    // LocalDateTime now = LocalDateTime.now();
+    // LocalDateTime expiresAt = now.plusMinutes(10);
+    // if (request.getSeatIds() == null || request.getSeatIds().isEmpty()) {
+    // throw new AppException(BookingErrorCode.INVALID_SEAT_SELECTION);
+    // }
+    // long uniqueSeatsCount = request.getSeatIds().stream()
+    // .distinct()
+    // .count();
+    // if (uniqueSeatsCount != request.getSeatIds().size()) {
+    // throw new AppException(BookingErrorCode.DUPLICATE_SEATS_IN_REQUEST);
+    // }
 
-        if (!activeLocks.isEmpty()) {
-            throw new AppException(BookingErrorCode.SEATS_ALREADY_TAKEN);
-        }
-        
-        seatLockRepository.releaseSeatsByList(request.getShowtimeId(), request.getSeatIds());
+    // if
+    // (seatLockRepository.existsByShowtimeIdAndSeatIdInAndExpiresAtAfter(request.getShowtimeId(),
+    // request.getSeatIds(), now)) {
+    // throw new AppException(BookingErrorCode.SEATS_ALREADY_TAKEN);
+    // }
 
-        List<SeatLock> newLocks = request.getSeatIds().stream().map(seatId -> SeatLock.builder()
-                .showtimeId(request.getShowtimeId())
-                .seatId(seatId)
-                .lockedByAccountId(request.getAccountId())
-                .expiresAt(expiresAt)
-                .build()).collect(Collectors.toList());
+    // if
+    // (bookingItemRepository.existsByShowtimeIdAndSeatCodeInAndStatusConfirmed(request.getShowtimeId(),
+    // request.getSeatIds())) {
+    // throw new AppException(BookingErrorCode.SEATS_ALREADY_TAKEN);
+    // }
 
-        List<SeatLock> savedLocks = seatLockRepository.saveAll(newLocks);
+    // seatLockRepository.releaseSeatsByBookingAndList(request.getShowtimeId(),
+    // request.getSeatIds(), null);
 
-        return bookingMapper.toSeatHoldResponse(savedLocks);
-    }
+    // List<SeatLock> newLocks = request.getSeatIds().stream().map(seatId ->
+    // SeatLock.builder()
+    // .showtimeId(request.getShowtimeId())
+    // .seatId(seatId)
+    // .lockedByAccountId(accountId)
+    // .expiresAt(expiresAt)
+    // .build()).collect(Collectors.toList());
+
+    // List<SeatLock> savedLocks = seatLockRepository.saveAll(newLocks);
+
+    // return bookingMapper.toSeatHoldResponse(savedLocks);
+    // }
 
     @Transactional(readOnly = true)
-    public BookingDetailResponse getBookingById(String id) {
+    public BookingDetailResponse getBookingById(String id, String accountId, boolean isAdmin) {
         Booking booking = bookingRepository.findById(id)
                 .orElseThrow(() -> new AppException(BookingErrorCode.BOOKING_NOT_FOUND));
+
+        if (!isAdmin && !booking.getAccountId().equals(accountId)) {
+            throw new AppException(BookingErrorCode.BOOKING_NOT_FOUND);
+        }
 
         List<BookingItem> details = bookingItemRepository.findByBooking_BookingId(id);
 
@@ -181,26 +208,32 @@ public class BookingService {
     public BookingListResponse getMyBookings(String currentUserId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("bookingId").descending());
 
-        Page<Booking> bookingPage = bookingRepository.findAllByAccountId(currentUserId, pageable);
+        Page<Booking> bookingPage;
+        bookingPage = bookingRepository.findAllByAccountId(currentUserId, pageable);
 
         return bookingMapper.toBookingListResponse(bookingPage);
     }
 
     @Transactional
     public CancelBookingResponse cancelBooking(String bookingId, String currentUserId, boolean isAdmin) {
+        // 1. Kiểm tra tồn tại của Booking
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new AppException(BookingErrorCode.BOOKING_NOT_FOUND));
 
+        // 2. [Confirm] Phân quyền: Admin hủy mọi booking, Customer chỉ hủy của chính
+        // mình
         if (!isAdmin && !booking.getAccountId().equals(currentUserId)) {
             throw new AppException(BookingErrorCode.CANCEL_PERMISSION_DENIED);
         }
 
+        // 3. [Confirm] Kiểm tra trạng thái: Chỉ cho phép PENDING hoặc CONFIRMED
         String currentStatus = booking.getStatus();
         if (!BookingStatus.PENDING.name().equalsIgnoreCase(currentStatus) &&
                 !BookingStatus.CONFIRMED.name().equalsIgnoreCase(currentStatus)) {
             throw new AppException(BookingErrorCode.INVALID_BOOKING_STATE);
         }
 
+        // 4. Kiểm tra thời gian hủy (nếu sát giờ chiếu)
         if (booking.getShowDate() != null && booking.getStartTime() != null) {
             LocalDateTime showtime = LocalDateTime.of(booking.getShowDate(), booking.getStartTime());
             if (LocalDateTime.now().plusMinutes(minsBeforeShowtime).isAfter(showtime)) {
@@ -208,18 +241,17 @@ public class BookingService {
             }
         }
 
-        List<Ticket> tickets = null;
+        // 5. [Confirm] Chuyển ticket liên quan của booking CONFIRMED sang CANCELLED
         if (BookingStatus.CONFIRMED.name().equalsIgnoreCase(currentStatus)) {
-            tickets = ticketRepository.findByBooking_BookingId(bookingId);
+            List<Ticket> tickets = ticketRepository.findByBooking_BookingId(bookingId);
+            if (tickets != null && !tickets.isEmpty()) {
+                tickets.forEach(ticket -> ticket.setStatus(BookingStatus.CANCELLED.name()));
+                ticketRepository.saveAll(tickets);
+            }
         }
 
+        // 6. [Confirm] Xóa Seat Lock ĐÚNG ghế và KHÔNG xóa nhầm của booking khác
         List<BookingItem> details = bookingItemRepository.findByBooking_BookingId(bookingId);
-
-        if (tickets != null && !tickets.isEmpty()) {
-            tickets.forEach(ticket -> ticket.setStatus(BookingStatus.CANCELLED.name()));
-            ticketRepository.saveAll(tickets);
-        }
-
         if (details != null && !details.isEmpty()) {
             List<String> seatCodes = details.stream()
                     .map(BookingItem::getSeatCode)
@@ -227,13 +259,19 @@ public class BookingService {
                     .collect(Collectors.toList());
 
             if (!seatCodes.isEmpty()) {
-                seatLockRepository.releaseSeatsByList(booking.getShowtimeId(), seatCodes);
+                // SỬA TẠI ĐÂY: Truyền thêm bookingId vào để câu lệnh SQL xóa chính xác bản ghi
+                // Lock liên kết với Booking này
+                seatLockRepository.releaseSeatsByBookingAndList(booking.getShowtimeId(), seatCodes, bookingId);
             }
         }
 
+        // 7. [Confirm] Cập nhật booking.status = CANCELLED
         booking.setStatus(BookingStatus.CANCELLED.name());
-        bookingRepository.save(booking);
+        booking.setUpdatedAt(LocalDateTime.now()); // Đảm bảo ghi nhận thời gian update mới nhất
+        Booking bookingSave = bookingRepository.save(booking);
 
-        return bookingMapper.toCancelBookingResponse(booking);
+        // 8. [Confirm] Trả về dữ liệu map đúng Format yêu cầu
+        return bookingMapper.toCancelBookingResponse(bookingSave);
     }
+
 }

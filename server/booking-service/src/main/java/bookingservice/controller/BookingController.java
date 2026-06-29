@@ -1,23 +1,19 @@
 package bookingservice.controller;
 
-import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.List;
-
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import bookingservice.dto.request.BookingRequest;
 import bookingservice.dto.request.HoldSeatRequest;
+
 import bookingservice.dto.response.BookingDetailResponse;
 import bookingservice.dto.response.BookingListResponse;
 import bookingservice.dto.response.CancelBookingResponse;
@@ -39,6 +35,7 @@ public class BookingController {
         BookingService bookingService;
 
         @PostMapping
+        @ResponseStatus(HttpStatus.CREATED)
         public ApiResponse<CreateBookingResponse> createBooking(@RequestBody @Valid BookingRequest request) {
                 String accountId = JwtSecurityUtils.getCurrentAccountId();
                 boolean isMember = JwtSecurityUtils.hasRole("ROLE_MEMBER");
@@ -51,13 +48,23 @@ public class BookingController {
                                 .build();
         }
 
-        @PostMapping("/hold")
-        public ApiResponse<SeatHoldResponse> holdSeats(@RequestBody HoldSeatRequest request) {
+        // @PostMapping("/hold")
+        // public ApiResponse<SeatHoldResponse> holdSeats(@RequestBody @Valid HoldSeatRequest request) {
+        //         String accountId = JwtSecurityUtils.getCurrentAccountId();
+        //         SeatHoldResponse seatHoldResponse = bookingService.holdSeats(request, accountId);
+        //         return ApiResponse.<SeatHoldResponse>builder()
+        //                         .code(1000)
+        //                         .result(seatHoldResponse)
+        //                         .build();
+        // }
 
-                SeatHoldResponse seatHoldResponse = bookingService.holdSeats(request);
-                return ApiResponse.<SeatHoldResponse>builder()
+        @GetMapping("/{id}")
+        public ApiResponse<BookingDetailResponse> getBookingById(@PathVariable("id") String id) {
+                String accountId = JwtSecurityUtils.getCurrentAccountId();
+                boolean isAdmin = JwtSecurityUtils.hasRole("ROLE_ADMIN");
+                return ApiResponse.<BookingDetailResponse>builder()
                                 .code(1000)
-                                .result(seatHoldResponse)
+                                .result(bookingService.getBookingById(id, accountId, isAdmin))
                                 .build();
         }
 

@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -31,4 +32,5 @@ public class BookingDetailResponse {
     String bookingType;       // ONLINE / OFFLINE
     String status;            // PENDING, CONFIRMED, CANCELLED
     LocalDateTime createdAt;
+    List<BookingItemResponse> items;
 }

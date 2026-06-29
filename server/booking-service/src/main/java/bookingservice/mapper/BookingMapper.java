@@ -23,6 +23,7 @@ import bookingservice.entity.SeatLock;
 
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE, nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
 public interface BookingMapper {
+    @Mapping(source = "details", target = "items")
     BookingDetailResponse toBookingDetailResponse(Booking booking, List<BookingItem> details);
 
     BookingDetailResponse toBookingListResponse(Booking booking);
