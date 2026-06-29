@@ -1,83 +1,37 @@
 import { useRef } from "react";
-import { ChevronLeft, ChevronRight, Flame } from "lucide-react";
+import { ChevronLeft, ChevronRight, Flame, RefreshCw } from "lucide-react";
 import { MovieCard, Movie } from "../../layouts/MovieCard";
+import type { MovieApiResponse } from "../../api/movieApi";
 
-const NOW_SHOWING: Movie[] = [
-  {
-    id: 1,
-    title: "Crimson Veil",
-    genre: "Thriller",
-    rating: 8.4,
-    duration: "2h 18m",
-    image:
-      "https://images.unsplash.com/photo-1675726205553-4e348f24da2c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxkcmFtYXRpYyUyMHBvcnRyYWl0JTIwY2luZW1hdGljJTIwbGlnaHRpbmclMjBkYXJrfGVufDF8fHx8MTc4MDkxOTU2Nnww&ixlib=rb-4.1.0&q=80&w=1080",
-    badge: "HOT",
-    badgeColor: "#FF4500",
-  },
-  {
-    id: 2,
-    title: "Eclipse Protocol",
-    genre: "Sci-Fi",
-    rating: 9.1,
-    duration: "2h 42m",
-    image:
-      "https://images.unsplash.com/photo-1748194257310-284797669bbd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxhZHZlbnR1cmUlMjBhY3Rpb24lMjBoZXJvJTIwZHJhbWF0aWMlMjBzY2VuZXxlbnwxfHx8fDE3ODA5MTk1Njd8MA&ixlib=rb-4.1.0&q=80&w=1080",
-    badge: "#1",
-    badgeColor: "#FFD700",
-  },
-  {
-    id: 3,
-    title: "Shadow Requiem",
-    genre: "Drama",
-    rating: 7.8,
-    duration: "1h 56m",
-    image:
-      "https://images.unsplash.com/photo-1776197739075-e492fcd2cb46?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHw4fHxkcmFtYXRpYyUyMHBvcnRyYWl0JTIwY2luZW1hdGljJTIwbGlnaHRpbmclMjBkYXJrfGVufDF8fHx8MTc4MDkxOTU2Nnww&ixlib=rb-4.1.0&q=80&w=1080",
-  },
-  {
-    id: 4,
-    title: "Neon Horizon",
-    genre: "Action",
-    rating: 8.7,
-    duration: "2h 05m",
-    image:
-      "https://images.unsplash.com/photo-1777927519939-671cd6a68a61?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHw2fHxkcmFtYXRpYyUyMHBvcnRyYWl0JTIwY2luZW1hdGljJTIwbGlnaHRpbmclMjBkYXJrfGVufDF8fHx8MTc4MDkxOTU2Nnww&ixlib=rb-4.1.0&q=80&w=1080",
-    badge: "NEW",
-    badgeColor: "#8A2BE2",
-  },
-  {
-    id: 5,
-    title: "The Last Signal",
-    genre: "Thriller",
-    rating: 8.2,
-    duration: "2h 12m",
-    image:
-      "https://images.unsplash.com/photo-1532171875345-9712d9d4f65a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwyfHxkcmFtYXRpYyUyMHBvcnRyYWl0JTIwY2luZW1hdGljJTIwbGlnaHRpbmclMjBkYXJrfGVufDF8fHx8MTc4MDkxOTU2Nnww&ixlib=rb-4.1.0&q=80&w=1080",
-  },
-  {
-    id: 6,
-    title: "Desert Storm",
-    genre: "Adventure",
-    rating: 7.5,
-    duration: "1h 49m",
-    image:
-      "https://images.unsplash.com/photo-1772541585835-d2273aebbf8b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwyfHxhZHZlbnR1cmUlMjBhY3Rpb24lMjBoZXJvJTIwZHJhbWF0aWMlMjBzY2VuZXxlbnwxfHx8fDE3ODA5MTk1Njd8MA&ixlib=rb-4.1.0&q=80&w=1080",
-  },
-  {
-    id: 7,
-    title: "Midnight Blade",
-    genre: "Action",
-    rating: 8.9,
-    duration: "2h 28m",
-    image:
-      "https://images.unsplash.com/photo-1764762173441-2fb3c0c8181e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHw1fHxhZHZlbnR1cmUlMjBhY3Rpb24lMjBoZXJvJTIwZHJhbWF0aWMlMjBzY2VuZXxlbnwxfHx8fDE3ODA5MTk1Njd8MA&ixlib=rb-4.1.0&q=80&w=1080",
-    badge: "4DX",
-    badgeColor: "#00CED1",
-  },
-];
+type Props = {
+  movies: MovieApiResponse[];
+  loading?: boolean;
+  error?: string;
+};
 
-export function NowShowing() {
+function formatDuration(minutes?: number): string {
+  if (!minutes) return "-";
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return hours > 0 ? `${hours}h ${String(mins).padStart(2, "0")}m` : `${mins}m`;
+}
+
+function toCardMovie(movie: MovieApiResponse, index: number): Movie {
+  return {
+    id: movie.movieId,
+    title: movie.movieNameEnglish || movie.movieNameVn || "Untitled Movie",
+    genre: movie.movieType?.join(" · ") || "Cinema",
+    rating: Number((8 + (index % 10) / 10).toFixed(1)),
+    duration: formatDuration(movie.duration),
+    image: movie.largeImage || movie.smallImage,
+    badge: index === 0 ? "HOT" : index === 1 ? "NEW" : undefined,
+    badgeColor: index === 0 ? "#FF4500" : index === 1 ? "#8A2BE2" : undefined,
+  };
+}
+
+export function NowShowing({ movies, loading = false, error = "" }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const cardMovies = movies.filter((movie) => movie.status !== false).map(toCardMovie);
 
   const scroll = (dir: "left" | "right") => {
     if (!scrollRef.current) return;
@@ -87,7 +41,6 @@ export function NowShowing() {
   return (
     <section style={{ backgroundColor: "#050505", paddingBottom: "64px" }}>
       <div className="max-w-7xl mx-auto px-6">
-        {/* Section header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
             <div
@@ -107,11 +60,12 @@ export function NowShowing() {
               >
                 Now Showing
               </h2>
-              <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.8rem" }}>{NOW_SHOWING.length} movies available this week</p>
+              <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.8rem" }}>
+                {loading ? "Loading movies..." : `${cardMovies.length} movies available this week`}
+              </p>
             </div>
           </div>
 
-          {/* Scroll controls */}
           <div className="flex gap-2">
             <button
               onClick={() => scroll("left")}
@@ -137,20 +91,38 @@ export function NowShowing() {
           </div>
         </div>
 
-        {/* Horizontal scroll row */}
-        <div
-          ref={scrollRef}
-          className="flex overflow-x-auto pb-4"
-          style={{
-            gap: "20px",
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
-          }}
-        >
-          {NOW_SHOWING.map((movie) => (
-            <MovieCard key={movie.id} movie={movie} />
-          ))}
-        </div>
+        {loading && (
+          <div className="flex items-center gap-2" style={{ color: "rgba(255,255,255,0.6)", minHeight: "360px" }}>
+            <RefreshCw size={18} className="animate-spin" />
+            <span>Loading movies...</span>
+          </div>
+        )}
+
+        {!loading && error && (
+          <div style={{ color: "rgba(255,255,255,0.65)", minHeight: "120px" }}>{error}</div>
+        )}
+
+        {!loading && !error && cardMovies.length === 0 && (
+          <div style={{ color: "rgba(255,255,255,0.65)", minHeight: "120px" }}>
+            No movies are available yet.
+          </div>
+        )}
+
+        {!loading && !error && cardMovies.length > 0 && (
+          <div
+            ref={scrollRef}
+            className="flex overflow-x-auto pb-4"
+            style={{
+              gap: "20px",
+              scrollbarWidth: "none",
+              msOverflowStyle: "none",
+            }}
+          >
+            {cardMovies.map((movie) => (
+              <MovieCard key={movie.id} movie={movie} />
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );
