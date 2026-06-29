@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import movie.theater.common.exception.AppException;
 import movieservice.dto.request.CreateMovieRequest;
 import movieservice.dto.request.ShowTimeRequest;
 import movieservice.dto.request.UpdateMovieRequest;
+import movieservice.dto.response.ImageUploadResponse;
 import movieservice.dto.response.MovieResponse;
 import movieservice.entity.CinemaRoom;
 import movieservice.entity.Movie;
@@ -32,6 +34,8 @@ import movieservice.repository.MovieRepository;
 @Slf4j
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class MovieService {
+    private static final long MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+
     MovieRepository movieRepository;
     MovieMapper movieMapper;
     CinemaRoomService cinemaRoomService;
@@ -85,10 +89,8 @@ public class MovieService {
         }
 
         try {
-            Map uploadSmallImage = imageStorageService.uploadImage(request.getSmallImage());
-            Map uploadLargeImage = imageStorageService.uploadImage(request.getLargeImage());
-            movie.setSmallImage(uploadSmallImage.get("url").toString());
-            movie.setLargeImage(uploadLargeImage.get("url").toString());
+            movie.setSmallImage(resolveImageUrl(request.getSmallImage()));
+            movie.setLargeImage(resolveImageUrl(request.getLargeImage()));
         } catch (Exception e) {
             throw new AppException(MovieErrorCode.UPLOAD_IMAGE_FAILED);
         }
@@ -99,6 +101,52 @@ public class MovieService {
                 "Created new movie: " + finalSavedMovie.getMovieNameEnglish());
 
         return movieMapper.toResponse(finalSavedMovie);
+    }
+
+    public ImageUploadResponse uploadMovieImage(MultipartFile file) {
+        validateImageFile(file);
+
+        try {
+            Map uploadResult = imageStorageService.uploadImage(file);
+            String url = getUploadValue(uploadResult, "url");
+            String secureUrl = getUploadValue(uploadResult, "secure_url");
+            String publicId = getUploadValue(uploadResult, "public_id");
+
+            return ImageUploadResponse.builder()
+                    .url(secureUrl != null ? secureUrl : url)
+                    .secureUrl(secureUrl)
+                    .publicId(publicId)
+                    .build();
+        } catch (Exception e) {
+            throw new AppException(MovieErrorCode.UPLOAD_IMAGE_FAILED);
+        }
+    }
+
+    private String resolveImageUrl(String imageUrl) throws java.io.IOException {
+        if (imageUrl != null && imageUrl.contains("res.cloudinary.com")) {
+            return imageUrl;
+        }
+
+        Map uploadResult = imageStorageService.uploadImage(imageUrl);
+        String secureUrl = getUploadValue(uploadResult, "secure_url");
+        String url = getUploadValue(uploadResult, "url");
+        return secureUrl != null ? secureUrl : url;
+    }
+
+    private void validateImageFile(MultipartFile file) {
+        if (file == null || file.isEmpty() || file.getSize() > MAX_IMAGE_SIZE_BYTES) {
+            throw new AppException(MovieErrorCode.INVALID_IMAGE_FILE);
+        }
+
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.matches("image/(jpeg|jpg|png|webp)")) {
+            throw new AppException(MovieErrorCode.INVALID_IMAGE_FILE);
+        }
+    }
+
+    private String getUploadValue(Map uploadResult, String key) {
+        Object value = uploadResult.get(key);
+        return value != null ? value.toString() : null;
     }
 
     public MovieResponse getMovie(Long id) {

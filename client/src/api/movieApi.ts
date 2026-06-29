@@ -111,6 +111,12 @@ export type CreateTypePayload = {
   typeName: string;
 };
 
+export type ImageUploadResponse = {
+  url: string;
+  secureUrl?: string;
+  publicId?: string;
+};
+
 type ApiWrapper<T> = { code: number; message?: string; result: T };
 
 export const movieApi = {
@@ -120,6 +126,14 @@ export const movieApi = {
   createMovie: (payload: CreateMoviePayload) =>
     axiosClient.post('/api/movies', payload) as Promise<ApiWrapper<MovieApiResponse>>,
 
+  uploadImage: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return axiosClient.post('/api/movies/images', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }) as Promise<ApiWrapper<ImageUploadResponse>>;
+  },
+
   updateMovie: (id: number, payload: UpdateMoviePayload) =>
     axiosClient.put(`/api/movies/${id}`, payload) as Promise<ApiWrapper<MovieApiResponse>>,
 
@@ -127,7 +141,7 @@ export const movieApi = {
     axiosClient.delete(`/api/movies/${id}`) as Promise<ApiWrapper<void>>,
 
   getTypes: () =>
-    axiosClient.get('/api/movies/types') as Promise<ApiWrapper<TypeResponse[]>>,
+    axiosClient.get('/api/movie-types') as Promise<ApiWrapper<TypeResponse[]>>,
 
   getRooms: () =>
     axiosClient.get('/api/cinema-rooms') as Promise<ApiWrapper<RoomResponse[]>>,
@@ -142,7 +156,7 @@ export const movieApi = {
     axiosClient.put(`/api/seats/${seatId}`, payload) as Promise<ApiWrapper<SeatResponse>>,
 
   createType: (payload: CreateTypePayload) =>
-    axiosClient.post('/api/movies/type', payload) as Promise<ApiWrapper<TypeResponse>>,
+    axiosClient.post('/api/movie-types', payload) as Promise<ApiWrapper<TypeResponse>>,
 };
 
 // Spring Boot may serialize LocalDate/LocalDateTime as [2026,6,22] arrays or "2026-06-22" strings.

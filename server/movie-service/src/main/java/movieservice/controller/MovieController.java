@@ -4,9 +4,11 @@ import java.util.List;
 
 import org.apache.hc.core5.http.HttpStatus;
 import org.springframework.data.domain.Page;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
@@ -16,6 +18,7 @@ import movie.theater.common.dto.ApiResponse;
 import movieservice.service.MovieService;
 import movieservice.dto.request.CreateMovieRequest;
 import movieservice.dto.request.UpdateMovieRequest;
+import movieservice.dto.response.ImageUploadResponse;
 import movieservice.dto.response.MovieResponse;
 
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,6 +41,15 @@ public class MovieController {
         return ApiResponse.<MovieResponse>builder()
                 .code(HttpStatus.SC_OK)
                 .result(movieService.createMovie(createMovieRequest))
+                .build();
+    }
+
+    @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<ImageUploadResponse> uploadMovieImage(@RequestParam("file") MultipartFile file) {
+        return ApiResponse.<ImageUploadResponse>builder()
+                .code(HttpStatus.SC_OK)
+                .message("Image uploaded successfully")
+                .result(movieService.uploadMovieImage(file))
                 .build();
     }
 

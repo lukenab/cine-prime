@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.Map;
 
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
@@ -26,6 +27,17 @@ public class CloudinaryImageStorageService
 
         return cloudinary.uploader().upload(
                 urlImage,
-                ObjectUtils.emptyMap());
+                ObjectUtils.asMap("folder", "movie-theater/movies", "resource_type", "image"));
+    }
+
+    @Override
+    public Map uploadImage(MultipartFile file) throws IOException {
+        return cloudinary.uploader().upload(
+                file.getBytes(),
+                ObjectUtils.asMap(
+                        "folder", "movie-theater/movies",
+                        "resource_type", "image",
+                        "use_filename", true,
+                        "unique_filename", true));
     }
 }
