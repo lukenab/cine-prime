@@ -24,7 +24,8 @@ public enum BookingErrorCode implements BaseErrorCode {
         INSUFFICIENT_POINTS(2008, "The member does not have enough points to complete this booking",
                         HttpStatus.BAD_REQUEST),
         DUPLICATE_SEATS_IN_REQUEST(2009, "Duplicate seat IDs found in the request", HttpStatus.BAD_REQUEST),
-        MEMBER_ONLY_ACTION(2010, "Only registered members can create a booking and hold seats", HttpStatus.FORBIDDEN);
+        MEMBER_ONLY_ACTION(2010, "Only registered members can create a booking and hold seats", HttpStatus.FORBIDDEN),
+        SEAT_ALREADY_LOCKED(2011, "The seat is already locked or reserved by another user", HttpStatus.CONFLICT);
 
         int code;
         String message;

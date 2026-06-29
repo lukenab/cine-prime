@@ -54,7 +54,7 @@ public class BookingController {
         @PostMapping("/hold")
         public ApiResponse<SeatHoldResponse> holdSeats(@RequestBody HoldSeatRequest request) {
 
-                SeatHoldResponse seatHoldResponse = bookingService.holdSeats(request);
+                SeatHoldResponse seatHoldResponse = bookingService.createSeatLocks(request);
                 return ApiResponse.<SeatHoldResponse>builder()
                                 .code(1000)
                                 .result(seatHoldResponse)

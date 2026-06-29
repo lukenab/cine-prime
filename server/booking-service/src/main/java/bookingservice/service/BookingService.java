@@ -4,16 +4,19 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.security.core.context.SecurityContextHolder; // Đảm bảo đã import đúng để lấy JWT info
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import bookingservice.dto.response.BookingDetailResponse;
 import bookingservice.dto.response.BookingItemResponse;
@@ -73,31 +76,9 @@ public class BookingService {
         if (distinctSeatCount != request.getSeatIds().size()) {
             throw new AppException(BookingErrorCode.DUPLICATE_SEATS_IN_REQUEST);
         }
-        List<SeatAvailabilityResponse> allSeatsInShowtime = List.of(
-                new SeatAvailabilityResponse(101L, BigDecimal.valueOf(85000), "A1", "NORMAL", "AVAILABLE", 101L,
-                        request.getShowtimeId()),
-                new SeatAvailabilityResponse(102L, BigDecimal.valueOf(85000), "A2", "NORMAL", "AVAILABLE", 102L,
-                        request.getShowtimeId()),
-                new SeatAvailabilityResponse(103L, BigDecimal.valueOf(110000), "B1", "VIP", "AVAILABLE", 103L,
-                        request.getShowtimeId()),
-                new SeatAvailabilityResponse(104L, BigDecimal.valueOf(110000), "B2", "VIP", "AVAILABLE", 104L,
-                        request.getShowtimeId()));
 
-        List<SeatAvailabilityResponse> selectedSeats = allSeatsInShowtime.stream()
-                .filter(seat -> request.getSeatIds().contains(seat.getSeatId()))
-                .collect(Collectors.toList());
+        holdSeats(request.getShowtimeId(), request.getSeatIds(), currentUserId);
 
-        if (selectedSeats.size() != request.getSeatIds().size()) {
-            throw new AppException(BookingErrorCode.INVALID_SEAT_SELECTION);
-        }
-
-        List<String> seatCodesStr = selectedSeats.stream()
-                .map(SeatAvailabilityResponse::getSeatCode)
-                .collect(Collectors.toList());
-
-        if (seatLockRepository.existsByShowtimeIdAndSeatIdIn(request.getShowtimeId(), seatCodesStr)) {
-            throw new AppException(BookingErrorCode.SEATS_ALREADY_TAKEN);
-        }
         BigDecimal totalPrice = BigDecimal.ZERO;
         List<BookingItemResponse> itemResponses = new ArrayList<>();
 
@@ -112,31 +93,72 @@ public class BookingService {
                 .bookingDetails(new ArrayList<>())
                 .build();
 
-        for (SeatAvailabilityResponse seat : selectedSeats) {
-            totalPrice = totalPrice.add(seat.getPrice());
+        for (Long seatId : request.getSeatIds()) {
+            BigDecimal seatPrice = BigDecimal.valueOf(85000);
+            totalPrice = totalPrice.add(seatPrice);
+
+            String temporarySeatCode = "Seat-" + seatId;
 
             booking.getBookingDetails().add(BookingItem.builder()
                     .booking(booking)
-                    .showtimeSeatId(seat.getShowtimeSeatId())
-                    .seatCode(seat.getSeatCode())
-                    .unitPrice(seat.getPrice())
+                    .showtimeSeatId(seatId)
+                    .seatCode(temporarySeatCode)
+                    .unitPrice(seatPrice)
                     .build());
 
-            itemResponses.add(bookingMapper.toBookingItemResponse(seat));
+            itemResponses.add(BookingItemResponse.builder()
+                    .seatId(seatId)
+                    .seatLabel(temporarySeatCode)
+                    .price(seatPrice)
+                    .build());
         }
-        booking.setTotalAmount(totalPrice);
 
+        booking.setTotalAmount(totalPrice);
         Booking savedBooking = bookingRepository.save(booking);
 
         return bookingMapper.toCreateBookingResponse(savedBooking, itemResponses, expiredAt);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void holdSeats(Long showtimeId, List<Long> seatIds, String accountId) {
+        List<String> seatIdStrs = seatIds.stream()
+                .map(String::valueOf)
+                .collect(Collectors.toList());
+
+        List<SeatLock> existingLocks = seatLockRepository
+                .findByShowtimeIdAndSeatIdInForUpdate(showtimeId, seatIdStrs);
+
+        for (SeatLock existingLock : existingLocks) {
+            if (existingLock.getExpiresAt().isAfter(LocalDateTime.now())) {
+                throw new AppException(BookingErrorCode.SEAT_ALREADY_LOCKED);
+            }
+        }
+
+        if (!existingLocks.isEmpty()) {
+            seatLockRepository.deleteAll(existingLocks);
+            seatLockRepository.flush();
+        }
+
+        List<SeatLock> newLocks = seatIdStrs.stream().map(seatIdStr -> SeatLock.builder()
+                .showtimeId(showtimeId)
+                .seatId(seatIdStr)
+                .lockedByAccountId(accountId)
+                .expiresAt(LocalDateTime.now().plusMinutes(10))
+                .build()).collect(Collectors.toList());
+
+        try {
+            seatLockRepository.saveAll(newLocks);
+        } catch (DataIntegrityViolationException ex) {
+            throw new AppException(BookingErrorCode.SEAT_ALREADY_LOCKED);
+        }
+    }
+
     @Transactional
-    public SeatHoldResponse holdSeats(HoldSeatRequest request) {
+    public SeatHoldResponse createSeatLocks(HoldSeatRequest request) {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime expiresAt = now.plusMinutes(10);
         if (request.getSeatIds() == null || request.getSeatIds().isEmpty()) {
-            throw new AppException(BookingErrorCode.INVALID_SEAT_SELECTION); 
+            throw new AppException(BookingErrorCode.INVALID_SEAT_SELECTION);
         }
         long uniqueSeatsCount = request.getSeatIds().stream()
                 .distinct()
@@ -152,7 +174,7 @@ public class BookingService {
         if (!activeLocks.isEmpty()) {
             throw new AppException(BookingErrorCode.SEATS_ALREADY_TAKEN);
         }
-        
+
         seatLockRepository.releaseSeatsByList(request.getShowtimeId(), request.getSeatIds());
 
         List<SeatLock> newLocks = request.getSeatIds().stream().map(seatId -> SeatLock.builder()
@@ -236,4 +258,5 @@ public class BookingService {
 
         return bookingMapper.toCancelBookingResponse(booking);
     }
+
 }
