@@ -17,7 +17,31 @@ import {
   CheckCheck,
 } from "lucide-react";
 
+/* ─── Mock API helpers (used until backend returns these fields) ─────── */
+
+const MOCK_PRICES = [75_000, 90_000, 95_000, 110_000, 120_000, 130_000];
+const MOCK_TOTAL_SEATS = [80, 100, 120, 150, 200, 300];
+
+/**
+ * Enriches showtimes with realistic mock data for fields the backend
+ * hasn't implemented yet (status, price, availableSeats, totalSeats).
+ * When the backend returns these fields, they take priority automatically.
+ */
+function enrichWithMockData(shows: ShowTimeResponse[]): ShowTimeResponse[] {
+  return shows.map((s) => {
+    // Deterministic mock based on showTimeId so values don't change on re-render
+    const seed = s.showTimeId ?? 0;
+    const total = s.totalSeats ?? MOCK_TOTAL_SEATS[seed % MOCK_TOTAL_SEATS.length];
+    const available = s.availableSeats ?? Math.max(0, total - (seed * 7 % (total + 1)));
+    const price = s.price ?? MOCK_PRICES[seed % MOCK_PRICES.length];
+    // Status: backend hasn't sent it — default SCHEDULED, occasionally FINISHED for demo
+    const status = s.status ?? (seed % 11 === 0 ? "FINISHED" : "SCHEDULED");
+    return { ...s, status, price, availableSeats: available, totalSeats: total };
+  });
+}
+
 /* ─── Helpers ────────────────────────────────────────────── */
+
 
 function formatTime(t: string | number[] | undefined) {
   if (!t) return "";
@@ -272,14 +296,16 @@ export default function ShowtimePage() {
     });
   }, [movieId]);
 
-  // Filter showtimes by selected date
+  // Filter showtimes by selected date, then enrich with mock data for missing fields
   const filteredShowtimes = useMemo(() => {
     if (!movie?.showTimes) return [];
-    return movie.showTimes.filter((s) => {
+    const filtered = movie.showTimes.filter((s) => {
       const showDateStr = toDateStr(s.showDate);
       const selectedDateStr = toDateStr(selectedDate.toISOString());
       return showDateStr === selectedDateStr;
     });
+    // Mock-enrich: fills status/price/availableSeats/totalSeats if backend hasn't returned them
+    return enrichWithMockData(filtered);
   }, [movie, selectedDate]);
 
   // We now have two hardcoded cinemas for the demo
