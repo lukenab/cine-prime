@@ -83,13 +83,19 @@ export default function AdminLayout() {
 
         * {
           scrollbar-width: thin;
-          scrollbar-color: rgba(255,215,0,0.15) transparent;
+          scrollbar-color: transparent transparent;
           box-sizing: border-box;
+        }
+        *:hover, *:focus-within, *:active {
+          scrollbar-color: rgba(59,130,246,0.35) transparent;
         }
         *::-webkit-scrollbar { width: 4px; height: 4px; }
         *::-webkit-scrollbar-track { background: transparent; }
-        *::-webkit-scrollbar-thumb { background: rgba(255,215,0,0.15); border-radius: 2px; }
-        *::-webkit-scrollbar-thumb:hover { background: rgba(255,215,0,0.3); }
+        *::-webkit-scrollbar-thumb { background: transparent; border-radius: 2px; transition: background 0.2s ease; }
+        *:hover::-webkit-scrollbar-thumb,
+        *:focus-within::-webkit-scrollbar-thumb,
+        *:active::-webkit-scrollbar-thumb { background: rgba(59,130,246,0.35); }
+        *::-webkit-scrollbar-thumb:hover { background: rgba(59,130,246,0.6); }
         body { margin: 0; background: var(--bg-main); }
         input::placeholder { color: var(--text-sub); }
       `}</style>

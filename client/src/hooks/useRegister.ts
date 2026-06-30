@@ -137,8 +137,8 @@ export function useRegister() {
 
     try {
       const res: any = await authApi.verifyRegister({
+        email: form.email,
         otp: otp,
-        registerRequest: getPayload(),
       });
       const responseData = res?.data || res;
       if (responseData && responseData.code && responseData.code !== 1000) {
