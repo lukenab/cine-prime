@@ -1,12 +1,12 @@
 import axiosClient from './api';
 
 export interface EmployeeCreatePayload {
-  accountId: string;
-  cinemaId?: string;
-  position: EmployeePosition;
-  department?: EmployeeDepartment;
-  employmentType?: EmploymentType;
-  hireDate: string;
+  accountId:      string;
+  cinemaId?:      string;
+  position:       EmployeePosition;
+  department:     EmployeeDepartment;   // @NotNull in backend
+  employmentType: EmploymentType;       // @NotNull in backend
+  hireDate:       string;
 }
 
 export interface EmployeeUpdatePayload {
