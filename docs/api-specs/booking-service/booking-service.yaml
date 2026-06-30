@@ -1,0 +1,123 @@
+openapi: 3.0.1
+info:
+  title: CinePrime Booking Service API
+  description: API endpoints for managing movie theater or homestay bookings, cancellations, and status modifications.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8081
+    description: Booking Service Local Server
+  - url: http://localhost:8085
+    description: API Gateway
+tags:
+  - name: Booking
+    description: Endpoints for booking operations, updates, and cancellations
+
+paths:
+  # ==========================================
+  # BOOKING OPERATIONS ENDPOINTS
+  # ==========================================
+  /api/bookings/{id}/cancel:
+    patch:
+      tags:
+        - Booking
+      summary: Cancel an existing booking
+      description: >
+        Cancels a booking by its unique ID. The system validates the booking state
+        and verifies ownership/permissions using the JWT token passed in the Authorization header.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The unique identifier (UUID or String ID) of the booking to cancel
+          schema:
+            type: string
+            example: "bk-uuid-9999-8888"
+      responses:
+        '200':
+          description: Booking cancelled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseBookingResponse'
+              example:
+                code: 1000
+                message: "Booking cancelled successfully"
+                result:
+                  bookingId: "bk-uuid-9999-8888"
+                  accountId: "acc-uuid-1234-5678"
+                  status: "CANCELLED"
+                  updatedAt: "2026-06-27T11:21:43Z"
+        '400':
+          description: Business logic error — e.g., invalid booking state for cancellation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              examples:
+                InvalidBookingState:
+                  summary: "Error 2001: Invalid Booking State"
+                  value:
+                    code: 2001
+                    message: "Booking cannot be cancelled in its current state."
+        '401':
+          description: Unauthenticated — Token missing, expired, or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              example:
+                code: 1008
+                message: "Unauthenticated!"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # --- CORE RESPONSE SCHEMAS ---
+    BookingResponse:
+      type: object
+      properties:
+        bookingId:
+          type: string
+          example: "bk-uuid-9999-8888"
+        accountId:
+          type: string
+          example: "acc-uuid-1234-5678Z"
+        status:
+          type: string
+          example: "CANCELLED"
+          description: "Current status of the booking (e.g., PENDING, CONFIRMED, CANCELLED)"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-06-27T11:21:43Z"
+
+    # --- WRAPPER RESPONSES (Consistent with old structure) ---
+    ApiResponseBookingResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 1000
+        message:
+          type: string
+          example: "Booking cancelled successfully"
+        result:
+          $ref: '#/components/schemas/BookingResponse'
+
+    # --- ERROR RESPONSE SCHEMA ---
+    ApiErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 2001
+        message:
+          type: string
+          example: "Booking cannot be cancelled in its current state."
