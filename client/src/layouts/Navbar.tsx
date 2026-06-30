@@ -1,10 +1,13 @@
 import { useState } from "react";
-import { Film, Ticket, Menu, X, User, LogOut } from "lucide-react";
+import { Film, Search, Menu, X, LogOut, User } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
+const ACCENT = "#3b82f6";
+
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
@@ -16,6 +19,14 @@ export function Navbar() {
     logout();
   };
 
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = query.trim();
+    if (!q) return;
+    navigate(`/movies?search=${encodeURIComponent(q)}`);
+    setMenuOpen(false);
+  };
+
   return (
     <nav
       style={{ backgroundColor: "rgba(5,5,5,0.85)", backdropFilter: "blur(12px)" }}
@@ -23,13 +34,40 @@ export function Navbar() {
     >
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-16">
         {/* Logo */}
-        <div className="flex items-center gap-2">
-          <Film size={22} style={{ color: "#FFD700" }} />
-          <span
-            className="tracking-widest uppercase"
-            style={{ color: "#FFD700", fontSize: "1.1rem", fontWeight: 700, letterSpacing: "0.2em" }}
+        <div className="flex items-center gap-2.5 cursor-pointer select-none group">
+          <div
+            className="flex items-center justify-center rounded-xl transition-all duration-300 group-hover:scale-105"
+            style={{
+              width: "38px",
+              height: "38px",
+              background: "linear-gradient(135deg, rgba(96,165,250,0.18), rgba(37,99,235,0.10))",
+              border: "1px solid rgba(96,165,250,0.45)",
+              boxShadow: "0 0 18px rgba(59,130,246,0.35), inset 0 0 10px rgba(96,165,250,0.15)",
+            }}
           >
-            CinePrime
+            <Film size={20} style={{ color: "#60a5fa", filter: "drop-shadow(0 0 6px rgba(96,165,250,0.7))" }} />
+          </div>
+          <span
+            className="uppercase leading-none"
+            style={{
+              fontSize: "1.3rem",
+              fontWeight: 800,
+              letterSpacing: "0.18em",
+              fontFamily: "'Inter', sans-serif",
+              textShadow: "0 0 22px rgba(59,130,246,0.45)",
+            }}
+          >
+            <span style={{ color: "#f0f6ff" }}>Cine</span>
+            <span
+              style={{
+                background: "linear-gradient(135deg, #93c5fd 0%, #3b82f6 50%, #2563eb 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+              }}
+            >
+              Prime
+            </span>
           </span>
         </div>
 
@@ -47,27 +85,46 @@ export function Navbar() {
           ))}
         </div>
 
-        {/* CTA & User Profile */}
+        {/* Search & User Profile */}
         <div className="hidden md:flex items-center gap-4">
+          {/* Thanh tìm kiếm phim */}
+          <form
+            onSubmit={handleSearch}
+            className="flex items-center gap-2 rounded-full px-4 py-2 transition-all duration-200"
+            style={{
+              backgroundColor: "rgba(59,130,246,0.08)",
+              border: "1px solid rgba(59,130,246,0.35)",
+            }}
+          >
+            <Search size={15} style={{ color: ACCENT }} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search movies..."
+              className="bg-transparent outline-none text-white placeholder-white/40"
+              style={{ fontSize: "0.85rem", width: "150px" }}
+            />
+          </form>
+
           {isLogged ? (
             // UI khi ĐÃ ĐĂNG NHẬP
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 cursor-pointer group">
-                <div 
+                <div
                   className="w-8 h-8 rounded-full flex items-center justify-center transition-transform group-hover:scale-105"
-                  style={{ backgroundColor: "rgba(255,215,0,0.15)", border: "1px solid #FFD700" }}
+                  style={{ backgroundColor: "rgba(59,130,246,0.15)", border: `1px solid ${ACCENT}` }}
                 >
                   {/* Lấy chữ cái đầu tiên của username làm Avatar */}
-                  <span style={{ color: "#FFD700", fontWeight: 700, fontSize: "0.85rem" }}>
+                  <span style={{ color: ACCENT, fontWeight: 700, fontSize: "0.85rem" }}>
                     {username.charAt(0).toUpperCase()}
                   </span>
                 </div>
                 <span className="text-white/80 text-sm font-medium">{username}</span>
               </div>
-              
-              <button 
+
+              <button
                 onClick={handleLogout}
-                className="text-white/50 hover:text-[#FFD700] transition-colors p-1"
+                className="text-white/50 hover:text-[#3b82f6] transition-colors p-1"
                 title="Logout"
               >
                 <LogOut size={18} />
@@ -75,7 +132,26 @@ export function Navbar() {
             </div>
           ) : (
             // UI khi CHƯA ĐĂNG NHẬP
-            <Link to="/login" className="text-white/60 hover:text-white text-sm transition-colors mr-2">
+            <Link
+              to="/login"
+              className="flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all duration-200"
+              style={{
+                color: ACCENT,
+                border: `1px solid ${ACCENT}`,
+                backgroundColor: "rgba(59,130,246,0.08)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = ACCENT;
+                e.currentTarget.style.color = "#050505";
+                e.currentTarget.style.boxShadow = "0 0 16px rgba(59,130,246,0.45)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "rgba(59,130,246,0.08)";
+                e.currentTarget.style.color = ACCENT;
+                e.currentTarget.style.boxShadow = "none";
+              }}
+            >
+              <User size={15} />
               Sign In
             </Link>
           )}
@@ -102,16 +178,16 @@ export function Navbar() {
       {/* Mobile menu */}
       {menuOpen && (
         <div style={{ backgroundColor: "#050505" }} className="md:hidden px-6 pb-4 flex flex-col gap-4 border-t border-white/10 pt-4">
-          
+
           {/* Thông tin user trên Mobile */}
           {isLogged && (
              <div className="flex items-center justify-between mb-2 pb-4 border-b border-white/10">
                <div className="flex items-center gap-3">
-                 <div 
+                 <div
                    className="w-10 h-10 rounded-full flex items-center justify-center"
-                   style={{ backgroundColor: "rgba(255,215,0,0.15)", border: "1px solid #FFD700" }}
+                   style={{ backgroundColor: "rgba(59,130,246,0.15)", border: `1px solid ${ACCENT}` }}
                  >
-                   <span style={{ color: "#FFD700", fontWeight: 700 }}>
+                   <span style={{ color: ACCENT, fontWeight: 700 }}>
                      {username.charAt(0).toUpperCase()}
                    </span>
                  </div>
@@ -123,14 +199,42 @@ export function Navbar() {
              </div>
           )}
 
+          {/* Thanh tìm kiếm phim trên Mobile */}
+          <form
+            onSubmit={handleSearch}
+            className="flex items-center gap-2 rounded-full px-4 py-3 w-full"
+            style={{
+              backgroundColor: "rgba(59,130,246,0.08)",
+              border: "1px solid rgba(59,130,246,0.35)",
+            }}
+          >
+            <Search size={16} style={{ color: ACCENT }} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search movies..."
+              className="bg-transparent outline-none text-white placeholder-white/40 w-full"
+              style={{ fontSize: "0.9rem" }}
+            />
+          </form>
+
           {["Home", "Movies", "Cinemas", "Events", "Offers"].map((item) => (
             <a key={item} href="#" className="text-white/70 hover:text-white text-sm py-1">
               {item}
             </a>
           ))}
-          
+
           {!isLogged && (
-            <Link to="/login" className="text-white/70 hover:text-white text-sm py-1 font-bold">
+            <Link
+              to="/login"
+              className="flex items-center justify-center gap-2 px-5 py-3 rounded-full w-full mt-1 text-sm font-semibold transition-all duration-200"
+              style={{
+                color: ACCENT,
+                border: `1px solid ${ACCENT}`,
+                backgroundColor: "rgba(59,130,246,0.08)",
+              }}
+            >
+              <User size={16} />
               Sign In
             </Link>
           )}
