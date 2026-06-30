@@ -7,6 +7,7 @@ import authservice.entity.AuthToken;
 import authservice.event.UserRegisteredEvent;
 import authservice.dto.response.AuthenticationResponse;
 import authservice.dto.response.AccountResponse;
+import authservice.dto.response.RegisterResponse;
 import authservice.entity.Account;
 import authservice.entity.Role;
 import authservice.mapper.AccountMapper;
@@ -14,6 +15,7 @@ import authservice.producer.UserEventProducer;
 import authservice.repository.AccountRepository;
 import authservice.repository.AuthTokenRepository;
 import authservice.repository.RoleRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
@@ -57,7 +59,7 @@ public class AuthenticationService {
     UserClient userClient;
     AuthTokenRepository authTokenRepository;
     AuthAuditLogService authAuditLogService;
-
+    ObjectMapper objectMapper;
 
     StringRedisTemplate redisTemplate;
 
@@ -67,6 +69,7 @@ public class AuthenticationService {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final long OTP_TTL_MINUTES = 5;
     private static final long OTP_COOLDOWN_SECONDS = 60;
+    private static final String PENDING_REGISTER_KEY_PREFIX = "pending:register:";
 
     public void checkFieldAvailability(String username, String email) {
         if (username != null && accountRepository.existsByUsername(username.trim())) {
@@ -82,7 +85,28 @@ public class AuthenticationService {
 
         try {
             validateUniqueFields(request.getUsername(), emailKey, request.getPhoneNumber(), request.getIdentityCard());
+
+            // Hash password before storing in Redis so plain-text credentials
+            // are never persisted, even temporarily.
+            request.setPassword(passwordEncoder.encode(request.getPassword()));
+
+            // Serialize and store the validated registration data in Redis.
+            // This prevents the client from tampering with form fields between
+            // the initiate and verify steps (e.g. changing phone/identityCard after validation).
+            try {
+                String pendingKey = PENDING_REGISTER_KEY_PREFIX + emailKey;
+                redisTemplate.opsForValue().set(pendingKey, objectMapper.writeValueAsString(request), OTP_TTL_MINUTES, TimeUnit.MINUTES);
+            } catch (Exception e) {
+                log.error("Failed to serialize pending registration data for email {}", emailKey, e);
+                throw new AppException(GlobalErrorCode.UNCATEGORIZED_EXCEPTION);
+            }
+
             generateAndSendOtp(emailKey);
+
+            // Set cooldown so resendOtp cannot be called immediately after initiate.
+            String cooldownKey = "cooldown:otp:" + emailKey;
+            redisTemplate.opsForValue().set(cooldownKey, "locked", OTP_COOLDOWN_SECONDS, TimeUnit.SECONDS);
+
             authAuditLogService.success("REGISTER_INITIATED", null, "Registration OTP sent",
                     authAuditLogService.metadata(
                             "username", request.getUsername(),
@@ -113,6 +137,11 @@ public class AuthenticationService {
             }
 
             redisTemplate.opsForValue().set(cooldownKey, "locked", OTP_COOLDOWN_SECONDS, TimeUnit.SECONDS);
+
+            // Refresh pending:register TTL to match the new OTP TTL so they expire together.
+            String pendingKey = PENDING_REGISTER_KEY_PREFIX + emailKey;
+            redisTemplate.expire(pendingKey, OTP_TTL_MINUTES, TimeUnit.MINUTES);
+
             generateAndSendOtp(emailKey);
             authAuditLogService.success("OTP_RESEND_REQUESTED", null, "Registration OTP resent",
                     authAuditLogService.metadata("email", emailKey));
@@ -126,32 +155,52 @@ public class AuthenticationService {
     }
 
     @Transactional
-    public AccountResponse verifyOtpAndRegister(VerifyOtpRequest request) {
-        RegisterRequest registerRequest = request.getRegisterRequest();
-
-        String emailKey = registerRequest.getEmail().trim().toLowerCase();
+    public RegisterResponse verifyOtpAndRegister(VerifyOtpRequest request) {
+        String emailKey = request.getEmail() != null ? request.getEmail().trim().toLowerCase() : "";
         String inputOtp = request.getOtp() != null ? request.getOtp().trim() : "";
 
+        // 1. Verify OTP
         String cachedOtp = redisTemplate.opsForValue().get(emailKey);
-
         if (cachedOtp == null) {
             authAuditLogService.failed("REGISTER_OTP_VERIFIED", null, "OTP expired",
                     authAuditLogService.metadata("email", emailKey));
             throw new AppException(AuthErrorCode.OTP_EXPIRED);
         }
-
         if (!cachedOtp.equals(inputOtp)) {
             authAuditLogService.failed("REGISTER_OTP_VERIFIED", null, "Invalid OTP",
                     authAuditLogService.metadata("email", emailKey));
             throw new AppException(AuthErrorCode.INVALID_OTP);
         }
 
-        redisTemplate.delete(emailKey);
+        // 2. Load server-side pending registration data — client cannot tamper with these fields
+        String pendingKey = PENDING_REGISTER_KEY_PREFIX + emailKey;
+        String pendingJson = redisTemplate.opsForValue().get(pendingKey);
+        if (pendingJson == null) {
+            // pending data expired (TTL elapsed) even though OTP is still valid — treat as expired
+            authAuditLogService.failed("REGISTER_OTP_VERIFIED", null, "Pending registration data expired",
+                    authAuditLogService.metadata("email", emailKey));
+            throw new AppException(AuthErrorCode.OTP_EXPIRED);
+        }
 
+        RegisterRequest registerRequest;
+        try {
+            registerRequest = objectMapper.readValue(pendingJson, RegisterRequest.class);
+        } catch (Exception e) {
+            log.error("Failed to deserialize pending registration data for email {}", emailKey, e);
+            throw new AppException(GlobalErrorCode.UNCATEGORIZED_EXCEPTION);
+        }
+
+        // 3. Clean up Redis keys
+        redisTemplate.delete(emailKey);
+        redisTemplate.delete(pendingKey);
+
+        // 4. Final uniqueness check (guards against race conditions in the OTP window)
         validateUniqueFields(registerRequest.getUsername(), emailKey, registerRequest.getPhoneNumber(), registerRequest.getIdentityCard());
 
+        // 5. Persist account
+        // Password was already hashed before being stored in Redis — set directly.
         Account account = accountMapper.toAccount(registerRequest);
-        account.setPasswordHash(passwordEncoder.encode(registerRequest.getPassword()));
+        account.setPasswordHash(registerRequest.getPassword());
         account.setStatus(ACCOUNT_STATUS_ACTIVE);
 
         Role accountRole = roleRepository.findById(DEFAULT_USER_ROLE)
@@ -160,6 +209,7 @@ public class AuthenticationService {
         account.setRoles(new HashSet<>(Set.of(accountRole)));
         account = accountRepository.saveAndFlush(account);
 
+        // 6. Publish Kafka event to user-service
         UserRegisteredEvent userRegisteredEvent = UserRegisteredEvent.builder()
                 .accountId(account.getAccountId())
                 .fullName(registerRequest.getFullName())
@@ -179,7 +229,7 @@ public class AuthenticationService {
                         "identityCard", authAuditLogService.maskIdentityCard(registerRequest.getIdentityCard())
                 ));
 
-        return accountMapper.toAccountResponse(account);
+        return accountMapper.toRegisterResponse(account);
     }
 
     @Transactional
@@ -288,7 +338,8 @@ public class AuthenticationService {
             if (data.isPhoneExists()) throw new AppException(AuthErrorCode.PHONE_EXISTED);
             if (data.isIdentityCardExists()) throw new AppException(AuthErrorCode.IDENTITY_CARD_EXISTED);
         } catch (FeignException e) {
-            log.warn("User-service unavailable. Skipping phone/identity check.");
+            log.error("User-service unavailable. Cannot validate phone/identity before account creation.", e);
+            throw new AppException(GlobalErrorCode.UNCATEGORIZED_EXCEPTION);
         }
     }
 

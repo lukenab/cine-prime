@@ -1,40 +1,42 @@
 import { useState } from "react";
-import { ArrowLeft, Save, User, Camera } from "lucide-react";
+import { ArrowLeft, Save, User, Camera, AlertCircle, X } from "lucide-react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { authApi } from "../../api/authApi";
 import { employeeApi, type EmployeeDepartment, type EmployeePosition, type EmploymentType } from "../../api/employeeApi";
-import { userApi } from "../../api/userApi";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface EmployeeFormData {
+  // Account fields (for auth-service)
   username: string;
   email: string;
   password: string;
+  // Profile fields (for user-service via Kafka)
   fullName: string;
   phoneNumber: string;
   gender: string;
   dateOfBirth: string;
   identityCard: string;
   address: string;
+  // Employee fields
   cinemaId: string;
-  position: EmployeePosition | "";
-  department: EmployeeDepartment | "";
-  employmentType: EmploymentType | "";
+  position: string;
+  department: string;
+  employmentType: string;
   hireDate: string;
 }
 
 const POSITIONS: { value: EmployeePosition; label: string }[] = [
-  { value: "STAFF", label: "Staff" },
+  { value: "STAFF",      label: "Staff" },
   { value: "SUPERVISOR", label: "Supervisor" },
-  { value: "MANAGER", label: "Manager" },
+  { value: "MANAGER",    label: "Manager" },
 ];
 
 const DEPARTMENTS: { value: EmployeeDepartment; label: string }[] = [
-  { value: "BOX_OFFICE", label: "Box Office" },
-  { value: "CONCESSION", label: "Concession" },
-  { value: "FLOOR", label: "Floor" },
-  { value: "PROJECTION", label: "Projection" },
-  { value: "MANAGEMENT", label: "Management" },
+  { value: "BOX_OFFICE",       label: "Box Office" },
+  { value: "CONCESSION",       label: "Concession" },
+  { value: "FLOOR",            label: "Floor" },
+  { value: "PROJECTION",       label: "Projection" },
+  { value: "MANAGEMENT",       label: "Management" },
   { value: "CUSTOMER_SERVICE", label: "Customer Service" },
 ];
 
@@ -42,9 +44,11 @@ const EMPLOYMENT_TYPES: { value: EmploymentType; label: string }[] = [
   { value: "FULL_TIME", label: "Full-time" },
   { value: "PART_TIME", label: "Part-time" },
   { value: "PROBATION", label: "Probation" },
-  { value: "INTERN", label: "Intern" },
-  { value: "CONTRACT", label: "Contract" },
+  { value: "INTERN",    label: "Intern" },
+  { value: "CONTRACT",  label: "Contract" },
 ];
+
+const today = new Date().toISOString().slice(0, 10);
 
 // ── Field helpers ─────────────────────────────────────────────────────────────
 function FormField({
@@ -63,68 +67,36 @@ function FormField({
   );
 }
 
-const inputCls = "px-3.5 py-2.5 text-sm rounded-xl border outline-none focus:ring-2 focus:ring-blue-500/50 transition-all";
+const inputCls   = "px-3.5 py-2.5 text-sm rounded-xl border outline-none focus:ring-2 focus:ring-blue-500/50 transition-all";
 const inputStyle = { background: "transparent", color: "var(--text-main)", borderColor: "var(--border-color)" };
-const today = new Date().toISOString().slice(0, 10);
-
-function isAtLeastAge(dateValue: string, age: number) {
-  const dob = new Date(`${dateValue}T00:00:00`);
-  const now = new Date();
-  let currentAge = now.getFullYear() - dob.getFullYear();
-  const monthDiff = now.getMonth() - dob.getMonth();
-
-  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dob.getDate())) {
-    currentAge -= 1;
-  }
-
-  return currentAge >= age;
-}
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-async function waitForUserProfile(accountId: string) {
-  const maxAttempts = 12;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      await userApi.getUserById(accountId);
-      return;
-    } catch {
-      if (attempt === maxAttempts) {
-        throw new Error("Account created, but user profile is not ready yet. Please wait a moment and create the employee record again.");
-      }
-      await sleep(1000);
-    }
-  }
-}
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function CreateEmployeePage() {
-  const navigate = useNavigate();
+  const navigate    = useNavigate();
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
 
   const [formData, setFormData] = useState<EmployeeFormData>({
-    username: "",
-    email: "",
-    password: "",
-    fullName: "",
-    phoneNumber: "",
-    gender: "Male",
-    dateOfBirth: "",
-    identityCard: "",
-    address: "",
-    cinemaId: "",
-    position: "",
-    department: "",
+    username:       "",
+    email:          "",
+    password:       "",
+    fullName:       "",
+    phoneNumber:    "",
+    gender:         "MALE",
+    dateOfBirth:    "",
+    identityCard:   "",
+    address:        "",
+    cinemaId:       "",
+    position:       "",
+    department:     "",
     employmentType: "",
-    hireDate: today,
+    hireDate:       today,
   });
 
-  const [errors, setErrors] = useState<Partial<Record<keyof EmployeeFormData, string>>>({});
-  const [loading, setLoading]   = useState(false);
-  const [apiError, setApiError] = useState<string | null>(null);
-  const [step, setStep]         = useState<"idle" | "account" | "employee">("idle");
-  const [createdAccountId, setCreatedAccountId] = useState<string | null>(null);
+  const [errors, setErrors]       = useState<Partial<Record<keyof EmployeeFormData, string>>>({});
+  const [loading, setLoading]     = useState(false);
+  const [apiError, setApiError]   = useState<string | null>(null);
+  const [errorStep, setErrorStep] = useState<"account" | "employee" | null>(null);
+  const [step, setStep]           = useState<"idle" | "account" | "employee">("idle");
 
   const accentColor = isDarkMode ? "#3b82f6" : "#2563eb";
 
@@ -138,25 +110,23 @@ export default function CreateEmployeePage() {
 
   const validate = (): boolean => {
     const e: Partial<Record<keyof EmployeeFormData, string>> = {};
-    if (!formData.fullName.trim())                              e.fullName     = "Full name is required";
-    if (!formData.username.trim())                              e.username     = "Username is required";
-    if (formData.username.length < 5)                          e.username     = "Username must be at least 5 characters";
-    if (!formData.email.trim())                                 e.email        = "Email is required";
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email))   e.email        = "Invalid email format";
-    if (!formData.password)                                     e.password     = "Password is required";
-    if (formData.password.length < 6)                          e.password     = "Password must be at least 6 characters";
-    if (!/^0[35789][0-9]{8}$/.test(formData.phoneNumber))      e.phoneNumber  = "Invalid Vietnamese phone number";
-    if (!/^[0-9]{12}$/.test(formData.identityCard))            e.identityCard = "Identity card must be exactly 12 digits";
-    if (!formData.dateOfBirth)                                  e.dateOfBirth  = "Date of birth is required";
-    else if (formData.dateOfBirth > today)                      e.dateOfBirth  = "Date of birth cannot be in the future";
-    else if (!isAtLeastAge(formData.dateOfBirth, 18))            e.dateOfBirth  = "Employee must be at least 18 years old";
-    if (!formData.address.trim())                               e.address      = "Address is required";
-    if (formData.cinemaId.length > 36)                           e.cinemaId     = "Cinema ID must be at most 36 characters";
-    if (!formData.position)                                     e.position     = "Position is required";
-    if (!formData.department)                                    e.department   = "Department is required";
-    if (!formData.employmentType)                                e.employmentType = "Employment type is required";
-    if (!formData.hireDate)                                     e.hireDate     = "Hire date is required";
-    else if (formData.hireDate > today)                         e.hireDate     = "Hire date cannot be in the future";
+    if (!formData.fullName.trim())                              e.fullName       = "Full name is required";
+    if (!formData.username.trim())                              e.username       = "Username is required";
+    if (formData.username.length < 5)                          e.username       = "Username must be at least 5 characters";
+    if (!formData.email.trim())                                 e.email          = "Email is required";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email))   e.email          = "Invalid email format";
+    if (!formData.password)                                     e.password       = "Password is required";
+    if (formData.password.length < 6)                          e.password       = "Password must be at least 6 characters";
+    if (!/^0[35789][0-9]{8}$/.test(formData.phoneNumber))      e.phoneNumber    = "Invalid Vietnamese phone number";
+    if (!/^[0-9]{12}$/.test(formData.identityCard))            e.identityCard   = "Identity card must be exactly 12 digits";
+    if (!formData.dateOfBirth)                                  e.dateOfBirth    = "Date of birth is required";
+    else if (formData.dateOfBirth > today)                      e.dateOfBirth    = "Date of birth cannot be in the future";
+    if (!formData.address.trim())                               e.address        = "Address is required";
+    if (!formData.position)                                     e.position       = "Position is required";
+    if (!formData.department)                                   e.department     = "Department is required";
+    if (!formData.employmentType)                               e.employmentType = "Employment type is required";
+    if (!formData.hireDate)                                     e.hireDate       = "Hire date is required";
+    else if (formData.hireDate > today)                         e.hireDate       = "Hire date cannot be in the future";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -167,48 +137,43 @@ export default function CreateEmployeePage() {
 
     setLoading(true);
     setApiError(null);
+    setErrorStep(null);
 
     try {
-      let accountId = createdAccountId;
+      // Step 1 — Create account (auth-service → Kafka → user-service creates User profile)
+      // Kafka sendAndWait (5s timeout) ensures profile exists before we proceed.
+      setStep("account");
+      const accountRes = await authApi.createAccount({
+        username:     formData.username,
+        password:     formData.password,
+        email:        formData.email,
+        fullName:     formData.fullName,
+        phoneNumber:  formData.phoneNumber,
+        dateOfBirth:  formData.dateOfBirth,
+        gender:       formData.gender,
+        address:      formData.address,
+        identityCard: formData.identityCard,
+        role:         "EMPLOYEE",
+      });
 
-      if (!accountId) {
-        // Step 1 — Create account (auth-service publishes Kafka event → user-service creates profile)
-        setStep("account");
-        const accountRes = await authApi.createAccount({
-          username:     formData.username,
-          password:     formData.password,
-          email:        formData.email,
-          fullName:     formData.fullName,
-          phoneNumber:  formData.phoneNumber,
-          dateOfBirth:  formData.dateOfBirth,
-          gender:       formData.gender,
-          address:      formData.address,
-          identityCard: formData.identityCard,
-          role:         "EMPLOYEE",
-        });
+      const accountId: string = (accountRes as any)?.result?.accountId;
+      if (!accountId) throw new Error("Account created but accountId not returned.");
 
-        accountId = (accountRes as any)?.result?.accountId;
-        if (!accountId) throw new Error("Account created but accountId not returned.");
-        setCreatedAccountId(accountId);
-      }
-
-      await waitForUserProfile(accountId);
-
-      // Step 2 — Create employee record.
+      // Step 2 — Create employee record (user profile exists via Kafka by now)
       setStep("employee");
       await employeeApi.create({
         accountId,
-        cinemaId:     formData.cinemaId.trim() || undefined,
-        position:     formData.position || "STAFF",
-        department:   formData.department || undefined,
-        employmentType: formData.employmentType || undefined,
-        hireDate:     formData.hireDate,
+        cinemaId:       formData.cinemaId.trim() || undefined,
+        position:       formData.position as EmployeePosition,
+        department:     formData.department as EmployeeDepartment,
+        employmentType: formData.employmentType as EmploymentType,
+        hireDate:       formData.hireDate,
       });
 
-      setCreatedAccountId(null);
       navigate("/admin/employees");
     } catch (err: any) {
-      setApiError(err.response?.data?.message || err.message || "Failed to create employee.");
+      setApiError(err.response?.data?.message || err.message || "An unexpected error occurred.");
+      setErrorStep(step === "idle" ? null : step as "account" | "employee");
     } finally {
       setLoading(false);
       setStep("idle");
@@ -243,7 +208,7 @@ export default function CreateEmployeePage() {
       </div>
 
       <form onSubmit={handleSubmit} noValidate>
-        {/* ── Section 1: Account Info ─────────────────────────────────────── */}
+        {/* ── Section 1: Account Info ──────────────────────────────────────── */}
         <div className="p-6 rounded-2xl border mb-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
           <h2 className="text-sm font-bold mb-5 pb-3 border-b" style={{ color: "var(--text-main)", borderColor: "var(--border-color)" }}>
             Account Information
@@ -264,8 +229,35 @@ export default function CreateEmployeePage() {
           </div>
 
           {apiError && (
-            <div className="mb-5 p-3.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm font-medium">
-              {apiError}
+            <div className="mb-5 rounded-xl border border-red-500/25 bg-red-500/8 overflow-hidden">
+              {/* colour bar */}
+              <div className="h-1 w-full bg-red-500" />
+              <div className="flex items-start gap-3 p-4">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-red-500/15 flex items-center justify-center mt-0.5">
+                  <AlertCircle size={16} className="text-red-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-red-500 mb-0.5">
+                    {errorStep === "account" ? "Failed to create account" : errorStep === "employee" ? "Account created — failed to register employee" : "Something went wrong"}
+                  </p>
+                  <p className="text-xs leading-relaxed" style={{ color: "var(--text-sub)" }}>
+                    {apiError}
+                  </p>
+                  {errorStep === "employee" && (
+                    <p className="text-xs mt-2 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400">
+                      The account was successfully created. You can try registering the employee record again from the employee list.
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setApiError(null); setErrorStep(null); }}
+                  className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-500/10 transition-colors"
+                  style={{ color: "var(--text-sub)" }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
             </div>
           )}
 
@@ -304,15 +296,15 @@ export default function CreateEmployeePage() {
             <FormField label="Gender" required>
               <select name="gender" value={formData.gender} onChange={handleChange}
                 className={inputCls} style={{ ...inputStyle, background: "var(--bg-card)" }}>
-                <option value="Male"   style={{ background: "var(--bg-card)" }}>Male</option>
-                <option value="Female" style={{ background: "var(--bg-card)" }}>Female</option>
-                <option value="Other"  style={{ background: "var(--bg-card)" }}>Other</option>
+                <option value="MALE"   style={{ background: "var(--bg-card)" }}>Male</option>
+                <option value="FEMALE" style={{ background: "var(--bg-card)" }}>Female</option>
+                <option value="OTHER"  style={{ background: "var(--bg-card)" }}>Other</option>
               </select>
             </FormField>
 
             <FormField label="Date of Birth" required error={errors.dateOfBirth}>
-              <input name="dateOfBirth" type="date"
-                value={formData.dateOfBirth} onChange={handleChange} max={today}
+              <input name="dateOfBirth" type="date" max={today}
+                value={formData.dateOfBirth} onChange={handleChange}
                 className={`${inputCls} ${errors.dateOfBirth ? "border-red-400" : ""}`} style={inputStyle} />
             </FormField>
 
@@ -332,19 +324,13 @@ export default function CreateEmployeePage() {
           </div>
         </div>
 
-        {/* ── Section 2: Employee Info ────────────────────────────────────── */}
+        {/* ── Section 2: Employment Info ───────────────────────────────────── */}
         <div className="p-6 rounded-2xl border mb-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
           <h2 className="text-sm font-bold mb-5 pb-3 border-b" style={{ color: "var(--text-main)", borderColor: "var(--border-color)" }}>
             Employment Information
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <FormField label="Cinema ID" error={errors.cinemaId}>
-              <input name="cinemaId" type="text" placeholder="Optional cinema/branch ID"
-                value={formData.cinemaId} onChange={handleChange}
-                className={`${inputCls} ${errors.cinemaId ? "border-red-400" : ""}`} style={inputStyle} />
-            </FormField>
-
             <FormField label="Position" required error={errors.position}>
               <select name="position" value={formData.position} onChange={handleChange}
                 className={`${inputCls} ${errors.position ? "border-red-400" : ""}`}
@@ -379,14 +365,20 @@ export default function CreateEmployeePage() {
             </FormField>
 
             <FormField label="Hire Date" required error={errors.hireDate}>
-              <input name="hireDate" type="date"
-                value={formData.hireDate} onChange={handleChange} max={today}
+              <input name="hireDate" type="date" max={today}
+                value={formData.hireDate} onChange={handleChange}
                 className={`${inputCls} ${errors.hireDate ? "border-red-400" : ""}`} style={inputStyle} />
+            </FormField>
+
+            <FormField label="Cinema ID" error={errors.cinemaId}>
+              <input name="cinemaId" type="text" placeholder="Optional — assign to a cinema branch"
+                value={formData.cinemaId} onChange={handleChange}
+                className={inputCls} style={inputStyle} />
             </FormField>
           </div>
         </div>
 
-        {/* ── Actions ────────────────────────────────────────────────────── */}
+        {/* ── Actions ──────────────────────────────────────────────────────── */}
         <div className="flex items-center justify-end gap-3">
           <button
             type="button"

@@ -65,6 +65,7 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
       <div
         style={{
           height: "60px",
+          flexShrink: 0,
           padding: "0 20px",
           borderBottom: "1px solid var(--border-color)",
           transition: "border-color 0.25s ease",
@@ -129,7 +130,7 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
       </div>
 
       {/* Nav items */}
-      <nav style={{ padding: "0 10px", flex: 1 }}>
+      <nav style={{ padding: "0 10px", flex: 1, overflowY: "auto", minHeight: 0 }}>
         {navItems.filter(({ roles }) => !roles || roles.includes(user?.role ?? "")).map(({ icon: Icon, label, id, path, group }, idx, visibleItems) => {
           const isActive =
             path === "/admin"

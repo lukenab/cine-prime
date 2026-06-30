@@ -61,6 +61,47 @@ public class AccountService {
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new AppException(AuthErrorCode.ACCOUNT_NOT_FOUND));
 
+        // Validate phone/CCCD uniqueness trước khi save để tránh lệch dữ liệu với user-service.
+        // Cần lấy profile hiện tại để biết phone/CCCD cũ — tránh false positive khi giá trị không đổi.
+        if (request.getPhoneNumber() != null || request.getIdentityCard() != null) {
+            try {
+                String currentPhone = null;
+                String currentIdentityCard = null;
+                try {
+                    var profile = userClient.getUser(accountId).getResult();
+                    if (profile != null) {
+                        currentPhone = profile.getPhoneNumber();
+                        currentIdentityCard = profile.getIdentityCard();
+                    }
+                } catch (FeignException ignored) {
+                    // Không lấy được profile hiện tại → fallback: coi như không có giá trị cũ
+                }
+
+                boolean phoneChanged = request.getPhoneNumber() != null
+                        && !request.getPhoneNumber().equals(currentPhone);
+                boolean cccdChanged = request.getIdentityCard() != null
+                        && !request.getIdentityCard().equals(currentIdentityCard);
+
+                if (phoneChanged || cccdChanged) {
+                    var existence = userClient.checkExistence(
+                            phoneChanged ? request.getPhoneNumber() : "",
+                            cccdChanged  ? request.getIdentityCard() : ""
+                    ).getResult();
+                    if (phoneChanged && existence.isPhoneExists()) {
+                        throw new AppException(AuthErrorCode.PHONE_EXISTED);
+                    }
+                    if (cccdChanged && existence.isIdentityCardExists()) {
+                        throw new AppException(AuthErrorCode.IDENTITY_CARD_EXISTED);
+                    }
+                }
+            } catch (AppException e) {
+                throw e;
+            } catch (FeignException e) {
+                log.error("User-service unavailable. Cannot validate phone/identity before account update.", e);
+                throw new AppException(GlobalErrorCode.UNCATEGORIZED_EXCEPTION);
+            }
+        }
+
         String oldRoles = account.getRoles() != null ? account.getRoles().toString() : null;
 
         accountMapper.updateAccount(request, account);

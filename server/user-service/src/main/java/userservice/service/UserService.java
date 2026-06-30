@@ -48,8 +48,7 @@ public class UserService {
 
     @Transactional
     public void createUserProfile(UserRegisteredEvent event) {
-        identityCardService.validate(event.getIdentityCard());
-
+        // Check duplicate trước — tránh throw trước khi biết profile đã tồn tại
         if (userRepository.findById(event.getAccountId()).isPresent()) {
             log.warn("Profile for Account ID {} already exists. Skipping event to avoid duplication.", event.getAccountId());
             return;
@@ -57,11 +56,25 @@ public class UserService {
 
         if (userRepository.existsByPhoneNumber(event.getPhoneNumber())) {
             log.error("[DATA_INCONSISTENCY] Phone number {} already exists for accountId {}. Auth account created but profile skipped.", event.getPhoneNumber(), event.getAccountId());
+            auditLogService.log("User", event.getAccountId(), "CREATE_SKIPPED", null,
+                    "DATA_INCONSISTENCY: phone duplicate — " + event.getPhoneNumber(), "SYSTEM");
             return;
         }
 
         if (userRepository.existsByIdentityCard(event.getIdentityCard())) {
             log.error("[DATA_INCONSISTENCY] Identity card {} already exists for accountId {}. Auth account created but profile skipped.", event.getIdentityCard(), event.getAccountId());
+            auditLogService.log("User", event.getAccountId(), "CREATE_SKIPPED", null,
+                    "DATA_INCONSISTENCY: identityCard duplicate — " + event.getIdentityCard(), "SYSTEM");
+            return;
+        }
+
+        // Validate sau khi đã qua các guard checks
+        try {
+            identityCardService.validate(event.getIdentityCard());
+        } catch (Exception e) {
+            log.error("[DATA_INCONSISTENCY] Invalid identityCard for accountId {}: {}", event.getAccountId(), e.getMessage());
+            auditLogService.log("User", event.getAccountId(), "CREATE_SKIPPED", null,
+                    "DATA_INCONSISTENCY: invalid identityCard — " + e.getMessage(), "SYSTEM");
             return;
         }
 
@@ -127,7 +140,6 @@ public class UserService {
 
         user.setIsActive(false);
         user.setUpdatedAt(LocalDateTime.now());
-        userRepository.save(user);
 
         // Ghi Log
         User savedUser = userRepository.save(user);
