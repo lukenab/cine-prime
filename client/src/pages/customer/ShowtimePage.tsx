@@ -84,13 +84,15 @@ interface ShowtimeCardProps {
 }
 
 function ShowtimeCard({ show, onSelect }: ShowtimeCardProps) {
-  const status = "SCHEDULED";
+  // Use status from API if available; fall back to SCHEDULED
+  const status = show.status ?? "SCHEDULED";
   const disabled = isDisabled(status);
+  const sm = statusMeta(status);
 
   return (
     <div
       className={[
-        "relative rounded-lg border bg-zinc-900 px-3 py-1.5 flex items-center justify-center transition-all duration-200",
+        "relative rounded-lg border bg-zinc-900 px-3 py-2.5 flex flex-col gap-1.5 transition-all duration-200 min-w-[150px]",
         disabled
           ? "border-zinc-800 opacity-50 cursor-not-allowed select-none"
           : "border-zinc-800 hover:border-yellow-500/40 hover:bg-zinc-800 hover:shadow-[0_0_15px_rgba(234,179,8,0.1)] cursor-pointer",
@@ -100,13 +102,49 @@ function ShowtimeCard({ show, onSelect }: ShowtimeCardProps) {
       tabIndex={disabled ? -1 : 0}
       onKeyDown={(e) => e.key === "Enter" && !disabled && onSelect(String(show.showTimeId))}
     >
-      <div className="flex items-center justify-center">
+      {/* Status badge — only show when not SCHEDULED */}
+      {sm && (
+        <span className={`text-[10px] font-bold uppercase tracking-wider ${sm.text}`}>
+          {sm.label}
+        </span>
+      )}
+
+      {/* Time range: start → end */}
+      <div className="flex items-center gap-1 flex-wrap">
         <span
-          className="font-['Barlow_Condensed'] text-lg font-bold tracking-tight"
-          style={{ color: disabled ? "inherit" : "#f0f0f8" }}
+          className="font-['Barlow_Condensed'] text-lg font-bold tracking-tight leading-none"
+          style={{ color: disabled ? "#71717a" : "#f0f0f8" }}
         >
           {formatTime(show.startTime)}
         </span>
+        {show.endTime && (
+          <>
+            <span className="text-zinc-600 text-xs">→</span>
+            <span className="text-zinc-400 text-sm font-medium">
+              {formatTime(show.endTime)}
+            </span>
+          </>
+        )}
+      </div>
+
+      {/* Price & available seats */}
+      <div className="flex items-center gap-2 text-xs">
+        {show.price != null ? (
+          <span className="text-yellow-500/80 font-semibold">
+            {show.price.toLocaleString("vi-VN")}₫
+          </span>
+        ) : (
+          <span className="text-zinc-600 italic">Price TBD</span>
+        )}
+        {show.availableSeats != null && (
+          <>
+            <span className="text-zinc-700">·</span>
+            <span className={seatsLabel(show.availableSeats, show.totalSeats ?? 100).color}>
+              <Armchair size={10} className="inline mr-0.5" />
+              {seatsLabel(show.availableSeats, show.totalSeats ?? 100).label}
+            </span>
+          </>
+        )}
       </div>
     </div>
   );
@@ -253,8 +291,19 @@ export default function ShowtimePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+      <div className="min-h-screen bg-zinc-950 text-white">
+        {/* Skeleton hero */}
+        <div className="h-48 bg-zinc-900 animate-pulse" />
+        {/* Skeleton filter bar */}
+        <div className="h-14 bg-zinc-900/70 border-b border-zinc-800 animate-pulse" />
+        {/* Skeleton cards */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }

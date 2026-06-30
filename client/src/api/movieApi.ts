@@ -8,6 +8,14 @@ export type ShowTimeResponse = {
   cinemaRoomId: number;
   cinemaRoomName: string;
   updateAt: string;
+  /** SCHEDULED | ONGOING | FINISHED | CANCELLED — optional until backend returns it */
+  status?: string;
+  /** Base ticket price in VND */
+  price?: number;
+  /** Number of available seats */
+  availableSeats?: number;
+  /** Total seat count in the room */
+  totalSeats?: number;
 };
 
 export type MovieApiResponse = {
