@@ -1,8 +1,8 @@
 package bookingservice.dto.response;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
-
-import com.fasterxml.jackson.annotation.JsonFormat;
+import java.util.List;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -12,13 +12,18 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
+
+
 @Data
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class CancelBookingResponse {
+@Builder
+public class CreateBookingResponse {
     String bookingId;
+    Long showtimeId;
     String status;
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    LocalDateTime updatedAt;
+    BigDecimal totalPrice;
+    List<BookingItemResponse> items; // Danh sách chi tiết ghế lồng bên trong
+    LocalDateTime lockedUntil;       // Thời gian giữ ghế 10 phút
 }

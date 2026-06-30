@@ -1,8 +1,6 @@
 package bookingservice.dto.response;
 
-import java.time.LocalDateTime;
-
-import com.fasterxml.jackson.annotation.JsonFormat;
+import java.util.List;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -13,12 +11,17 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 @Data
-@Getter @Setter
-@NoArgsConstructor @AllArgsConstructor
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class CancelBookingResponse {
-    String bookingId;
-    String status;
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    LocalDateTime updatedAt;
+@Builder
+public class BookingListResponse {
+    List<BookingDetailResponse> content;
+    int pageNumber;
+    int pageSize;
+    long totalElements;
+    int totalPages;
+    boolean isLast;
 }
