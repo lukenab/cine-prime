@@ -104,15 +104,16 @@ public class BookingService {
             throw new AppException(BookingErrorCode.SEATS_ALREADY_TAKEN);
         }
 
-        // Xóa các lock đã hết hạn của các ghế này để tránh lỗi unique constraint
-        // (uc_showtime_seat)
         seatLockRepository.releaseSeatsByBookingAndList(request.getShowtimeId(), seatCodesStr, null);
 
         BigDecimal totalPrice = BigDecimal.ZERO;
         List<BookingItemResponse> itemResponses = new ArrayList<>();
 
+        int pointsUsed = request.getPointsUsed() != null ? request.getPointsUsed() : 0;
+
         Booking booking = Booking.builder()
                 .status(BookingStatus.PENDING.name())
+                .pointsUsed(pointsUsed)
                 .accountId(currentUserId)
                 .showtimeId(request.getShowtimeId())
                 .totalAmount(BigDecimal.ZERO)
