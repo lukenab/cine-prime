@@ -7,7 +7,6 @@ export function HeroSection() {
 
   return (
     <section className="relative w-full min-h-screen overflow-hidden">
-      {/* Video */}
       <div className="absolute inset-0 w-full h-full z-0 bg-black">
         <video
           autoPlay
@@ -21,7 +20,6 @@ export function HeroSection() {
         </video>
       </div>
 
-      {/* Gradient — chỉ fade ở bottom và left để video giữa nổi bật */}
       <div
         className="absolute inset-0 z-10 pointer-events-none"
         style={{
@@ -35,15 +33,12 @@ export function HeroSection() {
         }}
       />
 
-      {/* Gold top line */}
       <div className="absolute top-0 left-0 right-0 h-[2px] z-10" style={{ background: "linear-gradient(90deg, transparent, #FFD700, transparent)" }} />
 
-      {/* Text — góc dưới trái, không che giữa video */}
       <div
         className="absolute z-20 flex flex-col"
         style={{ bottom: "80px", left: "clamp(24px, 5vw, 80px)", maxWidth: "520px", gap: "20px" }}
       >
-        {/* Badge */}
         <div
           className="flex items-center gap-2 px-3 py-1 rounded-full w-fit"
           style={{
@@ -56,7 +51,6 @@ export function HeroSection() {
           <span style={{ color: "#FFD700", fontSize: "0.7rem", letterSpacing: "0.15em", fontWeight: 600 }}>NOW SHOWING IN THEATRES</span>
         </div>
 
-        {/* Headline */}
         <h1
           className="text-white"
           style={{
@@ -81,7 +75,6 @@ export function HeroSection() {
           Before
         </h1>
 
-        {/* Subheading */}
         <p
           style={{
             color: "rgba(255,255,255,0.75)",
@@ -93,7 +86,6 @@ export function HeroSection() {
           Premium screens. Dolby Atmos sound. Reclining seats.
         </p>
 
-        {/* CTA buttons */}
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => navigate("/booking/1")}
@@ -127,7 +119,6 @@ export function HeroSection() {
           </button>
         </div>
 
-        {/* Stats */}
         <div className="flex gap-8 flex-wrap" style={{ paddingTop: "8px" }}>
           {[
             { value: "200+", label: "Movies" },
@@ -143,7 +134,6 @@ export function HeroSection() {
         </div>
       </div>
 
-      {/* Scroll indicator */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 animate-bounce z-20">
         <span style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.6rem", letterSpacing: "0.15em" }}>SCROLL</span>
         <ChevronDown size={14} style={{ color: "rgba(255,255,255,0.4)" }} />
