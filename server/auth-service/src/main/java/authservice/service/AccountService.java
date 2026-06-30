@@ -41,6 +41,7 @@ public class AccountService {
     RoleRepository roleRepository;
     UserEventProducer userEventProducer;
     UserClient userClient;
+    AuthAuditLogService authAuditLogService;
 
 
 //    @PreAuthorize("hasRole('ADMIN')")
@@ -59,6 +60,8 @@ public class AccountService {
     public AccountResponse updateAccount(String accountId, AccountUpdateRequest request) {
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new AppException(AuthErrorCode.ACCOUNT_NOT_FOUND));
+
+        String oldRoles = account.getRoles() != null ? account.getRoles().toString() : null;
 
         accountMapper.updateAccount(request, account);
 
@@ -84,6 +87,16 @@ public class AccountService {
                 .build();
 
         userEventProducer.sendUpdatedEvent(userUpdatedEvent);
+        authAuditLogService.success("ACCOUNT_UPDATED", accountId, "Account updated",
+                authAuditLogService.metadata(
+                        "username", account.getUsername(),
+                        "email", account.getEmail(),
+                        "passwordChanged", StringUtils.hasText(request.getPassword()),
+                        "oldRoles", oldRoles,
+                        "newRoles", account.getRoles() != null ? account.getRoles().toString() : null,
+                        "phoneNumber", authAuditLogService.maskPhone(request.getPhoneNumber()),
+                        "identityCard", authAuditLogService.maskIdentityCard(request.getIdentityCard())
+                ));
 
         return accountMapper.toAccountResponse(account);
     }
@@ -123,6 +136,14 @@ public class AccountService {
                 .build();
 
         userEventProducer.sendRegisteredEvent(userRegisteredEvent);
+        authAuditLogService.success("ACCOUNT_CREATED", account.getAccountId(), "Account created by admin",
+                authAuditLogService.metadata(
+                        "username", account.getUsername(),
+                        "email", emailKey,
+                        "role", requestedRole,
+                        "phoneNumber", authAuditLogService.maskPhone(request.getPhoneNumber()),
+                        "identityCard", authAuditLogService.maskIdentityCard(request.getIdentityCard())
+                ));
 
         return accountMapper.toAccountResponse(account);
     }

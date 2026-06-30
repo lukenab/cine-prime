@@ -93,7 +93,7 @@ Chuyển đổi từ vận hành thủ công sang nền tảng microservices có
 - **Phim:** CRUD danh mục, upload poster lên Cloudinary — `POST/GET /api/movies`.
 - **Lịch chiếu:** Tạo lịch với validation giờ chiếu (08:00–23:00), tối thiểu 3 ngày trước, kiểm tra trùng lịch.
 - **Phòng chiếu:** CRUD phòng, tự động sinh ghế — `POST/GET /api/cinema-rooms`.
-- **Loại phim:** CRUD thể loại — `POST/GET /api/movie-type`.
+- **Loại phim:** CRUD thể loại — `POST/GET /api/movie-types`.
 
 ### 3.4 Đặt vé (booking-service) 🔧
 
@@ -211,7 +211,7 @@ API Gateway tại port **8080**:
 | `/api/users/**` | user-service | 8084 | Profile người dùng |
 | `/api/movies/**` | movie-service | 8081 | Danh mục phim |
 | `/api/cinema-rooms/**` | movie-service | 8081 | Phòng chiếu |
-| `/api/movie-type/**` | movie-service | 8081 | Loại phim |
+| `/api/movie-types/**` | movie-service | 8081 | Loại phim |
 | `/api/bookings/**` | booking-service | 8082 | Đặt vé |
 | `/api/tickets/**` | booking-service | 8082 | Quản lý vé |
 

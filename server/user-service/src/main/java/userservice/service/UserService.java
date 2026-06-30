@@ -43,10 +43,12 @@ public class UserService {
     UserRepository userRepository;
     UserMapper userMapper;
     AuditLogService auditLogService;
+    IdentityCardService identityCardService;
     private final RestClient.Builder builder;
 
     @Transactional
     public void createUserProfile(UserRegisteredEvent event) {
+        identityCardService.validate(event.getIdentityCard());
 
         if (userRepository.findById(event.getAccountId()).isPresent()) {
             log.warn("Profile for Account ID {} already exists. Skipping event to avoid duplication.", event.getAccountId());
@@ -89,6 +91,13 @@ public class UserService {
     @Transactional
     public UserResponse updateUser(String id, UserUpdateRequest request) {
         User user = userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        if (request.getIdentityCard() != null) {
+            identityCardService.validate(request.getIdentityCard());
+            if (!request.getIdentityCard().equals(user.getIdentityCard())
+                    && userRepository.existsByIdentityCard(request.getIdentityCard())) {
+                throw new AppException(ErrorCode.IDENTITY_CARD_EXISTED);
+            }
+        }
         if (request.getPhoneNumber() != null
                 && !request.getPhoneNumber().equals(user.getPhoneNumber())
                 && userRepository.existsByPhoneNumber(request.getPhoneNumber())) {

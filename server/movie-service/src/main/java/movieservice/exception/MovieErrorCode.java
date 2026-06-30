@@ -37,6 +37,8 @@ public enum MovieErrorCode implements BaseErrorCode {
                         "The room has been booked for another showtime.",
                         HttpStatus.CONFLICT),
         UPLOAD_IMAGE_FAILED(5001, "Failed to upload image to Cloudinary", HttpStatus.INTERNAL_SERVER_ERROR),
+        INVALID_IMAGE_FILE(5002, "Invalid image file. Please upload a JPG, PNG, or WebP image up to 5MB.",
+                        HttpStatus.BAD_REQUEST),
 
         INTERNAL_SERVER_ERROR(5000,
                         "Internal server error",

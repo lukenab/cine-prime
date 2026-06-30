@@ -55,7 +55,7 @@ public class EmployeeController {
     @PutMapping("/{id}")
     public ApiResponse<EmployeeResponse> updateEmployee(
             @PathVariable String id,
-            @RequestBody EmployeeUpdateRequest request
+            @Valid @RequestBody EmployeeUpdateRequest request
     ) {
         return ApiResponse.<EmployeeResponse>builder()
                 .result(employeeService.updateEmployee(id, request))
