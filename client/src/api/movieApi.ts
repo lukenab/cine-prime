@@ -8,13 +8,9 @@ export type ShowTimeResponse = {
   cinemaRoomId: number;
   cinemaRoomName: string;
   updateAt: string;
-  /** SCHEDULED | ONGOING | FINISHED | CANCELLED — optional until backend returns it */
   status?: string;
-  /** Base ticket price in VND */
   price?: number;
-  /** Number of available seats */
   availableSeats?: number;
-  /** Total seat count in the room */
   totalSeats?: number;
 };
 
@@ -169,8 +165,6 @@ export const movieApi = {
     axiosClient.post('/api/movie-types', payload) as Promise<ApiWrapper<TypeResponse>>,
 };
 
-// Spring Boot may serialize LocalDate/LocalDateTime as [2026,6,22] arrays or "2026-06-22" strings.
-// This helper normalises both to "YYYY-MM-DD".
 export function toDateStr(val: string | number[] | undefined): string {
   if (!val) return '';
   if (Array.isArray(val)) {

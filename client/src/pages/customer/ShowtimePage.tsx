@@ -17,30 +17,20 @@ import {
   CheckCheck,
 } from "lucide-react";
 
-/* ─── Mock API helpers (used until backend returns these fields) ─────── */
 
 const MOCK_PRICES = [75_000, 90_000, 95_000, 110_000, 120_000, 130_000];
 const MOCK_TOTAL_SEATS = [80, 100, 120, 150, 200, 300];
 
-/**
- * Enriches showtimes with realistic mock data for fields the backend
- * hasn't implemented yet (status, price, availableSeats, totalSeats).
- * When the backend returns these fields, they take priority automatically.
- */
 function enrichWithMockData(shows: ShowTimeResponse[]): ShowTimeResponse[] {
   return shows.map((s) => {
-    // Deterministic mock based on showTimeId so values don't change on re-render
     const seed = s.showTimeId ?? 0;
     const total = s.totalSeats ?? MOCK_TOTAL_SEATS[seed % MOCK_TOTAL_SEATS.length];
     const available = s.availableSeats ?? Math.max(0, total - (seed * 7 % (total + 1)));
     const price = s.price ?? MOCK_PRICES[seed % MOCK_PRICES.length];
-    // Status: backend hasn't sent it — default SCHEDULED, occasionally FINISHED for demo
     const status = s.status ?? (seed % 11 === 0 ? "FINISHED" : "SCHEDULED");
     return { ...s, status, price, availableSeats: available, totalSeats: total };
   });
 }
-
-/* ─── Helpers ────────────────────────────────────────────── */
 
 
 function formatTime(t: string | number[] | undefined) {
@@ -79,7 +69,66 @@ function statusMeta(status: string) {
 
 const isDisabled = (s: string) => s === "FINISHED" || s === "CANCELLED";
 
-/* ─── Sub-components ─────────────────────────────────────── */
+function getMockShowtimesForDateAndCinema(
+  movieId: number,
+  date: Date,
+  cinemaName: string
+): (ShowTimeResponse & { showDateTimeISO: string })[] {
+  if (date.getDay() === 3) {
+    return [];
+  }
+
+  const rooms = ["IMAX", "A", "B", "C"];
+  const showtimesByRoom: Record<string, string[]> = cinemaName === "CinePrime Lê Văn Việt" ? {
+    "IMAX": ["10:00", "14:30", "19:00"],
+    "A": ["09:15", "13:45", "18:30"],
+    "B": ["11:30", "16:15", "20:45"],
+    "C": ["12:00", "17:00", "21:30"]
+  } : {
+    "IMAX": ["11:00", "15:30", "20:00"],
+    "A": ["10:15", "14:45", "19:30"],
+    "B": ["12:30", "17:15", "21:45"],
+    "C": ["13:00", "18:00", "22:30"]
+  };
+
+  const results: (ShowTimeResponse & { showDateTimeISO: string })[] = [];
+  let idCounter = movieId * 1000 + (cinemaName.includes("Việt") ? 100 : 200);
+
+  const dateStr = format(date, "yyyy-MM-dd");
+
+  rooms.forEach((roomName) => {
+    const times = showtimesByRoom[roomName] || [];
+    times.forEach((timeStr) => {
+      const showTimeId = idCounter++;
+      const [h, m] = timeStr.split(":");
+      
+      const startMinutes = parseInt(h) * 60 + parseInt(m);
+      const endMinutes = startMinutes + 138;
+      const endH = Math.floor(endMinutes / 60) % 24;
+      const endM = endMinutes % 60;
+      const endTimeStr = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}:00`;
+
+      const isoDateTime = `${dateStr}T${timeStr}:00`;
+
+      results.push({
+        showTimeId,
+        showDate: dateStr,
+        startTime: `${timeStr}:00`,
+        endTime: endTimeStr,
+        cinemaRoomId: showTimeId,
+        cinemaRoomName: roomName,
+        updateAt: new Date().toISOString(),
+        status: "SCHEDULED",
+        price: roomName === "IMAX" ? 130000 : 90000,
+        availableSeats: 80 - (showTimeId % 30),
+        totalSeats: roomName === "IMAX" ? 150 : 100,
+        showDateTimeISO: isoDateTime
+      });
+    });
+  });
+
+  return results;
+}
 
 function SkeletonCard() {
   return (
@@ -103,83 +152,41 @@ function SkeletonCard() {
 }
 
 interface ShowtimeCardProps {
-  show: ShowTimeResponse;
-  onSelect: (id: string) => void;
+  show: ShowTimeResponse & { showDateTimeISO?: string };
+  onSelect: (show: ShowTimeResponse & { showDateTimeISO?: string }) => void;
 }
 
 function ShowtimeCard({ show, onSelect }: ShowtimeCardProps) {
-  // Use status from API if available; fall back to SCHEDULED
   const status = show.status ?? "SCHEDULED";
   const disabled = isDisabled(status);
-  const sm = statusMeta(status);
 
   return (
     <div
       className={[
-        "relative rounded-lg border bg-zinc-900 px-3 py-2.5 flex flex-col gap-1.5 transition-all duration-200 min-w-[150px]",
+        "relative rounded-md border bg-zinc-900 px-3 py-1.5 flex items-center justify-center transition-all duration-200 min-w-[80px] text-center",
         disabled
           ? "border-zinc-800 opacity-50 cursor-not-allowed select-none"
           : "border-zinc-800 hover:border-yellow-500/40 hover:bg-zinc-800 hover:shadow-[0_0_15px_rgba(234,179,8,0.1)] cursor-pointer",
       ].join(" ")}
-      onClick={() => !disabled && onSelect(String(show.showTimeId))}
+      onClick={() => !disabled && onSelect(show)}
       role={disabled ? undefined : "button"}
       tabIndex={disabled ? -1 : 0}
-      onKeyDown={(e) => e.key === "Enter" && !disabled && onSelect(String(show.showTimeId))}
+      onKeyDown={(e) => e.key === "Enter" && !disabled && onSelect(show)}
     >
-      {/* Status badge — only show when not SCHEDULED */}
-      {sm && (
-        <span className={`text-[10px] font-bold uppercase tracking-wider ${sm.text}`}>
-          {sm.label}
-        </span>
-      )}
-
-      {/* Time range: start → end */}
-      <div className="flex items-center gap-1 flex-wrap">
-        <span
-          className="font-['Barlow_Condensed'] text-lg font-bold tracking-tight leading-none"
-          style={{ color: disabled ? "#71717a" : "#f0f0f8" }}
-        >
-          {formatTime(show.startTime)}
-        </span>
-        {show.endTime && (
-          <>
-            <span className="text-zinc-600 text-xs">→</span>
-            <span className="text-zinc-400 text-sm font-medium">
-              {formatTime(show.endTime)}
-            </span>
-          </>
-        )}
-      </div>
-
-      {/* Price & available seats */}
-      <div className="flex items-center gap-2 text-xs">
-        {show.price != null ? (
-          <span className="text-yellow-500/80 font-semibold">
-            {show.price.toLocaleString("vi-VN")}₫
-          </span>
-        ) : (
-          <span className="text-zinc-600 italic">Price TBD</span>
-        )}
-        {show.availableSeats != null && (
-          <>
-            <span className="text-zinc-700">·</span>
-            <span className={seatsLabel(show.availableSeats, show.totalSeats ?? 100).color}>
-              <Armchair size={10} className="inline mr-0.5" />
-              {seatsLabel(show.availableSeats, show.totalSeats ?? 100).label}
-            </span>
-          </>
-        )}
-      </div>
+      <span
+        className="font-['Barlow_Condensed'] text-base font-bold tracking-tight leading-none"
+        style={{ color: disabled ? "#71717a" : "#f0f0f8" }}
+      >
+        {formatTime(show.startTime)}
+      </span>
     </div>
   );
 }
 
-/* ─── Cinema section ────────────────────────────────────── */
-
 interface CinemaGroupProps {
   cinemaName: string;
-  showtimes: ShowTimeResponse[];
-  onSelect: (id: string) => void;
+  showtimes: (ShowTimeResponse & { showDateTimeISO?: string })[];
+  onSelect: (show: ShowTimeResponse & { showDateTimeISO?: string }) => void;
   expanded: boolean;
   onToggle: () => void;
 }
@@ -188,22 +195,21 @@ function CinemaGroup({ cinemaName, showtimes, onSelect, expanded, onToggle }: Ci
   const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set());
 
   const groupedByRoom = useMemo(() => {
-    const map = new Map<string, ShowTimeResponse[]>();
+    const map = new Map<string, (ShowTimeResponse & { showDateTimeISO?: string })[]>();
     showtimes.forEach((s) => {
       let roomName = s.cinemaRoomName;
       if (!roomName) {
          const rm = s.showTimeId % 4;
-         if (rm === 0) roomName = "IMAX Room";
-         else if (rm === 1) roomName = "Room A";
-         else if (rm === 2) roomName = "Room B";
-         else roomName = "Room C";
+         if (rm === 0) roomName = "IMAX";
+         else if (rm === 1) roomName = "A";
+         else if (rm === 2) roomName = "B";
+         else roomName = "C";
       }
       
       if (!map.has(roomName)) map.set(roomName, []);
       map.get(roomName)!.push(s);
     });
     
-    // Sort times chronologically
     Array.from(map.values()).forEach(times => {
       times.sort((a, b) => {
         const timeA = String(a.startTime);
@@ -213,7 +219,7 @@ function CinemaGroup({ cinemaName, showtimes, onSelect, expanded, onToggle }: Ci
     });
 
     const entries = Array.from(map.entries());
-    const order = ["IMAX Room", "Room A", "Room B", "Room C"];
+    const order = ["IMAX", "A", "B", "C"];
     entries.sort((a, b) => {
       let indexA = order.indexOf(a[0]);
       let indexB = order.indexOf(b[0]);
@@ -246,7 +252,7 @@ function CinemaGroup({ cinemaName, showtimes, onSelect, expanded, onToggle }: Ci
                    onClick={(e) => { e.stopPropagation(); toggleRoom(roomName); }}
                  >
                    <div className="flex items-center gap-2">
-                     <span className="font-semibold text-zinc-200 tracking-wide">{roomName}</span>
+                     <span className="font-semibold text-zinc-200 tracking-wide">ROOM {roomName}</span>
                      <span className="text-xs text-zinc-500">({times.length} shows)</span>
                    </div>
                    {isRoomExpanded ? <ChevronUp size={16} className="text-zinc-600" /> : <ChevronDown size={16} className="text-zinc-600" />}
@@ -266,8 +272,6 @@ function CinemaGroup({ cinemaName, showtimes, onSelect, expanded, onToggle }: Ci
   );
 }
 
-/* ─── Main App ───────────────────────────────────────────── */
-
 export default function ShowtimePage() {
   const navigate = useNavigate();
   const { movieId } = useParams<{ movieId: string }>();
@@ -275,13 +279,11 @@ export default function ShowtimePage() {
   const [movie, setMovie] = useState<MovieApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Default to today
   const today = new Date();
   const dates = Array.from({ length: 7 }, (_, i) => addDays(today, i));
   const [selectedDate, setSelectedDate] = useState<Date>(today);
   const [selectedCinema, setSelectedCinema] = useState<string>("CinePrime Lê Văn Việt");
 
-  // Fetch movie data
   useEffect(() => {
     setLoading(true);
     movieApi.getAllMovies().then(res => {
@@ -296,23 +298,25 @@ export default function ShowtimePage() {
     });
   }, [movieId]);
 
-  // Filter showtimes by selected date, then enrich with mock data for missing fields
   const filteredShowtimes = useMemo(() => {
-    if (!movie?.showTimes) return [];
-    const filtered = movie.showTimes.filter((s) => {
-      const showDateStr = toDateStr(s.showDate);
-      const selectedDateStr = toDateStr(selectedDate.toISOString());
-      return showDateStr === selectedDateStr;
-    });
-    // Mock-enrich: fills status/price/availableSeats/totalSeats if backend hasn't returned them
-    return enrichWithMockData(filtered);
-  }, [movie, selectedDate]);
+    if (!movie) return [];
+    return getMockShowtimesForDateAndCinema(movie.movieId, selectedDate, selectedCinema);
+  }, [movie, selectedDate, selectedCinema]);
 
-  // We now have two hardcoded cinemas for the demo
   const hasShowtimes = filteredShowtimes.length > 0;
 
-  function handleSelectShowtime(id: string) {
-    navigate(`/booking/${id}`);
+  function handleSelectShowtime(show: ShowTimeResponse & { showDateTimeISO?: string }) {
+    navigate(`/booking/${show.showTimeId}`, {
+      state: {
+        showtime: {
+          movieTitle: movie?.movieNameEnglish || movie?.movieNameVn || "Movie Booking",
+          cinemaName: selectedCinema,
+          hall: show.cinemaRoomName,
+          dateTime: show.showDateTimeISO,
+          duration: movie?.duration || 120,
+        }
+      }
+    });
   }
 
   if (loading) {
@@ -528,7 +532,7 @@ export default function ShowtimePage() {
                 showtimes={filteredShowtimes}
                 onSelect={handleSelectShowtime}
                 expanded={true}
-                onToggle={() => {}} // Not toggleable at this level anymore since it's a tab
+                onToggle={() => {}} 
               />
             </div>
           </div>

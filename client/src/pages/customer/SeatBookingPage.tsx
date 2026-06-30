@@ -41,7 +41,6 @@ function CountdownTimer({ lockedUntil }: { lockedUntil: string }) {
   );
 }
 
-// ─── SeatBtn ────────────────────────────────────────────────────────────────
 
 function SeatBtn({
   seat, selected, conflict, onToggle,
@@ -74,7 +73,6 @@ function SeatBtn({
   );
 }
 
-// ─── Page ───────────────────────────────────────────────────────────────────
 
 type Screen = "map" | "confirming" | "confirmed";
 
@@ -83,7 +81,6 @@ export default function SeatBookingPage() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Try to get showtime details from route state, otherwise fallback
   const showtimeDetails = location.state?.showtime || {
     movieTitle: "Movie Booking",
     cinemaName: "CinePrime",
@@ -116,12 +113,10 @@ export default function SeatBookingPage() {
     }
   }, [showtimeId]);
 
-  // Initial load
   useEffect(() => {
     loadSeats();
   }, [loadSeats]);
 
-  // Poll every 10s for seat refresh
   useEffect(() => {
     pollRef.current = setInterval(async () => {
       if (!showtimeId) return;
@@ -131,7 +126,6 @@ export default function SeatBookingPage() {
           setSeats((prev) =>
             fresh.map((s) => {
               const p = prev.find((x) => x.seatId === s.seatId);
-              // keep selected status on frontend unless it became booked/locked by someone else
               return p && selected.has(s.seatId) && s.status === "AVAILABLE" ? p : s;
             })
           );
@@ -207,7 +201,6 @@ export default function SeatBookingPage() {
     );
   }
 
-  // Derived
   const pickedSeats = seats.filter((s) => selected.has(s.seatId));
   const total = pickedSeats.reduce((sum, s) => sum + s.price, 0);
   const rows = Array.from(new Set(seats.map((s) => s.row))).sort();
@@ -217,7 +210,6 @@ export default function SeatBookingPage() {
     weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
   });
 
-  // ── Confirmed ─────────────────────────────────────────────────────────────
   if (screen === "confirmed" && confirmation) {
     return (
       <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-4">
@@ -268,7 +260,6 @@ export default function SeatBookingPage() {
     );
   }
 
-  // ── Seat map ──────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#050505] text-white" style={{ fontFamily: "'DM Sans', sans-serif" }}>
 
@@ -323,8 +314,6 @@ export default function SeatBookingPage() {
             {rows.map((row, idx) => {
               const vip = isVipRow(row);
               const rowSeats = byRow(row);
-              // Dynamic layout based on length for better display
-              // For standard 10 seats: [2] - [6] - [2]
               let left: Seat[] = [], middle: Seat[] = [], right: Seat[] = [];
               if (rowSeats.length === 10) {
                 left = rowSeats.slice(0, 2);
