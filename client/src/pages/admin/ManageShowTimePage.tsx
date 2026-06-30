@@ -51,13 +51,26 @@ export default function ManageShowtimePage() {
   useEffect(() => {
     if (cinemaFilter) {
       showtimeApi.getRooms(Number(cinemaFilter))
-        .then((res) => setRooms(res.result ?? []))
+        .then((res) => {
+          const roomsList = res.result ?? [];
+          setRooms(roomsList);
+          // If current roomFilter is not in the loaded rooms, reset it
+          if (roomFilter && !roomsList.some((r) => r.cinemaRoomId === roomFilter)) {
+            setRoomFilter("");
+          }
+        })
+        .catch(() => {});
+    } else if (cinemas.length > 0) {
+      Promise.all(cinemas.map((c) => showtimeApi.getRooms(c.cinemaId)))
+        .then((results) => {
+          const allRooms = results.flatMap((res) => res.result ?? []);
+          setRooms(allRooms);
+        })
         .catch(() => {});
     } else {
       setRooms([]);
-      setRoomFilter("");
     }
-  }, [cinemaFilter]);
+  }, [cinemaFilter, cinemas, roomFilter]);
 
   const handleSaveShowtime = async (payload: any) => {
     if (editShowtime) {
@@ -208,8 +221,7 @@ export default function ManageShowtimePage() {
               <label className="block mb-1.5" style={{ fontSize: "12px", color: "var(--text-sub)" }}>Room</label>
               <select
                 value={roomFilter} onChange={(e) => setRoomFilter(e.target.value ? Number(e.target.value) : "")}
-                disabled={!cinemaFilter}
-                className="w-full px-3 py-2 rounded-lg border outline-none disabled:opacity-50 cursor-pointer"
+                className="w-full px-3 py-2 rounded-lg border outline-none cursor-pointer"
                 style={{ fontSize: "13px", background: "var(--bg-main)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
               >
                 <option value="">All Rooms</option>
