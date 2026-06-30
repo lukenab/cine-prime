@@ -1,6 +1,7 @@
 import { X, Film, Plus, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import {
+  movieApi,
   MovieApiResponse, TypeResponse, RoomResponse,
   CreateMoviePayload, UpdateMoviePayload, todayPlusDays,
 } from "../api/movieApi";
@@ -30,8 +31,8 @@ type FormState = {
 type Props = {
   open: boolean;
   onClose: () => void;
-  onCreate: (data: CreateMoviePayload) => void;
-  onUpdate: (id: number, data: UpdateMoviePayload) => void;
+  onCreate: (data: CreateMoviePayload) => Promise<void>;
+  onUpdate: (id: number, data: UpdateMoviePayload) => Promise<void>;
   editMovie?: MovieApiResponse | null;
   types: TypeResponse[];
   rooms: RoomResponse[];
@@ -79,6 +80,8 @@ function movieToForm(movie: MovieApiResponse, types: TypeResponse[]): FormState 
 export function MovieModal({ open, onClose, onCreate, onUpdate, editMovie, types, rooms }: Props) {
   const [form, setForm] = useState<FormState>(defaultForm);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState<"largeImage" | "smallImage" | null>(null);
+  const [uploadError, setUploadError] = useState("");
 
   // Reset form fields when modal opens or editMovie changes
   useEffect(() => {
@@ -123,6 +126,29 @@ export function MovieModal({ open, onClose, onCreate, onUpdate, editMovie, types
       form.showTimes.map((st, idx) => (idx === i ? { ...st, [field]: val } : st)),
     );
 
+  const handleImageUpload = async (field: "largeImage" | "smallImage", file?: File) => {
+    if (!file) return;
+
+    if (!file.type.startsWith("image/") || file.size > 5 * 1024 * 1024) {
+      setUploadError("Please choose a JPG, PNG, or WebP image up to 5MB.");
+      return;
+    }
+
+    setUploadError("");
+    setUploadingImage(field);
+    try {
+      const res = await movieApi.uploadImage(file);
+      const url = res.result?.secureUrl || res.result?.url;
+      if (!url) throw new Error("Missing uploaded image URL");
+      set(field, url as FormState[typeof field]);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? "Image upload failed. Please try again.";
+      setUploadError(msg);
+    } finally {
+      setUploadingImage(null);
+    }
+  };
+
   const handleSubmit = async (e: { preventDefault(): void }) => {
     e.preventDefault();
     if (form.typeIds.length === 0) {
@@ -146,7 +172,7 @@ export function MovieModal({ open, onClose, onCreate, onUpdate, editMovie, types
           ...(form.smallImage && { smallImage: form.smallImage }),
           ...(form.typeIds.length > 0 && { typeIds: form.typeIds }),
         };
-        onUpdate(editMovie.movieId, payload);
+        await onUpdate(editMovie.movieId, payload);
       } else {
         const payload: CreateMoviePayload = {
           movieNameEnglish: form.movieNameEnglish,
@@ -165,9 +191,9 @@ export function MovieModal({ open, onClose, onCreate, onUpdate, editMovie, types
             cinemaRoomId: Number(st.cinemaRoomId),
             showDate: st.showDate,
             startTime: st.startTime,
-          })),
+            })),
         };
-        onCreate(payload);
+        await onCreate(payload);
       }
       onClose();
     } finally {
@@ -328,10 +354,15 @@ export function MovieModal({ open, onClose, onCreate, onUpdate, editMovie, types
           {/* ── Poster Images ── */}
           <div>
             <p style={sectionLabel}>Poster Images</p>
+            {uploadError && (
+              <p className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600">
+                {uploadError}
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label style={fieldLabel}>
-                  Large Image URL {!editMovie && <span className="text-rose-500">*</span>}
+                  Large Poster {!editMovie && <span className="text-rose-500">*</span>}
                 </label>
                 <input
                   required={!editMovie}
@@ -340,15 +371,29 @@ export function MovieModal({ open, onClose, onCreate, onUpdate, editMovie, types
                   onChange={(e) => set("largeImage", e.target.value)}
                   className={inputClass} style={inputStyle}
                 />
-                {editMovie && (
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(e) => handleImageUpload("largeImage", e.target.files?.[0])}
+                  className={inputClass + " mt-2"} style={inputStyle}
+                />
+                {uploadingImage === "largeImage" && (
                   <p style={{ fontSize: "11px", color: "var(--text-sub)", marginTop: "4px" }}>
-                    Leave blank to keep existing
+                    Uploading...
                   </p>
+                )}
+                {form.largeImage && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <img src={form.largeImage} alt="Large poster preview" className="h-16 w-12 rounded-md object-cover border" style={{ borderColor: "var(--border-color)" }} />
+                    <p className="min-w-0 flex-1 truncate" style={{ fontSize: "11px", color: "var(--text-sub)" }}>
+                      {form.largeImage}
+                    </p>
+                  </div>
                 )}
               </div>
               <div>
                 <label style={fieldLabel}>
-                  Small Image URL {!editMovie && <span className="text-rose-500">*</span>}
+                  Small Poster {!editMovie && <span className="text-rose-500">*</span>}
                 </label>
                 <input
                   required={!editMovie}
@@ -357,10 +402,24 @@ export function MovieModal({ open, onClose, onCreate, onUpdate, editMovie, types
                   onChange={(e) => set("smallImage", e.target.value)}
                   className={inputClass} style={inputStyle}
                 />
-                {editMovie && (
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(e) => handleImageUpload("smallImage", e.target.files?.[0])}
+                  className={inputClass + " mt-2"} style={inputStyle}
+                />
+                {uploadingImage === "smallImage" && (
                   <p style={{ fontSize: "11px", color: "var(--text-sub)", marginTop: "4px" }}>
-                    Leave blank to keep existing
+                    Uploading...
                   </p>
+                )}
+                {form.smallImage && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <img src={form.smallImage} alt="Small poster preview" className="h-16 w-12 rounded-md object-cover border" style={{ borderColor: "var(--border-color)" }} />
+                    <p className="min-w-0 flex-1 truncate" style={{ fontSize: "11px", color: "var(--text-sub)" }}>
+                      {form.smallImage}
+                    </p>
+                  </div>
                 )}
               </div>
             </div>

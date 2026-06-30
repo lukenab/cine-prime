@@ -8,10 +8,14 @@ export type EmployeeStatus = "Active" | "Inactive";
 
 export interface EmployeeData {
   id: string;
+  employeeCode: string;
   accountId: string;
+  cinemaId: string;
   fullName: string;
   phoneNumber: string;
   position: string;
+  department: string;
+  employmentType: string;
   status: EmployeeStatus;
   hireDate: string;
   avatar: string;
@@ -33,13 +37,40 @@ function gradientFromId(id: string): string {
   return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
 }
 
+const DEPARTMENT_LABELS: Record<string, string> = {
+  BOX_OFFICE: "Box Office",
+  CONCESSION: "Concession",
+  FLOOR: "Floor",
+  PROJECTION: "Projection",
+  MANAGEMENT: "Management",
+  CUSTOMER_SERVICE: "Customer Service",
+};
+
+const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
+  FULL_TIME: "Full-time",
+  PART_TIME: "Part-time",
+  PROBATION: "Probation",
+  INTERN: "Intern",
+  CONTRACT: "Contract",
+};
+
+const POSITION_LABELS: Record<string, string> = {
+  STAFF: "Staff",
+  SUPERVISOR: "Supervisor",
+  MANAGER: "Manager",
+};
+
 function mapResponse(r: EmployeeResponse): EmployeeData {
   return {
     id: r.employeeId,
+    employeeCode: r.employeeCode || "—",
     accountId: r.accountId,
+    cinemaId: r.cinemaId || "—",
     fullName: r.fullName,
     phoneNumber: r.phoneNumber,
-    position: r.position,
+    position: POSITION_LABELS[r.position] ?? r.position,
+    department: r.department ? DEPARTMENT_LABELS[r.department] ?? r.department : "—",
+    employmentType: r.employmentType ? EMPLOYMENT_TYPE_LABELS[r.employmentType] ?? r.employmentType : "—",
     status: r.status === "ACTIVE" ? "Active" : "Inactive",
     hireDate: r.hireDate
       ? new Date(r.hireDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
@@ -197,7 +228,9 @@ export default function ManageEmployeePage() {
     const matchSearch =
       !q ||
       e.fullName.toLowerCase().includes(q) ||
+      e.employeeCode.toLowerCase().includes(q) ||
       e.position.toLowerCase().includes(q) ||
+      e.department.toLowerCase().includes(q) ||
       e.phoneNumber.includes(q) ||
       e.id.toLowerCase().includes(q);
     const matchStatus = !statusFilter || e.status === statusFilter;
@@ -321,7 +354,7 @@ export default function ManageEmployeePage() {
           <table className="w-full">
             <thead>
               <tr className="border-b" style={{ borderColor: "var(--border-color)", backgroundColor: "rgba(128,128,128,0.04)" }}>
-                {["Employee", "Phone", "Position", "Status", "Hire Date"].map((h) => (
+                {["Employee", "Code", "Phone", "Position", "Department", "Type", "Status", "Hire Date"].map((h) => (
                   <th key={h} className="px-5 py-3.5 text-left">
                     <span style={{ color: "var(--text-sub)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>{h}</span>
                   </th>
@@ -335,7 +368,7 @@ export default function ManageEmployeePage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-16 text-center">
+                  <td colSpan={9} className="px-5 py-16 text-center">
                     <div className="flex justify-center">
                       <div className="w-6 h-6 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
                     </div>
@@ -343,7 +376,7 @@ export default function ManageEmployeePage() {
                 </tr>
               ) : pageItems.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>
+                  <td colSpan={9} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>
                     {employees.length === 0 ? "No employees yet. Click Add Employee to get started." : "No employees match your filters."}
                   </td>
                 </tr>
@@ -362,10 +395,15 @@ export default function ManageEmployeePage() {
                         <div>
                           <p style={{ fontSize: "14px", fontWeight: 500, color: "var(--text-main)" }}>{emp.fullName}</p>
                           <p style={{ fontSize: "11px", color: "var(--text-sub)", marginTop: "2px", fontFamily: "monospace" }}>
-                            {emp.id.slice(0, 8)}…
+                            {emp.cinemaId}
                           </p>
                         </div>
                       </div>
+                    </td>
+
+                    {/* Code */}
+                    <td className="px-5 py-3.5">
+                      <span style={{ fontSize: "12px", color: "var(--text-sub)", fontFamily: "monospace" }}>{emp.employeeCode}</span>
                     </td>
 
                     {/* Phone */}
@@ -379,6 +417,16 @@ export default function ManageEmployeePage() {
                     {/* Position */}
                     <td className="px-5 py-3.5">
                       <p style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-main)" }}>{emp.position}</p>
+                    </td>
+
+                    {/* Department */}
+                    <td className="px-5 py-3.5">
+                      <p style={{ fontSize: "12px", color: "var(--text-sub)" }}>{emp.department}</p>
+                    </td>
+
+                    {/* Employment Type */}
+                    <td className="px-5 py-3.5">
+                      <p style={{ fontSize: "12px", color: "var(--text-sub)" }}>{emp.employmentType}</p>
                     </td>
 
                     {/* Status */}

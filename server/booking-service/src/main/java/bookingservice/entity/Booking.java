@@ -2,6 +2,8 @@ package bookingservice.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import lombok.experimental.FieldDefaults;
+
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import java.math.BigDecimal;
@@ -14,72 +16,69 @@ import java.util.List;
 @Table(name = "booking")
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
 @Builder
 public class Booking {
 
     @Id
     @Column(name = "booking_id", length = 50)
-    private String bookingId;
-
-    // --- PLAIN FIELDS (Không map quan hệ ra ngoài service) ---
+    @GeneratedValue(strategy = GenerationType.UUID)
+    String bookingId;
     @Column(name = "account_id", length = 50)
-    private String accountId;
+    String accountId;
 
     @Column(name = "member_id", length = 50)
-    private String memberId;
+    String memberId;
 
     @Column(name = "showtime_id")
-    private Long showtimeId;
-    // ---------------------------------------------------------
+    Long showtimeId;
 
     @Column(name = "movie_name")
-    private String movieName;
+    String movieName;
 
     @Column(name = "show_date")
-    private LocalDate showDate;
+    LocalDate showDate;
 
     @Column(name = "start_time")
-    private LocalTime startTime;
+    LocalTime startTime;
 
     @Column(name = "cinema_room_name")
-    private String cinemaRoomName;
+    String cinemaRoomName;
 
     @Column(name = "total_amount", precision = 12, scale = 2)
-    private BigDecimal totalAmount;
+    BigDecimal totalAmount;
 
     @Column(name = "points_used")
-    private Integer pointsUsed;
+    Integer pointsUsed;
 
     @Column(name = "points_discount", precision = 12, scale = 2)
-    private BigDecimal pointsDiscount;
+    BigDecimal pointsDiscount;
 
     @Column(name = "final_amount", precision = 12, scale = 2)
-    private BigDecimal finalAmount;
+    BigDecimal finalAmount;
 
     @Column(name = "booking_type")
-    private String bookingType;
+    String bookingType;
 
     @Column(name = "status", length = 20)
-    private String status;
+    String status;
 
     @Column(name = "created_by")
-    private String createdBy;
+    String createdBy;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
-    private LocalDateTime createdAt;
+    LocalDateTime createdAt;
 
     @UpdateTimestamp
     @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
+    LocalDateTime updatedAt;
 
     @Column(name = "expires_at")
-    private LocalDateTime expiresAt;
-
-    // QUAN HỆ NỘI BỘ TRONG SERVICE
+    LocalDateTime expiresAt;
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<BookingItem> bookingDetails;
+    List<BookingItem> bookingDetails;
 
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL)
-    private List<Ticket> tickets;
+    List<Ticket> tickets;
 }

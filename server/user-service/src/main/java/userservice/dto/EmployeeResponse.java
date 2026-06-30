@@ -6,7 +6,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import userservice.entity.EmployeeStatus;
+import userservice.enums.EmployeeDepartment;
+import userservice.enums.EmployeePosition;
+import userservice.enums.EmployeeStatus;
+import userservice.enums.EmploymentType;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -19,7 +22,11 @@ import java.time.LocalDateTime;
 public class EmployeeResponse {
     // Employee fields
     String employeeId;
-    String position;
+    String employeeCode;
+    String cinemaId;
+    EmployeePosition position;
+    EmployeeDepartment department;
+    EmploymentType employmentType;
     LocalDate hireDate;
     EmployeeStatus status;
     LocalDateTime createdAt;

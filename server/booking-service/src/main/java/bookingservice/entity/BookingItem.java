@@ -2,48 +2,51 @@ package bookingservice.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import lombok.experimental.FieldDefaults;
+
 import java.math.BigDecimal;
 
 @Entity
 @Table(name = "booking_detail")
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
 @Builder
 public class BookingItem {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "detail_id")
-    private Long detailId;
+    Long detailId;
 
     // --- PLAIN FIELDS ---
     @Column(name = "showtime_seat_id")
-    private Long showtimeSeatId; 
+    Long showtimeSeatId; 
     // ---------------------
 
     @Column(name = "seat_code", length = 20)
-    private String seatCode;
+    String seatCode;
 
     @Column(name = "seat_type", length = 50)
-    private String seatType;
+    String seatType;
 
     @Column(name = "unit_price", precision = 12, scale = 2)
-    private BigDecimal unitPrice;
+    BigDecimal unitPrice;
 
     @Column(name = "points_redeemed")
-    private Integer pointsRedeemed;
+    Integer pointsRedeemed;
 
     @Column(name = "is_from_points")
-    private Boolean isFromPoints;
+    Boolean isFromPoints;
 
     @Version
-    private Integer version;
+    Integer version;
 
     // QUAN HỆ NỘI BỘ TRONG SERVICE
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "booking_id", referencedColumnName = "booking_id")
-    private Booking booking;
+    Booking booking;
 
     @OneToOne(mappedBy = "bookingDetail", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private Ticket ticket;
+    Ticket ticket;
 }
