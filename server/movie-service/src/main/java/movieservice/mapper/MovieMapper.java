@@ -17,6 +17,8 @@ import movieservice.dto.response.TypeMovieResponse;
 import movieservice.entity.CinemaRoom;
 import movieservice.entity.Movie;
 import movieservice.entity.MovieType;
+import movieservice.entity.ShowTime;
+import movieservice.dto.response.ShowTimeResponse;
 
 @Mapper(componentModel = "spring", unmappedTargetPolicy = org.mapstruct.ReportingPolicy.IGNORE)
 public interface MovieMapper {
@@ -39,6 +41,10 @@ public interface MovieMapper {
     MovieType toType(TypeRequest typeRequest);
     TypeMovieResponse toMovieResponse(MovieType typeMovie);
     List<TypeMovieResponse> toTypeResponseList(List<MovieType> movieTypes);
+
+    @Mapping(source = "cinemaRoom.cinemaRoomId", target = "cinemaRoomId")
+    @Mapping(source = "cinemaRoom.cinemaRoomName", target = "cinemaRoomName")
+    ShowTimeResponse toShowTimeResponse(ShowTime showTime);
     // TRẢ LỜI: Hàm mapTypesToGenreNames dùng để trích xuất tên thể loại phim (typeName) từ Entity MovieType. 
     // Nhờ hàm này, khi convert sang MovieResponse, danh sách thể loại phim sẽ hiển thị dưới dạng List<String> (ví dụ: ["Hành động", "Kinh dị"]) thay vì List<Object> phức tạp.
     @Named("mapTypesToGenreNames")

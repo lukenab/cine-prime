@@ -5,6 +5,8 @@ export type ShowTimeResponse = {
   showDate: string | number[];
   startTime: string | number[];
   endTime: string | number[];
+  cinemaRoomId: number;
+  cinemaRoomName: string;
   updateAt: string;
 };
 

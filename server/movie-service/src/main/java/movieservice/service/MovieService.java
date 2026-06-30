@@ -115,15 +115,6 @@ public class MovieService {
             movie.setMovieTypes(types);
         }
 
-        try {
-            Map uploadSmallImage = uploadImage(request.getSmallImage());
-            Map uploadLagreImage = uploadImage(request.getLargeImage());
-            movie.setSmallImage(uploadSmallImage.get("url").toString());
-            movie.setLargeImage(uploadLagreImage.get("url").toString());
-        } catch (Exception e) {
-            throw new AppException(MovieErrorCode.UPLOAD_IMAGE_FAILED);
-        }
-
         Movie finalSavedMovie = movieRepository.save(movie);
 
         logAction("1", "Admin System", "movie - id:" + finalSavedMovie.getMovieId(),

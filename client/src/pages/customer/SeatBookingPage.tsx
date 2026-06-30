@@ -324,12 +324,16 @@ export default function SeatBookingPage() {
               const vip = isVipRow(row);
               const rowSeats = byRow(row);
               // Dynamic layout based on length for better display
-              // For standard 8 seats: [2] - [4] - [2]
+              // For standard 10 seats: [2] - [6] - [2]
               let left: Seat[] = [], middle: Seat[] = [], right: Seat[] = [];
-              if (rowSeats.length >= 8) {
+              if (rowSeats.length === 10) {
                 left = rowSeats.slice(0, 2);
-                middle = rowSeats.slice(2, 6);
-                right = rowSeats.slice(6, 8);
+                middle = rowSeats.slice(2, 8);
+                right = rowSeats.slice(8, 10);
+              } else if (rowSeats.length >= 8) {
+                left = rowSeats.slice(0, 2);
+                middle = rowSeats.slice(2, rowSeats.length - 2);
+                right = rowSeats.slice(rowSeats.length - 2, rowSeats.length);
               } else {
                 middle = rowSeats; // fallback
               }

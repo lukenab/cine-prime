@@ -107,7 +107,10 @@ export function MovieCard({ movie }: MovieCardProps) {
         style={{ backdropFilter: "blur(0px)" }}
       >
         <button
-          onClick={() => navigate("/booking/1")}
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/showtime/${movie.id}`);
+          }}
           className="flex items-center gap-2 px-5 py-2.5 rounded-full"
           style={{
             background: "linear-gradient(135deg, #FFD700, #FFA500)",

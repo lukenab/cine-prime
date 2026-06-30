@@ -17,5 +17,9 @@ public class ShowTimeResponse {
 
     private LocalTime endTime;
 
+    private Long cinemaRoomId;
+
+    private String cinemaRoomName;
+
     private LocalDateTime updateAt;
 }
