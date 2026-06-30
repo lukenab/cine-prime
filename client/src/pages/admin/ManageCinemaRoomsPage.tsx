@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, RefreshCw, AlertCircle, Building2, Users, Armchair, X, ChevronRight, Check } from "lucide-react";
+import { Plus, Search, RefreshCw, AlertCircle, Building2, Users, Armchair, X, ChevronRight, Check, MapPin } from "lucide-react";
 import { useOutletContext, useNavigate } from "react-router-dom";
-import { movieApi, type RoomResponse, type CreateRoomPayload, type RoomType, ROOM_TYPE_CONFIG } from "../../api/movieApi";
+import { movieApi, type RoomResponse, type CreateRoomPayload, type RoomType, ROOM_TYPE_CONFIG, type ClusterResponse } from "../../api/movieApi";
 
 // ── Add Room Modal ────────────────────────────────────────────────────────────
 
@@ -194,9 +194,11 @@ export default function ManageCinemaRoomsPage() {
   const navigate = useNavigate();
 
   const [rooms, setRooms] = useState<RoomResponse[]>([]);
+  const [clusters, setClusters] = useState<ClusterResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterCluster, setFilterCluster] = useState<string>("ALL");
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -204,10 +206,13 @@ export default function ManageCinemaRoomsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await movieApi.getRooms();
-      setRooms(res.result ?? []);
-    } catch (err: any) {
-      setError(err?.response?.data?.message ?? "Failed to load cinema rooms.");
+      const [roomsRes, clustersRes] = await Promise.allSettled([
+        movieApi.getRooms(),
+        movieApi.getClusters(),
+      ]);
+      if (roomsRes.status === "fulfilled") setRooms(roomsRes.value.result ?? []);
+      else setError("Failed to load cinema rooms.");
+      if (clustersRes.status === "fulfilled") setClusters(clustersRes.value.result ?? []);
     } finally {
       setLoading(false);
     }
@@ -228,9 +233,11 @@ export default function ManageCinemaRoomsPage() {
     }
   };
 
-  const filtered = rooms.filter((r) =>
-    !searchQuery || r.cinemaRoomName?.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const filtered = rooms.filter((r) => {
+    const matchSearch = !searchQuery || r.cinemaRoomName?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchCluster = filterCluster === "ALL" || String((r as any).clusterId) === filterCluster;
+    return matchSearch && matchCluster;
+  });
 
   const totalSeats = rooms.reduce((sum, r) => sum + (r.seatQuantity ?? 0), 0);
 
@@ -301,6 +308,21 @@ export default function ManageCinemaRoomsPage() {
             <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 hover:text-rose-500 text-base" style={{ color: "var(--text-sub)" }}>×</button>
           )}
         </div>
+
+        {/* Cluster filter */}
+        {clusters.length > 0 && (
+          <select
+            value={filterCluster}
+            onChange={(e) => setFilterCluster(e.target.value)}
+            className="px-3.5 py-2.5 rounded-xl border outline-none transition-all"
+            style={{ ...inputStyle, minWidth: "160px", background: "var(--bg-card)" }}
+          >
+            <option value="ALL">All Clusters</option>
+            {clusters.map((c) => (
+              <option key={c.clusterId} value={String(c.clusterId)}>{c.clusterName}</option>
+            ))}
+          </select>
+        )}
 
         <button
           onClick={loadRooms} disabled={loading}
