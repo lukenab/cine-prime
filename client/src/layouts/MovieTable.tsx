@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Pencil, Trash2, ChevronLeft, ChevronRight, Clapperboard, Clock } from "lucide-react";
+import { Eye, Pencil, Trash2, ChevronLeft, ChevronRight, Clapperboard, Clock } from "lucide-react";
 import type { MovieApiResponse } from "../api/movieApi";
 import { formatDisplayDate, toDateStr } from "../api/movieApi";
 
 type Props = {
   movies: MovieApiResponse[];
+  onView: (movie: MovieApiResponse) => void;
   onEdit: (movie: MovieApiResponse) => void;
   onDelete: (id: number) => void;
   searchQuery: string;
@@ -30,7 +31,7 @@ function hasFutureShowtime(movie: MovieApiResponse): boolean {
   return movie.showTimes.some((st) => toDateStr(st.showDate) >= today);
 }
 
-export function MovieTable({ movies, onEdit, onDelete, searchQuery, genreFilter, statusFilter }: Props) {
+export function MovieTable({ movies, onView, onEdit, onDelete, searchQuery, genreFilter, statusFilter }: Props) {
   const [page, setPage] = useState(1);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
 
@@ -180,6 +181,14 @@ export function MovieTable({ movies, onEdit, onDelete, searchQuery, genreFilter,
                     {/* Actions */}
                     <td className="px-5 py-3.5">
                       <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => onView(movie)}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors action-btn"
+                          style={{ color: "var(--text-sub)" }}
+                          title="View detail"
+                        >
+                          <Eye size={14} />
+                        </button>
                         <button
                           onClick={() => onEdit(movie)}
                           className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors action-btn"

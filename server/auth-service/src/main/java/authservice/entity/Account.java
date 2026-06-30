@@ -47,7 +47,7 @@ public class Account {
     LocalDateTime lastLoginAt;
 
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false) // Đã thêm updatable = false
+    @Column(name = "created_at", nullable = false, updatable = false, columnDefinition = "TIMESTAMP DEFAULT NOW()")
     LocalDateTime createdAt;
 
     @UpdateTimestamp

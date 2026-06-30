@@ -4,6 +4,10 @@ server:
 spring:
   application:
     name: movie-service
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 10MB
 
   datasource:
     url: jdbc:postgresql://localhost:5433/movie_db
@@ -11,6 +15,7 @@ spring:
     password: "123456"
     driver-class-name: org.postgresql.Driver
   jpa:
+    defer-datasource-initialization: true
     hibernate:
       ddl-auto: update
     show-sql: false
@@ -18,6 +23,9 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+  sql:
+    init:
+      mode: always
 
 eureka:
   instance:
@@ -26,15 +34,10 @@ eureka:
     serviceUrl:
       defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
 
+jwt:
+  signerKey: 873bcf3b6023c6cfac735831cc01cbd59c6f64c2341050f12e5f0224d7edea62
+
 CLOUDINARY:
   CLOUD_NAME: dzlfgmtbc
   API_KEY: 144287537763843
   API_SECRET: 7kJ1TfEb7kEAVArwaY5jq0ctvlA
-springdoc:
-  api-docs:
-    enabled: true
-    path: /v3/api-docs
-
-  swagger-ui:
-    enabled: true
-    path: /swagger-ui

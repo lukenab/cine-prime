@@ -10,6 +10,10 @@ export const authApi = {
         return axiosClient.post('api/auth/login', data);
     },
 
+    checkAvailability: (params: { username?: string; email?: string }) => {
+        return axiosClient.get('/api/auth/check', { params });
+    },
+
     initiateRegister: (payload: any) => {
         return axiosClient.post('/api/auth/register/initiate', payload);
     },
@@ -35,6 +39,16 @@ export const authApi = {
     },
 
     updateAccount: (accountId: string | undefined, payload: any) => {
-      return axiosClient.put(`/api/accounts/${accountId}`, payload);
-  }
+        return axiosClient.put(`/api/accounts/${accountId}`, payload);
+    },
+
+    logout: () => {
+        // Token đã được interceptor tự đính vào Authorization header
+        // Không cần gửi trong body nữa
+        return axiosClient.post('/api/auth/logout');
+    },
+
+    refresh: (token: string) => {
+        return axiosClient.post('/api/auth/refresh', { token });
+    },
 }

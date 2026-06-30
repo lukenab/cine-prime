@@ -31,8 +31,9 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: create
+    defer-datasource-initialization: true   # chạy data.sql SAU khi Hibernate tạo tables
+    show-sql: false
     properties:
       hibernate:
         format_sql: true
@@ -61,3 +62,9 @@ jwt:
   signerKey: 873bcf3b6023c6cfac735831cc01cbd59c6f64c2341050f12e5f0224d7edea62
   valid-duration: 1800 # in second
   refreshable-duration: 36000 # in second
+
+app:
+  admin:
+    username: ${ADMIN_USERNAME:admin}
+    password: ${ADMIN_PASSWORD:admin}
+    email: ${ADMIN_EMAIL:admin@cineprime.vn}

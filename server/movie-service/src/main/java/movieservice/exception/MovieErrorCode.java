@@ -37,6 +37,8 @@ public enum MovieErrorCode implements BaseErrorCode {
                         "The room has been booked for another showtime.",
                         HttpStatus.CONFLICT),
         UPLOAD_IMAGE_FAILED(5001, "Failed to upload image to Cloudinary", HttpStatus.INTERNAL_SERVER_ERROR),
+        INVALID_IMAGE_FILE(5002, "Invalid image file. Please upload a JPG, PNG, or WebP image up to 5MB.",
+                        HttpStatus.BAD_REQUEST),
 
         INTERNAL_SERVER_ERROR(5000,
                         "Internal server error",
@@ -44,7 +46,13 @@ public enum MovieErrorCode implements BaseErrorCode {
 
 
     GENRE_NOT_FOUND(2010, "Movie genre not found.", HttpStatus.NOT_FOUND),
-    ACTIVE_SHOWTIMES_EXIST(2011, "Cannot delete movie because it still has upcoming showtimes.", HttpStatus.CONFLICT);
+    ACTIVE_SHOWTIMES_EXIST(2011, "Cannot delete movie because it still has upcoming showtimes.", HttpStatus.CONFLICT),
+
+    SEAT_NOT_FOUND(2012, "Seat not found.", HttpStatus.NOT_FOUND),
+
+    SEAT_QUANTITY_EXCEEDS_LIMIT(2013,
+            "Seat quantity exceeds the maximum allowed for this room type.",
+            HttpStatus.BAD_REQUEST);
 
     int code;
     String message;

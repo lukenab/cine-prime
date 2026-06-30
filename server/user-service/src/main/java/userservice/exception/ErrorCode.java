@@ -20,7 +20,10 @@ public enum ErrorCode implements BaseErrorCode {
     AGE_TOO_YOUNG(2007, "User must be at least 18 years old", HttpStatus.BAD_REQUEST),
     AGE_INVALID(2008, "Invalid age! Age must be beetween 18 and 100 yearolds!", HttpStatus.BAD_REQUEST),
     USER_ALREADY_INACTIVE(2010, "User is already inactive", HttpStatus.BAD_REQUEST),
-    USER_ALREADY_ACTIVE(2011, "User is already active", HttpStatus.BAD_REQUEST)
+    USER_ALREADY_ACTIVE(2011, "User is already active", HttpStatus.BAD_REQUEST),
+    EMPLOYEE_NOT_FOUND(2020, "Employee not found!", HttpStatus.NOT_FOUND),
+    EMPLOYEE_ALREADY_DISABLED(2021, "Employee is already disabled!", HttpStatus.BAD_REQUEST),
+    ACCOUNT_ALREADY_EMPLOYEE(2022, "This account is already linked to an employee!", HttpStatus.CONFLICT)
     ;
 
     int code;

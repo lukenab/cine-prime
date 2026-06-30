@@ -6,11 +6,14 @@ import authservice.dto.response.AccountResponse;
 import authservice.dto.response.IntrospectResponse;
 import authservice.service.AuthenticationService;
 import com.nimbusds.jose.JOSEException;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import movie.theater.common.dto.ApiResponse;
+import movie.theater.common.exception.AppException;
+import movie.theater.common.exception.GlobalErrorCode;
 import org.springframework.web.bind.annotation.*;
 
 import java.text.ParseException;
@@ -21,6 +24,14 @@ import java.text.ParseException;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class AuthenticationController {
     AuthenticationService authenticationService;
+
+    @GetMapping("/check")
+    ApiResponse<Void> checkFieldAvailability(
+            @RequestParam(required = false) String username,
+            @RequestParam(required = false) String email) {
+        authenticationService.checkFieldAvailability(username, email);
+        return ApiResponse.<Void>builder().message("Available").build();
+    }
 
     @PostMapping("/register/initiate")
     ApiResponse<String> initiateRegistration(@Valid @RequestBody RegisterRequest request) {
@@ -53,15 +64,20 @@ public class AuthenticationController {
     }
 
     @PostMapping("/logout")
-    ApiResponse<Void> logout(@RequestBody LogoutRequest request) throws ParseException, JOSEException {
-        authenticationService.logout(request);
+    ApiResponse<Void> logout(HttpServletRequest request) throws ParseException, JOSEException {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new AppException(GlobalErrorCode.UNAUTHENTICATED);
+        }
+        String token = authHeader.substring(7);
+        authenticationService.logoutByToken(token);
         return ApiResponse.<Void>builder()
                 .message("Logged out successfully")
                 .build();
     }
 
     @PostMapping("/introspect")
-    public ApiResponse<IntrospectResponse> introspect(@RequestBody IntrospectRequest request) throws ParseException, JOSEException {
+    public ApiResponse<IntrospectResponse> introspect(@RequestBody IntrospectRequest request) {
         return ApiResponse.<IntrospectResponse>builder()
                 .result(authenticationService.introspect(request))
                 .build();

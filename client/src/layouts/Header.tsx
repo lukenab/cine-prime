@@ -1,11 +1,23 @@
 import { useAuth } from "../context/AuthContext";
-import { Bell, Search, ChevronRight, User, Settings, LogOut } from "lucide-react";
+import { Bell, Search, ChevronRight, User, Settings, LogOut, Sun, Moon } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+
+const roleLabels: Record<string, string> = {
+  ROLE_ADMIN: "Admin",
+  ROLE_EMPLOYEE: "Employee",
+  ROLE_MEMBER: "Member",
+  ROLE_USER: "User",
+};
+
+function getInitials(username: string): string {
+  return username.slice(0, 2).toUpperCase();
+}
 
 interface HeaderProps {
   activePage: string;
   isDarkMode?: boolean;
+  onToggleTheme?: () => void;
 }
 
 const pageTitles: Record<string, string> = {
@@ -20,7 +32,7 @@ const pageTitles: Record<string, string> = {
   settings: "Settings",
 };
 
-export function Header({ activePage, isDarkMode = true }: HeaderProps) {
+export function Header({ activePage, isDarkMode = true, onToggleTheme }: HeaderProps) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -86,6 +98,23 @@ const handleLogout = () => {
           Thu, Jun 11 2026
         </div>
 
+        {/* Dark / Light mode toggle */}
+        <button
+          onClick={onToggleTheme}
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "8px", width: "36px", height: "36px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--text-sub)", transition: "all 0.15s ease" }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = isDarkMode ? "rgba(255, 215, 0, 0.4)" : "#ca8a04";
+            e.currentTarget.style.color = isDarkMode ? "#FFD700" : "#ca8a04";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = "var(--border-color)";
+            e.currentTarget.style.color = "var(--text-sub)";
+          }}
+          title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+        >
+          {isDarkMode ? <Sun size={15} style={{ color: "#FFD700" }} /> : <Moon size={15} />}
+        </button>
+
         {/* Notification bell */}
         <button
           style={{ position: "relative", background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "8px", width: "36px", height: "36px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--text-sub)", transition: "all 0.15s ease" }}
@@ -123,7 +152,7 @@ const handleLogout = () => {
               userSelect: "none",
             }}
           >
-            JD
+            {getInitials(user?.username ?? "?")}
           </div>
 
           {/* Menu thả xuống */}
@@ -145,8 +174,12 @@ const handleLogout = () => {
             >
               {/* Thông tin nhanh */}
               <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-color)", marginBottom: "4px" }}>
-                <p style={{ color: "var(--text-main)", fontSize: "13.5px", fontWeight: 600, margin: "0 0 2px 0" }}>James Donovan</p>
-                <p style={{ color: "var(--text-sub)", fontSize: "11px", margin: 0 }}>james.d@cineprime.com</p>
+                <p style={{ color: "var(--text-main)", fontSize: "13.5px", fontWeight: 600, margin: "0 0 2px 0" }}>
+                  {user?.username ?? "—"}
+                </p>
+                <p style={{ color: "var(--text-sub)", fontSize: "11px", margin: 0 }}>
+                  {roleLabels[user?.role ?? ""] ?? user?.role ?? ""}
+                </p>
               </div>
 
               {/* Các nút bấm */}

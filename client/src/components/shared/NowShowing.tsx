@@ -1,29 +1,37 @@
-import { useState, useEffect, useRef } from "react";
-import { ChevronLeft, ChevronRight, Flame } from "lucide-react";
+import { useRef } from "react";
+import { ChevronLeft, ChevronRight, Flame, RefreshCw } from "lucide-react";
 import { MovieCard, Movie } from "../../layouts/MovieCard";
-import { movieApi } from "../../api/movieApi";
+import type { MovieApiResponse } from "../../api/movieApi";
 
-export function NowShowing() {
+type Props = {
+  movies: MovieApiResponse[];
+  loading?: boolean;
+  error?: string;
+};
+
+function formatDuration(minutes?: number): string {
+  if (!minutes) return "-";
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return hours > 0 ? `${hours}h ${String(mins).padStart(2, "0")}m` : `${mins}m`;
+}
+
+function toCardMovie(movie: MovieApiResponse, index: number): Movie {
+  return {
+    id: movie.movieId,
+    title: movie.movieNameEnglish || movie.movieNameVn || "Untitled Movie",
+    genre: movie.movieType?.[0] || "Thriller",
+    rating: Number((Math.random() * (9.5 - 7.5) + 7.5).toFixed(1)), // Random rating between 7.5 and 9.5
+    duration: formatDuration(movie.duration),
+    image: movie.largeImage || movie.smallImage,
+    badge: movie.movieId % 2 === 0 ? "NEW" : "HOT",
+    badgeColor: movie.movieId % 2 === 0 ? "#8A2BE2" : "#FF4500",
+  };
+}
+
+export function NowShowing({ movies, loading = false, error = "" }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [nowShowing, setNowShowing] = useState<Movie[]>([]);
-
-  useEffect(() => {
-    movieApi.getAllMovies().then(res => {
-      if (res && res.result) {
-        const mapped = res.result.map(m => ({
-          id: m.movieId,
-          title: m.movieNameEnglish,
-          genre: m.movieType?.[0] || "Thriller",
-          rating: Number((Math.random() * (9.5 - 7.5) + 7.5).toFixed(1)), // Random rating between 7.5 and 9.5
-          duration: `${Math.floor(m.duration / 60)}h ${m.duration % 60}m`,
-          image: m.smallImage,
-          badge: m.movieId % 2 === 0 ? "NEW" : "HOT",
-          badgeColor: m.movieId % 2 === 0 ? "#8A2BE2" : "#FF4500"
-        }));
-        setNowShowing(mapped);
-      }
-    }).catch(console.error);
-  }, []);
+  const cardMovies = movies.filter((movie) => movie.status !== false).map(toCardMovie);
 
   const scroll = (dir: "left" | "right") => {
     if (!scrollRef.current) return;
@@ -33,7 +41,6 @@ export function NowShowing() {
   return (
     <section style={{ backgroundColor: "#050505", paddingBottom: "64px" }}>
       <div className="max-w-7xl mx-auto px-6">
-        {/* Section header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
             <div
@@ -53,11 +60,12 @@ export function NowShowing() {
               >
                 Now Showing
               </h2>
-              <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.8rem" }}>{nowShowing.length} movies available this week</p>
+              <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.8rem" }}>
+                {loading ? "Loading movies..." : `${cardMovies.length} movies available this week`}
+              </p>
             </div>
           </div>
 
-          {/* Scroll controls */}
           <div className="flex gap-2">
             <button
               onClick={() => scroll("left")}
@@ -83,20 +91,38 @@ export function NowShowing() {
           </div>
         </div>
 
-        {/* Horizontal scroll row */}
-        <div
-          ref={scrollRef}
-          className="flex overflow-x-auto pb-4"
-          style={{
-            gap: "20px",
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
-          }}
-        >
-          {nowShowing.map((movie) => (
-            <MovieCard key={movie.id} movie={movie} />
-          ))}
-        </div>
+        {loading && (
+          <div className="flex items-center gap-2" style={{ color: "rgba(255,255,255,0.6)", minHeight: "360px" }}>
+            <RefreshCw size={18} className="animate-spin" />
+            <span>Loading movies...</span>
+          </div>
+        )}
+
+        {!loading && error && (
+          <div style={{ color: "rgba(255,255,255,0.65)", minHeight: "120px" }}>{error}</div>
+        )}
+
+        {!loading && !error && cardMovies.length === 0 && (
+          <div style={{ color: "rgba(255,255,255,0.65)", minHeight: "120px" }}>
+            No movies are available yet.
+          </div>
+        )}
+
+        {!loading && !error && cardMovies.length > 0 && (
+          <div
+            ref={scrollRef}
+            className="flex overflow-x-auto pb-4"
+            style={{
+              gap: "20px",
+              scrollbarWidth: "none",
+              msOverflowStyle: "none",
+            }}
+          >
+            {cardMovies.map((movie) => (
+              <MovieCard key={movie.id} movie={movie} />
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

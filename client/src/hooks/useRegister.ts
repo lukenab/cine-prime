@@ -24,7 +24,9 @@ export function useRegister() {
     email: "",
     password: "",
     phone: "",
-    dob: "",
+    dobDay: "",
+    dobMonth: "",
+    dobYear: "",
     gender: "",
     identityCard: "",
     address: "",
@@ -35,6 +37,9 @@ export function useRegister() {
     if (errors[e.target.name]) {
       setErrors((prev) => ({ ...prev, [e.target.name]: "" }));
     }
+    if (e.target.name.startsWith("dob") && errors.dob) {
+      setErrors((prev) => ({ ...prev, dob: "" }));
+    }
   };
 
   const validateClientForm = () => {
@@ -44,7 +49,11 @@ export function useRegister() {
     if (!form.email.trim()) clientErrors.email = "Email address must not be blank";
     if (!form.password.trim()) clientErrors.password = "Password must not be blank";
     if (!form.phone.trim()) clientErrors.phone = "Phone number must not be blank";
-    if (!form.dob) clientErrors.dob = "Date of birth must not be null";
+    if (!form.dobDay || !form.dobMonth || !form.dobYear) {
+      clientErrors.dob = "Date of birth must not be null";
+    } else if (!buildDateOfBirth()) {
+      clientErrors.dob = "Invalid date of birth";
+    }
     if (!form.gender) clientErrors.gender = "Gender must not be blank";
     if (!form.identityCard.trim()) clientErrors.identityCard = "Identity card must not be blank";
     if (!form.address.trim()) clientErrors.address = "Address must not be blank";
@@ -59,11 +68,25 @@ export function useRegister() {
     email: form.email,
     fullName: form.fullName,
     phoneNumber: form.phone,
-    dateOfBirth: form.dob,
+    dateOfBirth: buildDateOfBirth(),
     gender: form.gender,
     address: form.address,
     identityCard: form.identityCard,
   });
+
+  const buildDateOfBirth = () => {
+    const year = Number(form.dobYear);
+    const month = Number(form.dobMonth);
+    const day = Number(form.dobDay);
+    if (!year || !month || !day) return "";
+
+    const date = new Date(year, month - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+      return "";
+    }
+
+    return `${form.dobYear}-${form.dobMonth.padStart(2, "0")}-${form.dobDay.padStart(2, "0")}`;
+  };
 
   const handleInitiate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,6 +182,7 @@ export function useRegister() {
     errors,
     generalError,
     form,
+    setForm,
     handleChange,
     handleInitiate,
     handleVerifyOtp,

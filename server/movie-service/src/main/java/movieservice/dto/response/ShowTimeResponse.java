@@ -1,25 +1,28 @@
 package movieservice.dto.response;
 
+import lombok.AccessLevel;
 import lombok.Data;
+import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 @Data
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class ShowTimeResponse {
 
-    private Long showTimeId;
+    Long showTimeId;
 
-    private LocalDate showDate;
+    LocalDate showDate;
 
-    private LocalTime startTime;
+    LocalTime startTime;
 
-    private LocalTime endTime;
+    LocalTime endTime;
 
-    private Long cinemaRoomId;
+    Long cinemaRoomId;
 
-    private String cinemaRoomName;
+    String cinemaRoomName;
 
-    private LocalDateTime updateAt;
+    LocalDateTime updateAt;
 }

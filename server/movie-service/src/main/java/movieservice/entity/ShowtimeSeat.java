@@ -2,6 +2,7 @@ package movieservice.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -19,42 +20,43 @@ import java.time.LocalDateTime;
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor
 @Builder
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class ShowtimeSeat {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "showtime_seat_id")
-    private Long showtimeSeatId;
+    Long showtimeSeatId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "showtime_id", nullable = false)
-    private ShowTime showTime;
+    ShowTime showTime;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "seat_id", nullable = false)
-    private Seat seat;
+    Seat seat;
 
     /** Snapshot — không đổi dù seat master thay đổi */
     @Column(name = "seat_code", nullable = false, length = 10)
-    private String seatCode;
+    String seatCode;
 
     @Column(name = "seat_type", nullable = false, length = 20)
-    private String seatType;                    // NORMAL | VIP
+    String seatType;                    // NORMAL | VIP
 
     @Column(name = "price", nullable = false, precision = 10, scale = 2)
-    private BigDecimal price;
+    BigDecimal price;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
-    private SeatStatus status = SeatStatus.AVAILABLE;
+    SeatStatus status = SeatStatus.AVAILABLE;
 
     @Column(name = "reserved_at")
-    private LocalDateTime reservedAt;
+    LocalDateTime reservedAt;
 
     /** Ghế tự động AVAILABLE lại khi vượt thời điểm này mà booking vẫn PENDING */
     @Column(name = "reserved_expires_at")
-    private LocalDateTime reservedExpiresAt;
+    LocalDateTime reservedExpiresAt;
 
     public enum SeatStatus { AVAILABLE, RESERVED, SOLD }
 }

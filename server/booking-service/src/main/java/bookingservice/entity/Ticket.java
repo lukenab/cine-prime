@@ -2,90 +2,83 @@ package bookingservice.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import lombok.experimental.FieldDefaults;
 
+import org.hibernate.annotations.CreationTimestamp;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 @Entity
-@Table(name = "ticket", indexes = {
-    @Index(name = "idx_ticket_booking",  columnList = "booking_id"),
-    @Index(name = "idx_ticket_member",   columnList = "member_id"),
-    @Index(name = "idx_ticket_showtime", columnList = "showtime_id"),
-    @Index(name = "idx_ticket_status",   columnList = "status"),
-})
+@Table(name = "ticket")
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
 @Builder
 public class Ticket {
 
     @Id
-    @Column(name = "ticket_id", length = 36)
-    private String ticketId;                    // UUID
+    @Column(name = "ticket_id", length = 50)
+    String ticketId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "booking_id")
-    private Booking booking;                    // nullable — bán trực tiếp không qua booking
+    // --- PLAIN FIELDS ---
+    @Column(name = "showtime_id")
+    Long showtimeId;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "detail_id")
-    private BookingDetail bookingDetail;
+    @Column(name = "account_id", length = 50)
+    String accountId;
 
-    @Column(name = "showtime_id", nullable = false)
-    private Long showtimeId;
+    @Column(name = "member_id", length = 50)
+    String memberId;
+    // ---------------------
 
-    // ── Snapshot thông tin vé (bất biến) ─────────────────────
-    @Column(name = "movie_name", length = 255)
-    private String movieName;
+    @Column(name = "movie_name")
+    String movieName;
 
-    @Column(name = "cinema_room_name", length = 100)
-    private String cinemaRoomName;
+    @Column(name = "cinema_room_name")
+    String cinemaRoomName;
 
     @Column(name = "show_date")
-    private LocalDate showDate;
+    LocalDate showDate;
 
     @Column(name = "start_time")
-    private LocalTime startTime;
+    LocalTime startTime;
 
-    @Column(name = "seat_code", length = 10)
-    private String seatCode;
+    @Column(name = "seat_code", length = 20)
+    String seatCode;
 
-    @Column(name = "seat_type", length = 20)
-    private String seatType;
+    @Column(name = "seat_type", length = 50)
+    String seatType;
 
-    @Column(name = "price", precision = 10, scale = 2)
-    private BigDecimal price;
+    @Column(name = "price", precision = 12, scale = 2)
+    BigDecimal price;
 
-    @Column(name = "is_from_points", nullable = false)
-    @Builder.Default
-    private Boolean isFromPoints = false;
+    @Column(name = "is_from_points")
+    Boolean isFromPoints;
 
-    // ── Thông tin người mua ───────────────────────────────────
-    @Column(name = "member_id", length = 10)
-    private String memberId;
+    @Column(name = "qr_code")
+    String qrCode;
 
-    @Column(name = "account_id", length = 36)
-    private String accountId;
+    @Column(name = "status", length = 20)
+    String status;
 
-    @Column(name = "qr_code", length = 500)
-    private String qrCode;
-
-    // ── Trạng thái ───────────────────────────────────────────
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
-    @Builder.Default
-    private TicketStatus status = TicketStatus.VALID;
-
-    @Column(name = "issued_at", nullable = false)
-    @Builder.Default
-    private LocalDateTime issuedAt = LocalDateTime.now();
+    @CreationTimestamp
+    @Column(name = "issued_at", updatable = false)
+    LocalDateTime issuedAt;
 
     @Column(name = "used_at")
-    private LocalDateTime usedAt;
+    LocalDateTime usedAt;
 
-    @Column(name = "issued_by", length = 36)
-    private String issuedBy;                    // account_id nhân viên phát vé
+    @Column(name = "issued_by")
+    String issuedBy;
 
-    public enum TicketStatus { VALID, USED, CANCELLED }
+    // QUAN HỆ NỘI BỘ TRONG SERVICE
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "booking_id", referencedColumnName = "booking_id")
+    Booking booking;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "detail_id", referencedColumnName = "detail_id")
+    BookingItem bookingDetail;
 }

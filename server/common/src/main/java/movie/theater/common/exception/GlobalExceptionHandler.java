@@ -4,6 +4,7 @@ import jakarta.validation.ConstraintViolation;
 import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.dto.ApiResponse;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -22,12 +23,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(value = RuntimeException.class)
     ResponseEntity<ApiResponse<?>> handlingRuntimeException(RuntimeException exception){
-        exception.printStackTrace();
+        log.error("Unhandled exception: ", exception);
+        GlobalErrorCode errorCode = GlobalErrorCode.UNCATEGORIZED_EXCEPTION;
         ApiResponse<?> apiResponse = ApiResponse.builder()
-                .code(GlobalErrorCode.UNCATEGORIZED_EXCEPTION.getCode())
-                .message(GlobalErrorCode.UNCATEGORIZED_EXCEPTION.getMessage())
+                .code(errorCode.getCode())
+                .message(errorCode.getMessage())
                 .build();
-        return ResponseEntity.badRequest().body(apiResponse);
+        return ResponseEntity.status(errorCode.getStatusCode()).body(apiResponse);
     }
 
     @ExceptionHandler(value = AppException.class)
@@ -44,13 +46,15 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(value = MethodArgumentNotValidException.class)
     ResponseEntity<ApiResponse<?>> handlingValidation(MethodArgumentNotValidException exception){
-        String enumKey = exception.getFieldError().getDefaultMessage();
+        String validationMessage = exception.getFieldError() != null
+                ? exception.getFieldError().getDefaultMessage()
+                : GlobalErrorCode.INVALID_KEY.getMessage();
         GlobalErrorCode errorCode = GlobalErrorCode.INVALID_KEY;
 
         Map<String, Object> attributes = null;
 
         try {
-            errorCode = GlobalErrorCode.valueOf(enumKey);
+            errorCode = GlobalErrorCode.valueOf(validationMessage);
 
             var constraintViolation = exception.getBindingResult()
                     .getAllErrors().get(0).unwrap(ConstraintViolation.class);
@@ -60,15 +64,26 @@ public class GlobalExceptionHandler {
             log.info(attributes.toString());
 
         } catch (IllegalArgumentException e) {
+            log.warn("Unrecognized validation message key: {}", validationMessage);
         }
         ApiResponse<?> apiResponse = ApiResponse.builder()
                 .code(errorCode.getCode())
                 .message(Objects.nonNull(attributes) ? mapAttribute(errorCode.getMessage(), attributes)
-                        : errorCode.getMessage())
+                        : validationMessage)
                 .build();
         return ResponseEntity.badRequest().body(apiResponse);
     }
 
+    @ExceptionHandler(value = HttpMessageNotReadableException.class)
+    ResponseEntity<ApiResponse<?>> handlingUnreadableRequest(HttpMessageNotReadableException exception){
+        log.warn("Invalid request body: {}", exception.getMessage());
+        GlobalErrorCode errorCode = GlobalErrorCode.INVALID_KEY;
+        ApiResponse<?> apiResponse = ApiResponse.builder()
+                .code(errorCode.getCode())
+                .message("Invalid request body or date format!")
+                .build();
+        return ResponseEntity.badRequest().body(apiResponse);
+    }
     private String mapAttribute(String message, Map<String, Object> attributes) {
         // @Size uses "min"; @Min uses "value" — resolve whichever is present
         Object minRaw = attributes.containsKey(MIN_ATTRIBUTE)

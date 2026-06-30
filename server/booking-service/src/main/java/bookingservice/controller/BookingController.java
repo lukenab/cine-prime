@@ -1,29 +1,94 @@
 package bookingservice.controller;
 
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import lombok.RequiredArgsConstructor;
-import bookingservice.dto.request.BookingPayload;
-import bookingservice.dto.response.BookingConfirmation;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+import bookingservice.dto.request.BookingRequest;
+import bookingservice.dto.request.HoldSeatRequest;
+
+import bookingservice.dto.response.BookingDetailResponse;
+import bookingservice.dto.response.BookingListResponse;
+import bookingservice.dto.response.CancelBookingResponse;
+import bookingservice.dto.response.CreateBookingResponse;
+import bookingservice.dto.response.SeatHoldResponse;
 import bookingservice.service.BookingService;
+import jakarta.validation.Valid;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import movie.theater.common.dto.ApiResponse;
+import movie.theater.common.security.JwtSecurityUtils;
 
 @RestController
 @RequestMapping("/api/bookings")
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class BookingController {
+        BookingService bookingService;
 
-    private final BookingService bookingService;
+        @PostMapping
+        @ResponseStatus(HttpStatus.CREATED)
+        public ApiResponse<CreateBookingResponse> createBooking(@RequestBody @Valid BookingRequest request) {
+                String accountId = JwtSecurityUtils.getCurrentAccountId();
+                boolean isMember = JwtSecurityUtils.hasRole("ROLE_MEMBER");
+                CreateBookingResponse response = bookingService.createBookingAndHoldSeats(request, accountId, isMember);
 
-    @PostMapping
-    public ResponseEntity<Object> createBooking(@RequestBody BookingPayload payload) {
-        BookingConfirmation confirmation = bookingService.createBooking(payload);
-        
-        // Wrap with ApiResponse if needed, but for now returning a generic structure that matches the frontend
-        // Assuming frontend expects { "result": { ... } } or similar based on `response?.result ?? response`
-        java.util.Map<String, Object> response = new java.util.HashMap<>();
-        response.put("code", 1000);
-        response.put("result", confirmation);
-        
-        return ResponseEntity.ok(response);
-    }
+                return ApiResponse.<CreateBookingResponse>builder()
+                                .code(1000)
+                                .message("Booking created successfully")
+                                .result(response)
+                                .build();
+        }
+
+        // @PostMapping("/hold")
+        // public ApiResponse<SeatHoldResponse> holdSeats(@RequestBody @Valid HoldSeatRequest request) {
+        //         String accountId = JwtSecurityUtils.getCurrentAccountId();
+        //         SeatHoldResponse seatHoldResponse = bookingService.holdSeats(request, accountId);
+        //         return ApiResponse.<SeatHoldResponse>builder()
+        //                         .code(1000)
+        //                         .result(seatHoldResponse)
+        //                         .build();
+        // }
+
+        @GetMapping("/{id}")
+        public ApiResponse<BookingDetailResponse> getBookingById(@PathVariable("id") String id) {
+                String accountId = JwtSecurityUtils.getCurrentAccountId();
+                boolean isAdmin = JwtSecurityUtils.hasRole("ROLE_ADMIN");
+                return ApiResponse.<BookingDetailResponse>builder()
+                                .code(1000)
+                                .result(bookingService.getBookingById(id, accountId, isAdmin))
+                                .build();
+        }
+
+        @GetMapping("/me")
+        public ApiResponse<BookingListResponse> getMyBookings(
+                        @RequestParam(defaultValue = "0") int page,
+                        @RequestParam(defaultValue = "10") int size) {
+                String accountId = JwtSecurityUtils.getCurrentAccountId();
+                return ApiResponse.<BookingListResponse>builder()
+                                .code(1000)
+                                .result(bookingService.getMyBookings(accountId, page, size))
+                                .build();
+        }
+
+        @PatchMapping("/{id}/cancel")
+        public ApiResponse<CancelBookingResponse> cancelBooking(@PathVariable("id") String id) {
+                String accountId = JwtSecurityUtils.getCurrentAccountId();
+                boolean isAdmin = JwtSecurityUtils.hasRole("ROLE_ADMIN");
+
+                CancelBookingResponse responseData = bookingService.cancelBooking(id, accountId, isAdmin);
+
+                return new ApiResponse<>(
+                                1000,
+                                "Booking cancelled successfully",
+                                responseData);
+        }
 }

@@ -43,10 +43,12 @@ public class UserService {
     UserRepository userRepository;
     UserMapper userMapper;
     AuditLogService auditLogService;
+    IdentityCardService identityCardService;
     private final RestClient.Builder builder;
 
     @Transactional
     public void createUserProfile(UserRegisteredEvent event) {
+        identityCardService.validate(event.getIdentityCard());
 
         if (userRepository.findById(event.getAccountId()).isPresent()) {
             log.warn("Profile for Account ID {} already exists. Skipping event to avoid duplication.", event.getAccountId());
@@ -54,17 +56,12 @@ public class UserService {
         }
 
         if (userRepository.existsByPhoneNumber(event.getPhoneNumber())) {
-            log.error("Phone number {} already exists. Skipping event.", event.getPhoneNumber());
+            log.error("[DATA_INCONSISTENCY] Phone number {} already exists for accountId {}. Auth account created but profile skipped.", event.getPhoneNumber(), event.getAccountId());
             return;
         }
 
         if (userRepository.existsByIdentityCard(event.getIdentityCard())) {
-            log.error("Identity card {} already exists. Skipping event.", event.getIdentityCard());
-            return;
-        }
-
-        if (userRepository.existsByEmail(event.getEmail())) {
-            log.error("Email {} already exists. Skipping event.", event.getEmail());
+            log.error("[DATA_INCONSISTENCY] Identity card {} already exists for accountId {}. Auth account created but profile skipped.", event.getIdentityCard(), event.getAccountId());
             return;
         }
 
@@ -94,6 +91,13 @@ public class UserService {
     @Transactional
     public UserResponse updateUser(String id, UserUpdateRequest request) {
         User user = userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        if (request.getIdentityCard() != null) {
+            identityCardService.validate(request.getIdentityCard());
+            if (!request.getIdentityCard().equals(user.getIdentityCard())
+                    && userRepository.existsByIdentityCard(request.getIdentityCard())) {
+                throw new AppException(ErrorCode.IDENTITY_CARD_EXISTED);
+            }
+        }
         if (request.getPhoneNumber() != null
                 && !request.getPhoneNumber().equals(user.getPhoneNumber())
                 && userRepository.existsByPhoneNumber(request.getPhoneNumber())) {

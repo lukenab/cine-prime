@@ -1,23 +1,25 @@
 package movieservice.dto.request;
 
-import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotNull;
+import lombok.AccessLevel;
 import lombok.Data;
+import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
 
 @Data
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class ShowTimeRequest {
 
     @NotNull(message = "Show date cannot be blank")
-    private LocalDate showDate;
+    LocalDate showDate;
 
     @NotNull(message = "Start time cannot be blank")
-    private LocalTime startTime;
+    LocalTime startTime;
 
-    private LocalTime endTime;
+    LocalTime endTime;
 
     @NotNull(message = "Cinema room ID cannot be blank")
-    private Long cinemaRoomId;
+    Long cinemaRoomId;
 }

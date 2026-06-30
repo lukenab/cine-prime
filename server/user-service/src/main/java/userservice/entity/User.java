@@ -69,5 +69,4 @@
 
         @OneToOne(mappedBy = "user")
         private Employee employee;
-
     }

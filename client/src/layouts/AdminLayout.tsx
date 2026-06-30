@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Sidebar } from "../layouts/Sidebar";
 import { Header } from "../layouts/Header";
-import { Sun, Moon } from "lucide-react";
 
 export default function AdminLayout() {
   // 1. Logic tự động nhận diện trang hiện tại để bôi sáng Menu
@@ -30,32 +29,6 @@ export default function AdminLayout() {
         transition: "background 0.25s ease",
       }}
     >
-      {/* Nút Toggle Theme toàn cục */}
-      <button
-        onClick={() => setIsDarkMode(!isDarkMode)}
-        style={{
-          position: "fixed",
-          bottom: "24px",
-          right: "24px",
-          width: "46px",
-          height: "46px",
-          borderRadius: "50%",
-          background: "var(--bg-card)",
-          border: "1px solid var(--border-color)",
-          color: "var(--text-main)",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
-          zIndex: 999,
-          transition: "all 0.2s ease",
-        }}
-        title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-      >
-        {isDarkMode ? <Sun size={18} style={{ color: "#FFD700" }} /> : <Moon size={18} />}
-      </button>
-
       {/* Sidebar cố định bên trái */}
       <Sidebar isDarkMode={isDarkMode} />
 
@@ -69,7 +42,7 @@ export default function AdminLayout() {
           minHeight: "100vh",
         }}
       >
-        <Header activePage={activeNav} isDarkMode={isDarkMode} />
+        <Header activePage={activeNav} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)} />
 
         <main
           style={{
