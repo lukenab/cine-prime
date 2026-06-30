@@ -6,12 +6,11 @@ import { useAuth } from "../context/AuthContext";
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
 
   const token = localStorage.getItem("accessToken");
-  const username = localStorage.getItem("username") || "User";
   const isLogged = !!token;
-
-      const { user, logout } = useAuth();
+  const username = user?.username || "User";
 
   const handleLogout = () => {
     logout();

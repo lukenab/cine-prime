@@ -93,6 +93,10 @@ public class UserService {
         User user = userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
         if (request.getIdentityCard() != null) {
             identityCardService.validate(request.getIdentityCard());
+            if (!request.getIdentityCard().equals(user.getIdentityCard())
+                    && userRepository.existsByIdentityCard(request.getIdentityCard())) {
+                throw new AppException(ErrorCode.IDENTITY_CARD_EXISTED);
+            }
         }
         if (request.getPhoneNumber() != null
                 && !request.getPhoneNumber().equals(user.getPhoneNumber())

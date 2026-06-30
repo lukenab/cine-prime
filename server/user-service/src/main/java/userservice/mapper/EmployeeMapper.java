@@ -18,7 +18,7 @@ public interface EmployeeMapper {
     @Mapping(source = "user.dateOfBirth",  target = "dateOfBirth")
     @Mapping(source = "user.gender",       target = "gender")
     @Mapping(source = "user.address",      target = "address")
-    @Mapping(source = "user.identityCard", target = "identityCard")
+    @Mapping(target = "identityCard", expression = "java(employee.getUser() == null ? null : userservice.util.IdentityCardMasker.mask(employee.getUser().getIdentityCard()))")
     @Mapping(source = "user.avatarUrl",    target = "avatarUrl")
     EmployeeResponse toEmployeeResponse(Employee employee);
 
