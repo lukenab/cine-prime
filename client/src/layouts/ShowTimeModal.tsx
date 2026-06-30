@@ -286,12 +286,14 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime, cinemas }: 
             >
               Cancel
             </button>
+ Updated upstream
             <button
               type="submit" disabled={submitting}
               className="flex-1 px-4 py-2.5 rounded-xl bg-purple-600 text-white hover:bg-purple-700 transition-colors disabled:opacity-50"
               style={{ fontSize: "14px", fontWeight: 500 }}
             >
               {submitting ? "Saving..." : editShowtime ? "Update Schedule" : "Schedule Movie"}
+Stashed changes
             </button>
           </div>
         </form>
