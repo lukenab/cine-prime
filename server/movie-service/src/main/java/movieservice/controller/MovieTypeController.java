@@ -19,7 +19,7 @@ import movieservice.dto.response.TypeMovieResponse;
 import movieservice.service.MovieTypeService;
 
 @RestController
-@RequestMapping("/api/movie-type")
+@RequestMapping("/api/movie-types")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class MovieTypeController {

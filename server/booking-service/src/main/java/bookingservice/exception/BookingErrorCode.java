@@ -25,7 +25,9 @@ public enum BookingErrorCode implements BaseErrorCode {
                         HttpStatus.BAD_REQUEST),
         DUPLICATE_SEATS_IN_REQUEST(2009, "Duplicate seat IDs found in the request", HttpStatus.BAD_REQUEST),
         MEMBER_ONLY_ACTION(2010, "Only registered members can create a booking and hold seats", HttpStatus.FORBIDDEN),
-        SEAT_ALREADY_LOCKED(2011, "The seat is already locked or reserved by another user", HttpStatus.CONFLICT);
+        SEAT_ALREADY_LOCKED(2011, "The seat is already locked or reserved by another user", HttpStatus.CONFLICT),
+        SEAT_ALREADY_HELD_BY_YOU(2012, "You have already held this seat and the lock is still valid",
+                        HttpStatus.BAD_REQUEST);
 
         int code;
         String message;

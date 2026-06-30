@@ -2,20 +2,50 @@ import axiosClient from './api';
 
 export interface EmployeeCreatePayload {
   accountId: string;
-  position: string;
+  cinemaId?: string;
+  position: EmployeePosition;
+  department?: EmployeeDepartment;
+  employmentType?: EmploymentType;
   hireDate: string;
 }
 
 export interface EmployeeUpdatePayload {
-  position?: string;
+  cinemaId?: string;
+  position?: EmployeePosition;
+  department?: EmployeeDepartment;
+  employmentType?: EmploymentType;
   hireDate?: string;
 }
+
+export type EmployeePosition =
+  | 'STAFF'
+  | 'SUPERVISOR'
+  | 'MANAGER';
+
+export type EmployeeDepartment =
+  | 'BOX_OFFICE'
+  | 'CONCESSION'
+  | 'FLOOR'
+  | 'PROJECTION'
+  | 'MANAGEMENT'
+  | 'CUSTOMER_SERVICE';
+
+export type EmploymentType =
+  | 'FULL_TIME'
+  | 'PART_TIME'
+  | 'PROBATION'
+  | 'INTERN'
+  | 'CONTRACT';
 
 /** Shape returned by GET /api/employees and GET /api/employees/{id} */
 export interface EmployeeResponse {
   // Employee fields
   employeeId: string;
-  position: string;
+  employeeCode: string | null;
+  cinemaId: string | null;
+  position: EmployeePosition;
+  department: EmployeeDepartment | null;
+  employmentType: EmploymentType | null;
   hireDate: string;
   status: 'ACTIVE' | 'DISABLED';
   createdAt: string;

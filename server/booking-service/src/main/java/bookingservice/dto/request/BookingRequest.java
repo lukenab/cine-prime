@@ -29,7 +29,6 @@ public class BookingRequest {
     @Size(max = 8, message = "MAX_SEATS_EXCEEDED") // Tối đa 8 ghế
     List<Long> seatIds;
 
-    @NotNull(message = "POINTS_USED_REQUIRED")
     @Min(value = 0, message = "POINTS_CANNOT_BE_NEGATIVE")
-    Integer pointsUsed;
+    Integer pointsUsed = 0;
 }

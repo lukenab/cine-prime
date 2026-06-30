@@ -1,4 +1,4 @@
-package userservice.entity;
+package userservice.enums;
 
 public enum EmployeeStatus {
     ACTIVE,

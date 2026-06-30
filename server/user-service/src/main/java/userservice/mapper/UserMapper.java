@@ -2,6 +2,7 @@ package userservice.mapper;
 
 import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
 import org.mapstruct.MappingTarget;
 import org.mapstruct.NullValuePropertyMappingStrategy;
@@ -13,6 +14,8 @@ import userservice.event.UserRegisteredEvent;
 @Mapper(componentModel = "spring")
 public interface UserMapper {
     User toUser(UserRegisteredEvent event);
+
+    @Mapping(target = "identityCard", expression = "java(userservice.util.IdentityCardMasker.mask(user.getIdentityCard()))")
     UserResponse toUserResponse(User user);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)

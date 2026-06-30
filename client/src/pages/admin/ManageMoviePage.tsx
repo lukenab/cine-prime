@@ -5,6 +5,7 @@ import { useOutletContext } from "react-router-dom";
 import { MovieStatsCards } from "../../layouts/MovieStatsCards";
 import { MovieTable } from "../../layouts/MovieTable";
 import { MovieModal } from "../../layouts/MovieModal";
+import { MovieDetailModal } from "../../layouts/MovieDetailModal";
 import {
   movieApi,
   type MovieApiResponse,
@@ -31,6 +32,7 @@ export default function ManageMoviePage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editMovie, setEditMovie] = useState<MovieApiResponse | null>(null);
+  const [detailMovie, setDetailMovie] = useState<MovieApiResponse | null>(null);
 
   // ── Load movies from API ──────────────────────────────────────────────────
   const loadMovies = useCallback(async () => {
@@ -65,6 +67,10 @@ export default function ManageMoviePage() {
     setModalOpen(true);
   };
 
+  const handleViewMovie = (movie: MovieApiResponse) => {
+    setDetailMovie(movie);
+  };
+
   const handleDeleteMovie = async (id: number) => {
     try {
       await movieApi.deleteMovie(id);
@@ -82,6 +88,7 @@ export default function ManageMoviePage() {
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? "Create failed.";
       alert(`Error: ${msg}`);
+      throw err;
     }
   };
 
@@ -92,6 +99,7 @@ export default function ManageMoviePage() {
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? "Update failed.";
       alert(`Error: ${msg}`);
+      throw err;
     }
   };
 
@@ -229,6 +237,7 @@ export default function ManageMoviePage() {
       {!loading && (
         <MovieTable
           movies={movies}
+          onView={handleViewMovie}
           onEdit={handleEditMovie}
           onDelete={handleDeleteMovie}
           searchQuery={searchQuery}
@@ -245,6 +254,12 @@ export default function ManageMoviePage() {
         editMovie={editMovie}
         types={types}
         rooms={rooms}
+      />
+
+      <MovieDetailModal
+        open={Boolean(detailMovie)}
+        movie={detailMovie}
+        onClose={() => setDetailMovie(null)}
       />
 
       <style>{`
