@@ -18,6 +18,9 @@ import movieservice.entity.Movie;
 public interface MovieRepository extends JpaRepository<Movie, Long> {
         List<Movie> findByStatusTrue();
         Movie findByMovieId(Long movieId);
+
+        // Duplicate guard: same Vietnamese title + same format/version already exists
+        boolean existsByMovieNameVnAndVersion(String movieNameVn, String version);
         // Tự sinh query: DELETE FROM Movie WHERE createAt <= :time
         void deleteByCreateAtLessThanEqual(LocalDateTime time);
 

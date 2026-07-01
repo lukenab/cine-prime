@@ -45,15 +45,21 @@ public class MovieService {
     ShowTimeService showTimeService;
     @Transactional
     public MovieResponse createMovie(CreateMovieRequest request) {
+        // Prevent duplicates: same Vietnamese title + same format/version.
+        // (Same movie in a different format, e.g. 2D vs 3D, is still allowed.)
+        if (movieRepository.existsByMovieNameVnAndVersion(request.getMovieNameVn(), request.getVersion())) {
+            throw new AppException(MovieErrorCode.MOVIE_ALREADY_EXISTS);
+        }
+
         Movie movie = movieMapper.toMovie(request);
         movie = movieRepository.save(movie);
 
         List<ShowTimeRequest> showTimeRequests = request.getShowTimes();
-        showTimeService.validateShowDates(showTimeRequests);
-        showTimeService.validateStartTimes(showTimeRequests);
-        showTimeService.validateLocalRequests(showTimeRequests, request.getDuration());
-        showTimeService.validateWithDatabase(showTimeRequests, request.getDuration());
         if (showTimeRequests != null && !showTimeRequests.isEmpty()) {
+            showTimeService.validateShowDates(showTimeRequests);
+            showTimeService.validateStartTimes(showTimeRequests);
+            showTimeService.validateLocalRequests(showTimeRequests, request.getDuration());
+            showTimeService.validateWithDatabase(showTimeRequests, request.getDuration());
             List<ShowTime> showTimesToSave = new ArrayList<>();
 
             for (ShowTimeRequest stReq : showTimeRequests) {

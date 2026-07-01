@@ -50,7 +50,7 @@ public class CreateMovieRequest {
     @NotEmpty(message = "At least one type ID must be selected")
     List<Long> typeIds;
 
+    // Optional: showtimes are scheduled separately via Showtime Management.
     @Valid
-    @NotEmpty(message = "Show times list must not be empty")
     List<ShowTimeRequest> showTimes;
 }
