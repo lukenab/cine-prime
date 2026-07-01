@@ -1,8 +1,7 @@
 package authservice.controller;
 
 import authservice.dto.request.AccountUpdateRequest;
-import authservice.dto.request.LogoutRequest;
-import authservice.dto.request.RegisterRequest;
+import authservice.dto.request.AdminCreateAccountRequest;
 import authservice.dto.response.AccountResponse;
 import authservice.entity.Account;
 import authservice.service.AccountService;
@@ -45,7 +44,7 @@ public class AccountController {
     }
 
     @PostMapping
-    ApiResponse<AccountResponse> createAccount(@RequestBody @Valid RegisterRequest request){
+    ApiResponse<AccountResponse> createAccount(@RequestBody @Valid AdminCreateAccountRequest request){
         return ApiResponse.<AccountResponse>builder()
                 .result(accountService.createAccount(request))
                 .build();

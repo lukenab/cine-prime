@@ -3,6 +3,7 @@ package authservice.config;
 import authservice.entity.Account;
 import authservice.entity.Permission;
 import authservice.entity.Role;
+import authservice.enums.AccountStatus;
 import authservice.repository.AccountRepository;
 import authservice.repository.PermissionRepository;
 import authservice.repository.RoleRepository;
@@ -202,7 +203,7 @@ public class ApplicationInitConfig {
                 .email(adminEmail)
                 .passwordHash(passwordEncoder.encode(adminPassword))
                 .roles(Set.of(adminRole))
-                .status(1) // 1 = ACTIVE
+                .status(AccountStatus.ACTIVE)
                 .build();
 
         accountRepository.save(admin);
@@ -242,7 +243,7 @@ public class ApplicationInitConfig {
                     .email(email)
                     .passwordHash(demoPassword)
                     .roles(Set.of(role))
-                    .status(1)
+                    .status(AccountStatus.ACTIVE)
                     .build();
 
             accountRepository.save(account);

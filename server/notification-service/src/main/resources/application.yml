@@ -1,9 +1,32 @@
 server:
-  port: 8087 
+  port: 8087
 
 spring:
   application:
     name: notification-service
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME:cineprime.theater.contact@gmail.com}
+    password: ${MAIL_PASSWORD:yczsrtyvtveosbvi}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: notification-service-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      properties:
+        "[spring.json.trusted.packages]": "notificationservice.event"
+        "[spring.json.type.mapping]": "otpRequested:notificationservice.event.OtpRequestedEvent"
 
 eureka:
   client:

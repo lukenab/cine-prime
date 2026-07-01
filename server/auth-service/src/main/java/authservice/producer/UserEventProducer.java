@@ -1,5 +1,6 @@
 package authservice.producer;
 
+import authservice.event.OtpRequestedEvent;
 import authservice.event.UserRegisteredEvent;
 import authservice.event.UserUpdatedEvent;
 import lombok.AccessLevel;
@@ -24,6 +25,21 @@ public class UserEventProducer {
 
     public void sendRegisteredEvent(UserRegisteredEvent event){
         sendAndWait("user-register-topic", event);
+    }
+
+    /**
+     * Fire-and-forget: không block HTTP response chờ email gửi xong.
+     * Notification-service sẽ consume và gửi email trong background.
+     */
+    public void sendOtpRequestedEvent(OtpRequestedEvent event) {
+        kafkaTemplate.send("send-otp-email-topic", event)
+                .whenComplete((result, ex) -> {
+                    if (ex != null) {
+                        log.error("Failed to publish OtpRequestedEvent for email {}: {}", event.getEmail(), ex.getMessage());
+                    } else {
+                        log.info("Published OtpRequestedEvent to send-otp-email-topic for email: {}", event.getEmail());
+                    }
+                });
     }
 
     public void sendUpdatedEvent(UserUpdatedEvent event){

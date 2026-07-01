@@ -1,7 +1,5 @@
 package authservice.service;
 
-import authservice.dto.request.IntrospectRequest;
-import authservice.dto.response.IntrospectResponse;
 import authservice.entity.Account;
 import authservice.entity.AuthToken;
 import authservice.repository.AuthTokenRepository;
@@ -95,16 +93,6 @@ public class JwtService {
             account.getRoles().forEach(role -> stringJoiner.add("ROLE_" + role.getRoleName()));
         }
         return stringJoiner.toString();
-    }
-
-    public IntrospectResponse introspect(IntrospectRequest request) throws ParseException, JOSEException {
-        boolean isValid = true;
-        try {
-            verifyToken(request.getToken(), false);
-        } catch (AppException e) {
-            isValid = false;
-        }
-        return IntrospectResponse.builder().valid(isValid).build();
     }
 
     public SignedJWT parseAndVerifySignature(String token) throws ParseException, JOSEException {

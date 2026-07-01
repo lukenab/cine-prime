@@ -1,14 +1,13 @@
 package authservice.controller;
 
-import authservice.dto.request.*;
+import authservice.dto.request.AuthenticationRequest;
+import authservice.dto.request.IntrospectRequest;
+import authservice.dto.request.RefreshRequest;
 import authservice.dto.response.AuthenticationResponse;
-import authservice.dto.response.AccountResponse;
-import authservice.dto.response.RegisterResponse;
 import authservice.dto.response.IntrospectResponse;
 import authservice.service.AuthenticationService;
 import com.nimbusds.jose.JOSEException;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -24,43 +23,13 @@ import java.text.ParseException;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class AuthenticationController {
+
     AuthenticationService authenticationService;
-
-    @GetMapping("/check")
-    ApiResponse<Void> checkFieldAvailability(
-            @RequestParam(required = false) String username,
-            @RequestParam(required = false) String email) {
-        authenticationService.checkFieldAvailability(username, email);
-        return ApiResponse.<Void>builder().message("Available").build();
-    }
-
-    @PostMapping("/register/initiate")
-    ApiResponse<String> initiateRegistration(@Valid @RequestBody RegisterRequest request) {
-        authenticationService.initiateRegistration(request);
-        return ApiResponse.<String>builder()
-                .result("OTP has been sent to your email")
-                .build();
-    }
-
-    @PostMapping("/register/verify")
-    ApiResponse<RegisterResponse> verifyAndRegister(@Valid @RequestBody VerifyOtpRequest request) {
-        return ApiResponse.<RegisterResponse>builder()
-                .result(authenticationService.verifyOtpAndRegister(request))
-                .build();
-    }
 
     @PostMapping("/login")
     ApiResponse<AuthenticationResponse> authenticate(@RequestBody AuthenticationRequest request) {
         return ApiResponse.<AuthenticationResponse>builder()
                 .result(authenticationService.authenticate(request))
-                .build();
-    }
-
-    @PostMapping("/resend-otp")
-    public ApiResponse<?> resendOtp(@Valid @RequestBody ResendOtpRequest request){
-        authenticationService.resendOtp(request);
-        return ApiResponse.builder()
-                .message("New otp has been sent to your email!")
                 .build();
     }
 
@@ -78,14 +47,14 @@ public class AuthenticationController {
     }
 
     @PostMapping("/introspect")
-    public ApiResponse<IntrospectResponse> introspect(@RequestBody IntrospectRequest request) {
+    ApiResponse<IntrospectResponse> introspect(@RequestBody IntrospectRequest request) {
         return ApiResponse.<IntrospectResponse>builder()
                 .result(authenticationService.introspect(request))
                 .build();
     }
 
     @PostMapping("/refresh")
-    public ApiResponse<AuthenticationResponse> refreshToken(@RequestBody RefreshRequest request) throws ParseException, JOSEException {
+    ApiResponse<AuthenticationResponse> refreshToken(@RequestBody RefreshRequest request) throws ParseException, JOSEException {
         return ApiResponse.<AuthenticationResponse>builder()
                 .result(authenticationService.refreshToken(request))
                 .build();
