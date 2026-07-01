@@ -5,10 +5,18 @@ spring:
   application:
     name: booking-service 
   datasource:
-    url: jdbc:postgresql://localhost:5433/booking_db
-    username: postgres
-    password: "123456"
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/booking_db}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:123456}
     driver-class-name: org.postgresql.Driver
+
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
   jpa:
     hibernate:
       ddl-auto: update

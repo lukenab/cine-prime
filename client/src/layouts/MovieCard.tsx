@@ -1,4 +1,5 @@
 import { Star, Clock, Ticket } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 interface Movie {
   id: number;
@@ -16,6 +17,8 @@ interface MovieCardProps {
 }
 
 export function MovieCard({ movie }: MovieCardProps) {
+  const navigate = useNavigate();
+
   return (
     <div
       className="relative flex-shrink-0 rounded-2xl overflow-hidden cursor-pointer group"
@@ -104,6 +107,10 @@ export function MovieCard({ movie }: MovieCardProps) {
         style={{ backdropFilter: "blur(0px)" }}
       >
         <button
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/showtime/${movie.id}`);
+          }}
           className="flex items-center gap-2 px-5 py-2.5 rounded-full"
           style={{
             background: "linear-gradient(135deg, #FFD700, #FFA500)",

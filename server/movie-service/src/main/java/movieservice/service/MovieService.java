@@ -94,7 +94,6 @@ public class MovieService {
         } catch (Exception e) {
             throw new AppException(MovieErrorCode.UPLOAD_IMAGE_FAILED);
         }
-
         Movie finalSavedMovie = movieRepository.save(movie);
 
         auditLogService.logAction("1", "Admin System", "movie - id:" + finalSavedMovie.getMovieId(),

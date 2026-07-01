@@ -20,12 +20,12 @@ function toCardMovie(movie: MovieApiResponse, index: number): Movie {
   return {
     id: movie.movieId,
     title: movie.movieNameEnglish || movie.movieNameVn || "Untitled Movie",
-    genre: movie.movieType?.join(" · ") || "Cinema",
-    rating: Number((8 + (index % 10) / 10).toFixed(1)),
+    genre: movie.movieType?.[0] || "Thriller",
+    rating: Number((Math.random() * (9.5 - 7.5) + 7.5).toFixed(1)), // Random rating between 7.5 and 9.5
     duration: formatDuration(movie.duration),
     image: movie.largeImage || movie.smallImage,
-    badge: index === 0 ? "HOT" : index === 1 ? "NEW" : undefined,
-    badgeColor: index === 0 ? "#FF4500" : index === 1 ? "#8A2BE2" : undefined,
+    badge: movie.movieId % 2 === 0 ? "NEW" : "HOT",
+    badgeColor: movie.movieId % 2 === 0 ? "#8A2BE2" : "#FF4500",
   };
 }
 

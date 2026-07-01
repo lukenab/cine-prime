@@ -2,6 +2,7 @@ package bookingservice.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -24,7 +25,7 @@ import bookingservice.entity.Booking;
 import bookingservice.entity.BookingItem;
 import bookingservice.entity.BookingStatus;
 import bookingservice.entity.Ticket;
-import bookingservice.entity.SeatLock; // Import entity SeatLock
+import bookingservice.entity.SeatLock; 
 import bookingservice.exception.BookingErrorCode;
 import bookingservice.mapper.BookingMapper;
 import bookingservice.repository.BookingItemRepository;
@@ -32,7 +33,7 @@ import bookingservice.repository.BookingRepository;
 import bookingservice.repository.SeatLockRepository;
 import bookingservice.repository.TicketRepository;
 import bookingservice.client.MemberClient;
-import bookingservice.client.ShowtimeClient; // OpenFeign Client sang showtime-service
+import bookingservice.client.ShowtimeClient; 
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -50,7 +51,7 @@ public class BookingService {
     BookingItemRepository bookingItemRepository;
     SeatLockRepository seatLockRepository;
     TicketRepository ticketRepository;
-    ShowtimeClient showtimeClient; // Tích hợp OpenFeign Client
+    ShowtimeClient showtimeClient; 
     BookingMapper bookingMapper;
     MemberClient memberClient;
     @NonFinal
@@ -104,15 +105,12 @@ public class BookingService {
             throw new AppException(BookingErrorCode.SEATS_ALREADY_TAKEN);
         }
 
-        // Xóa các lock đã hết hạn của các ghế này để tránh lỗi unique constraint
-        // (uc_showtime_seat)
+
         seatLockRepository.releaseSeatsByBookingAndList(request.getShowtimeId(), seatCodesStr, null);
 
         BigDecimal totalPrice = BigDecimal.ZERO;
         List<BookingItemResponse> itemResponses = new ArrayList<>();
 
-        // TODO: pointsUsed is not yet fully processed since score/loyalty management is incomplete.
-        // The points are not yet deducted from MemberClient or applied as discount.
         int pointsUsed = request.getPointsUsed() != null ? request.getPointsUsed() : 0;
 
         Booking booking = Booking.builder()

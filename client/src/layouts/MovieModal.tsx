@@ -7,7 +7,7 @@ import {
 } from "../api/movieApi";
 
 type ShowTimeRow = {
-  cinemaRoomId: string; // "" when unselected so HTML required validation works
+  cinemaRoomId: string; 
   showDate: string;
   startTime: string;
 };

@@ -14,7 +14,7 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class BookingItemResponse {
-    Long seatId;        // Lưu ID của ghế (ví dụ: 101, 102)
-    String seatLabel;   // Nhãn hiển thị của ghế (ví dụ: "A1", "A2")
-    BigDecimal price;   // Giá tiền áp dụng riêng cho ghế này
+    Long seatId;        
+    String seatLabel;   
+    BigDecimal price;   
 }

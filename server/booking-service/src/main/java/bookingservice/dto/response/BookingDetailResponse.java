@@ -24,13 +24,13 @@ public class BookingDetailResponse {
     String accountId;
     String memberId;
     String movieName;
-    LocalDate showDate;       // Trả ra dạng yyyy-MM-dd
-    LocalTime startTime;      // Trả ra dạng HH:mm:ss
+    LocalDate showDate;       
+    LocalTime startTime;      
     String cinemaRoomName;
     Integer totalSeats;
-    BigDecimal finalAmount;   // map vào trường totalPrice/finalAmount của bạn
-    String bookingType;       // ONLINE / OFFLINE
-    String status;            // PENDING, CONFIRMED, CANCELLED
+    BigDecimal finalAmount;   
+    String bookingType;       
+    String status;            
     LocalDateTime createdAt;
     List<BookingItemResponse> items;
 }
