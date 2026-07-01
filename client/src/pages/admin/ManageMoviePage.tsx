@@ -85,9 +85,8 @@ export default function ManageMoviePage() {
     try {
       const res = await movieApi.createMovie(data);
       setMovies((prev) => [res.result, ...prev]);
-    } catch (err: any) {
-      const msg = err?.response?.data?.message ?? "Create failed.";
-      alert(`Error: ${msg}`);
+    } catch (err) {
+      // Let MovieModal surface the error in its inline banner
       throw err;
     }
   };
@@ -96,9 +95,8 @@ export default function ManageMoviePage() {
     try {
       const res = await movieApi.updateMovie(id, data);
       setMovies((prev) => prev.map((m) => (m.movieId === id ? res.result : m)));
-    } catch (err: any) {
-      const msg = err?.response?.data?.message ?? "Update failed.";
-      alert(`Error: ${msg}`);
+    } catch (err) {
+      // Let MovieModal surface the error in its inline banner
       throw err;
     }
   };

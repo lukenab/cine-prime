@@ -94,8 +94,8 @@ public class BookingService {
         // trùng lặp)
         cleanExpiredLocksAndHold(request.getShowtimeId(), seatIdStrs, currentUserId);
 
-
-        seatLockRepository.releaseSeatsByBookingAndList(request.getShowtimeId(), seatCodesStr, null);
+        // Expiry returned to the client — matches the 10-minute hold created above
+        LocalDateTime expiredAt = LocalDateTime.now().plusMinutes(10);
 
         // 3. Logic tạo Booking & chi tiết hóa đơn
         BigDecimal totalPrice = BigDecimal.ZERO;

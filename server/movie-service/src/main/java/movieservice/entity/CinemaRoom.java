@@ -17,6 +17,7 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 import movieservice.enums.RoomType;
+import org.hibernate.annotations.ColumnDefault;
 
 @Getter
 @Setter
@@ -40,7 +41,8 @@ public class CinemaRoom {
     Boolean status;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "room_type", columnDefinition = "VARCHAR(20) DEFAULT 'STANDARD'")
+    @ColumnDefault("'STANDARD'")
+    @Column(name = "room_type", length = 20)
     RoomType roomType;
 
     @OneToMany(mappedBy = "cinemaRoom", fetch = FetchType.LAZY)
