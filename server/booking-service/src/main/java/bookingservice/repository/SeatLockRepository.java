@@ -17,34 +17,6 @@ import jakarta.persistence.LockModeType;
 @Repository
 public interface SeatLockRepository extends JpaRepository<SeatLock, Long> {
 
-    @Modifying
-    @Query("DELETE FROM SeatLock s WHERE s.showtimeId = :showtimeId AND s.seatId IN :seatIds")
-    void releaseSeatsByList(
-            @Param("showtimeId") Long showtimeId,
-            @Param("seatIds") List<String> seatIds);
-
-    @Query("SELECT COUNT(s) > 0 FROM SeatLock s WHERE s.showtimeId = :showtimeId " +
-           "AND s.seatId IN :seatIds AND s.expiresAt > :now")
-    boolean existsActiveLocksOrBookings(
-        @Param("showtimeId") Long showtimeId, 
-        @Param("seatIds") List<String> seatIds, 
-        @Param("now") LocalDateTime now
-    );
-
-    @Query("SELECT s FROM SeatLock s WHERE s.showtimeId = :showtimeId AND s.expiresAt > :now")
-    List<SeatLock> findAllActiveLocks(@Param("showtimeId") Long showtimeId, @Param("now") LocalDateTime now);
-
-    boolean existsByShowtimeIdAndSeatIdIn(Long showtimeId, List<String> seatIds);
-
-    @Query("SELECT COUNT(s) > 0 FROM SeatLock s WHERE s.showtimeId = :showtimeId AND s.seatId IN :seatIds AND s.expiresAt > :now")
-    boolean existsByShowtimeIdAndSeatIdInAndExpiresAtAfter(@Param("showtimeId") Long showtimeId, @Param("seatIds") List<String> seatIds, @Param("now") LocalDateTime now);
-
-    @Query("SELECT s FROM SeatLock s WHERE s.showtimeId = :showtimeId AND s.seatId IN :seatIds AND s.expiresAt > :now")
-    List<SeatLock> findActiveLocks(
-            @Param("showtimeId") Long showtimeId,
-            @Param("seatIds") List<String> seatIds,
-            @Param("now") LocalDateTime now);
-
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM SeatLock s WHERE s.showtimeId = :showtimeId AND s.seatId IN :seatIds")
     List<SeatLock> findByShowtimeIdAndSeatIdInForUpdate(
@@ -52,19 +24,9 @@ public interface SeatLockRepository extends JpaRepository<SeatLock, Long> {
             @Param("seatIds") List<String> seatIds);
 
     @Modifying
-    @Query("DELETE FROM SeatLock s WHERE s.showtimeId = :showtimeId AND s.seatId IN :seatIds AND s.expiresAt <= :now")
-    void deleteExpiredLocks(@Param("showtimeId") Long showtimeId,
-            @Param("seatIds") List<String> seatIds,
-            @Param("now") LocalDateTime now);
-
-    Optional<SeatLock> findByShowtimeIdAndSeatId(Long showtimeId, String seatId);
-
-    void deleteByExpiresAtBefore(LocalDateTime now);
-
-    @Modifying
-    @Query("DELETE FROM SeatLock s WHERE s.showtimeId = :showtimeId AND s.seatId IN :seatCodes")
-    void releaseSeatsByBookingAndList(
+    @Query("DELETE FROM SeatLock s WHERE s.showtimeId = :showtimeId AND s.seatId IN :seatCodes AND s.lockedByAccountId = :accountId")
+    void releaseSeatsByAccountAndList(
             @Param("showtimeId") Long showtimeId,
             @Param("seatCodes") List<String> seatCodes,
-            @Param("bookingId") String bookingId);
+            @Param("accountId") String accountId);
 }

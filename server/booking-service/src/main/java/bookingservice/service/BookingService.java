@@ -66,7 +66,7 @@ public class BookingService {
     // 1. Đảm bảo ở DB đã có UNIQUE KEY / UNIQUE INDEX trên 2 cột: (showtime_id,
     // seat_id)
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public CreateBookingResponse createBookingAndHoldSeats(BookingRequest request, String currentUserId,
             boolean isMember) {
 
@@ -146,18 +146,13 @@ public class BookingService {
         List<SeatLock> existingLocks = seatLockRepository.findByShowtimeIdAndSeatIdInForUpdate(showtimeId, seatIdStrs);
 
         List<SeatLock> locksToSave = new ArrayList<>();
-        List<String> processedSeatIds = new ArrayList<>();
 
         for (SeatLock existingLock : existingLocks) {
             if (existingLock.getExpiresAt().isAfter(now)) {
-                System.out.println(accountId);
-                System.out.println(existingLock.getLockedByAccountId());
                 if (accountId == null || !existingLock.getLockedByAccountId().equals(accountId)) {
                     throw new AppException(BookingErrorCode.SEAT_ALREADY_LOCKED);
                 }
                 throw new AppException(BookingErrorCode.SEAT_ALREADY_HELD_BY_YOU);
-
-                
             } else {
                 seatLockRepository.delete(existingLock);
             }
@@ -167,24 +162,23 @@ public class BookingService {
         // mới
         seatLockRepository.flush();
 
-        // 2. Những ghế chưa từng có lock, hoặc lock đã hết hạn (không nằm trong
-        // processedSeatIds còn hạn)
+        // 2. Những ghế chưa từng có lock, hoặc lock đã hết hạn
         for (String seatIdStr : seatIdStrs) {
-            if (!processedSeatIds.contains(seatIdStr)) {
-                SeatLock newLock = SeatLock.builder()
-                        .showtimeId(showtimeId)
-                        .seatId(seatIdStr)
-                        .lockedByAccountId(accountId)
-                        .expiresAt(newExpiresAt)
-                        .build();
-                locksToSave.add(newLock);
-            }
+            SeatLock newLock = SeatLock.builder()
+                    .showtimeId(showtimeId)
+                    .seatId(seatIdStr)
+                    .lockedByAccountId(accountId)
+                    .expiresAt(newExpiresAt)
+                    .build();
+            locksToSave.add(newLock);
         }
 
         try {
             seatLockRepository.saveAll(locksToSave);
             seatLockRepository.flush();
         } catch (DataIntegrityViolationException ex) {
+            // Rationale: SELECT ... FOR UPDATE (pessimistic lock) chỉ khóa được các bản ghi ĐÃ tồn tại (để thay lock đã hết hạn).
+            // Unique constraint (uc_showtime_seat) là chốt chặn cuối cùng ngăn ngừa 2 request đồng thời tạo lock mới cho cùng một ghế chưa từng được lock.
             throw new AppException(BookingErrorCode.SEAT_ALREADY_LOCKED);
         }
     }
@@ -276,9 +270,9 @@ public class BookingService {
                     .collect(Collectors.toList());
 
             if (!seatCodes.isEmpty()) {
-                // SỬA TẠI ĐÂY: Truyền thêm bookingId vào để câu lệnh SQL xóa chính xác bản ghi
-                // Lock liên kết với Booking này
-                seatLockRepository.releaseSeatsByBookingAndList(booking.getShowtimeId(), seatCodes, bookingId);
+                // SỬA TẠI ĐÂY: Truyền thêm accountId vào để câu lệnh SQL xóa chính xác bản ghi
+                // Lock liên kết với người dùng này
+                seatLockRepository.releaseSeatsByAccountAndList(booking.getShowtimeId(), seatCodes, booking.getAccountId());
             }
         }
 
