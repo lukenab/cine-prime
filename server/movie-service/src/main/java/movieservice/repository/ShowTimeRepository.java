@@ -2,6 +2,7 @@ package movieservice.repository;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -44,4 +45,8 @@ public interface ShowTimeRepository extends JpaRepository<ShowTime, Long> {
                         @Param("startTime") LocalTime startTime,
                         @Param("endTime") LocalTime endTime,
                         @Param("excludeId") Long excludeId);
+
+        List<ShowTime> findByMovieMovieId(Long movieId);
+
+        List<ShowTime> findByMovieMovieIdAndShowDate(Long movieId, LocalDate showDate);
 }
