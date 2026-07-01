@@ -33,7 +33,7 @@ function hasFutureShowtime(movie: MovieApiResponse): boolean {
 
 export function MovieTable({ movies, onView, onEdit, onDelete, searchQuery, genreFilter, statusFilter }: Props) {
   const [page, setPage] = useState(1);
-  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<MovieApiResponse | null>(null);
 
   const filtered = movies.filter((m) => {
     const q = searchQuery.toLowerCase();
@@ -54,17 +54,59 @@ export function MovieTable({ movies, onView, onEdit, onDelete, searchQuery, genr
   const safePage = Math.min(page, totalPages);
   const pageMovies = filtered.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE);
 
-  const handleDelete = (id: number) => {
-    if (deleteConfirm === id) {
-      onDelete(id);
-      setDeleteConfirm(null);
-    } else {
-      setDeleteConfirm(id);
-    }
+  const handleConfirmDelete = () => {
+    if (!deleteTarget) return;
+    onDelete(deleteTarget.movieId);
+    setDeleteTarget(null);
   };
 
   return (
-    <div className="rounded-2xl border overflow-hidden" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+    <>
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
+          onClick={() => setDeleteTarget(null)}
+        >
+          <div
+            className="rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-rose-50 mx-auto mb-4">
+              <Trash2 size={22} className="text-rose-500" />
+            </div>
+            <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-main)", textAlign: "center", marginBottom: "8px" }}>
+              Delete Movie
+            </h3>
+            <p style={{ fontSize: "13px", color: "var(--text-sub)", textAlign: "center", marginBottom: "20px" }}>
+              Are you sure you want to delete{" "}
+              <span style={{ fontWeight: 600, color: "var(--text-main)" }}>{deleteTarget.movieNameEnglish}</span>?
+              <br />
+              This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="flex-1 py-2.5 rounded-xl border text-sm font-medium transition-colors hover:opacity-80"
+                style={{ color: "var(--text-main)", borderColor: "var(--border-color)", background: "transparent" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white transition-colors hover:opacity-90"
+                style={{ background: "#ef4444" }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-2xl border overflow-hidden" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
@@ -198,13 +240,9 @@ export function MovieTable({ movies, onView, onEdit, onDelete, searchQuery, genr
                           <Pencil size={14} />
                         </button>
                         <button
-                          onClick={() => handleDelete(movie.movieId)}
-                          title={deleteConfirm === movie.movieId ? "Click again to confirm delete" : "Delete"}
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                            deleteConfirm === movie.movieId
-                              ? "bg-rose-100 text-rose-600"
-                              : "action-btn text-rose-400 hover:text-rose-500"
-                          }`}
+                          onClick={() => setDeleteTarget(movie)}
+                          title="Delete"
+                          className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors action-btn text-rose-400 hover:text-rose-500"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -265,6 +303,7 @@ export function MovieTable({ movies, onView, onEdit, onDelete, searchQuery, genr
           </button>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

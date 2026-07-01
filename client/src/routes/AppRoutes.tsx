@@ -3,6 +3,7 @@ import CustomerLayout from "../layouts/CustomerLayout";
 import LoginPage from "../pages/auth/LoginPage";
 import HomePage from "../pages/customer/HomePage";
 import ShowtimePage from "../pages/customer/ShowtimePage";
+import SeatBookingPage from "../pages/customer/SeatBookingPage";
 import { Route, Routes } from "react-router-dom";
 import RootRedirect from "./RootRedirect";
 import ProtectedRoute from "./ProtectedRoute";
