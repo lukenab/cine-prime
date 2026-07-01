@@ -8,35 +8,22 @@ const axiosClient = axios.create({
   },
 });
 
-const USE_MOCK = true; // Toggle to false when backend is ready to bypass mock
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
 
 const shouldMock = (url: string | undefined): boolean => {
   if (!url) return false;
-  if (url.includes("api/auth/login")) {
-    return true;
-  }
-  if (
+  return (
     url === "/api/showtimes" ||
     url === "/api/showtimes/assign" ||
-    url.match(/^\/api\/showtimes\/\d+$/)
-  ) {
-    return true;
-  }
-  if (url === "/api/cinemas" || url.match(/^\/api\/cinemas\/\d+\/rooms$/)) {
-    return true;
-  }
-  if (url === "/api/movies") {
-    return true;
-  }
-  
-  return false;
+    url.match(/^\/api\/showtimes\/\d+$/) !== null
+  );
 };
 
 // ── Request interceptor — attach Bearer token ─────────────────────────────────
 axiosClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("accessToken");
-    if (token) {
+    if (token && token !== "null" && token !== "undefined" && token.trim() !== "") {
       config.headers.Authorization = `Bearer ${token}`;
     }
 

@@ -97,7 +97,7 @@ export function UserForm({
               style={{ background: "transparent", color: "var(--text-main)", borderColor: "var(--border-color)" }}
             >
               <option value="USER"   style={{ background: "var(--bg-card)" }}>User</option>
-              <option value="MEMBER" style={{ background: "var(--bg-card)" }}>Member</option>
+              <option value="ADMIN"  style={{ background: "var(--bg-card)" }}>Admin</option>
             </select>
           </div>
           <div className="flex flex-col gap-1.5">

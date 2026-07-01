@@ -1,121 +1,113 @@
 import { X, CalendarClock, AlertCircle } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
-  showtimeApi,
-  ShowtimeResponse,
-  CinemaResponse,
-  MovieDropdownResponse,
-  RoomDropdownResponse,
-  ShowtimeStatus
+  type ShowtimeResponse,
+  type ShowtimeAssignPayload,
+  type ShowtimeUpdatePayload,
+  type ShowtimeStatus,
 } from "../api/showtimeApi";
+import { getMockMovies, getMockCinemas, getMockRooms } from "../api/mockShowtime";
+
+type FormState = {
+  movieId: number;
+  cinemaId: number;
+  cinemaRoomId: number;
+  showDate: string;
+  startTime: string;
+  endTime: string;
+  basePrice: number;
+  status: ShowtimeStatus;
+};
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  onSave: (payload: any) => Promise<void>;
+  onSave: (payload: ShowtimeAssignPayload | ShowtimeUpdatePayload) => Promise<void>;
   editShowtime?: ShowtimeResponse | null;
-  cinemas: CinemaResponse[];
 };
 
-const timeToMinutes = (t: string): number => {
-  const [h, m] = t.split(':').map(Number);
-  return h * 60 + m;
-};
+const timeToMinutes = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
 
-export function ShowtimeModal({ open, onClose, onSave, editShowtime, cinemas }: Props) {
-  const [movies, setMovies] = useState<MovieDropdownResponse[]>([]);
-  const [rooms, setRooms] = useState<RoomDropdownResponse[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+export function ShowtimeModal({ open, onClose, onSave, editShowtime }: Props) {
+  const movies  = useMemo(() => getMockMovies(),  []);
+  const cinemas = useMemo(() => getMockCinemas(), []);
+  const allRooms = useMemo(() => getMockRooms(),  []);
 
-  const [form, setForm] = useState({
-    movieId: 0,
-    cinemaId: 0,
+  const [form, setForm] = useState<FormState>({
+    movieId: movies[0]?.movieId ?? 0,
+    cinemaId: cinemas[0]?.cinemaId ?? 0,
     cinemaRoomId: 0,
     showDate: "",
     startTime: "",
     endTime: "",
     basePrice: 90000,
-    status: "SCHEDULED" as ShowtimeStatus
+    status: "SCHEDULED",
   });
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg]     = useState<string | null>(null);
 
-  // Fetch movies for dropdown
-  useEffect(() => {
-    if (open) {
-      showtimeApi.getMovies()
-        .then((res) => setMovies(res.result ?? []))
-        .catch(() => {});
-    }
-  }, [open]);
+  const rooms = useMemo(
+    () => allRooms.filter(r => r.cinemaId === form.cinemaId),
+    [allRooms, form.cinemaId]
+  );
 
-  // Fetch rooms dynamically when cinemaId changes
+  // Populate form when opening
   useEffect(() => {
-    if (form.cinemaId) {
-      showtimeApi.getRooms(form.cinemaId)
-        .then((res) => {
-          const roomList = res.result ?? [];
-          setRooms(roomList);
-          
-          // Select first room if current room is not in the list
-          const roomIds = roomList.map((r) => r.cinemaRoomId);
-          if (!roomIds.includes(form.cinemaRoomId)) {
-            setForm((f) => ({ ...f, cinemaRoomId: roomList[0]?.cinemaRoomId ?? 0 }));
-          }
-        })
-        .catch(() => {});
-    } else {
-      setRooms([]);
-      setForm((f) => ({ ...f, cinemaRoomId: 0 }));
-    }
-  }, [form.cinemaId]);
-
-  // Set form values on edit or create
-  useEffect(() => {
+    if (!open) return;
+    setErrorMsg(null);
     if (editShowtime) {
       setForm({
-        movieId: editShowtime.movieId,
-        cinemaId: editShowtime.cinemaId,
+        movieId:      editShowtime.movieId,
+        cinemaId:     editShowtime.cinemaId,
         cinemaRoomId: editShowtime.cinemaRoomId,
-        showDate: editShowtime.showDate,
-        startTime: editShowtime.startTime,
-        endTime: editShowtime.endTime,
-        basePrice: editShowtime.basePrice,
-        status: editShowtime.status
+        showDate:     editShowtime.showDate,
+        startTime:    editShowtime.startTime,
+        endTime:      editShowtime.endTime,
+        basePrice:    editShowtime.basePrice,
+        status:       editShowtime.status,
       });
     } else {
+      const defaultCinema = cinemas[0]?.cinemaId ?? 0;
+      const defaultRoom   = allRooms.find(r => r.cinemaId === defaultCinema)?.cinemaRoomId ?? 0;
       setForm({
         movieId: movies[0]?.movieId ?? 0,
-        cinemaId: cinemas[0]?.cinemaId ?? 0,
-        cinemaRoomId: 0,
+        cinemaId: defaultCinema,
+        cinemaRoomId: defaultRoom,
         showDate: "",
         startTime: "",
         endTime: "",
         basePrice: 90000,
-        status: "SCHEDULED"
+        status: "SCHEDULED",
       });
     }
-    setErrorMsg(null);
-  }, [editShowtime, open, movies, cinemas]);
+  }, [open, editShowtime, movies, cinemas, allRooms]);
+
+  // Auto-select first room when cinema changes
+  useEffect(() => {
+    const firstRoom = allRooms.find(r => r.cinemaId === form.cinemaId)?.cinemaRoomId ?? 0;
+    setForm(f => {
+      const roomStillValid = allRooms.some(r => r.cinemaId === f.cinemaId && r.cinemaRoomId === f.cinemaRoomId);
+      return roomStillValid ? f : { ...f, cinemaRoomId: firstRoom };
+    });
+  }, [form.cinemaId, allRooms]);
 
   if (!open) return null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const set = (field: keyof FormState, value: string | number) =>
+    setForm(f => ({ ...f, [field]: value }));
+
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorMsg(null);
 
-    // Form validations
-    if (!form.movieId || !form.cinemaId || !form.cinemaRoomId || !form.showDate || !form.startTime || !form.endTime || !form.basePrice) {
+    if (!form.movieId || !form.cinemaId || !form.cinemaRoomId || !form.showDate || !form.startTime || !form.endTime) {
       setErrorMsg("Please fill in all required fields.");
       return;
     }
-
-    const start = timeToMinutes(form.startTime);
-    const end = timeToMinutes(form.endTime);
-    if (start >= end) {
+    if (timeToMinutes(form.startTime) >= timeToMinutes(form.endTime)) {
       setErrorMsg("Start time must be before end time.");
       return;
     }
-
     if (form.basePrice <= 0) {
       setErrorMsg("Base price must be a positive number.");
       return;
@@ -123,28 +115,52 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime, cinemas }: 
 
     setSubmitting(true);
     try {
-      await onSave({
-        movieId: Number(form.movieId),
-        cinemaRoomId: Number(form.cinemaRoomId),
-        showDate: form.showDate,
-        startTime: form.startTime,
-        endTime: form.endTime,
-        basePrice: Number(form.basePrice),
-        ...(editShowtime ? { status: form.status } : {})
-      });
+      const payload = editShowtime
+        ? ({
+            movieId: form.movieId,
+            cinemaRoomId: form.cinemaRoomId,
+            showDate: form.showDate,
+            startTime: form.startTime,
+            endTime: form.endTime,
+            basePrice: form.basePrice,
+            status: form.status,
+          } as ShowtimeUpdatePayload)
+        : ({
+            movieId: form.movieId,
+            cinemaRoomId: form.cinemaRoomId,
+            showDate: form.showDate,
+            startTime: form.startTime,
+            endTime: form.endTime,
+            basePrice: form.basePrice,
+          } as ShowtimeAssignPayload);
+
+      await onSave(payload);
       onClose();
-    } catch (err: any) {
-      setErrorMsg(err.message ?? "An error occurred while saving showtime.");
+    } catch (err: unknown) {
+      setErrorMsg(
+        (err as { message?: string })?.message ?? "An error occurred while saving."
+      );
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const inputStyle = {
+    colorScheme: "var(--color-scheme)" as string,
+    fontSize: "14px",
+    background: "var(--bg-card)",
+    color: "var(--text-main)",
+    borderColor: "var(--border-color)",
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
 
-      <div className="relative rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden" style={{ background: "var(--bg-main)" }}>
+      <div
+        className="relative rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden"
+        style={{ background: "var(--bg-main)" }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b" style={{ borderColor: "var(--border-color)" }}>
           <div className="flex items-center gap-3">
@@ -155,145 +171,186 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime, cinemas }: 
               {editShowtime ? "Edit Showtime" : "Schedule New Showtime"}
             </h2>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors" style={{ color: "var(--text-sub)" }}>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors"
+            style={{ color: "var(--text-sub)" }}
+          >
             <X size={16} />
           </button>
         </div>
 
-        {/* Error Alert Box */}
+        {/* Error */}
         {errorMsg && (
           <div className="mx-6 mt-4 p-3 rounded-xl border border-rose-200 bg-rose-50 flex items-start gap-2 text-rose-600">
-            <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+            <AlertCircle size={16} className="mt-0.5 shrink-0" />
             <p style={{ fontSize: "13px" }}>{errorMsg}</p>
           </div>
         )}
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          {/* Select Movie */}
+          {/* Movie */}
           <div>
-            <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>Select Movie</label>
+            <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+              Movie <span className="text-red-500">*</span>
+            </label>
             <select
-              value={form.movieId} onChange={(e) => setForm({ ...form, movieId: Number(e.target.value) })}
-              className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors appearance-none cursor-pointer font-medium"
-              style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
+              required
+              value={form.movieId}
+              onChange={e => set("movieId", Number(e.target.value))}
+              className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors appearance-none cursor-pointer"
+              style={inputStyle}
             >
-              <option value={0} disabled>Choose a Movie...</option>
-              {movies.map((m) => (
-                <option key={m.movieId} value={m.movieId}>
+              <option value={0} disabled>Choose a movie…</option>
+              {movies.map(m => (
+                <option key={m.movieId} value={m.movieId} style={{ background: "var(--bg-card)" }}>
                   {m.movieNameEnglish} ({m.duration}m)
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Grid: Cinema & Room */}
+          {/* Cinema → Room cascade */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>Cinema</label>
+              <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+                Cinema <span className="text-red-500">*</span>
+              </label>
               <select
-                value={form.cinemaId} onChange={(e) => setForm({ ...form, cinemaId: Number(e.target.value) })}
+                required
+                value={form.cinemaId}
+                onChange={e => set("cinemaId", Number(e.target.value))}
                 className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors appearance-none cursor-pointer"
-                style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
+                style={inputStyle}
               >
-                <option value={0} disabled>Choose Cinema...</option>
-                {cinemas.map((c) => (
-                  <option key={c.cinemaId} value={c.cinemaId}>{c.cinemaName}</option>
+                <option value={0} disabled>Choose cinema…</option>
+                {cinemas.map(c => (
+                  <option key={c.cinemaId} value={c.cinemaId} style={{ background: "var(--bg-card)" }}>
+                    {c.cinemaName}
+                  </option>
                 ))}
               </select>
             </div>
-
             <div>
-              <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>Cinema Room</label>
+              <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+                Room <span className="text-red-500">*</span>
+              </label>
               <select
-                value={form.cinemaRoomId} onChange={(e) => setForm({ ...form, cinemaRoomId: Number(e.target.value) })}
+                required
+                value={form.cinemaRoomId}
                 disabled={!form.cinemaId}
+                onChange={e => set("cinemaRoomId", Number(e.target.value))}
                 className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors appearance-none cursor-pointer disabled:opacity-50"
-                style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
+                style={inputStyle}
               >
-                <option value={0} disabled>Choose Room...</option>
-                {rooms.map((r) => (
-                  <option key={r.cinemaRoomId} value={r.cinemaRoomId}>{r.cinemaRoomName}</option>
+                <option value={0} disabled>Choose room…</option>
+                {rooms.map(r => (
+                  <option key={r.cinemaRoomId} value={r.cinemaRoomId} style={{ background: "var(--bg-card)" }}>
+                    {r.cinemaRoomName}
+                  </option>
                 ))}
               </select>
             </div>
           </div>
 
-          {/* Grid: Show Date */}
+          {/* Show Date */}
           <div>
-            <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>Show Date</label>
+            <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+              Show Date <span className="text-red-500">*</span>
+            </label>
             <input
-              type="date" required value={form.showDate} onChange={(e) => setForm({ ...form, showDate: e.target.value })}
+              type="date"
+              required
+              value={form.showDate}
+              onChange={e => set("showDate", e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors"
-              style={Object.assign({ colorScheme: "var(--color-scheme)" }, { fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" })}
+              style={inputStyle}
             />
           </div>
 
-          {/* Grid: Start/End time */}
+          {/* Start / End Time */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>Start Time</label>
+              <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+                Start Time <span className="text-red-500">*</span>
+              </label>
               <input
-                type="time" required value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })}
+                type="time"
+                required
+                value={form.startTime}
+                onChange={e => set("startTime", e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors"
-                style={Object.assign({ colorScheme: "var(--color-scheme)" }, { fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" })}
+                style={inputStyle}
               />
             </div>
             <div>
-              <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>End Time</label>
+              <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+                End Time <span className="text-red-500">*</span>
+              </label>
               <input
-                type="time" required value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })}
+                type="time"
+                required
+                value={form.endTime}
+                onChange={e => set("endTime", e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors"
-                style={Object.assign({ colorScheme: "var(--color-scheme)" }, { fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" })}
+                style={inputStyle}
               />
             </div>
           </div>
 
-          {/* Grid: Base Price & Status (if editing) */}
+          {/* Base Price + Status (on edit) */}
           <div className={editShowtime ? "grid grid-cols-2 gap-3" : ""}>
             <div>
-              <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>Base Price (VND)</label>
+              <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+                Base Price (VND) <span className="text-red-500">*</span>
+              </label>
               <input
-                type="number" required min={0} value={form.basePrice} onChange={(e) => setForm({ ...form, basePrice: Number(e.target.value) })}
+                type="number"
+                required
+                min={1000}
+                step={1000}
+                value={form.basePrice}
+                onChange={e => set("basePrice", Number(e.target.value))}
                 className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors"
-                style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
+                style={inputStyle}
               />
             </div>
-
             {editShowtime && (
               <div>
                 <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>Status</label>
                 <select
-                  value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as ShowtimeStatus })}
+                  value={form.status}
+                  onChange={e => set("status", e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors appearance-none cursor-pointer"
-                  style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
+                  style={inputStyle}
                 >
-                  <option value="SCHEDULED">Scheduled</option>
-                  <option value="ONGOING">Ongoing</option>
-                  <option value="FINISHED">Finished</option>
-                  <option value="CANCELLED">Cancelled</option>
+                  <option value="SCHEDULED"  style={{ background: "var(--bg-card)" }}>Scheduled</option>
+                  <option value="ONGOING"    style={{ background: "var(--bg-card)" }}>Ongoing</option>
+                  <option value="FINISHED"   style={{ background: "var(--bg-card)" }}>Finished</option>
+                  <option value="CANCELLED"  style={{ background: "var(--bg-card)" }}>Cancelled</option>
                 </select>
               </div>
             )}
           </div>
 
           {/* Actions */}
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3 pt-2">
             <button
-              type="button" onClick={onClose} disabled={submitting}
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
               className="flex-1 px-4 py-2.5 rounded-xl border transition-colors hover:opacity-80 disabled:opacity-50"
               style={{ fontSize: "14px", borderColor: "var(--border-color)", color: "var(--text-main)", background: "transparent" }}
             >
               Cancel
             </button>
- Updated upstream
             <button
-              type="submit" disabled={submitting}
+              type="submit"
+              disabled={submitting}
               className="flex-1 px-4 py-2.5 rounded-xl bg-purple-600 text-white hover:bg-purple-700 transition-colors disabled:opacity-50"
               style={{ fontSize: "14px", fontWeight: 500 }}
             >
-              {submitting ? "Saving..." : editShowtime ? "Update Schedule" : "Schedule Movie"}
-Stashed changes
+              {submitting ? "Saving…" : editShowtime ? "Update Schedule" : "Schedule Movie"}
             </button>
           </div>
         </form>
