@@ -288,6 +288,8 @@ export default function ShowtimePage() {
   const [selectedCinema, setSelectedCinema] = useState<string>("CinePrime Lê Văn Việt");
   const CINEMAS = ["CinePrime Lê Văn Việt", "CinePrime Quang Trung"];
 
+  const [showSoldOutModal, setShowSoldOutModal] = useState(false);
+
   useEffect(() => {
     setLoading(true);
     movieApi.getAllMovies().then(res => {
@@ -310,6 +312,10 @@ export default function ShowtimePage() {
   const hasShowtimes = filteredShowtimes.length > 0;
 
   function handleSelectShowtime(show: ShowTimeResponse & { showDateTimeISO?: string }) {
+    if ((show.availableSeats || 0) === 0) {
+      setShowSoldOutModal(true);
+      return;
+    }
     navigate(`/booking/${show.showTimeId}`, {
       state: {
         showtime: {
@@ -465,6 +471,27 @@ export default function ShowtimePage() {
           </>
         )}
       </div>
+
+      {/* Sold Out Modal */}
+      {showSoldOutModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 max-w-sm w-full shadow-2xl flex flex-col items-center text-center animate-in fade-in zoom-in duration-200">
+            <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
+              <AlertTriangle size={24} className="text-red-500" />
+            </div>
+            <h3 className="text-lg font-bold text-white mb-2">Thông báo</h3>
+            <p className="text-sm text-zinc-400 mb-6">
+              Suất chiếu đã hết ghế. Xin vui lòng đặt suất chiếu khác
+            </p>
+            <button 
+              onClick={() => setShowSoldOutModal(false)}
+              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors cursor-pointer"
+            >
+              Quay lại chọn suất chiếu
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
