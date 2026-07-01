@@ -50,7 +50,7 @@ export function ExperienceBanner() {
               textTransform: "uppercase",
             }}
           >
-            Why Choose CineVault
+            Why Choose CinePrime
           </span>
           <h2
             style={{
@@ -141,7 +141,7 @@ export function ExperienceBanner() {
               Ready for an unforgettable night?
             </h3>
             <p style={{ color: "rgba(255,255,255,0.45)", fontSize: "0.85rem", marginTop: "4px" }}>
-              Join 2 million+ movie lovers who book with CineVault every month.
+              Join 2 million+ movie lovers who book with CinePrime every month.
             </p>
           </div>
           <button

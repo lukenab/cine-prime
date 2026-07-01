@@ -10,6 +10,7 @@ import ManageUserPage from "../pages/admin/ManageUserPage";
 import RegisterPage from "../pages/auth/RegisterPage";
 import ManageMoviePage from "../pages/admin/ManageMoviePage";
 import ManageCinemaRoomsPage from "../pages/admin/ManageCinemaRoomsPage";
+import ManageCinemaClusterPage from "../pages/admin/ManageCinemaClusterPage";
 import RoomDetailPage from "../pages/admin/RoomDetailPage";
 import ManageGenresPage from "../pages/admin/ManageGenresPage";
 import CreateUserPage from "../pages/admin/CreateUserPage";
@@ -62,6 +63,7 @@ export default function AppRoutes() {
             <Route path="users/create"   element={<CreateUserPage/>}/>
             <Route path="users/edit/:id" element={<EditUserPage/>}/>
             <Route path="users/:id"      element={<UserDetailPage/>}/>
+            <Route path="clusters"       element={<ManageCinemaClusterPage/>}/>
             <Route path="rooms"          element={<ManageCinemaRoomsPage/>}/>
             <Route path="rooms/:id"      element={<RoomDetailPage/>}/>
             <Route path="genres"         element={<ManageGenresPage/>}/>

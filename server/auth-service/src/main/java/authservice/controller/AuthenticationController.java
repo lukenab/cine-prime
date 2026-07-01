@@ -3,6 +3,7 @@ package authservice.controller;
 import authservice.dto.request.*;
 import authservice.dto.response.AuthenticationResponse;
 import authservice.dto.response.AccountResponse;
+import authservice.dto.response.RegisterResponse;
 import authservice.dto.response.IntrospectResponse;
 import authservice.service.AuthenticationService;
 import com.nimbusds.jose.JOSEException;
@@ -42,8 +43,8 @@ public class AuthenticationController {
     }
 
     @PostMapping("/register/verify")
-    ApiResponse<AccountResponse> verifyAndRegister(@Valid @RequestBody VerifyOtpRequest request) {
-        return ApiResponse.<AccountResponse>builder()
+    ApiResponse<RegisterResponse> verifyAndRegister(@Valid @RequestBody VerifyOtpRequest request) {
+        return ApiResponse.<RegisterResponse>builder()
                 .result(authenticationService.verifyOtpAndRegister(request))
                 .build();
     }

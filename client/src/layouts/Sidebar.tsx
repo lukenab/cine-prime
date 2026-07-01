@@ -1,5 +1,5 @@
 import { useAuth } from "../context/AuthContext";
-import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, Users, UserCog, BarChart2, Settings, Clapperboard, LogOut, Gift, ShoppingCart } from "lucide-react";
+import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, Users, UserCog, BarChart2, Settings, Clapperboard, LogOut, Gift, ShoppingCart, MapPin } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 
 const roleLabels: Record<string, string> = {
@@ -17,6 +17,7 @@ function getInitials(username: string): string {
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard",   id: "dashboard", path: "/admin",          group: "main" },
   { icon: Film,            label: "Movies",       id: "movies",    path: "/admin/movies",    group: "catalog" },
+  { icon: MapPin,          label: "Clusters",     id: "clusters",  path: "/admin/clusters",  group: "catalog",  roles: ["ROLE_ADMIN"] },
   { icon: Building2,       label: "Cinema Rooms", id: "rooms",     path: "/admin/rooms",     group: "catalog",  roles: ["ROLE_ADMIN"] },
   { icon: Tags,            label: "Genres",       id: "genres",    path: "/admin/genres",    group: "catalog",  roles: ["ROLE_ADMIN"] },
   { icon: Calendar,        label: "Showtimes",    id: "showtimes", path: "/admin/showtimes", group: "ops" },
@@ -65,6 +66,7 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
       <div
         style={{
           height: "60px",
+          flexShrink: 0,
           padding: "0 20px",
           borderBottom: "1px solid var(--border-color)",
           transition: "border-color 0.25s ease",
@@ -129,7 +131,7 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
       </div>
 
       {/* Nav items */}
-      <nav style={{ padding: "0 10px", flex: 1 }}>
+      <nav style={{ padding: "0 10px", flex: 1, overflowY: "auto", minHeight: 0 }}>
         {navItems.filter(({ roles }) => !roles || roles.includes(user?.role ?? "")).map(({ icon: Icon, label, id, path, group }, idx, visibleItems) => {
           const isActive =
             path === "/admin"
