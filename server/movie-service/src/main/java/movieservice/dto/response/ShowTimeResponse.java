@@ -20,6 +20,10 @@ public class ShowTimeResponse {
 
     LocalTime endTime;
 
+    Long movieId;
+
+    String movieName;
+
     Long cinemaRoomId;
 
     String cinemaRoomName;

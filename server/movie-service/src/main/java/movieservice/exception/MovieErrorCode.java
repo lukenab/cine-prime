@@ -54,7 +54,9 @@ public enum MovieErrorCode implements BaseErrorCode {
             "Seat quantity exceeds the maximum allowed for this room type.",
             HttpStatus.BAD_REQUEST),
 
-    MOVIE_ALREADY_EXISTS(2014, "A movie with this Vietnamese title and format already exists.", HttpStatus.CONFLICT);
+    MOVIE_ALREADY_EXISTS(2014, "A movie with this Vietnamese title and format already exists.", HttpStatus.CONFLICT),
+
+    SHOWTIME_NOT_FOUND(2015, "Showtime not found.", HttpStatus.NOT_FOUND);
 
     int code;
     String message;
