@@ -42,9 +42,9 @@ public class EmployeeService {
 
     @Transactional
     public EmployeeResponse createEmployee(EmployeeCreateRequest request) {
-        // Verify user profile exists before linking it to an employee.
-        User user = userRepository.findById(request.getAccountId())
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        // Verify user profile exists. Kafka (UserRegisteredEvent) is async so the profile
+        // may not exist yet immediately after account creation — retry up to 5× / 300ms each.
+        User user = waitForUserProfile(request.getAccountId());
 
         // Prevent duplicate employee for same account.
         if (employeeRepository.existsByUser_AccountId(request.getAccountId())) {
@@ -139,6 +139,38 @@ public class EmployeeService {
 
         auditLogService.log("Employee", saved.getEmployeeId(), "DELETE", oldData, saved, getCurrentAccountId());
         log.info("Disabled employee {}", id);
+    }
+
+    /**
+     * Poll for a User profile with up to MAX_ATTEMPTS retries, spaced RETRY_DELAY_MS apart.
+     * Needed because Kafka consumer processes UserRegisteredEvent asynchronously — the profile
+     * may not exist yet in the brief window between account creation and employee creation.
+     */
+    private static final int    KAFKA_PROFILE_MAX_ATTEMPTS = 5;
+    private static final long   KAFKA_PROFILE_RETRY_DELAY_MS = 300;
+
+    private User waitForUserProfile(String accountId) {
+        for (int attempt = 1; attempt <= KAFKA_PROFILE_MAX_ATTEMPTS; attempt++) {
+            var opt = userRepository.findById(accountId);
+            if (opt.isPresent()) {
+                if (attempt > 1) {
+                    log.info("User profile for {} found on attempt {}", accountId, attempt);
+                }
+                return opt.get();
+            }
+            if (attempt < KAFKA_PROFILE_MAX_ATTEMPTS) {
+                log.warn("User profile not found for {} (attempt {}/{}), retrying in {}ms...",
+                        accountId, attempt, KAFKA_PROFILE_MAX_ATTEMPTS, KAFKA_PROFILE_RETRY_DELAY_MS);
+                try {
+                    Thread.sleep(KAFKA_PROFILE_RETRY_DELAY_MS);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new AppException(ErrorCode.USER_NOT_FOUND);
+                }
+            }
+        }
+        log.error("User profile for {} not found after {} attempts — Kafka may be down or slow", accountId, KAFKA_PROFILE_MAX_ATTEMPTS);
+        throw new AppException(ErrorCode.USER_NOT_FOUND);
     }
 
     private String getCurrentAccountId() {

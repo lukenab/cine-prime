@@ -20,7 +20,11 @@ public class UserEventConsumer {
     @KafkaListener(topics = "user-register-topic", groupId = "user-service-group")
     public void consumeRegisteredEvent(UserRegisteredEvent event){
         if (event == null) return;
-        userService.createUserProfile(event);
+        try {
+            userService.createUserProfile(event);
+        } catch (Exception e) {
+            log.error("[KAFKA] Failed to process user-register-topic for accountId {}: {}", event.getAccountId(), e.getMessage(), e);
+        }
     }
 
     @KafkaListener(topics = "user-update-topic", groupId = "user-service-group")

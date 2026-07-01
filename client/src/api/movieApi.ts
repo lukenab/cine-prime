@@ -90,6 +90,31 @@ export type CreateRoomPayload = {
   defaultPrice: number;
 };
 
+// ── Cinema Cluster ────────────────────────────────────────────────────────────
+
+export type ClusterStatus = "ACTIVE" | "INACTIVE";
+
+export type ClusterResponse = {
+  clusterId: number;
+  clusterName: string;
+  province: string;
+  address: string;
+  phoneNumber?: string;
+  status: ClusterStatus;
+  totalRooms?: number;
+  totalSeats?: number;
+};
+
+export type CreateClusterPayload = {
+  clusterName: string;
+  province: string;
+  address: string;
+  phoneNumber?: string;
+  status?: ClusterStatus;
+};
+
+export type UpdateClusterPayload = Partial<CreateClusterPayload>;
+
 export type SeatResponse = {
   seatId: number;
   seatCode: string;
@@ -157,6 +182,22 @@ export const movieApi = {
 
   createType: (payload: CreateTypePayload) =>
     axiosClient.post('/api/movie-types', payload) as Promise<ApiWrapper<TypeResponse>>,
+
+  // Cinema Cluster APIs
+  getClusters: () =>
+    axiosClient.get('/api/cinema-clusters') as Promise<ApiWrapper<ClusterResponse[]>>,
+
+  createCluster: (payload: CreateClusterPayload) =>
+    axiosClient.post('/api/cinema-clusters', payload) as Promise<ApiWrapper<ClusterResponse>>,
+
+  updateCluster: (id: number, payload: UpdateClusterPayload) =>
+    axiosClient.put(`/api/cinema-clusters/${id}`, payload) as Promise<ApiWrapper<ClusterResponse>>,
+
+  deleteCluster: (id: number) =>
+    axiosClient.delete(`/api/cinema-clusters/${id}`) as Promise<ApiWrapper<void>>,
+
+  getRoomsByCluster: (clusterId: number) =>
+    axiosClient.get(`/api/cinema-rooms?clusterId=${clusterId}`) as Promise<ApiWrapper<RoomResponse[]>>,
 };
 
 // Spring Boot may serialize LocalDate/LocalDateTime as [2026,6,22] arrays or "2026-06-22" strings.
