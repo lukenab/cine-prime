@@ -16,12 +16,19 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.exception.AppException;
+import movieservice.dto.request.CreateShowTimeRequest;
 import movieservice.dto.request.ShowTimeRequest;
+import movieservice.dto.request.UpdateShowTimeRequest;
+import movieservice.dto.response.ShowTimeResponse;
 import movieservice.dto.response.ShowtimeSeatDto;
+import movieservice.entity.CinemaRoom;
+import movieservice.entity.Movie;
 import movieservice.entity.Seat;
 import movieservice.entity.ShowTime;
 import movieservice.entity.ShowtimeSeat;
 import movieservice.exception.MovieErrorCode;
+import movieservice.repository.CinemaRoomRepository;
+import movieservice.repository.MovieRepository;
 import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeSeatRepository;
 import movieservice.repository.SeatRepository;
@@ -34,6 +41,8 @@ public class ShowTimeService {
     ShowTimeRepository showTimeRepository;
     ShowtimeSeatRepository showtimeSeatRepository;
     SeatRepository seatRepository;
+    MovieRepository movieRepository;
+    CinemaRoomRepository cinemaRoomRepository;
 
     @Transactional
     public List<ShowtimeSeatDto> getSeatsByShowtime(Long showtimeId) {
@@ -197,6 +206,130 @@ public class ShowTimeService {
 
     public List<ShowTime> saveSchedule(List<ShowTime> showTimes) {
         return showTimeRepository.saveAll(showTimes);
+    }
 
+    // ── Write API ─────────────────────────────────────────────────────────────
+
+    private static final LocalTime OPENING_TIME = LocalTime.of(8, 0);
+    private static final LocalTime CLOSING_TIME  = LocalTime.of(23, 0);
+
+    @Transactional
+    public ShowTimeResponse createStandalone(CreateShowTimeRequest request) {
+        // 1. Movie exists
+        Movie movie = movieRepository.findById(request.getMovieId())
+                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+
+        // 2. Room exists
+        CinemaRoom room = cinemaRoomRepository.findByCinemaRoomId(request.getCinemaRoomId());
+        if (room == null) throw new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND);
+
+        // 3. showDate >= today + 3
+        if (request.getShowDate().isBefore(LocalDate.now().plusDays(3))) {
+            throw new AppException(MovieErrorCode.INVALID_SHOWDATE);
+        }
+
+        // 4. startTime in 08:00–23:00, endTime = startTime + duration <= 23:00
+        LocalTime startTime = request.getStartTime();
+        LocalTime endTime   = startTime.plusMinutes(movie.getDuration());
+        if (startTime.isBefore(OPENING_TIME) || endTime.isAfter(CLOSING_TIME)) {
+            throw new AppException(MovieErrorCode.INVALID_SHOWTIME);
+        }
+
+        // 5. Overlap check with DB
+        if (showTimeRepository.existsByCinemaRoomAndOverlappingTime(
+                request.getCinemaRoomId(), request.getShowDate(), startTime, endTime)) {
+            throw new AppException(MovieErrorCode.SHOWTIME_CONFLICT_IN_DATABASE);
+        }
+
+        // 6. Save
+        ShowTime showTime = new ShowTime();
+        showTime.setMovie(movie);
+        showTime.setCinemaRoom(room);
+        showTime.setShowDate(request.getShowDate());
+        showTime.setStartTime(startTime);
+        showTime.setEndTime(endTime);
+        showTime.setUpdateAt(LocalDateTime.now());
+
+        return toShowTimeResponse(showTimeRepository.save(showTime));
+    }
+
+    @Transactional
+    public ShowTimeResponse update(Long id, UpdateShowTimeRequest request) {
+        ShowTime showTime = showTimeRepository.findById(id)
+                .orElseThrow(() -> new AppException(MovieErrorCode.SHOWTIME_NOT_FOUND));
+
+        // Apply non-null field updates
+        if (request.getMovieId() != null) {
+            Movie movie = movieRepository.findById(request.getMovieId())
+                    .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+            showTime.setMovie(movie);
+        }
+
+        if (request.getCinemaRoomId() != null) {
+            CinemaRoom room = cinemaRoomRepository.findByCinemaRoomId(request.getCinemaRoomId());
+            if (room == null) throw new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND);
+            showTime.setCinemaRoom(room);
+        }
+
+        if (request.getShowDate() != null) {
+            if (request.getShowDate().isBefore(LocalDate.now().plusDays(3))) {
+                throw new AppException(MovieErrorCode.INVALID_SHOWDATE);
+            }
+            showTime.setShowDate(request.getShowDate());
+        }
+
+        if (request.getStartTime() != null) {
+            LocalTime startTime = request.getStartTime();
+            LocalTime endTime   = startTime.plusMinutes(showTime.getMovie().getDuration());
+            if (startTime.isBefore(OPENING_TIME) || endTime.isAfter(CLOSING_TIME)) {
+                throw new AppException(MovieErrorCode.INVALID_SHOWTIME);
+            }
+            showTime.setStartTime(startTime);
+            showTime.setEndTime(endTime);
+        }
+
+        // Rerun overlap check (excluding self) when room, date, or time changed
+        if (request.getCinemaRoomId() != null || request.getShowDate() != null || request.getStartTime() != null) {
+            if (showTimeRepository.existsByCinemaRoomAndOverlappingTimeExcluding(
+                    showTime.getCinemaRoom().getCinemaRoomId(),
+                    showTime.getShowDate(),
+                    showTime.getStartTime(),
+                    showTime.getEndTime(),
+                    id)) {
+                throw new AppException(MovieErrorCode.SHOWTIME_CONFLICT_IN_DATABASE);
+            }
+        }
+
+        showTime.setUpdateAt(LocalDateTime.now());
+        return toShowTimeResponse(showTimeRepository.save(showTime));
+    }
+
+    @Transactional
+    public void deleteById(Long id) {
+        if (!showTimeRepository.existsById(id)) {
+            throw new AppException(MovieErrorCode.SHOWTIME_NOT_FOUND);
+        }
+        if (showTimeRepository.existsByShowTimeIdAndFutureShowTime(id, LocalDate.now(), LocalTime.now())) {
+            throw new AppException(MovieErrorCode.ACTIVE_SHOWTIMES_EXIST);
+        }
+        showTimeRepository.deleteById(id);
+    }
+
+    private ShowTimeResponse toShowTimeResponse(ShowTime s) {
+        ShowTimeResponse r = new ShowTimeResponse();
+        r.setShowTimeId(s.getShowTimeId());
+        r.setShowDate(s.getShowDate());
+        r.setStartTime(s.getStartTime());
+        r.setEndTime(s.getEndTime());
+        r.setUpdateAt(s.getUpdateAt());
+        if (s.getMovie() != null) {
+            r.setMovieId(s.getMovie().getMovieId());
+            r.setMovieName(s.getMovie().getMovieNameVn());
+        }
+        if (s.getCinemaRoom() != null) {
+            r.setCinemaRoomId(s.getCinemaRoom().getCinemaRoomId());
+            r.setCinemaRoomName(s.getCinemaRoom().getCinemaRoomName());
+        }
+        return r;
     }
 }
