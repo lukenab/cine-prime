@@ -3,6 +3,7 @@ import { movieApi, type MovieApiResponse } from "../../api/movieApi";
 import { HeroSection } from "../../components/shared/HeroSection";
 import { SearchBar } from "../../components/shared/SearchBar";
 import { NowShowing } from "../../components/shared/NowShowing";
+import { CinemaLocations } from "../../components/shared/CinemaLocations";
 import { ExperienceBanner } from "../../components/shared/ExperienceBanner";
 import { ComingSoon } from "../../components/shared/ComingSoon";
 
@@ -39,6 +40,7 @@ export default function HomePage() {
       <HeroSection />
       <SearchBar />
       <NowShowing movies={movies} loading={loadingMovies} error={movieError} />
+      <CinemaLocations />
       <ExperienceBanner />
       <ComingSoon movies={movies} />
     </>
