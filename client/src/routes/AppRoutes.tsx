@@ -2,7 +2,6 @@ import AuthLayout from "../layouts/AuthLayout";
 import CustomerLayout from "../layouts/CustomerLayout";
 import LoginPage from "../pages/auth/LoginPage";
 import HomePage from "../pages/customer/HomePage";
-import SeatBookingPage from "../pages/customer/SeatBookingPage";
 import ShowtimePage from "../pages/customer/ShowtimePage";
 import { Route, Routes } from "react-router-dom";
 import RootRedirect from "./RootRedirect";
@@ -84,3 +83,4 @@ export default function AppRoutes() {
     </Routes>
   );
 }
+
