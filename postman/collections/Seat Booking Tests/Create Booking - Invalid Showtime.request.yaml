@@ -1,0 +1,26 @@
+$kind: http-request
+name: 'Create Booking - Invalid Showtime'
+order: 6000
+method: POST
+url: '{{baseUrl}}/api/bookings'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "showtimeId": 99999,
+      "seatIds": [99999]
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("[Negative] Status code is NOT 200 (expect 4xx or 5xx)", function () {
+          pm.expect(pm.response.code).to.not.eql(200);
+      });
+
+      pm.test("[Negative] Status code is 4xx or 5xx", function () {
+          pm.expect(pm.response.code).to.be.within(400, 599);
+      });

@@ -1,0 +1,31 @@
+$kind: http-request
+name: Lock Seats
+order: 2000
+method: PUT
+url: '{{baseUrl}}/api/showtimes/{{showtimeId}}/seats/lock'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    [
+      {{firstSeatId}}
+    ]
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Response has field 'code' equal to 1000", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.code).to.eql(1000);
+      });
+
+      pm.test("Response has field 'message' equal to 'Seats locked successfully'", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.message).to.eql('Seats locked successfully');
+      });

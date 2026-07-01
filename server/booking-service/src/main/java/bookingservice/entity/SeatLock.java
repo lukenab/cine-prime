@@ -20,7 +20,7 @@ import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
 @Entity
-// Tạo unique constraint tầng Database tránh việc khóa trùng ghế trong cùng một suất chiếu
+
 @Table(name = "seat_lock", uniqueConstraints = {
     @UniqueConstraint(name = "uc_showtime_seat", columnNames = {"showtime_id", "seat_id"})
 })
@@ -34,7 +34,7 @@ public class SeatLock {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     Long id;
 
-    // Các trường này đều là Plain fields đúng theo constraint đề bài yêu cầu
+
     @Column(name = "showtime_id", nullable = false)
     Long showtimeId;
 

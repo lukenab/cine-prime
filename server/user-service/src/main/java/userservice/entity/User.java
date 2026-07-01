@@ -48,6 +48,9 @@
         @Column(name = "identity_card", length = 20)
         private String identityCard;
 
+        @Column(name = "email", length = 255)
+        private  String email;
+
         @Column(name = "avatar_url", length = 255)
         private String avatarUrl;
 
@@ -66,5 +69,4 @@
 
         @OneToOne(mappedBy = "user")
         private Employee employee;
-
     }

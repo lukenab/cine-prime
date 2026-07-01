@@ -12,6 +12,7 @@ spring:
           '[/**]':
             allowed-origins:
               - "http://localhost:3000"
+              - "http://localhost:3001"
             allowed-methods:
               - GET
               - POST
@@ -25,7 +26,7 @@ spring:
         - id: movie-service
           uri: lb://movie-service
           predicates:
-            - Path=/api/movies/**, /api/cinema-rooms/**, /api/movie-types/**, /api/seats/**
+            - Path=/api/movies/**, /api/cinemas/**, /api/shows/**, /api/showtimes/**, /api/cinema-rooms/**, /api/movie-types/**, /api/seats/**
 
         - id: booking-service
           uri: lb://booking-service

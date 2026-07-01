@@ -24,6 +24,6 @@ public class CreateBookingResponse {
     Long showtimeId;
     String status;
     BigDecimal totalPrice;
-    List<BookingItemResponse> items; // Danh sách chi tiết ghế lồng bên trong
-    LocalDateTime lockedUntil;       // Thời gian giữ ghế 10 phút
+    List<BookingItemResponse> items; 
+    LocalDateTime lockedUntil;       
 }

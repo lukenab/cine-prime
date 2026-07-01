@@ -1,0 +1,48 @@
+$kind: http-request
+name: Create Booking
+order: 3000
+method: POST
+url: '{{baseUrl}}/api/bookings'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "showtimeId": {{showtimeId}},
+      "seatIds": [{{firstSeatId}}]
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Response has field 'code' equal to 1000", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.code).to.eql(1000);
+      });
+
+      pm.test("Response has field 'result' as object", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.result).to.be.an('object');
+      });
+
+      pm.test("result.bookingId exists and is a non-empty string", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.result.bookingId).to.be.a('string').and.to.have.length.above(0);
+      });
+
+      pm.test("result.lockedUntil exists", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.result.lockedUntil).to.exist;
+      });
+
+      // Save bookingId to collection variable
+      var jsonData = pm.response.json();
+      if (jsonData.result && jsonData.result.bookingId) {
+          pm.collectionVariables.set('bookingId', jsonData.result.bookingId);
+      }

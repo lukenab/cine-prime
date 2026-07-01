@@ -22,7 +22,7 @@ public class Ticket {
     @Column(name = "ticket_id", length = 50)
     String ticketId;
 
-    // --- PLAIN FIELDS ---
+
     @Column(name = "showtime_id")
     Long showtimeId;
 
@@ -31,7 +31,7 @@ public class Ticket {
 
     @Column(name = "member_id", length = 50)
     String memberId;
-    // ---------------------
+
 
     @Column(name = "movie_name")
     String movieName;
@@ -73,7 +73,7 @@ public class Ticket {
     @Column(name = "issued_by")
     String issuedBy;
 
-    // QUAN HỆ NỘI BỘ TRONG SERVICE
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "booking_id", referencedColumnName = "booking_id")
     Booking booking;

@@ -19,10 +19,10 @@ public class BookingItem {
     @Column(name = "detail_id")
     Long detailId;
 
-    // --- PLAIN FIELDS ---
+
     @Column(name = "showtime_seat_id")
     Long showtimeSeatId; 
-    // ---------------------
+
 
     @Column(name = "seat_code", length = 20)
     String seatCode;
@@ -42,7 +42,7 @@ public class BookingItem {
     @Version
     Integer version;
 
-    // QUAN HỆ NỘI BỘ TRONG SERVICE
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "booking_id", referencedColumnName = "booking_id")
     Booking booking;

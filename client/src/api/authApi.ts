@@ -43,8 +43,7 @@ export const authApi = {
     },
 
     logout: () => {
-        // Token đã được interceptor tự đính vào Authorization header
-        // Không cần gửi trong body nữa
+
         return axiosClient.post('/api/auth/logout');
     },
 

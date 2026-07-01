@@ -48,15 +48,6 @@ public class BookingController {
                                 .build();
         }
 
-        // @PostMapping("/hold")
-        // public ApiResponse<SeatHoldResponse> holdSeats(@RequestBody @Valid HoldSeatRequest request) {
-        //         String accountId = JwtSecurityUtils.getCurrentAccountId();
-        //         SeatHoldResponse seatHoldResponse = bookingService.holdSeats(request, accountId);
-        //         return ApiResponse.<SeatHoldResponse>builder()
-        //                         .code(1000)
-        //                         .result(seatHoldResponse)
-        //                         .build();
-        // }
 
         @GetMapping("/{id}")
         public ApiResponse<BookingDetailResponse> getBookingById(@PathVariable("id") String id) {

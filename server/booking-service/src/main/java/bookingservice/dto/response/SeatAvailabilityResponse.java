@@ -17,11 +17,11 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Builder
 public class SeatAvailabilityResponse {
-    Long showtimeSeatId; // showtime_seat_id
-    BigDecimal price;    // price
-    String seatCode;     // seat_code
-    String seatType;     // seat_type
-    String status;       // status (AVAILABLE, LOCKED, BOOKED)
-    Long seatId;         // seat_id
-    Long showtimeId;     // showtime_id
+    Long showtimeSeatId; 
+    BigDecimal price;    
+    String seatCode;     
+    String seatType;    
+    String status;       
+    Long seatId;        
+    Long showtimeId;     
 }
