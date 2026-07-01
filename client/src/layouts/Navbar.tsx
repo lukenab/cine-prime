@@ -148,15 +148,6 @@ export function Navbar() {
               Sign In
             </Link>
           )}
-
-          <button
-            onClick={() => navigate("/booking/1")}
-            className="flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-200 hover:brightness-110"
-            style={{ backgroundColor: "#FFD700", color: "#050505", fontSize: "0.85rem", fontWeight: 700 }}
-          >
-            <Ticket size={14} />
-            Book Now
-          </button>
         </div>
 
         <button
@@ -227,15 +218,6 @@ export function Navbar() {
               Sign In
             </Link>
           )}
-
-          <button
-            onClick={() => navigate("/booking/1")}
-            className="flex items-center justify-center gap-2 px-4 py-3 rounded-full w-full mt-2"
-            style={{ backgroundColor: "#FFD700", color: "#050505", fontWeight: 700, fontSize: "0.9rem" }}
-          >
-            <Ticket size={16} />
-            Book Now
-          </button>
         </div>
       )}
     </nav>
