@@ -1,7 +1,7 @@
 package authservice.config;
 
-import authservice.dto.request.IntrospectRequest;
 import authservice.service.JwtService;
+import movie.theater.common.exception.AppException;
 import com.nimbusds.jose.JOSEException;
 import jakarta.annotation.PostConstruct;
 import lombok.AccessLevel;
@@ -46,15 +46,12 @@ public class CustomJwtDecoder implements JwtDecoder {
     @Override
     public Jwt decode(String token) throws JwtException {
         try {
-            var response = jwtService.introspect(IntrospectRequest.builder()
-                    .token(token)
-                    .build());
-
-            if (!response.isValid()) {
-                throw new JwtException("Token is invalid or has been logged out");
-            }
+            // Verify signature + expiry + not revoked/logged-out
+            jwtService.verifyToken(token, false);
         } catch (ParseException | JOSEException e) {
             throw new JwtException(e.getMessage());
+        } catch (AppException e) {
+            throw new JwtException("Token is invalid or has been logged out");
         }
 
         return nimbusJwtDecoder.decode(token);

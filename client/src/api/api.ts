@@ -58,7 +58,7 @@ axiosClient.interceptors.response.use(
     const url: string = originalRequest?.url ?? "";
 
     // Never try to refresh on public auth endpoints
-    const isPublicAuthCall = ["auth/login", "auth/register", "auth/resend", "auth/refresh"].some(
+    const isPublicAuthCall = ["auth/login", "auth/register", "auth/resend", "auth/refresh", "auth/check"].some(
       (s) => url.includes(s)
     );
 

@@ -4,12 +4,14 @@ import authservice.client.UserClient;
 import authservice.dto.request.*;
 import authservice.dto.response.IntrospectResponse;
 import authservice.entity.AuthToken;
+import authservice.event.OtpRequestedEvent;
 import authservice.event.UserRegisteredEvent;
 import authservice.dto.response.AuthenticationResponse;
 import authservice.dto.response.AccountResponse;
 import authservice.dto.response.RegisterResponse;
 import authservice.entity.Account;
 import authservice.entity.Role;
+import authservice.enums.AccountStatus;
 import authservice.mapper.AccountMapper;
 import authservice.producer.UserEventProducer;
 import authservice.repository.AccountRepository;
@@ -54,7 +56,6 @@ public class AuthenticationService {
     AccountMapper accountMapper;
     PasswordEncoder passwordEncoder;
     JwtService jwtService;
-    EmailService emailService;
     UserEventProducer userEventProducer;
     UserClient userClient;
     AuthTokenRepository authTokenRepository;
@@ -65,7 +66,6 @@ public class AuthenticationService {
 
     private static final String DEFAULT_USER_ROLE = "USER";
     private static final String TOKEN_TYPE = "BEARER";
-    private static final int ACCOUNT_STATUS_ACTIVE = 1;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final long OTP_TTL_MINUTES = 5;
     private static final long OTP_COOLDOWN_SECONDS = 60;
@@ -85,14 +85,7 @@ public class AuthenticationService {
 
         try {
             validateUniqueFields(request.getUsername(), emailKey, request.getPhoneNumber(), request.getIdentityCard());
-
-            // Hash password before storing in Redis so plain-text credentials
-            // are never persisted, even temporarily.
             request.setPassword(passwordEncoder.encode(request.getPassword()));
-
-            // Serialize and store the validated registration data in Redis.
-            // This prevents the client from tampering with form fields between
-            // the initiate and verify steps (e.g. changing phone/identityCard after validation).
             try {
                 String pendingKey = PENDING_REGISTER_KEY_PREFIX + emailKey;
                 redisTemplate.opsForValue().set(pendingKey, objectMapper.writeValueAsString(request), OTP_TTL_MINUTES, TimeUnit.MINUTES);
@@ -103,7 +96,6 @@ public class AuthenticationService {
 
             generateAndSendOtp(emailKey);
 
-            // Set cooldown so resendOtp cannot be called immediately after initiate.
             String cooldownKey = "cooldown:otp:" + emailKey;
             redisTemplate.opsForValue().set(cooldownKey, "locked", OTP_COOLDOWN_SECONDS, TimeUnit.SECONDS);
 
@@ -201,7 +193,7 @@ public class AuthenticationService {
         // Password was already hashed before being stored in Redis — set directly.
         Account account = accountMapper.toAccount(registerRequest);
         account.setPasswordHash(registerRequest.getPassword());
-        account.setStatus(ACCOUNT_STATUS_ACTIVE);
+        account.setStatus(AccountStatus.ACTIVE);
 
         Role accountRole = roleRepository.findById(DEFAULT_USER_ROLE)
                 .orElseThrow(() -> new AppException(AuthErrorCode.ROLE_NOT_FOUND));
@@ -247,7 +239,7 @@ public class AuthenticationService {
             throw new AppException(GlobalErrorCode.UNAUTHENTICATED);
         }
 
-        if (account.getStatus() == null || account.getStatus() != ACCOUNT_STATUS_ACTIVE) {
+        if (account.getStatus() == null || account.getStatus() != AccountStatus.ACTIVE) {
             authAuditLogService.failed("LOGIN_FAILED", account.getAccountId(), "Account inactive",
                     authAuditLogService.metadata("username", request.getUsername()));
             throw new AppException(AuthErrorCode.ACCOUNT_INACTIVE);
@@ -321,8 +313,13 @@ public class AuthenticationService {
     private void generateAndSendOtp(String emailKey) {
         String otp = String.format("%06d", SECURE_RANDOM.nextInt(1000000));
         redisTemplate.opsForValue().set(emailKey, otp, OTP_TTL_MINUTES, TimeUnit.MINUTES);
-        emailService.sendOtpEmail(emailKey, otp);
-        log.info("OTP sent to email: {}", emailKey);
+        userEventProducer.sendOtpRequestedEvent(
+                OtpRequestedEvent.builder()
+                        .email(emailKey)
+                        .otp(otp)
+                        .expiryMinutes((int) OTP_TTL_MINUTES)
+                        .build()
+        );
     }
 
     private void validateUniqueFields(String username, String emailKey, String phone, String identityCard) {

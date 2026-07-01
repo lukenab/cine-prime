@@ -1,5 +1,6 @@
 package authservice.entity;
 
+import authservice.enums.AccountStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -40,8 +41,9 @@ public class Account {
     )
     Set<Role> roles;
 
-    @Column(name = "status", columnDefinition = "integer default 1")
-    Integer status;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", columnDefinition = "varchar(10) default 'ACTIVE'")
+    AccountStatus status;
 
     @Column(name = "last_login_at")
     LocalDateTime lastLoginAt;

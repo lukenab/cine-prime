@@ -5,18 +5,6 @@ spring:
   application:
     name: auth-service
 
-  mail:
-    host: smtp.gmail.com
-    port: 587
-    username: cineprime.theater.contact@gmail.com
-    password: yczsrtyvtveosbvi
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-
   data:
       redis:
         host: localhost
@@ -49,7 +37,7 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
         "[spring.json.add.type.headers]": true
-        "[spring.json.type.mapping]": "userRegistered:authservice.event.UserRegisteredEvent,userUpdated:authservice.event.UserUpdatedEvent"
+        "[spring.json.type.mapping]": "userRegistered:authservice.event.UserRegisteredEvent,userUpdated:authservice.event.UserUpdatedEvent,otpRequested:authservice.event.OtpRequestedEvent"
 
 eureka:
   instance:

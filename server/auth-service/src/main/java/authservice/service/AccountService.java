@@ -2,7 +2,9 @@ package authservice.service;
 
 import authservice.client.UserClient;
 import authservice.dto.request.AccountUpdateRequest;
+import authservice.dto.request.AdminCreateAccountRequest;
 import authservice.dto.request.RegisterRequest;
+import authservice.enums.AccountStatus;
 import authservice.event.UserRegisteredEvent;
 import authservice.event.UserUpdatedEvent;
 import authservice.dto.response.AccountResponse;
@@ -29,6 +31,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -61,8 +64,6 @@ public class AccountService {
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new AppException(AuthErrorCode.ACCOUNT_NOT_FOUND));
 
-        // Validate phone/CCCD uniqueness trước khi save để tránh lệch dữ liệu với user-service.
-        // Cần lấy profile hiện tại để biết phone/CCCD cũ — tránh false positive khi giá trị không đổi.
         if (request.getPhoneNumber() != null || request.getIdentityCard() != null) {
             try {
                 String currentPhone = null;
@@ -74,7 +75,6 @@ public class AccountService {
                         currentIdentityCard = profile.getIdentityCard();
                     }
                 } catch (FeignException ignored) {
-                    // Không lấy được profile hiện tại → fallback: coi như không có giá trị cũ
                 }
 
                 boolean phoneChanged = request.getPhoneNumber() != null
@@ -143,14 +143,17 @@ public class AccountService {
     }
 
     @Transactional
-    public AccountResponse createAccount(RegisterRequest request) {
+    public AccountResponse createAccount(AdminCreateAccountRequest request) {
         String emailKey = request.getEmail().trim().toLowerCase();
 
         validateUniqueFields(request.getUsername(), emailKey, request.getPhoneNumber(), request.getIdentityCard());
 
-        Account account = accountMapper.toAccount(request);
-        account.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-        account.setStatus(1);
+        Account account = Account.builder()
+                .username(request.getUsername())
+                .email(emailKey)
+                .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .status(AccountStatus.ACTIVE)
+                .build();
 
         String requestedRole = (request.getRole() != null && !request.getRole().isBlank())
                 ? request.getRole().toUpperCase().trim()
@@ -158,14 +161,10 @@ public class AccountService {
 
         Role accountRole = roleRepository.findById(requestedRole)
                 .orElseThrow(() -> new AppException(AuthErrorCode.ROLE_NOT_FOUND));
-        
-        HashSet<Role> roles = new HashSet<>();
-        roles.add(accountRole);
-        account.setRoles(roles);
 
+        account.setRoles(new HashSet<>(Set.of(accountRole)));
         account = accountRepository.saveAndFlush(account);
 
-        // 5. Bắn Event sang cho user-service tạo Profile
         UserRegisteredEvent userRegisteredEvent = UserRegisteredEvent.builder()
                 .accountId(account.getAccountId())
                 .fullName(request.getFullName())

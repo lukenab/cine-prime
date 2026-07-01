@@ -295,8 +295,10 @@ export default function RegisterPage() {
     const errs: Record<string, string> = {};
     if (!form.fullName.trim()) errs.fullName = "Full name is required";
     if (!form.username.trim()) errs.username = "Username is required";
+    else if (form.username.trim().length < 5) errs.username = "Username must be at least 5 characters";
     if (!form.email.trim()) errs.email = "Email is required";
     if (!form.password.trim()) errs.password = "Password is required";
+    else if (form.password.length < 8) errs.password = "Password must be at least 8 characters";
     setLocalErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
