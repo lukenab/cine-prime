@@ -1,14 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
 import { format, addDays, isSameDay } from "date-fns";
 import { useNavigate, useParams } from "react-router-dom";
-import { movieApi, MovieApiResponse, ShowTimeResponse, toDateStr } from "../../api/movieApi";
+import { movieApi, MovieApiResponse, ShowTimeResponse } from "../../api/movieApi";
 import {
   ChevronLeft,
   MapPin,
   Clock,
   ChevronDown,
   ChevronUp,
-  Star,
   Armchair,
   Calendar,
   Ticket,
@@ -17,22 +16,7 @@ import {
   CheckCheck,
 } from "lucide-react";
 
-
-const MOCK_PRICES = [75_000, 90_000, 95_000, 110_000, 120_000, 130_000];
-const MOCK_TOTAL_SEATS = [80, 100, 120, 150, 200, 300];
-
-function enrichWithMockData(shows: ShowTimeResponse[]): ShowTimeResponse[] {
-  return shows.map((s) => {
-    const seed = s.showTimeId ?? 0;
-    const total = s.totalSeats ?? MOCK_TOTAL_SEATS[seed % MOCK_TOTAL_SEATS.length];
-    const available = s.availableSeats ?? Math.max(0, total - (seed * 7 % (total + 1)));
-    const price = s.price ?? MOCK_PRICES[seed % MOCK_PRICES.length];
-    const status = s.status ?? (seed % 11 === 0 ? "FINISHED" : "SCHEDULED");
-    return { ...s, status, price, availableSeats: available, totalSeats: total };
-  });
-}
-
-
+// ─── Helpers ────────────────────────────────────────────────────────────────
 function formatTime(t: string | number[] | undefined) {
   if (!t) return "";
   if (Array.isArray(t)) {
@@ -47,23 +31,26 @@ function formatTime(t: string | number[] | undefined) {
   return format(date, "h:mm a");
 }
 
+function formatPrice(v: number) {
+  return new Intl.NumberFormat("vi-VN").format(v) + "đ";
+}
+
 function seatsLabel(available: number, total: number) {
-  const pct = available / total;
-  if (available === 0) return { label: "Sold Out", color: "text-red-400" };
-  if (pct < 0.15) return { label: `${available} left`, color: "text-orange-400" };
-  return { label: `${available} / ${total}`, color: "text-emerald-400" };
+  if (available === 0) return { label: "Sold Out", color: "#f87171" };
+  if (available / total < 0.15) return { label: `${available} left`, color: "#fb923c" };
+  return { label: `${available}/${total}`, color: "#34d399" };
 }
 
 function statusMeta(status: string) {
   switch (status) {
     case "FINISHED":
-      return { label: "Ended", icon: CheckCheck, bg: "bg-zinc-800", text: "text-zinc-400" };
+      return { label: "Ended", Icon: CheckCheck, color: "#a1a1aa", bg: "rgba(113,113,122,0.15)" };
     case "CANCELLED":
-      return { label: "Cancelled", icon: Ban, bg: "bg-red-950", text: "text-red-400" };
+      return { label: "Cancelled", Icon: Ban, color: "#f87171", bg: "rgba(248,113,113,0.12)" };
     case "ONGOING":
-      return { label: "Now Playing", icon: Clock, bg: "bg-blue-950", text: "text-blue-300" };
+      return { label: "Now Playing", Icon: Clock, color: "#60a5fa", bg: "rgba(96,165,250,0.12)" };
     default:
-      return null;
+      return { label: "Scheduled", Icon: Clock, color: "#3b82f6", bg: "rgba(59,130,246,0.12)" };
   }
 }
 
@@ -75,7 +62,7 @@ function getMockShowtimesForDateAndCinema(
   cinemaName: string
 ): (ShowTimeResponse & { showDateTimeISO: string })[] {
   if (date.getDay() === 3) {
-    return [];
+    return []; // Empty state demo for Wednesday
   }
 
   const rooms = ["IMAX", "A", "B", "C"];
@@ -110,6 +97,14 @@ function getMockShowtimesForDateAndCinema(
 
       const isoDateTime = `${dateStr}T${timeStr}:00`;
 
+      let status = "SCHEDULED";
+      if (showTimeId % 11 === 0) status = "FINISHED";
+      else if (showTimeId % 17 === 0) status = "CANCELLED";
+      else if (showTimeId % 5 === 0) status = "ONGOING";
+
+      let available = 80 - (showTimeId % 30);
+      if (showTimeId % 4 === 0) available = 0; // trigger sold out
+      
       results.push({
         showTimeId,
         showDate: dateStr,
@@ -118,9 +113,9 @@ function getMockShowtimesForDateAndCinema(
         cinemaRoomId: showTimeId,
         cinemaRoomName: roomName,
         updateAt: new Date().toISOString(),
-        status: "SCHEDULED",
+        status,
         price: roomName === "IMAX" ? 130000 : 90000,
-        availableSeats: 80 - (showTimeId % 30),
+        availableSeats: available,
         totalSeats: roomName === "IMAX" ? 150 : 100,
         showDateTimeISO: isoDateTime
       });
@@ -132,25 +127,26 @@ function getMockShowtimesForDateAndCinema(
 
 function SkeletonCard() {
   return (
-    <div className="rounded-xl border border-border bg-card p-5 space-y-3 animate-pulse">
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5 space-y-3 animate-pulse">
       <div className="flex justify-between">
-        <div className="h-4 w-28 rounded-md bg-muted" />
-        <div className="h-4 w-16 rounded-md bg-muted" />
+        <div className="h-4 w-28 rounded-md bg-zinc-800" />
+        <div className="h-4 w-16 rounded-md bg-zinc-800" />
       </div>
-      <div className="h-8 w-20 rounded-md bg-muted" />
+      <div className="h-8 w-20 rounded-md bg-zinc-800" />
       <div className="flex gap-3">
-        <div className="h-3 w-24 rounded bg-muted" />
-        <div className="h-3 w-20 rounded bg-muted" />
+        <div className="h-3 w-24 rounded bg-zinc-800" />
+        <div className="h-3 w-20 rounded bg-zinc-800" />
       </div>
-      <div className="h-1.5 w-full rounded-full bg-muted" />
+      <div className="h-1.5 w-full rounded-full bg-zinc-800" />
       <div className="flex justify-between items-center pt-1">
-        <div className="h-5 w-14 rounded bg-muted" />
-        <div className="h-9 w-28 rounded-lg bg-muted" />
+        <div className="h-5 w-14 rounded bg-zinc-800" />
+        <div className="h-9 w-28 rounded-lg bg-zinc-800" />
       </div>
     </div>
   );
 }
 
+// ─── Enriched showtime card ─────────────────────────────────────────────────
 interface ShowtimeCardProps {
   show: ShowTimeResponse & { showDateTimeISO?: string };
   onSelect: (show: ShowTimeResponse & { showDateTimeISO?: string }) => void;
@@ -159,42 +155,60 @@ interface ShowtimeCardProps {
 function ShowtimeCard({ show, onSelect }: ShowtimeCardProps) {
   const status = show.status ?? "SCHEDULED";
   const disabled = isDisabled(status);
+  const seat = seatsLabel(show.availableSeats || 0, show.totalSeats || 100);
+  const sm = statusMeta(status);
 
   return (
     <div
-      className={[
-        "relative rounded-md border bg-zinc-900 px-3 py-1.5 flex items-center justify-center transition-all duration-200 min-w-[80px] text-center",
-        disabled
-          ? "border-zinc-800 opacity-50 cursor-not-allowed select-none"
-          : "border-zinc-800 hover:border-yellow-500/40 hover:bg-zinc-800 hover:shadow-[0_0_15px_rgba(234,179,8,0.1)] cursor-pointer",
-      ].join(" ")}
-      onClick={() => !disabled && onSelect(show)}
       role={disabled ? undefined : "button"}
       tabIndex={disabled ? -1 : 0}
+      onClick={() => !disabled && onSelect(show)}
       onKeyDown={(e) => e.key === "Enter" && !disabled && onSelect(show)}
+      className={[
+        "rounded-xl border p-3.5 transition-all duration-200 min-w-[210px] flex flex-col gap-2.5",
+        disabled
+          ? "border-zinc-800 bg-zinc-900/40 opacity-50 cursor-not-allowed select-none"
+          : "border-zinc-800 bg-zinc-900 hover:border-blue-500/50 hover:bg-zinc-800/70 hover:shadow-[0_0_18px_rgba(59,130,246,0.15)] cursor-pointer",
+      ].join(" ")}
     >
-      <span
-        className="font-['Barlow_Condensed'] text-base font-bold tracking-tight leading-none"
-        style={{ color: disabled ? "#71717a" : "#f0f0f8" }}
-      >
-        {formatTime(show.startTime)}
-      </span>
+      <div className="flex items-center justify-between">
+        <span className="font-bold text-[15px]" style={{ color: disabled ? "#71717a" : "#f0f0f8" }}>
+          {formatTime(show.startTime)} <span className="text-zinc-500 font-normal">— {formatTime(show.endTime)}</span>
+        </span>
+        <span
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide"
+          style={{ color: sm.color, background: sm.bg }}
+        >
+          <sm.Icon size={11} /> {sm.label}
+        </span>
+      </div>
+
+      <div className="h-px bg-zinc-800" />
+
+      <div className="flex items-center justify-between text-[13px]">
+        <span className="flex items-center gap-1.5 text-zinc-300">
+          <Ticket size={13} className="text-zinc-500" />
+          {formatPrice(show.price || 90000)}
+        </span>
+        <span className="flex items-center gap-1.5 font-medium" style={{ color: seat.color }}>
+          <Armchair size={13} />
+          {seat.label}
+        </span>
+      </div>
     </div>
   );
 }
 
+// ─── Cinema → room accordion ────────────────────────────────────────────────
 interface CinemaGroupProps {
-  cinemaName: string;
   showtimes: (ShowTimeResponse & { showDateTimeISO?: string })[];
   onSelect: (show: ShowTimeResponse & { showDateTimeISO?: string }) => void;
-  expanded: boolean;
-  onToggle: () => void;
 }
 
-function CinemaGroup({ cinemaName, showtimes, onSelect, expanded, onToggle }: CinemaGroupProps) {
-  const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set());
+function CinemaGroup({ showtimes, onSelect }: CinemaGroupProps) {
+  const [open, setOpen] = useState<Set<string>>(new Set(["IMAX"]));
 
-  const groupedByRoom = useMemo(() => {
+  const byRoom = useMemo(() => {
     const map = new Map<string, (ShowTimeResponse & { showDateTimeISO?: string })[]>();
     showtimes.forEach((s) => {
       let roomName = s.cinemaRoomName;
@@ -205,73 +219,62 @@ function CinemaGroup({ cinemaName, showtimes, onSelect, expanded, onToggle }: Ci
          else if (rm === 2) roomName = "B";
          else roomName = "C";
       }
-      
       if (!map.has(roomName)) map.set(roomName, []);
       map.get(roomName)!.push(s);
     });
     
-    Array.from(map.values()).forEach(times => {
-      times.sort((a, b) => {
-        const timeA = String(a.startTime);
-        const timeB = String(b.startTime);
-        return timeA.localeCompare(timeB);
-      });
-    });
-
-    const entries = Array.from(map.entries());
     const order = ["IMAX", "A", "B", "C"];
-    entries.sort((a, b) => {
-      let indexA = order.indexOf(a[0]);
-      let indexB = order.indexOf(b[0]);
-      if (indexA === -1) indexA = 999;
-      if (indexB === -1) indexB = 999;
-      return indexA - indexB;
-    });
-
-    return entries;
+    return Array.from(map.entries())
+      .sort((a, b) => {
+        let indexA = order.indexOf(a[0]);
+        let indexB = order.indexOf(b[0]);
+        if (indexA === -1) indexA = 999;
+        if (indexB === -1) indexB = 999;
+        return indexA - indexB;
+      })
+      .map(([room, list]) => {
+         return [room, list.sort((x, y) => String(x.startTime).localeCompare(String(y.startTime)))] as const;
+      });
   }, [showtimes]);
 
-  function toggleRoom(roomName: string) {
-    setExpandedRooms(prev => {
-      const next = new Set(prev);
-      if (next.has(roomName)) next.delete(roomName);
-      else next.add(roomName);
-      return next;
+  const toggle = (room: string) =>
+    setOpen((prev) => {
+      const n = new Set(prev);
+      n.has(room) ? n.delete(room) : n.add(room);
+      return n;
     });
-  }
 
   return (
-    <section className="bg-transparent">
-      <div className="flex flex-col">
-          {groupedByRoom.map(([roomName, times]) => {
-             const isRoomExpanded = expandedRooms.has(roomName);
-             return (
-               <div key={roomName} className="border-b border-zinc-800/50 last:border-b-0">
-                 <button 
-                   className="w-full flex items-center justify-between p-4 hover:bg-zinc-900/50 transition-colors"
-                   onClick={(e) => { e.stopPropagation(); toggleRoom(roomName); }}
-                 >
-                   <div className="flex items-center gap-2">
-                     <span className="font-semibold text-zinc-200 tracking-wide">ROOM {roomName}</span>
-                     <span className="text-xs text-zinc-500">({times.length} shows)</span>
-                   </div>
-                   {isRoomExpanded ? <ChevronUp size={16} className="text-zinc-600" /> : <ChevronDown size={16} className="text-zinc-600" />}
-                 </button>
-                 {isRoomExpanded && (
-                   <div className="px-4 pb-4 flex flex-wrap gap-3">
-                     {times.map((show) => (
-                       <ShowtimeCard key={show.showTimeId} show={show} onSelect={onSelect} />
-                     ))}
-                   </div>
-                 )}
-               </div>
-             );
-          })}
-      </div>
-    </section>
+    <div className="rounded-xl border border-zinc-800 overflow-hidden divide-y divide-zinc-800/60 bg-transparent">
+      {byRoom.map(([room, list]) => {
+        const expanded = open.has(room);
+        return (
+          <div key={room}>
+            <button
+              onClick={() => toggle(room)}
+              className="w-full flex items-center justify-between p-4 hover:bg-zinc-900/50 transition-colors cursor-pointer"
+            >
+              <span className="flex items-center gap-2">
+                <span className="font-semibold text-zinc-200 tracking-wide">ROOM {room}</span>
+                <span className="text-xs text-zinc-500">({list.length} shows)</span>
+              </span>
+              {expanded ? <ChevronUp size={16} className="text-zinc-600" /> : <ChevronDown size={16} className="text-zinc-600" />}
+            </button>
+            {expanded && (
+              <div className="px-4 pb-4 flex flex-wrap gap-3">
+                {list.map((s) => (
+                  <ShowtimeCard key={s.showTimeId} show={s} onSelect={onSelect} />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
+// ─── Page ───────────────────────────────────────────────────────────────────
 export default function ShowtimePage() {
   const navigate = useNavigate();
   const { movieId } = useParams<{ movieId: string }>();
@@ -283,6 +286,7 @@ export default function ShowtimePage() {
   const dates = Array.from({ length: 7 }, (_, i) => addDays(today, i));
   const [selectedDate, setSelectedDate] = useState<Date>(today);
   const [selectedCinema, setSelectedCinema] = useState<string>("CinePrime Lê Văn Việt");
+  const CINEMAS = ["CinePrime Lê Văn Việt", "CinePrime Quang Trung"];
 
   useEffect(() => {
     setLoading(true);
@@ -322,12 +326,9 @@ export default function ShowtimePage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-zinc-950 text-white">
-        {/* Skeleton hero */}
         <div className="h-48 bg-zinc-900 animate-pulse" />
-        {/* Skeleton filter bar */}
         <div className="h-14 bg-zinc-900/70 border-b border-zinc-800 animate-pulse" />
-        {/* Skeleton cards */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-5xl mx-auto px-6 py-8">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {Array.from({ length: 6 }).map((_, i) => (
               <SkeletonCard key={i} />
@@ -343,7 +344,7 @@ export default function ShowtimePage() {
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center flex-col gap-4 text-white">
         <AlertTriangle size={32} className="text-red-500" />
         <h2 className="text-xl font-bold">Movie not found!</h2>
-        <button className="px-4 py-2 bg-yellow-500 text-black font-semibold rounded-lg" onClick={() => navigate("/")}>
+        <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg" onClick={() => navigate("/")}>
           Go to Home
         </button>
       </div>
@@ -351,27 +352,22 @@ export default function ShowtimePage() {
   }
 
   return (
-    <div
-      className="min-h-screen bg-zinc-950 text-white font-['DM_Sans',sans-serif]"
-      style={{ scrollbarWidth: "thin", scrollbarColor: "#1a1a2e transparent" }}
-    >
+    <div className="min-h-screen bg-zinc-950 text-white font-sans">
       {/* ── Movie hero ── */}
       <div className="relative overflow-hidden">
-        {/* Backdrop */}
         <div className="absolute inset-0 bg-black">
           <img
             src={movie.largeImage || "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=1400&h=420&fit=crop"}
             alt="Backdrop"
             className="w-full h-full object-cover opacity-30"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-background/60 to-background" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-zinc-950/80 to-zinc-950" />
         </div>
 
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8">
-          {/* Nav row */}
-          <div className="flex items-center gap-3 mb-8">
+        <div className="relative z-10 max-w-5xl mx-auto px-6 pt-8 pb-4">
+          <div className="flex items-center gap-3 mb-6">
             <button 
-              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors group cursor-pointer"
+              className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors group cursor-pointer"
               onClick={() => navigate("/")}
             >
               <ChevronLeft size={16} className="group-hover:-translate-x-0.5 transition-transform" />
@@ -379,163 +375,94 @@ export default function ShowtimePage() {
             </button>
           </div>
 
-          {/* Movie info */}
-          <div className="flex gap-5 sm:gap-7 items-end">
-            <div className="shrink-0 w-24 sm:w-32 rounded-xl overflow-hidden shadow-2xl bg-zinc-900">
-              <img
-                src={movie.smallImage || "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=220&h=330&fit=crop"}
-                alt={movie.movieNameEnglish}
-                className="w-full aspect-[2/3] object-cover"
-              />
-            </div>
-            <div className="pb-1">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-500 border border-yellow-500/30">
-                  {movie.version || "2D"}
-                </span>
-                <span className="flex items-center gap-1 text-xs text-yellow-400 font-medium">
-                  <Star size={11} fill="currentColor" />
-                  9.0
-                </span>
-              </div>
-              <h1 className="font-['Barlow_Condensed'] text-3xl sm:text-5xl font-extrabold tracking-tight text-white leading-none mb-2">
-                {movie.movieNameEnglish}
-              </h1>
-              <p className="text-zinc-300 text-sm mb-4 max-w-2xl hidden md:block leading-relaxed">
-                {movie.content}
-              </p>
-
-              <div className="flex flex-col gap-1.5 text-sm text-zinc-400 mb-4 hidden md:flex">
-                {movie.director && (
-                  <div className="flex items-start gap-2">
-                    <span className="font-semibold text-zinc-300 w-20 shrink-0">Director:</span>
-                    <span className="text-zinc-400">{movie.director}</span>
-                  </div>
-                )}
-                {movie.actor && (
-                  <div className="flex items-start gap-2">
-                    <span className="font-semibold text-zinc-300 w-20 shrink-0">Cast:</span>
-                    <span className="text-zinc-400">{movie.actor}</span>
-                  </div>
-                )}
-                {movie.movieProductionCompany && (
-                  <div className="flex items-start gap-2">
-                    <span className="font-semibold text-zinc-300 w-20 shrink-0">Production:</span>
-                    <span className="text-zinc-400">{movie.movieProductionCompany}</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3 text-sm text-yellow-500/90 font-medium">
-                <span>{movie.movieType?.join(" · ") || "Action · Sci-Fi"}</span>
-                <span className="w-1 h-1 rounded-full bg-yellow-500/50" />
-                <span className="flex items-center gap-1"><Clock size={14} /> {movie.duration} min</span>
-              </div>
-            </div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
+              {movie.version || "2D"}
+            </span>
+            <span className="text-blue-400 text-xs font-medium">★ 9.0</span>
           </div>
+          <h1 className="text-4xl font-extrabold tracking-tight mb-1">
+            {movie.movieNameEnglish}
+          </h1>
+          <p className="text-zinc-400 text-sm flex items-center gap-2">
+            {movie.movieType?.join(" · ") || "Sci-Fi · Action"} 
+            <span className="w-1 h-1 rounded-full bg-zinc-600" /> 
+            <Clock size={13} /> {movie.duration} min
+          </p>
         </div>
       </div>
 
-      {/* ── Filters ── */}
-      <div className="sticky top-0 z-30 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-4 py-3 overflow-x-auto no-scrollbar">
-            {/* Date pills */}
-            <div className="flex items-center gap-1.5 shrink-0">
-              <Calendar size={14} className="text-zinc-500 shrink-0" />
-              <div className="flex gap-1.5">
-                {dates.map((d) => {
-                  const isSelected = isSameDay(d, selectedDate);
-                  const isToday = isSameDay(d, today);
-                  return (
-                    <button
-                      key={d.toISOString()}
-                      onClick={() => setSelectedDate(d)}
-                      className={[
-                        "flex flex-col items-center px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 shrink-0 cursor-pointer",
-                        isSelected
-                          ? "bg-yellow-500 text-black"
-                          : "bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800",
-                      ].join(" ")}
-                    >
-                      <span className="text-[10px] uppercase tracking-wider leading-none mb-0.5">
-                        {isToday ? "Today" : format(d, "EEE")}
-                      </span>
-                      <span className="text-sm font-bold">{format(d, "d")}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Result count */}
-            <span className="text-xs text-muted-foreground shrink-0 ml-auto">
-              {filteredShowtimes.length} shows
-            </span>
-          </div>
+      {/* ── Date filter ── */}
+      <div className="sticky top-0 z-30 bg-zinc-950/90 backdrop-blur border-y border-zinc-800">
+        <div className="max-w-5xl mx-auto px-6 py-3 flex items-center gap-2 overflow-x-auto no-scrollbar">
+          <Calendar size={15} className="text-zinc-500 shrink-0" />
+          {dates.map((d) => {
+            const active = isSameDay(d, selectedDate);
+            return (
+              <button
+                key={d.toISOString()}
+                onClick={() => setSelectedDate(d)}
+                className={[
+                  "flex flex-col items-center px-3 py-1.5 rounded-lg text-xs shrink-0 transition-all cursor-pointer",
+                  active ? "bg-blue-600 text-white" : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-white",
+                ].join(" ")}
+              >
+                <span className="text-[10px] uppercase tracking-wider">{isSameDay(d, today) ? "Today" : format(d, "EEE")}</span>
+                <span className="text-sm font-bold">{format(d, "d")}</span>
+              </button>
+            );
+          })}
+          <span className="ml-auto text-xs text-zinc-500 shrink-0">
+            {filteredShowtimes.length} shows
+          </span>
         </div>
       </div>
 
       {/* ── Content ── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <div className="max-w-5xl mx-auto px-6 py-8">
+        {/* Cinema selector */}
+        <div className="flex flex-wrap gap-3 mb-6">
+          {CINEMAS.map((c) => {
+            const active = c === selectedCinema;
+            return (
+              <button
+                key={c}
+                onClick={() => setSelectedCinema(c)}
+                className={[
+                  "flex items-center gap-2 rounded-lg border px-4 py-2 transition-all cursor-pointer",
+                  active ? "bg-zinc-800 border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.2)]" : "bg-zinc-900 border-zinc-800 hover:border-blue-500/50",
+                ].join(" ")}
+              >
+                <MapPin size={16} className={active ? "text-blue-400" : "text-zinc-500"} />
+                <span className="font-bold" style={{ color: active ? "#f0f0f8" : "#a1a1aa" }}>{c}</span>
+              </button>
+            );
+          })}
+        </div>
+
         {!hasShowtimes ? (
-          /* Empty state */
           <div className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-5">
-              <AlertTriangle size={24} className="text-muted-foreground" />
+            <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center mb-5">
+              <AlertTriangle size={24} className="text-zinc-500" />
             </div>
-            <h3 className="font-['Barlow_Condensed'] text-2xl font-bold text-foreground mb-2">
-              No showtimes available
-            </h3>
-            <p className="text-sm text-muted-foreground max-w-xs">
-              Currently no showtimes scheduled for{" "}
-              <span className="text-foreground font-medium">{format(selectedDate, "dd/MM/yyyy")}</span>.
-              Please select another date.
+            <h3 className="text-2xl font-bold mb-2">No showtimes available</h3>
+            <p className="text-sm text-zinc-500 max-w-xs">
+              No showtimes scheduled for{" "}
+              <span className="text-zinc-300 font-medium">{format(selectedDate, "dd/MM/yyyy")}</span>. Please select another date.
             </p>
           </div>
         ) : (
-          /* Showtime groups */
-          <div>
-            {/* Cinema Tabs styled like ShowtimeCards */}
-            <div className="flex flex-wrap gap-3 mb-6">
-              {["CinePrime Lê Văn Việt", "CinePrime Quang Trung"].map((cinema) => {
-                const isSelected = selectedCinema === cinema;
-                return (
-                  <div
-                    key={cinema}
-                    className={[
-                      "relative rounded-lg border px-4 py-2 flex items-center justify-center transition-all duration-200 cursor-pointer",
-                      isSelected 
-                        ? "bg-zinc-800 border-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.2)]" 
-                        : "bg-zinc-900 border-zinc-800 hover:border-yellow-500/50 hover:bg-zinc-800/80"
-                    ].join(" ")}
-                    onClick={() => setSelectedCinema(cinema)}
-                  >
-                    <div className="flex items-center justify-center gap-2">
-                      <MapPin size={16} className={isSelected ? "text-yellow-500" : "text-zinc-500"} />
-                      <span
-                        className="font-['Barlow_Condensed'] text-lg font-bold tracking-tight"
-                        style={{ color: isSelected ? "#f0f0f8" : "#a1a1aa" }}
-                      >
-                        {cinema}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
+          <>
+            <CinemaGroup showtimes={filteredShowtimes} onSelect={handleSelectShowtime} />
+            
+            {/* Legend */}
+            <div className="flex flex-wrap items-center gap-4 mt-6 text-[11px] text-zinc-500">
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#34d399]" /> Plenty of seats</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#fb923c]" /> Almost full</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#f87171]" /> Sold out</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-zinc-600" /> Ended / Cancelled (disabled)</span>
             </div>
-
-            {/* Render the selected cinema's rooms (CinemaGroup handles the inner accordion) */}
-            <div className="bg-zinc-950/30 rounded-xl">
-              <CinemaGroup
-                cinemaName={selectedCinema}
-                showtimes={filteredShowtimes}
-                onSelect={handleSelectShowtime}
-                expanded={true}
-                onToggle={() => {}} 
-              />
-            </div>
-          </div>
+          </>
         )}
       </div>
     </div>
