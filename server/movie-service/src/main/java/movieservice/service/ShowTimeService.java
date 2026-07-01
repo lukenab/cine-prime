@@ -27,6 +27,7 @@ import movieservice.entity.Seat;
 import movieservice.entity.ShowTime;
 import movieservice.entity.ShowtimeSeat;
 import movieservice.exception.MovieErrorCode;
+import movieservice.mapper.MovieMapper;
 import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.MovieRepository;
 import movieservice.repository.ShowTimeRepository;
@@ -43,6 +44,7 @@ public class ShowTimeService {
     SeatRepository seatRepository;
     MovieRepository movieRepository;
     CinemaRoomRepository cinemaRoomRepository;
+    MovieMapper movieMapper;
 
     @Transactional
     public List<ShowtimeSeatDto> getSeatsByShowtime(Long showtimeId) {
@@ -206,6 +208,28 @@ public class ShowTimeService {
 
     public List<ShowTime> saveSchedule(List<ShowTime> showTimes) {
         return showTimeRepository.saveAll(showTimes);
+    }
+
+    // ── Read API ──────────────────────────────────────────────────────────────
+
+    public List<ShowTimeResponse> getAll() {
+        return movieMapper.toShowTimeResponseList(showTimeRepository.findAll());
+    }
+
+    public ShowTimeResponse getById(Long id) {
+        ShowTime showTime = showTimeRepository.findById(id)
+                .orElseThrow(() -> new AppException(MovieErrorCode.SHOWTIME_NOT_FOUND));
+        return movieMapper.toShowTimeResponse(showTime);
+    }
+
+    public List<ShowTimeResponse> getByMovieId(Long movieId, LocalDate date) {
+        if (!movieRepository.existsById(movieId)) {
+            throw new AppException(MovieErrorCode.MOVIE_NOT_FOUND);
+        }
+        List<ShowTime> results = (date != null)
+                ? showTimeRepository.findByMovieMovieIdAndShowDate(movieId, date)
+                : showTimeRepository.findByMovieMovieId(movieId);
+        return movieMapper.toShowTimeResponseList(results);
     }
 
     // ── Write API ─────────────────────────────────────────────────────────────

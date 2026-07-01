@@ -7,9 +7,13 @@ import movieservice.dto.request.CreateShowTimeRequest;
 import movieservice.dto.request.UpdateShowTimeRequest;
 import movieservice.dto.response.ShowTimeResponse;
 import movieservice.service.ShowTimeService;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/schedules")
@@ -17,6 +21,37 @@ import org.springframework.web.bind.annotation.*;
 public class ScheduleController {
 
     private final ShowTimeService showTimeService;
+
+    // ── Read (public) ─────────────────────────────────────────────────────────
+
+    @GetMapping
+    public ApiResponse<List<ShowTimeResponse>> getAll() {
+        return ApiResponse.<List<ShowTimeResponse>>builder()
+                .result(showTimeService.getAll())
+                .build();
+    }
+
+    @GetMapping("/{id}")
+    public ApiResponse<ShowTimeResponse> getById(@PathVariable Long id) {
+        return ApiResponse.<ShowTimeResponse>builder()
+                .result(showTimeService.getById(id))
+                .build();
+    }
+
+    /**
+     * GET /api/schedules/movie/{movieId}
+     * GET /api/schedules/movie/{movieId}?date=2026-07-10
+     */
+    @GetMapping("/movie/{movieId}")
+    public ApiResponse<List<ShowTimeResponse>> getByMovie(
+            @PathVariable Long movieId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return ApiResponse.<List<ShowTimeResponse>>builder()
+                .result(showTimeService.getByMovieId(movieId, date))
+                .build();
+    }
+
+    // ── Write (ADMIN only) ────────────────────────────────────────────────────
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
