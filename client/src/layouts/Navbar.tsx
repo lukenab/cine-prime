@@ -33,7 +33,6 @@ export function Navbar() {
       className="fixed top-0 left-0 right-0 z-50 border-b border-white/10"
     >
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-16">
-        {/* Logo */}
         <div className="flex items-center gap-2.5 cursor-pointer select-none group">
           <div
             className="flex items-center justify-center rounded-xl transition-all duration-300 group-hover:scale-105"
@@ -71,7 +70,6 @@ export function Navbar() {
           </span>
         </div>
 
-        {/* Desktop nav */}
         <div className="hidden md:flex items-center gap-8">
           {["Home", "Movies", "Cinemas", "Events", "Offers"].map((item) => (
             <a
@@ -85,9 +83,7 @@ export function Navbar() {
           ))}
         </div>
 
-        {/* Search & User Profile */}
         <div className="hidden md:flex items-center gap-4">
-          {/* Thanh tìm kiếm phim */}
           <form
             onSubmit={handleSearch}
             className="flex items-center gap-2 rounded-full px-4 py-2 transition-all duration-200"
@@ -107,14 +103,12 @@ export function Navbar() {
           </form>
 
           {isLogged ? (
-            // UI khi ĐÃ ĐĂNG NHẬP
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 cursor-pointer group">
                 <div
                   className="w-8 h-8 rounded-full flex items-center justify-center transition-transform group-hover:scale-105"
                   style={{ backgroundColor: "rgba(59,130,246,0.15)", border: `1px solid ${ACCENT}` }}
                 >
-                  {/* Lấy chữ cái đầu tiên của username làm Avatar */}
                   <span style={{ color: ACCENT, fontWeight: 700, fontSize: "0.85rem" }}>
                     {username.charAt(0).toUpperCase()}
                   </span>
@@ -131,7 +125,6 @@ export function Navbar() {
               </button>
             </div>
           ) : (
-            // UI khi CHƯA ĐĂNG NHẬP
             <Link
               to="/login"
               className="flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all duration-200"
@@ -157,7 +150,6 @@ export function Navbar() {
           )}
         </div>
 
-        {/* Mobile menu toggle */}
         <button
           className="md:hidden text-white"
           onClick={() => setMenuOpen(!menuOpen)}
@@ -166,11 +158,9 @@ export function Navbar() {
         </button>
       </div>
 
-      {/* Mobile menu */}
       {menuOpen && (
         <div style={{ backgroundColor: "#050505" }} className="md:hidden px-6 pb-4 flex flex-col gap-4 border-t border-white/10 pt-4">
 
-          {/* Thông tin user trên Mobile */}
           {isLogged && (
              <div className="flex items-center justify-between mb-2 pb-4 border-b border-white/10">
                <div className="flex items-center gap-3">
@@ -190,7 +180,6 @@ export function Navbar() {
              </div>
           )}
 
-          {/* Thanh tìm kiếm phim trên Mobile */}
           <form
             onSubmit={handleSearch}
             className="flex items-center gap-2 rounded-full px-4 py-3 w-full"

@@ -119,6 +119,7 @@ public class AuthenticationService {
                     authAuditLogService.metadata("username", request.getUsername(), "email", emailKey));
             throw e;
         }
+
     }
 
 
@@ -150,6 +151,7 @@ public class AuthenticationService {
                     authAuditLogService.metadata("email", emailKey));
             throw e;
         }
+
     }
 
     @Transactional

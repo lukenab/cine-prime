@@ -2,6 +2,7 @@ package bookingservice.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -30,7 +31,7 @@ import bookingservice.entity.Booking;
 import bookingservice.entity.BookingItem;
 import bookingservice.entity.BookingStatus;
 import bookingservice.entity.Ticket;
-import bookingservice.entity.SeatLock; // Import entity SeatLock
+import bookingservice.entity.SeatLock; 
 import bookingservice.exception.BookingErrorCode;
 import bookingservice.mapper.BookingMapper;
 import bookingservice.repository.BookingItemRepository;
@@ -38,7 +39,7 @@ import bookingservice.repository.BookingRepository;
 import bookingservice.repository.SeatLockRepository;
 import bookingservice.repository.TicketRepository;
 import bookingservice.client.MemberClient;
-import bookingservice.client.ShowtimeClient; // OpenFeign Client sang showtime-service
+import bookingservice.client.ShowtimeClient; 
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -56,7 +57,7 @@ public class BookingService {
     BookingItemRepository bookingItemRepository;
     SeatLockRepository seatLockRepository;
     TicketRepository ticketRepository;
-    ShowtimeClient showtimeClient; // Tích hợp OpenFeign Client
+    ShowtimeClient showtimeClient; 
     BookingMapper bookingMapper;
     MemberClient memberClient;
     @NonFinal
@@ -93,12 +94,13 @@ public class BookingService {
         // trùng lặp)
         cleanExpiredLocksAndHold(request.getShowtimeId(), seatIdStrs, currentUserId);
 
-        // Thời gian hết hạn hiển thị trả về Client (Khớp với 10 phút trong DB)
-        LocalDateTime expiredAt = LocalDateTime.now().plusMinutes(10);
+
+        seatLockRepository.releaseSeatsByBookingAndList(request.getShowtimeId(), seatCodesStr, null);
 
         // 3. Logic tạo Booking & chi tiết hóa đơn
         BigDecimal totalPrice = BigDecimal.ZERO;
         List<BookingItemResponse> itemResponses = new ArrayList<>();
+
         int pointsUsed = request.getPointsUsed() != null ? request.getPointsUsed() : 0;
 
         Booking booking = Booking.builder()

@@ -26,7 +26,7 @@ public class BookingRequest {
     Long showtimeId;
 
     @NotEmpty(message = "SEAT_LIST_REQUIRED")
-    @Size(max = 8, message = "MAX_SEATS_EXCEEDED") // Tối đa 8 ghế
+    @Size(max = 8, message = "MAX_SEATS_EXCEEDED") 
     List<Long> seatIds;
 
     @Min(value = 0, message = "POINTS_CANNOT_BE_NEGATIVE")

@@ -18,11 +18,14 @@ import movieservice.dto.response.TypeMovieResponse;
 import movieservice.entity.CinemaRoom;
 import movieservice.entity.Movie;
 import movieservice.entity.MovieType;
+import movieservice.entity.ShowTime;
+import movieservice.dto.response.ShowTimeResponse;
 import movieservice.entity.Seat;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", unmappedTargetPolicy = org.mapstruct.ReportingPolicy.IGNORE)
 public interface MovieMapper {
     Movie toMovie(CreateMovieRequest request);
+
     void updateMovieFromRequest(UpdateMovieRequest request, @MappingTarget Movie movie);
 
     @Mapping(target = "movieType", source = "movieTypes", qualifiedByName = "mapTypesToGenreNames")
@@ -37,12 +40,15 @@ public interface MovieMapper {
     MovieType toType(TypeRequest typeRequest);
     TypeMovieResponse toMovieResponse(MovieType typeMovie);
     List<TypeMovieResponse> toTypeResponseList(List<MovieType> movieTypes);
+    @Mapping(source = "cinemaRoom.cinemaRoomId", target = "cinemaRoomId")
+    @Mapping(source = "cinemaRoom.cinemaRoomName", target = "cinemaRoomName")
+    ShowTimeResponse toShowTimeResponse(ShowTime showTime);
+
     @Mapping(target = "cinemaRoomId", source = "cinemaRoom.cinemaRoomId")
     @Mapping(target = "cinemaRoomName", source = "cinemaRoom.cinemaRoomName")
     SeatResponse toSeatResponse(Seat seat);
 
     List<SeatResponse> toSeatResponseList(List<Seat> seats);
-
     @Named("mapTypesToGenreNames")
     default List<String> mapTypesToGenreNames(List<MovieType> types) {
         if (types == null) {

@@ -84,7 +84,6 @@ public class GlobalExceptionHandler {
                 .build();
         return ResponseEntity.badRequest().body(apiResponse);
     }
-
     private String mapAttribute(String message, Map<String, Object> attributes) {
         // @Size uses "min"; @Min uses "value" — resolve whichever is present
         Object minRaw = attributes.containsKey(MIN_ATTRIBUTE)

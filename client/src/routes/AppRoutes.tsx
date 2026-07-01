@@ -1,6 +1,8 @@
 import AuthLayout from "../layouts/AuthLayout";
 import CustomerLayout from "../layouts/CustomerLayout";
 import LoginPage from "../pages/auth/LoginPage";
+import HomePage from "../pages/customer/HomePage";
+import ShowtimePage from "../pages/customer/ShowtimePage";
 import { Route, Routes } from "react-router-dom";
 import RootRedirect from "./RootRedirect";
 import ProtectedRoute from "./ProtectedRoute";
@@ -35,6 +37,8 @@ export default function AppRoutes() {
     <Routes>
       <Route element={<CustomerLayout />}>
         <Route path="/" element={<RootRedirect />} />
+        <Route path="/showtime/:movieId" element={<ShowtimePage />} />
+        <Route path="/booking/:showtimeId" element={<SeatBookingPage />} />
       </Route>
 
       <Route element={<AuthLayout/>}>
@@ -79,3 +83,4 @@ export default function AppRoutes() {
     </Routes>
   );
 }
+
