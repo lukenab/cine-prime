@@ -26,7 +26,7 @@ spring:
         - id: movie-service
           uri: lb://movie-service
           predicates:
-            - Path=/api/movies/**, /api/cinemas/**, /api/shows/**, /api/showtimes/**, /api/cinema-rooms/**, /api/movie-types/**, /api/seats/**
+            - Path=/api/movies/**, /api/cinemas/**, /api/shows/**, /api/showtimes/**, /api/cinema-rooms/**, /api/movie-types/**, /api/seats/**, /api/schedules/**
 
         - id: booking-service
           uri: lb://booking-service

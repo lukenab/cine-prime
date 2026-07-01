@@ -46,6 +46,8 @@ public interface MovieMapper {
     @Mapping(source = "movie.movieNameVn", target = "movieName")
     ShowTimeResponse toShowTimeResponse(ShowTime showTime);
 
+    List<ShowTimeResponse> toShowTimeResponseList(List<ShowTime> showTimes);
+
     @Mapping(target = "cinemaRoomId", source = "cinemaRoom.cinemaRoomId")
     @Mapping(target = "cinemaRoomName", source = "cinemaRoom.cinemaRoomName")
     SeatResponse toSeatResponse(Seat seat);
