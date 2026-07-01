@@ -15,10 +15,10 @@ import ManageCinemaRoomsPage from "../pages/admin/ManageCinemaRoomsPage";
 import ManageCinemaClusterPage from "../pages/admin/ManageCinemaClusterPage";
 import RoomDetailPage from "../pages/admin/RoomDetailPage";
 import ManageGenresPage from "../pages/admin/ManageGenresPage";
-import ManageShowTimePage from "../pages/admin/ManageShowTimePage";
 import CreateUserPage from "../pages/admin/CreateUserPage";
 import EditUserPage from "../pages/admin/EditUserPage";
 import UserDetailPage from "../pages/admin/UserDetailPage";
+import ManageShowtimePage from "../pages/admin/ManageShowTimePage";
 import ManageBookingPage from "../pages/admin/ManageBookingPage";
 import ManageEmployeePage from "../pages/admin/ManageEmployeePage";
 import CreateEmployeePage from "../pages/admin/CreateEmployeePage";
@@ -53,7 +53,7 @@ export default function AppRoutes() {
 
           {/* Accessible by both ADMIN and EMPLOYEE */}
           <Route path="movies"    element={<ManageMoviePage/>}/>
-          <Route path="showtimes" element={<ManageShowTimePage/>}/>
+          <Route path="showtimes" element={<ManageShowtimePage/>}/>
           <Route path="bookings"  element={<ManageBookingPage/>}/>
           <Route path="sell"      element={<TicketSalePage/>}/>
 

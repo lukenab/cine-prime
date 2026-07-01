@@ -1,4 +1,5 @@
 import axios from "axios";
+import { handleMockRequest } from "./mockShowtime";
 
 const axiosClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:8080",
@@ -7,13 +8,29 @@ const axiosClient = axios.create({
   },
 });
 
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
+
+const shouldMock = (url: string | undefined): boolean => {
+  if (!url) return false;
+  return (
+    url === "/api/showtimes" ||
+    url === "/api/showtimes/assign" ||
+    url.match(/^\/api\/showtimes\/\d+$/) !== null
+  );
+};
+
 // ── Request interceptor — attach Bearer token ─────────────────────────────────
 axiosClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("accessToken");
-    if (token) {
+    if (token && token !== "null" && token !== "undefined" && token.trim() !== "") {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    if (USE_MOCK && shouldMock(config.url)) {
+      config.adapter = () => handleMockRequest(config);
+    }
+
     return config;
   },
   (error) => Promise.reject(error)
