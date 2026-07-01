@@ -42,6 +42,8 @@ public interface MovieMapper {
     List<TypeMovieResponse> toTypeResponseList(List<MovieType> movieTypes);
     @Mapping(source = "cinemaRoom.cinemaRoomId", target = "cinemaRoomId")
     @Mapping(source = "cinemaRoom.cinemaRoomName", target = "cinemaRoomName")
+    @Mapping(source = "movie.movieId", target = "movieId")
+    @Mapping(source = "movie.movieNameVn", target = "movieName")
     ShowTimeResponse toShowTimeResponse(ShowTime showTime);
 
     @Mapping(target = "cinemaRoomId", source = "cinemaRoom.cinemaRoomId")
