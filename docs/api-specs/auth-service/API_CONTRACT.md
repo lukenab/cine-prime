@@ -2,8 +2,8 @@
 
 > **Source of Truth:** This is the single, official document defining the APIs for the Auth Service. Any modifications to Input/Output schemas must be updated and agreed upon here before actual implementation.
 
-**Version:** v1.4.0
-**Last Updated:** June 27, 2026
+**Version:** v1.5.0
+**Last Updated:** July 2, 2026
 
 ---
 
@@ -172,10 +172,10 @@ Validates registration payload and sends a 6-digit OTP to the user's email if th
 ```json
 {
   "username": "john_doe",
-  "password": "Password123@",
+  "password": "Password123",
   "email": "johndoe@example.com",
   "fullName": "John Doe",
-  "phoneNumber": "0123456789",
+  "phoneNumber": "0912345678",
   "dateOfBirth": "1995-10-15",
   "gender": "MALE",
   "address": "123 Main Street, Tech City",
@@ -185,16 +185,17 @@ Validates registration payload and sends a 6-digit OTP to the user's email if th
 
 | Field | Type | Required | Description |
 | :--- | :--- | :---: | :--- |
-| `username` | string | ✅ | 5–50 chars |
-| `password` | string | ✅ | Min 6 chars |
+| `username` | string | ✅ | 5–50 chars, must be unique |
+| `password` | string | ✅ | Min 8 chars |
 | `email` | string | ✅ | Valid email format, must be unique |
 | `fullName` | string | ✅ | Display name |
 | `phoneNumber` | string | ✅ | Pattern: `0[3/5/7/8/9]XXXXXXXX` (10 digits) |
-| `dateOfBirth` | string (date) | ❌ | Format `YYYY-MM-DD`, at least 2 years in the past |
-| `gender` | string | ✅ | Enum: `MALE`, `FEMALE`, `OTHER` |
-| `address` | string | ✅ | Max 255 chars |
+| `dateOfBirth` | string (date) | ✅ | Format `YYYY-MM-DD`. User must be **at least 18 years old** |
+| `gender` | string | ✅ | Free-text (not enum-validated). Convention: `MALE`, `FEMALE`, `OTHER` |
+| `address` | string | ✅ | Address string |
 | `identityCard` | string | ✅ | Exactly 12 digits |
-| `role` | string | ❌ | Role name to assign; defaults to `USER` if omitted |
+
+> **Note:** The public registration flow does **not** accept a `role` field — every account created this way gets the default `USER` role. To assign a role, use the admin endpoint `POST /api/accounts` (see Section 6.2).
 
 **Success Response (200):**
 ```json
@@ -243,32 +244,25 @@ Validates registration payload and sends a 6-digit OTP to the user's email if th
 
 #### POST `/api/auth/register/verify`
 
-Verifies OTP and creates the account. After successful account creation, a `UserRegisteredEvent` is published to Kafka topic `user-register-topic` for async user profile creation in `user-service`.
+Verifies OTP and creates the account. The registration payload is **not** resent here — it was captured server-side (Redis) during `/register/initiate`, so only `email` and `otp` are sent. After successful account creation, a `UserRegisteredEvent` is published to Kafka topic `user-register-topic` for async user profile creation in `user-service`.
 
 **Request Body:**
 ```json
 {
-  "otp": "654321",
-  "registerRequest": {
-    "username": "john_doe",
-    "password": "Password123@",
-    "email": "johndoe@example.com",
-    "fullName": "John Doe",
-    "phoneNumber": "0123456789",
-    "dateOfBirth": "1995-10-15",
-    "gender": "MALE",
-    "address": "123 Main Street, Tech City",
-    "identityCard": "079012345678"
-  }
+  "email": "johndoe@example.com",
+  "otp": "654321"
 }
 ```
 
 | Field | Type | Required | Description |
 | :--- | :--- | :---: | :--- |
-| `otp` | string | ✅ | 6-digit OTP sent to email |
-| `registerRequest` | object | ✅ | Same payload used in `/register/initiate` |
+| `email` | string | ✅ | Email of the pending registration |
+| `otp` | string | ✅ | Exactly 6 digits, sent to email |
 
 **Success Response (200):**
+
+> Returns a `RegisterResponse` — note it does **not** include `roles` (the account is always assigned the default `USER` role).
+
 ```json
 {
   "code": 1000,
@@ -276,14 +270,7 @@ Verifies OTP and creates the account. After successful account creation, a `User
     "accountId": "acc-uuid-1234-5678",
     "username": "john_doe",
     "email": "johndoe@example.com",
-    "createdAt": "2026-06-14T15:00:00",
-    "roles": [
-      {
-        "roleName": "USER",
-        "description": "Default user role",
-        "permissions": []
-      }
-    ]
+    "createdAt": "2026-06-14T15:00:00Z"
   }
 }
 ```
@@ -384,17 +371,17 @@ Resends a new 6-digit OTP to the provided email. Rate-limited to prevent abuse.
 ```json
 {
   "code": 1000,
-  "message": "New otp has been sent to your email!"
+  "message": "New OTP has been sent to your email!"
 }
 ```
 
 **Error Responses:**
 
-*400 — Account not found:*
+*400 — Email already registered (no OTP will be resent):*
 ```json
 {
-  "code": 1014,
-  "message": "Account not found!"
+  "code": 1011,
+  "message": "Email already exists!"
 }
 ```
 
@@ -614,7 +601,26 @@ GET /api/accounts/acc-uuid-1234-5678
 
 Creates a new account directly without OTP verification. Intended for admin use.
 
-**Request Body:** Same schema as `RegisterRequest` (see Section 6.1 `/register/initiate`).
+**Request Body:** `AdminCreateAccountRequest` — same fields as `RegisterRequest` (see Section 6.1 `/register/initiate`) **plus** an optional `role`:
+
+| Field | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| `role` | string | ❌ | Must be `USER` or `ADMIN`. Defaults to `USER` if omitted |
+
+```json
+{
+  "username": "jane_admin",
+  "password": "Password123",
+  "email": "jane@example.com",
+  "fullName": "Jane Admin",
+  "phoneNumber": "0912345678",
+  "dateOfBirth": "1990-05-20",
+  "gender": "FEMALE",
+  "address": "1 Admin Road",
+  "identityCard": "079012345679",
+  "role": "ADMIN"
+}
+```
 
 **Success Response (200):**
 ```json
@@ -883,8 +889,8 @@ Retrieves all roles and their assigned permissions.
 - **Must be unique** across all accounts
 
 ### Password
-- **Min length:** 6 characters
-- **Validation message:** `Password must be at least 6 characters!`
+- **Min length:** 8 characters
+- **Validation message:** `Password must be at least 8 characters!`
 
 ### Email
 - **Format:** Valid email — `user@domain.tld`
@@ -900,11 +906,12 @@ Retrieves all roles and their assigned permissions.
 
 ### Date of Birth
 - **Format:** `YYYY-MM-DD`
-- **Rule:** Must be at least **2 years** in the past (`@DobConstraint(min = 2)`)
+- **Required:** Yes (`@NotNull`)
+- **Rule:** User must be at least **18 years old** (`@DobConstraint(min = 18)`)
 
 ### Gender
-- **Allowed values:** `MALE`, `FEMALE`, `OTHER`
-- Case-sensitive, must not be blank
+- **Constraint:** `@NotBlank` only — accepted as a free-text string, **not** enum-validated server-side
+- **Convention:** `MALE`, `FEMALE`, `OTHER`
 
 ### Identity Card
 - **Format:** Exactly 12 digits
@@ -987,6 +994,16 @@ For full Kafka contract details (retries, DLT, idempotency), see [docs/kafka-use
 ---
 
 ## 10. Changelog
+
+### Version 1.5.0 (2026-07-02)
+Synced the contract and `auth-service.yaml` with the actual backend implementation:
+- **`POST /api/auth/register/verify` — request body simplified:** now `{ email, otp }` only. The full registration payload is no longer resent — it is captured server-side (Redis, 5-min TTL) during `/register/initiate`. The previous `{ otp, registerRequest }` shape was never implemented.
+- **`POST /api/auth/register/verify` — response changed:** now returns `RegisterResponse` (`accountId`, `username`, `email`, `createdAt`) **without** the `roles` array. The previous `AccountResponse` (with roles) was incorrect.
+- **`POST /api/auth/resend-otp` — corrected error handling:** returns `400 / 1011` (Email already exists) when the email is already registered, not `404 / 1014`. Success message corrected to `New OTP has been sent to your email!`.
+- **`POST /api/accounts` — request schema corrected:** uses `AdminCreateAccountRequest` (RegisterRequest fields + optional `role` restricted to `USER`/`ADMIN`), not `RegisterRequest`.
+- **`RegisterRequest` corrected:** password minimum is **8** characters (was 6); `dateOfBirth` is **required** and the user must be **at least 18 years old** (`@DobConstraint(min = 18)`, was "2 years"); the `role` field was removed (public registration always assigns `USER`).
+- **`gender`** documented as free-text `@NotBlank` (not enum-validated server-side).
+- **`POST /api/auth/logout`** YAML corrected to drop the request body (already header-based since 1.4.0).
 
 ### Version 1.4.0 (2026-06-27)
 - **Breaking change — `POST /api/auth/logout`:** Token is no longer accepted in the request body. The endpoint now reads the token exclusively from the `Authorization: Bearer <token>` header.

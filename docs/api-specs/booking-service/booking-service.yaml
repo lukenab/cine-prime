@@ -1,75 +1,309 @@
 openapi: 3.0.1
 info:
   title: CinePrime Booking Service API
-  description: API endpoints for managing movie theater or homestay bookings, cancellations, and status modifications.
-  version: 1.0.0
+  description: >
+    API contract for booking-service. All responses use the shared ApiResponse<T>
+    wrapper (code / message / result). Fields that are null are omitted from JSON output
+    (@JsonInclude NON_NULL). Only implemented endpoints are listed here; planned endpoints
+    are noted in booking-service-api-design.md.
+  version: 1.1.0
 servers:
-  - url: http://localhost:8081
-    description: Booking Service Local Server
   - url: http://localhost:8085
-    description: API Gateway
+    description: Booking Service direct (debugging only)
+  - url: http://localhost:8080
+    description: API Gateway (use this for all Frontend calls)
+
 tags:
   - name: Booking
-    description: Endpoints for booking operations, updates, and cancellations
+    description: Booking creation, retrieval, and cancellation (Member / Admin)
+
+security:
+  - bearerAuth: []
 
 paths:
-  # ==========================================
-  # BOOKING OPERATIONS ENDPOINTS
-  # ==========================================
-  /api/bookings/{id}/cancel:
-    patch:
+
+  # ─────────────────────────────────────────────
+  # POST /api/bookings — Create booking + hold seats
+  # ─────────────────────────────────────────────
+  /api/bookings:
+    post:
       tags:
         - Booking
-      summary: Cancel an existing booking
+      summary: Create booking and hold seats
       description: >
-        Cancels a booking by its unique ID. The system validates the booking state
-        and verifies ownership/permissions using the JWT token passed in the Authorization header.
+        Creates a PENDING booking and locks the requested seats for 10 minutes.
+        Requires MEMBER role. Returns the new booking with seat lock expiry time.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingRequest'
+            example:
+              showtimeId: 1
+              seatIds: [101, 102]
+              pointsUsed: 0
+      responses:
+        '201':
+          description: Booking created and seats locked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseCreateBooking'
+              example:
+                code: 1000
+                message: "Booking created successfully"
+                result:
+                  bookingId: "550e8400-e29b-41d4-a716-446655440000"
+                  showtimeId: 1
+                  status: "PENDING"
+                  totalPrice: 170000
+                  items:
+                    - seatId: 101
+                      seatLabel: "101"
+                      price: 85000
+                    - seatId: 102
+                      seatLabel: "102"
+                      price: 85000
+                  lockedUntil: "2026-07-01T13:25:00"
+        '400':
+          description: Validation error or duplicate seat IDs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              examples:
+                DuplicateSeats:
+                  summary: "Error 2009: Duplicate seat IDs"
+                  value:
+                    code: 2009
+                    message: "Duplicate seat IDs found in the request"
+                SeatsAlreadyTaken:
+                  summary: "Error 2006: Seats already booked"
+                  value:
+                    code: 2006
+                    message: "The selected seats are already locked or booked by another user"
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          description: Caller is not a MEMBER
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              example:
+                code: 2010
+                message: "Only registered members can create a booking and hold seats"
+        '409':
+          description: Seat is already locked by another user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              example:
+                code: 2011
+                message: "The seat is already locked or reserved by another user"
+
+  # ─────────────────────────────────────────────
+  # GET /api/bookings/me — My booking history
+  # ─────────────────────────────────────────────
+  /api/bookings/me:
+    get:
+      tags:
+        - Booking
+      summary: Get own booking history (paginated)
+      description: >
+        Returns a paginated list of the authenticated member's bookings, sorted
+        by bookingId descending. Results include top-level booking fields only
+        (no seat items sub-array).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: Page index (0-based). Default 0.
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+        - name: size
+          in: query
+          required: false
+          description: Page size. Default 10.
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+      responses:
+        '200':
+          description: Paginated booking list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseBookingList'
+              example:
+                code: 1000
+                result:
+                  content:
+                    - bookingId: "550e8400-e29b-41d4-a716-446655440000"
+                      accountId: "acc-001"
+                      memberId: null
+                      movieName: "Avengers: Endgame"
+                      showDate: "2026-07-01"
+                      startTime: "14:00:00"
+                      cinemaRoomName: "Room 1"
+                      totalSeats: 2
+                      finalAmount: 170000
+                      bookingType: null
+                      status: "PENDING"
+                      createdAt: "2026-07-01T13:15:00"
+                  pageNumber: 0
+                  pageSize: 10
+                  totalElements: 1
+                  totalPages: 1
+                  isLast: true
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  # ─────────────────────────────────────────────
+  # GET /api/bookings/{id} — Booking detail
+  # ─────────────────────────────────────────────
+  /api/bookings/{id}:
+    get:
+      tags:
+        - Booking
+      summary: Get booking detail
+      description: >
+        Returns full booking detail including seat items. Members may only retrieve
+        their own bookings; Admins may retrieve any. A non-owner member receives
+        404 (same as not-found) to avoid leaking booking existence.
       security:
         - bearerAuth: []
       parameters:
         - name: id
           in: path
           required: true
-          description: The unique identifier (UUID or String ID) of the booking to cancel
+          description: Booking UUID
           schema:
             type: string
-            example: "bk-uuid-9999-8888"
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Booking detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseBookingDetail'
+              example:
+                code: 1000
+                result:
+                  bookingId: "550e8400-e29b-41d4-a716-446655440000"
+                  accountId: "acc-001"
+                  memberId: null
+                  movieName: "Avengers: Endgame"
+                  showDate: "2026-07-01"
+                  startTime: "14:00:00"
+                  cinemaRoomName: "Room 1"
+                  totalSeats: 2
+                  finalAmount: 170000
+                  bookingType: null
+                  status: "PENDING"
+                  createdAt: "2026-07-01T13:15:00"
+                  items:
+                    - seatId: 101
+                      seatLabel: "101"
+                      price: 85000
+                    - seatId: 102
+                      seatLabel: "102"
+                      price: 85000
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: Booking not found or access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              example:
+                code: 2004
+                message: "Booking not found"
+
+  # ─────────────────────────────────────────────
+  # PATCH /api/bookings/{id}/cancel — Cancel booking
+  # ─────────────────────────────────────────────
+  /api/bookings/{id}/cancel:
+    patch:
+      tags:
+        - Booking
+      summary: Cancel a booking
+      description: >
+        Cancels a PENDING or CONFIRMED booking. Members may cancel their own bookings;
+        Admins may cancel any. Cancellation is blocked if the showtime is too close.
+        All associated seat locks are released and (if CONFIRMED) tickets are voided.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Booking UUID
+          schema:
+            type: string
+            example: "550e8400-e29b-41d4-a716-446655440000"
       responses:
         '200':
           description: Booking cancelled successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponseBookingResponse'
+                $ref: '#/components/schemas/ApiResponseCancelBooking'
               example:
                 code: 1000
                 message: "Booking cancelled successfully"
                 result:
-                  bookingId: "bk-uuid-9999-8888"
-                  accountId: "acc-uuid-1234-5678"
+                  bookingId: "550e8400-e29b-41d4-a716-446655440000"
                   status: "CANCELLED"
-                  updatedAt: "2026-06-27T11:21:43Z"
+                  updatedAt: "2026-07-01T13:30:00"
         '400':
-          description: Business logic error — e.g., invalid booking state for cancellation
+          description: Invalid booking state or cancellation window expired
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
               examples:
-                InvalidBookingState:
-                  summary: "Error 2001: Invalid Booking State"
+                InvalidState:
+                  summary: "Error 2001: Invalid booking state"
                   value:
                     code: 2001
-                    message: "Booking cannot be cancelled in its current state."
+                    message: "Booking cannot be cancelled in its current state"
+                TimeExpired:
+                  summary: "Error 2003: Too close to showtime"
+                  value:
+                    code: 2003
+                    message: "Cancellation time has expired for this showtime"
         '401':
-          description: Unauthenticated — Token missing, expired, or invalid
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          description: Not the booking owner (and not admin)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
               example:
-                code: 1008
-                message: "Unauthenticated!"
+                code: 2002
+                message: "You do not have permission to cancel this booking"
+        '404':
+          description: Booking not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              example:
+                code: 2004
+                message: "Booking not found"
 
 components:
   securitySchemes:
@@ -78,28 +312,198 @@ components:
       scheme: bearer
       bearerFormat: JWT
 
+  responses:
+    Unauthenticated:
+      description: Token missing, expired, or invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+          example:
+            code: 1008
+            message: "Unauthenticated"
+
   schemas:
-    # --- CORE RESPONSE SCHEMAS ---
-    BookingResponse:
+
+    # ── Request ─────────────────────────────────
+    BookingRequest:
+      type: object
+      required:
+        - showtimeId
+        - seatIds
+      properties:
+        showtimeId:
+          type: integer
+          format: int64
+          minimum: 1
+          example: 1
+        seatIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+          minItems: 1
+          maxItems: 8
+          description: showtime_seat IDs; no duplicates allowed
+          example: [101, 102]
+        pointsUsed:
+          type: integer
+          minimum: 0
+          default: 0
+          example: 0
+
+    # ── Response DTOs ────────────────────────────
+    BookingItemResponse:
+      type: object
+      properties:
+        seatId:
+          type: integer
+          format: int64
+          description: showtime_seat_id
+          example: 101
+        seatLabel:
+          type: string
+          description: Seat code (currently same as seatId string)
+          example: "101"
+        price:
+          type: number
+          format: decimal
+          description: Unit price for this seat in VND
+          example: 85000
+
+    CreateBookingResponse:
       type: object
       properties:
         bookingId:
           type: string
-          example: "bk-uuid-9999-8888"
-        accountId:
-          type: string
-          example: "acc-uuid-1234-5678Z"
+          description: UUID of the new booking
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        showtimeId:
+          type: integer
+          format: int64
+          example: 1
         status:
           type: string
+          description: Always PENDING on creation
+          example: "PENDING"
+        totalPrice:
+          type: number
+          format: decimal
+          description: Total amount (sum of seat prices) in VND
+          example: 170000
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookingItemResponse'
+        lockedUntil:
+          type: string
+          format: date-time
+          description: Seat lock expiry time (now + 10 minutes)
+          example: "2026-07-01T13:25:00"
+
+    BookingDetailResponse:
+      type: object
+      properties:
+        bookingId:
+          type: string
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        accountId:
+          type: string
+          example: "acc-001"
+        memberId:
+          type: string
+          nullable: true
+          example: null
+        movieName:
+          type: string
+          nullable: true
+          description: Snapshot from booking record
+          example: "Avengers: Endgame"
+        showDate:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-07-01"
+        startTime:
+          type: string
+          format: time
+          nullable: true
+          example: "14:00:00"
+        cinemaRoomName:
+          type: string
+          nullable: true
+          example: "Room 1"
+        totalSeats:
+          type: integer
+          nullable: true
+          example: 2
+        finalAmount:
+          type: number
+          format: decimal
+          nullable: true
+          example: 170000
+        bookingType:
+          type: string
+          nullable: true
+          description: "ONLINE | COUNTER | null"
+          example: null
+        status:
+          type: string
+          description: "PENDING | CONFIRMED | CANCELLED"
+          example: "PENDING"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-07-01T13:15:00"
+        items:
+          type: array
+          nullable: true
+          description: Populated in detail view; null in list view
+          items:
+            $ref: '#/components/schemas/BookingItemResponse'
+
+    BookingListResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookingDetailResponse'
+        pageNumber:
+          type: integer
+          description: Current page index (0-based)
+          example: 0
+        pageSize:
+          type: integer
+          example: 10
+        totalElements:
+          type: integer
+          format: int64
+          example: 1
+        totalPages:
+          type: integer
+          example: 1
+        isLast:
+          type: boolean
+          example: true
+
+    CancelBookingResponse:
+      type: object
+      properties:
+        bookingId:
+          type: string
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        status:
+          type: string
+          description: Always CANCELLED
           example: "CANCELLED"
-          description: "Current status of the booking (e.g., PENDING, CONFIRMED, CANCELLED)"
         updatedAt:
           type: string
           format: date-time
-          example: "2026-06-27T11:21:43Z"
+          example: "2026-07-01T13:30:00"
 
-    # --- WRAPPER RESPONSES (Consistent with old structure) ---
-    ApiResponseBookingResponse:
+    # ── Wrapper schemas ──────────────────────────
+    ApiResponseCreateBooking:
       type: object
       properties:
         code:
@@ -107,17 +511,56 @@ components:
           example: 1000
         message:
           type: string
+          nullable: true
+          example: "Booking created successfully"
+        result:
+          $ref: '#/components/schemas/CreateBookingResponse'
+
+    ApiResponseBookingDetail:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 1000
+        message:
+          type: string
+          nullable: true
+        result:
+          $ref: '#/components/schemas/BookingDetailResponse'
+
+    ApiResponseBookingList:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 1000
+        message:
+          type: string
+          nullable: true
+        result:
+          $ref: '#/components/schemas/BookingListResponse'
+
+    ApiResponseCancelBooking:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 1000
+        message:
+          type: string
+          nullable: true
           example: "Booking cancelled successfully"
         result:
-          $ref: '#/components/schemas/BookingResponse'
+          $ref: '#/components/schemas/CancelBookingResponse'
 
-    # --- ERROR RESPONSE SCHEMA ---
+    # ── Error schema ─────────────────────────────
     ApiErrorResponse:
       type: object
       properties:
         code:
           type: integer
-          example: 2001
+          description: Error code from BookingErrorCode enum
+          example: 2004
         message:
           type: string
-          example: "Booking cannot be cancelled in its current state."
+          example: "Booking not found"
