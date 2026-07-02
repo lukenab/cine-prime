@@ -2,7 +2,7 @@ openapi: 3.0.1
 info:
   title: CinePrime Auth Service API
   description: OpenAPI specification for the CinePrime authentication service. Defines endpoints for user registration, authentication, token management, account management, and RBAC (Roles & Permissions) management.
-  version: 1.3.0
+  version: 1.5.0
 servers:
   - url: http://localhost:8088
     description: Auth Service Local Server
@@ -134,7 +134,9 @@ paths:
         - Authentication
       summary: Verify OTP and create account
       description: >
-        Verifies the OTP submitted by the user and creates the account.
+        Verifies the OTP submitted by the user and creates the account. The registration payload
+        itself is NOT resent here — it was captured server-side (in Redis) during `/register/initiate`,
+        so this endpoint only needs the `email` and the `otp`.
         After successful creation, a `UserRegisteredEvent` is published to Kafka topic
         `user-register-topic` for async profile creation in `user-service`.
       requestBody:
@@ -149,18 +151,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponseAccountResponse'
+                $ref: '#/components/schemas/ApiResponseRegisterResponse'
               example:
                 code: 1000
                 result:
                   accountId: "acc-uuid-1234-5678"
                   username: "john_doe"
                   email: "johndoe@example.com"
-                  createdAt: "2026-06-14T15:00:00"
-                  roles:
-                    - roleName: "USER"
-                      description: "Default user role"
-                      permissions: []
+                  createdAt: "2026-06-14T15:00:00Z"
         '400':
           description: OTP validation failure
           content:
@@ -209,16 +207,16 @@ paths:
                 $ref: '#/components/schemas/ApiResponseMessage'
               example:
                 code: 1000
-                message: "New otp has been sent to your email!"
-        '404':
-          description: No pending registration found for the given email
+                message: "New OTP has been sent to your email!"
+        '400':
+          description: Email is already registered — no OTP will be resent
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
               example:
-                code: 1014
-                message: "Account not found!"
+                code: 1011
+                message: "Email already exists!"
         '429':
           description: Resend rate limit exceeded
           content:
@@ -280,16 +278,11 @@ paths:
         - Authentication
       summary: Revoke the current JWT token
       description: >
-        Marks the provided token as revoked in the whitelist. After this call the token
+        Marks the current token as revoked in the whitelist. The token is read exclusively from the
+        `Authorization: Bearer <token>` header — there is NO request body. After this call the token
         will be rejected by all services even if the JWT signature is still technically valid.
       security:
         - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TokenRequest'
       responses:
         '200':
           description: Token successfully revoked
@@ -413,7 +406,7 @@ paths:
       tags:
         - Account
       summary: Create account directly (admin)
-      description: Creates a new account directly without OTP verification. Intended for admin use.
+      description: Creates a new account directly without OTP verification. Intended for admin use. Unlike the public registration flow, the caller may specify the account's `role` (USER or ADMIN).
       security:
         - bearerAuth: []
       requestBody:
@@ -421,7 +414,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RegisterRequest'
+              $ref: '#/components/schemas/AdminCreateAccountRequest'
       responses:
         '200':
           description: Account successfully created
@@ -669,6 +662,7 @@ components:
         - email
         - fullName
         - phoneNumber
+        - dateOfBirth
         - gender
         - address
         - identityCard
@@ -682,9 +676,9 @@ components:
         password:
           type: string
           format: password
-          minLength: 6
+          minLength: 8
           example: "Password123"
-          description: "Minimum 6 characters"
+          description: "Minimum 8 characters"
         email:
           type: string
           format: email
@@ -701,37 +695,95 @@ components:
           type: string
           format: date
           example: "1995-10-15"
-          description: "Format YYYY-MM-DD, must be at least 2 years in the past"
+          description: "Format YYYY-MM-DD. Required. User must be at least 18 years old (@DobConstraint(min = 18))"
         gender:
           type: string
           example: "MALE"
-          description: "Enum: MALE, FEMALE, OTHER"
+          description: "Free-text string (not enum-validated server-side). Convention: MALE, FEMALE, OTHER"
         address:
           type: string
-          maxLength: 255
           example: "123 Main Street, Tech City"
         identityCard:
           type: string
           pattern: "^[0-9]{12}$"
           example: "079012345678"
           description: "Exactly 12 digits"
+
+    AdminCreateAccountRequest:
+      type: object
+      description: "Payload for admin-initiated account creation (POST /api/accounts). Same fields as RegisterRequest plus an optional role."
+      required:
+        - username
+        - password
+        - email
+        - fullName
+        - phoneNumber
+        - dateOfBirth
+        - gender
+        - address
+        - identityCard
+      properties:
+        username:
+          type: string
+          minLength: 5
+          maxLength: 50
+          example: "john_doe"
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: "Password123"
+          description: "Minimum 8 characters"
+        email:
+          type: string
+          format: email
+          example: "johndoe@example.com"
+        fullName:
+          type: string
+          example: "John Doe"
+        phoneNumber:
+          type: string
+          pattern: "^(0[3|5|7|8|9])+([0-9]{8})$"
+          example: "0912345678"
+        dateOfBirth:
+          type: string
+          format: date
+          example: "1995-10-15"
+          description: "Required. User must be at least 18 years old"
+        gender:
+          type: string
+          example: "MALE"
+        address:
+          type: string
+          example: "123 Main Street, Tech City"
+        identityCard:
+          type: string
+          pattern: "^[0-9]{12}$"
+          example: "079012345678"
         role:
           type: string
+          pattern: "^(USER|ADMIN)$"
           example: "USER"
-          description: "Optional — if omitted, default role USER is assigned"
+          description: "Optional — must be USER or ADMIN. If omitted, default role USER is assigned"
 
     VerifyOtpRequest:
       type: object
       required:
+        - email
         - otp
-        - registerRequest
+      description: "Only email + OTP are sent here. The registration payload was captured server-side during /register/initiate."
       properties:
+        email:
+          type: string
+          format: email
+          example: "johndoe@example.com"
+          description: "Email of the pending registration"
         otp:
           type: string
+          minLength: 6
+          maxLength: 6
           example: "654321"
           description: "6-digit OTP sent to email"
-        registerRequest:
-          $ref: '#/components/schemas/RegisterRequest'
 
     AuthenticationRequest:
       type: object
@@ -761,7 +813,7 @@ components:
       type: object
       required:
         - token
-      description: "Used by /logout, /refresh, and /introspect"
+      description: "Used by /refresh and /introspect. (/logout reads the token from the Authorization header instead.)"
       properties:
         token:
           type: string
@@ -879,6 +931,25 @@ components:
           items:
             $ref: '#/components/schemas/RoleResponse'
 
+    RegisterResponse:
+      type: object
+      description: "Returned by /register/verify. Note: does NOT include roles (unlike AccountResponse)."
+      properties:
+        accountId:
+          type: string
+          example: "acc-uuid-1234-5678"
+        username:
+          type: string
+          example: "john_doe"
+        email:
+          type: string
+          example: "johndoe@example.com"
+        createdAt:
+          type: string
+          format: date-time
+          description: "ISO-8601 timestamp with offset (OffsetDateTime)"
+          example: "2026-06-14T15:00:00Z"
+
     PermissionResponse:
       type: object
       properties:
@@ -939,6 +1010,18 @@ components:
           nullable: true
         result:
           $ref: '#/components/schemas/AccountResponse'
+
+    ApiResponseRegisterResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 1000
+        message:
+          type: string
+          nullable: true
+        result:
+          $ref: '#/components/schemas/RegisterResponse'
 
     ApiResponseListAccountResponse:
       type: object
