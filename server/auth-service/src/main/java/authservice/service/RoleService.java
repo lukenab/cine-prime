@@ -1,6 +1,6 @@
 package authservice.service;
 
-import authservice.dto.request.RoleRequest;
+import authservice.dto.request.CreateRoleRequest;
 import authservice.dto.response.RoleResponse;
 import authservice.entity.Permission;
 import authservice.entity.Role;
@@ -22,17 +22,17 @@ public class RoleService {
     RoleRepository roleRepository;
     PermissionRepository permissionRepository;
     RoleMapper roleMapper;
-    AuthAuditLogService authAuditLogService;
+    AuditLogService auditLogService;
 
-    public RoleResponse createRole(RoleRequest request){
+    public RoleResponse createRole(CreateRoleRequest request){
         Role role = roleMapper.toRole(request);
 
         List<Permission> permissions = permissionRepository.findAllById(request.getPermissions());
         role.setPermissions(new HashSet<>(permissions));
 
         role = roleRepository.save(role);
-        authAuditLogService.success("ROLE_CREATED", null, "Role created",
-                authAuditLogService.metadata(
+        auditLogService.success("ROLE_CREATED", null, "Role created",
+                auditLogService.metadata(
                         "roleName", role.getRoleName(),
                         "permissions", request.getPermissions()
                 ));

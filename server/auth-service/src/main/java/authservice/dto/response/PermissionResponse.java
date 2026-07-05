@@ -10,6 +10,6 @@ import lombok.experimental.FieldDefaults;
 @Builder
 
 public class PermissionResponse {
-    String name;
+    String permissionName;
     String description;
 }

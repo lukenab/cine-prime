@@ -1,8 +1,7 @@
-package authservice.producer;
+package authservice.messaging;
 
 import authservice.event.OtpRequestedEvent;
 import authservice.event.UserRegisteredEvent;
-import authservice.event.UserUpdatedEvent;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -20,17 +19,13 @@ import java.util.concurrent.TimeoutException;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
-public class UserEventProducer {
+public class AuthEventPublisher {
     KafkaTemplate<String, Object> kafkaTemplate;
 
     public void sendRegisteredEvent(UserRegisteredEvent event){
         sendAndWait("user-register-topic", event);
     }
-
-    /**
-     * Fire-and-forget: không block HTTP response chờ email gửi xong.
-     * Notification-service sẽ consume và gửi email trong background.
-     */
+    
     public void sendOtpRequestedEvent(OtpRequestedEvent event) {
         kafkaTemplate.send("send-otp-email-topic", event)
                 .whenComplete((result, ex) -> {
@@ -40,10 +35,6 @@ public class UserEventProducer {
                         log.info("Published OtpRequestedEvent to send-otp-email-topic for email: {}", event.getEmail());
                     }
                 });
-    }
-
-    public void sendUpdatedEvent(UserUpdatedEvent event){
-        sendAndWait("user-update-topic", event);
     }
 
     private void sendAndWait(String topic, Object event) {

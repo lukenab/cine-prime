@@ -16,14 +16,14 @@ import java.util.Set;
 @Builder
 public class Role {
     @Id
-    @Column(name = "role_name", nullable = false, unique = true, length = 50)
+    @Column(name = "role_name", length = 50)
     String roleName;
 
     @Column(name = "description", length = 255)
     String description;
 
 
-    @ManyToMany(fetch = FetchType.EAGER)
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "role_permissions",
             joinColumns = @JoinColumn(name = "role_name"),

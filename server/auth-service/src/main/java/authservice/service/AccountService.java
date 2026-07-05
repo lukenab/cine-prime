@@ -1,18 +1,15 @@
 package authservice.service;
 
-import authservice.client.UserClient;
-import authservice.dto.request.AccountUpdateRequest;
-import authservice.dto.request.AdminCreateAccountRequest;
-import authservice.dto.request.RegisterRequest;
-import authservice.enums.AccountStatus;
-import authservice.event.UserRegisteredEvent;
-import authservice.event.UserUpdatedEvent;
+import authservice.dto.request.CreateAccountRequest;
+import authservice.dto.request.UpdateAccountRequest;
 import authservice.dto.response.AccountResponse;
 import authservice.entity.Account;
 import authservice.entity.Role;
+import authservice.enums.AccountStatus;
+import authservice.event.UserRegisteredEvent;
 import authservice.exception.AuthErrorCode;
 import authservice.mapper.AccountMapper;
-import authservice.producer.UserEventProducer;
+import authservice.messaging.AuthEventPublisher;
 import authservice.repository.AccountRepository;
 import authservice.repository.RoleRepository;
 import jakarta.transaction.Transactional;
@@ -20,9 +17,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import feign.FeignException;
 import movie.theater.common.exception.AppException;
-import movie.theater.common.exception.GlobalErrorCode;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -38,17 +33,14 @@ import java.util.Set;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
 public class AccountService {
+
     AccountRepository accountRepository;
     AccountMapper accountMapper;
     PasswordEncoder passwordEncoder;
     RoleRepository roleRepository;
-    UserEventProducer userEventProducer;
-    UserClient userClient;
-    AuthAuditLogService authAuditLogService;
+    AuthEventPublisher authEventPublisher;
+    AuditLogService auditLogService;
 
-
-//    @PreAuthorize("hasRole('ADMIN')")
-//    @PreAuthorize("hasAuthority('CREATE_DATA')")
     public List<AccountResponse> getAllAccount() {
         return accountMapper.toAccountResponseList(accountRepository.findAll());
     }
@@ -60,51 +52,16 @@ public class AccountService {
     }
 
     @Transactional
-    public AccountResponse updateAccount(String accountId, AccountUpdateRequest request) {
+    public AccountResponse updateAccount(String accountId, UpdateAccountRequest request) {
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new AppException(AuthErrorCode.ACCOUNT_NOT_FOUND));
 
-        if (request.getPhoneNumber() != null || request.getIdentityCard() != null) {
-            try {
-                String currentPhone = null;
-                String currentIdentityCard = null;
-                try {
-                    var profile = userClient.getUser(accountId).getResult();
-                    if (profile != null) {
-                        currentPhone = profile.getPhoneNumber();
-                        currentIdentityCard = profile.getIdentityCard();
-                    }
-                } catch (FeignException ignored) {
-                }
-
-                boolean phoneChanged = request.getPhoneNumber() != null
-                        && !request.getPhoneNumber().equals(currentPhone);
-                boolean cccdChanged = request.getIdentityCard() != null
-                        && !request.getIdentityCard().equals(currentIdentityCard);
-
-                if (phoneChanged || cccdChanged) {
-                    var existence = userClient.checkExistence(
-                            phoneChanged ? request.getPhoneNumber() : "",
-                            cccdChanged  ? request.getIdentityCard() : ""
-                    ).getResult();
-                    if (phoneChanged && existence.isPhoneExists()) {
-                        throw new AppException(AuthErrorCode.PHONE_EXISTED);
-                    }
-                    if (cccdChanged && existence.isIdentityCardExists()) {
-                        throw new AppException(AuthErrorCode.IDENTITY_CARD_EXISTED);
-                    }
-                }
-            } catch (AppException e) {
-                throw e;
-            } catch (FeignException e) {
-                log.error("User-service unavailable. Cannot validate phone/identity before account update.", e);
-                throw new AppException(GlobalErrorCode.UNCATEGORIZED_EXCEPTION);
-            }
-        }
-
         String oldRoles = account.getRoles() != null ? account.getRoles().toString() : null;
 
-        accountMapper.updateAccount(request, account);
+        // Update auth fields owned by auth-service
+        if (StringUtils.hasText(request.getEmail())) {
+            account.setEmail(request.getEmail().trim().toLowerCase());
+        }
 
         if (StringUtils.hasText(request.getPassword())) {
             account.setPasswordHash(passwordEncoder.encode(request.getPassword()));
@@ -115,45 +72,35 @@ public class AccountService {
             account.setRoles(new HashSet<>(roles));
         }
 
+        if (request.getStatus() != null) {
+            account.setStatus(request.getStatus());
+        }
+
         accountRepository.save(account);
 
-        UserUpdatedEvent userUpdatedEvent = UserUpdatedEvent.builder()
-                .accountId(accountId)
-                .fullName(request.getFullName())
-                .phoneNumber(request.getPhoneNumber())
-                .dateOfBirth(request.getDateOfBirth())
-                .gender(request.getGender())
-                .address(request.getAddress())
-                .identityCard(request.getIdentityCard())
-                .build();
-
-        userEventProducer.sendUpdatedEvent(userUpdatedEvent);
-        authAuditLogService.success("ACCOUNT_UPDATED", accountId, "Account updated",
-                authAuditLogService.metadata(
+        auditLogService.success("ACCOUNT_UPDATED", accountId, "Account updated",
+                auditLogService.metadata(
                         "username", account.getUsername(),
                         "email", account.getEmail(),
                         "passwordChanged", StringUtils.hasText(request.getPassword()),
                         "oldRoles", oldRoles,
                         "newRoles", account.getRoles() != null ? account.getRoles().toString() : null,
-                        "phoneNumber", authAuditLogService.maskPhone(request.getPhoneNumber()),
-                        "identityCard", authAuditLogService.maskIdentityCard(request.getIdentityCard())
+                        "statusChanged", request.getStatus() != null
                 ));
 
         return accountMapper.toAccountResponse(account);
     }
 
     @Transactional
-    public AccountResponse createAccount(AdminCreateAccountRequest request) {
+    public AccountResponse createAccount(CreateAccountRequest request) {
         String emailKey = request.getEmail().trim().toLowerCase();
 
-        validateUniqueFields(request.getUsername(), emailKey, request.getPhoneNumber(), request.getIdentityCard());
-
-        Account account = Account.builder()
-                .username(request.getUsername())
-                .email(emailKey)
-                .passwordHash(passwordEncoder.encode(request.getPassword()))
-                .status(AccountStatus.ACTIVE)
-                .build();
+        if (accountRepository.existsByUsername(request.getUsername())) {
+            throw new AppException(AuthErrorCode.USERNAME_EXISTED);
+        }
+        if (accountRepository.existsByEmail(emailKey)) {
+            throw new AppException(AuthErrorCode.EMAIL_EXISTED);
+        }
 
         String requestedRole = (request.getRole() != null && !request.getRole().isBlank())
                 ? request.getRole().toUpperCase().trim()
@@ -162,64 +109,36 @@ public class AccountService {
         Role accountRole = roleRepository.findById(requestedRole)
                 .orElseThrow(() -> new AppException(AuthErrorCode.ROLE_NOT_FOUND));
 
-        account.setRoles(new HashSet<>(Set.of(accountRole)));
-        account = accountRepository.saveAndFlush(account);
-
-        UserRegisteredEvent userRegisteredEvent = UserRegisteredEvent.builder()
-                .accountId(account.getAccountId())
-                .fullName(request.getFullName())
-                .phoneNumber(request.getPhoneNumber())
-                .address(request.getAddress())
-                .gender(request.getGender())
-                .dateOfBirth(request.getDateOfBirth())
-                .identityCard(request.getIdentityCard())
+        Account account = Account.builder()
+                .username(request.getUsername())
+                .email(emailKey)
+                .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .status(AccountStatus.ACTIVE)
+                .roles(new HashSet<>(Set.of(accountRole)))
                 .build();
 
-        userEventProducer.sendRegisteredEvent(userRegisteredEvent);
-        authAuditLogService.success("ACCOUNT_CREATED", account.getAccountId(), "Account created by admin",
-                authAuditLogService.metadata(
+        account = accountRepository.saveAndFlush(account);
+
+        // Notify user-service to create a bare profile
+        authEventPublisher.sendRegisteredEvent(UserRegisteredEvent.builder()
+                .accountId(account.getAccountId())
+                .email(account.getEmail())
+                .build());
+
+        auditLogService.success("ACCOUNT_CREATED", account.getAccountId(), "Account created by admin",
+                auditLogService.metadata(
                         "username", account.getUsername(),
                         "email", emailKey,
-                        "role", requestedRole,
-                        "phoneNumber", authAuditLogService.maskPhone(request.getPhoneNumber()),
-                        "identityCard", authAuditLogService.maskIdentityCard(request.getIdentityCard())
+                        "role", requestedRole
                 ));
 
         return accountMapper.toAccountResponse(account);
     }
 
-
     public AccountResponse myInfo() {
-        var context = SecurityContextHolder.getContext();
-
-        String name = context.getAuthentication().getName();
-
-        Account account = accountRepository.findByUsername(name).orElseThrow(() -> new AppException(AuthErrorCode.USERNAME_EXISTED));
-
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        Account account = accountRepository.findByUsername(username)
+                .orElseThrow(() -> new AppException(AuthErrorCode.ACCOUNT_NOT_FOUND));
         return accountMapper.toAccountResponse(account);
     }
-
-    private void validateUniqueFields(String username, String emailKey, String phone, String identityCard) {
-        if (accountRepository.existsByUsername(username)) {
-            throw new AppException(AuthErrorCode.USERNAME_EXISTED);
-        }
-        if (accountRepository.existsByEmail(emailKey)) {
-            throw new AppException(AuthErrorCode.EMAIL_EXISTED);
-        }
-
-        try {
-            var response = userClient.checkExistence(phone, identityCard);
-            var data = response.getResult();
-            if (data.isPhoneExists()) {
-                throw new AppException(AuthErrorCode.PHONE_EXISTED);
-            }
-            if (data.isIdentityCardExists()) {
-                throw new AppException(AuthErrorCode.IDENTITY_CARD_EXISTED);
-            }
-        } catch (FeignException e) {
-            log.error("User-service unavailable. Cannot validate phone/identity before account creation.", e);
-            throw new AppException(GlobalErrorCode.UNCATEGORIZED_EXCEPTION);
-        }
-    }
-
 }

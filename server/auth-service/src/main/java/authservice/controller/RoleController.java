@@ -1,10 +1,7 @@
 package authservice.controller;
 
-import authservice.dto.request.PermissionRequest;
-import authservice.dto.request.RoleRequest;
-import authservice.dto.response.PermissionResponse;
+import authservice.dto.request.CreateRoleRequest;
 import authservice.dto.response.RoleResponse;
-import authservice.service.PermissionService;
 import authservice.service.RoleService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +20,7 @@ public class RoleController {
     RoleService roleService;
 
     @PostMapping
-    ApiResponse<RoleResponse> createRole(@RequestBody RoleRequest request){
+    ApiResponse<RoleResponse> createRole(@RequestBody CreateRoleRequest request){
         return ApiResponse.<RoleResponse>builder()
                 .result(roleService.createRole(request))
                 .build();

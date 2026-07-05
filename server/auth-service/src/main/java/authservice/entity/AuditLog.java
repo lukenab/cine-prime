@@ -19,13 +19,11 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "auth_audit_log")
-@AllArgsConstructor
-@NoArgsConstructor
+@AllArgsConstructor @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@Getter
-@Setter
-@Builder
-public class AuthAuditLog {
+@Getter @Setter @Builder
+public class AuditLog {
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "audit_id", updatable = false, nullable = false, length = 36)
@@ -46,7 +44,7 @@ public class AuthAuditLog {
     @Column(name = "message", columnDefinition = "TEXT")
     String message;
 
-    @Column(name = "ip_address", length = 45)
+    @Column(name = "ip_address", length = 50)
     String ipAddress;
 
     @Column(name = "user_agent", columnDefinition = "TEXT")
@@ -56,6 +54,8 @@ public class AuthAuditLog {
     String metadata;
 
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false, columnDefinition = "TIMESTAMP DEFAULT NOW()")
+    @Column(name = "created_at", nullable = false, updatable = false)
     LocalDateTime createdAt;
+
+
 }

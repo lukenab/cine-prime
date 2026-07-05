@@ -1,10 +1,9 @@
 package authservice.dto.request;
 
-import authservice.entity.Role;
+import authservice.enums.AccountStatus;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
-import java.time.LocalDate;
 import java.util.List;
 
 @Data
@@ -12,16 +11,11 @@ import java.util.List;
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Builder
-public class AccountUpdateRequest {
+public class UpdateAccountRequest {
 
+    // Auth-service only owns these fields
     String email;
     String password;
     List<String> roles;
-
-    String fullName;
-    String phoneNumber;
-    LocalDate dateOfBirth;
-    String gender;
-    String address;
-    String identityCard;
+    AccountStatus status;
 }

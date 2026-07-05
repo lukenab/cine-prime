@@ -22,7 +22,12 @@ public enum AuthErrorCode implements BaseErrorCode {
     PHONE_EXISTED(1017, "Phone number already exists in the system!", HttpStatus.BAD_REQUEST),
     IDENTITY_CARD_EXISTED(1018, "Identity card (CCCD) already exists in the system!", HttpStatus.BAD_REQUEST),
     EMAIL_SEND_FAILED(1019, "Failed to send OTP email. Please try again.", HttpStatus.INTERNAL_SERVER_ERROR),
-    ACCOUNT_INACTIVE(1020, "Your account has been deactivated. Please contact support.", HttpStatus.FORBIDDEN);
+    ACCOUNT_INACTIVE(1020, "Your account has been deactivated. Please contact support.", HttpStatus.FORBIDDEN),
+    ACCOUNT_LOCKED(1021, "Your account has been temporarily locked due to too many failed login attempts. Please try again later.", HttpStatus.FORBIDDEN),
+    TOKEN_EXPIRED(1022, "Your session has expired. Please log in again.", HttpStatus.UNAUTHORIZED),
+    TOKEN_INVALID(1023, "Invalid token. Please log in again.", HttpStatus.UNAUTHORIZED),
+    TOKEN_REVOKED(1024, "This session has been logged out. Please log in again.", HttpStatus.UNAUTHORIZED),
+    REGISTRATION_NOT_INITIATED(1025, "Registration has not been initiated!", HttpStatus.BAD_REQUEST);
 
     int code;
     String message;

@@ -4,6 +4,7 @@ import authservice.enums.AccountStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -12,13 +13,11 @@ import java.util.Set;
 
 @Entity
 @Table(name = "account")
-@AllArgsConstructor
-@NoArgsConstructor
+@AllArgsConstructor @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@Getter
-@Setter
-@Builder
+@Getter @Setter @Builder
 public class Account {
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "account_id", updatable = false, nullable = false, length = 36)
@@ -33,7 +32,26 @@ public class Account {
     @Column(name = "password_hash", nullable = false, length = 255)
     String passwordHash;
 
-    @ManyToMany(fetch = FetchType.EAGER)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 30)
+    @Builder.Default
+    AccountStatus status = AccountStatus.PENDING;
+
+    @Column(name = "failed_login_attempts", nullable = false)
+    @ColumnDefault("0")
+    @Builder.Default
+    int failedLoginAttempts = 0;
+
+    @Column(name = "locked_until")
+    LocalDateTime lockedUntil;
+
+    @Column(name = "email_verified_at")
+    LocalDateTime emailVerifiedAt;
+
+    @Column(name = "last_login_at")
+    LocalDateTime lastLoginAt;
+
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "account_role",
             joinColumns = @JoinColumn(name = "account_id"),
@@ -41,18 +59,11 @@ public class Account {
     )
     Set<Role> roles;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", columnDefinition = "varchar(10) default 'ACTIVE'")
-    AccountStatus status;
-
-    @Column(name = "last_login_at")
-    LocalDateTime lastLoginAt;
-
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false, columnDefinition = "TIMESTAMP DEFAULT NOW()")
+    @Column(name = "created_at", nullable = false, updatable = false)
     LocalDateTime createdAt;
 
     @UpdateTimestamp
-    @Column(name = "updated_at", insertable = false)
+    @Column(name = "updated_at")
     LocalDateTime updatedAt;
 }

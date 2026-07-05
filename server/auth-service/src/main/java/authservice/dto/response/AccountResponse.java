@@ -4,6 +4,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.Set;
 
 @Data
@@ -15,7 +16,10 @@ public class AccountResponse {
     String accountId;
     String username;
     String email;
-    LocalDateTime createdAt;
+    String status;
+    LocalDateTime lastLoginAt;
+    OffsetDateTime createdAt;
+    LocalDateTime updatedAt;
 
     Set<RoleResponse> roles;
 }
