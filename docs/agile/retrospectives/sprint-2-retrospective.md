@@ -15,15 +15,19 @@
 
 ## 1. Sprint Goal
 
-Deliver end-to-end showtime scheduling and ticket booking capabilities across all service layers:
+Complete the Showtime Management module and implement the core Ticket Booking flow for customers, including seat selection, seat conflict prevention logic, and basic payment processing.
 
-- Design and implement the booking service database schema and JPA entities.
-- Implement the Create Booking, Hold Seats, Seat Conflict, and Cancel Booking APIs in booking-service.
-- Implement the Showtime Write and Read APIs in movie-service.
-- Build the customer-facing Seat Map & Booking Flow UI.
-- Build Admin UIs for Showtime Management and Booking/Ticket Management.
-- Complete auth-service refresh token, logout, and admin account creation flows.
-- Deliver API contracts and documentation for booking and ticket management.
+### Backend
+
+- **Booking Service**: Set up database, JPA Entities, and CRUD APIs for creating, cancelling, and holding seat reservations.
+- **Seat Conflict Logic**: Implement conflict detection logic for concurrent seat booking requests using database transactions and locking mechanisms.
+- **Admin Account Management API**: Implement `POST /api/accounts` to allow Admins to create new accounts (ADMIN/USER roles), integrated with OpenFeign validation and Kafka event broadcasting.
+
+### Frontend
+
+- **Admin — Showtime Management**: Build the UI and integrate APIs for Admins to assign movie schedules to Cinema Rooms by time slots.
+- **Customer — Showtime Selection**: Build the screen for customers to browse and select showtimes by movie, date, and cinema.
+- **Customer — Seat Map & Booking**: Render the interactive Seat Map and implement the full booking flow based on data returned from the Backend.
 
 ---
 
@@ -94,7 +98,7 @@ Deliver end-to-end showtime scheduling and ticket booking capabilities across al
 
 | # | Issue |
 |---|-------|
-| #68 | Add API Contract for Booking and Ticket Management (`booking-service-api-design.md`, `booking-service.yaml`) |
+| #68 | Add API Contract for Booking and Ticket Management (`API_CONTRACT.md`, `booking-service.yaml`) |
 | #61 | Update Auth Service API Contract |
 
 ### 2.7. Frontend
@@ -133,7 +137,7 @@ The seat conflict logic (pessimistic lock + unique constraint + optimistic locki
 The decision to route showtime schedule management under `/api/schedules` instead of modifying `/api/showtimes` preserved the existing Feign client contract in booking-service, avoiding cross-service breakage.
 
 ### 4.4. API Documentation Quality
-Both `booking-service-api-design.md` and `booking-service.yaml` were written to a high standard — clear response envelope, error code catalog mapped to actual `BookingErrorCode` enum values, and separate sections for implemented vs. planned endpoints.
+Both `API_CONTRACT.md` and `booking-service.yaml` were written to a high standard — clear response envelope, error code catalog mapped to actual `BookingErrorCode` enum values, and separate sections for implemented vs. planned endpoints.
 
 ### 4.5. Kafka Integration
 The OTP email migration to notification-service via Kafka (fire-and-forget) was executed cleanly: dead code removed from auth-service (Java class, Spring Mail/Thymeleaf deps, YAML config, HTML template), and the new Kafka producer in auth-service is decoupled from the consumer in notification-service.
@@ -159,7 +163,7 @@ The contribution split is significantly uneven:
 One member carrying 62.5% of total issues creates a single point of failure, burnout risk, and reduced knowledge sharing. The remaining four members average 9.375% each.
 
 ### 5.2. Response Envelope Inconsistency in Docs
-The initial `booking-service-api-design.md` used a `success/data/errors` response format throughout the endpoint examples that did not match the actual `ApiResponse<T>` wrapper (`code/message/result`). This was caught and corrected, but required a full doc rewrite at the end of the sprint — wasting time that could have been avoided if the common module contract had been agreed on before doc writing started.
+The initial `API_CONTRACT.md` used a `success/data/errors` response format throughout the endpoint examples that did not match the actual `ApiResponse<T>` wrapper (`code/message/result`). This was caught and corrected, but required a full doc rewrite at the end of the sprint — wasting time that could have been avoided if the common module contract had been agreed on before doc writing started.
 
 ### 5.3. Pre-existing Repository Type Bug Not Fixed
 `CinemaRoomRepository extends JpaRepository<CinemaRoom, Integer>` but the `@Id` is `Long`. This pre-existing type mismatch was mitigated by using `findByCinemaRoomId(Long)` derived query but was not fixed at the root. It is a latent bug that will surface if `findById()` is ever called directly.
@@ -264,7 +268,7 @@ Sprint 3 picks up where Sprint 2 left off. The goals below are derived from outs
 |------|-------------|----------|
 | **Testing** | Concurrency integration tests for seat locking under parallel requests | High |
 | **Testing** | Unit tests for booking service business rules (cancel rules, expiry logic) | Medium |
-| **Documentation** | Update `booking-service-api-design.md` and YAML as new endpoints are implemented | Medium |
+| **Documentation** | Update `API_CONTRACT.md` and YAML as new endpoints are implemented | Medium |
 | **DevOps** | Configure `booking.cancel.mins-before-showtime` and seat lock TTL in `application.yml` per environment | Low |
 
 ### 10.5. Sprint 3 Success Criteria

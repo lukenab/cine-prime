@@ -3,6 +3,9 @@ import { jwtDecode } from "jwt-decode";
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
 const ROLE_PRIORITY = ["ROLE_ADMIN", "ROLE_EMPLOYEE", "ROLE_MEMBER", "ROLE_USER"];
+const MOCK_EMPLOYEE_USERNAME = "employee";
+const MOCK_EMPLOYEE_EMAIL = "employee@cineprime.com";
+const MOCK_EMPLOYEE_PASSWORD = "employee";
 
 function extractPrimaryRole(rolesClaim: string): string {
     const roles = (rolesClaim || "").split(" ").filter(r => r.startsWith("ROLE_"));
@@ -20,6 +23,39 @@ function isTokenExpired(token: string): boolean {
     } catch {
         return true;
     }
+}
+
+function base64UrlEncode(value: Record<string, unknown>): string {
+    return btoa(JSON.stringify(value))
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/g, "");
+}
+
+function createMockEmployeeToken(): string {
+    const now = Math.floor(Date.now() / 1000);
+    return [
+        base64UrlEncode({ alg: "none", typ: "JWT" }),
+        base64UrlEncode({
+            sub: MOCK_EMPLOYEE_USERNAME,
+            accountId: "mock-employee-account",
+            role: "ROLE_EMPLOYEE",
+            scope: "ROLE_EMPLOYEE TICKET_SELL BOOKING_READ BOOKING_CONFIRM BOOKING_CANCEL",
+            iat: now,
+            exp: now + 60 * 60 * 24 * 7,
+        }),
+        "mock-signature",
+    ].join(".");
+}
+
+function isMockEmployeeCredentials(credentials: any): boolean {
+    const username = String(credentials?.username ?? "").trim().toLowerCase();
+    const password = String(credentials?.password ?? "").trim();
+
+    return (
+        (username === MOCK_EMPLOYEE_USERNAME || username === MOCK_EMPLOYEE_EMAIL) &&
+        password === MOCK_EMPLOYEE_PASSWORD
+    );
 }
 
 interface User {
@@ -63,6 +99,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     const login = async (credentials: any) => {
+        if (isMockEmployeeCredentials(credentials)) {
+            const token = createMockEmployeeToken();
+            localStorage.setItem("accessToken", token);
+            localStorage.setItem("role", "ROLE_EMPLOYEE");
+            setUser({ username: MOCK_EMPLOYEE_USERNAME, role: "ROLE_EMPLOYEE" });
+            return;
+        }
+
         const response = await authApi.login(credentials);
 
         // axios interceptor may already return response.data, support both shapes

@@ -1,173 +1,49 @@
 services:
-  # ===== FRONTEND =====
-  # client:
-  #   build: ./client
-  #   container_name: cineprime-client
-  #   ports:
-  #     - "3000:3000" 
-  #   volumes:
-  #     - ./client/src:/app/src
-  #     - ./client/public:/app/public
-  #   tty: true
-  #   networks:
-  #     - cinema-network
 
-  # ===== MICROSERVICES DISCOVERY SERVER =====
-  # discovery-server:
-  #   build: ./server/discovery-server
-  #   container_name: discovery-server
-  #   ports:
-  #     - "8761:8761"
-  #   networks:
-  #     - cinema-network
+  # ═══════════════════════════════════════════════════════
+  # DATA LAYER
+  # ═══════════════════════════════════════════════════════
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "123456"
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cinema-network
 
-  # ===== BACKEND MICROSERVICES =====
-  # auth-service:
-  #   build: ./server/auth-service
-  #   container_name: auth-service
-  #   ports:
-  #     - "8088:8088"
-  #   environment:
-  #     - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/auth_db
-  #     - SPRING_DATASOURCE_USERNAME=postgres
-  #     - SPRING_DATASOURCE_PASSWORD=123456
-  #     - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
-  #   depends_on:
-  #     - postgres
-  #     - discovery-server
-  #   networks:
-  #     - cinema-network
-
-  # movie-service:
-  #   build: ./server/movie-service
-  #   container_name: movie-service
-  #   ports:
-  #     - "8081:8081"
-  #   environment:
-  #     - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/movie_db
-  #     - SPRING_DATASOURCE_USERNAME=postgres
-  #     - SPRING_DATASOURCE_PASSWORD=123456
-  #     - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
-  #   depends_on:
-  #     - postgres
-  #     - discovery-server
-  #   networks:
-  #     - cinema-network
-
-  # booking-service:
-  #   build: ./server/booking-service
-  #   container_name: booking-service
-  #   ports:
-  #     - "8082:8082"
-  #   environment:
-  #     - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/booking_db
-  #     - SPRING_DATASOURCE_USERNAME=postgres
-  #     - SPRING_DATASOURCE_PASSWORD=123456
-  #     - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
-  #     - SPRING_DATA_REDIS_HOST=redis
-  #     - SPRING_DATA_REDIS_PORT=6379
-  #     - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-  #   depends_on:
-  #     - postgres
-  #     - discovery-server
-  #     - redis
-  #     - kafka
-  #   networks:
-  #     - cinema-network
-
-  # payment-service:
-  #   build: ./server/payment-service
-  #   container_name: payment-service
-  #   ports:
-  #     - "8083:8083"
-  #   environment:
-  #     - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/payment_db
-  #     - SPRING_DATASOURCE_USERNAME=postgres
-  #     - SPRING_DATASOURCE_PASSWORD=123456
-  #     - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
-  #     - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-  #   depends_on:
-  #     - postgres
-  #     - discovery-server
-  #     - kafka
-  #   networks:
-  #     - cinema-network
-
-  # user-service:
-  #   build: ./server/user-service
-  #   container_name: user-service
-  #   ports:
-  #     - "8084:8084"
-  #   environment:
-  #     - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/user_db
-  #     - SPRING_DATASOURCE_USERNAME=postgres
-  #     - SPRING_DATASOURCE_PASSWORD=123456
-  #     - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
-  #   depends_on:
-  #     - postgres
-  #     - discovery-server
-  #   networks:
-  #     - cinema-network
-
-  # promotion-service:
-  #   build: ./server/promotion-service
-  #   container_name: promotion-service
-  #   ports:
-  #     - "8086:8086"
-  #   environment:
-  #     - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/promotion_db
-  #     - SPRING_DATASOURCE_USERNAME=postgres
-  #     - SPRING_DATASOURCE_PASSWORD=123456
-  #     - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
-  #   depends_on:
-  #     - postgres
-  #     - discovery-server
-  #   networks:
-  #     - cinema-network
-
-  # notification-service:
-  #   build: ./server/notification-service
-  #   container_name: notification-service
-  #   ports:
-  #     - "8087:8087"
-  #   environment:
-  #     - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
-  #     - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-  #   depends_on:
-  #     - discovery-server
-  #     - kafka
-  #   networks:
-  #     - cinema-network
-
-  # api-gateway:
-  #   build: ./server/api-gateway
-  #   container_name: api-gateway
-  #   ports:
-  #     - "8080:8080"
-  #   environment:
-  #     - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
-  #   depends_on:
-  #     - discovery-server
-  #   networks:
-  #     - cinema-network
-
-  # ===== CACHE & MESSAGE BROKER =====
   redis:
     image: redis:alpine
     container_name: redis
-    restart: always
+    restart: unless-stopped
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - cinema-network
 
   kafka:
     image: apache/kafka:3.7.0
     container_name: kafka
-    restart: always
+    restart: unless-stopped
     ports:
-      - "9092:9092"   # Port cho container/VS Code truy cập từ bên ngoài
-      - "29092:29092" # Port cho các service gọi nội bộ trong mạng Docker
+      - "9092:9092"
+      - "29092:29092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -184,19 +60,176 @@ services:
     networks:
       - cinema-network
 
-  # ===== DATA LAYER =====
-  postgres:
-    image: postgres:16
-    container_name: postgres
-    restart: always
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: "123456"
+  # ═══════════════════════════════════════════════════════
+  # SERVICE DISCOVERY
+  # ═══════════════════════════════════════════════════════
+  discovery-server:
+    build:
+      context: ./server
+      dockerfile: discovery-server/Dockerfile
+    container_name: discovery-server
+    restart: unless-stopped
     ports:
-      - "5433:5432"
+      - "8761:8761"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - cinema-network
+
+  # ═══════════════════════════════════════════════════════
+  # BACKEND MICROSERVICES
+  # ═══════════════════════════════════════════════════════
+  auth-service:
+    build:
+      context: ./server
+      dockerfile: auth-service/Dockerfile
+    container_name: auth-service
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/auth_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: "123456"
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+    networks:
+      - cinema-network
+
+  movie-service:
+    build:
+      context: ./server
+      dockerfile: movie-service/Dockerfile
+    container_name: movie-service
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/movie_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: "123456"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+    depends_on:
+      postgres:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+    networks:
+      - cinema-network
+
+  booking-service:
+    build:
+      context: ./server
+      dockerfile: booking-service/Dockerfile
+    container_name: booking-service
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/booking_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: "123456"
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+    networks:
+      - cinema-network
+
+  user-service:
+    build:
+      context: ./server
+      dockerfile: user-service/Dockerfile
+    container_name: user-service
+    restart: unless-stopped
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/user_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: "123456"
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+    depends_on:
+      postgres:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+    networks:
+      - cinema-network
+
+  notification-service:
+    build:
+      context: ./server
+      dockerfile: notification-service/Dockerfile
+    container_name: notification-service
+    restart: unless-stopped
+    ports:
+      - "8087:8087"
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      # Override mail credentials via .env file if needed
+      # MAIL_USERNAME: your@gmail.com
+      # MAIL_PASSWORD: your-app-password
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+    networks:
+      - cinema-network
+
+  api-gateway:
+    build:
+      context: ./server
+      dockerfile: api-gateway/Dockerfile
+    container_name: api-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+    networks:
+      - cinema-network
+
+  # ═══════════════════════════════════════════════════════
+  # FRONTEND
+  # ═══════════════════════════════════════════════════════
+  client:
+    build: ./client
+    container_name: cineprime-client
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      VITE_API_URL: http://localhost:8080
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./postgres-init:/docker-entrypoint-initdb.d
+      - ./client/src:/app/src
+      - ./client/public:/app/public
+    depends_on:
+      - api-gateway
     networks:
       - cinema-network
 

@@ -3,6 +3,41 @@ import { Eye, EyeOff, User, Lock, Loader2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
+const MOCK_EMPLOYEE_USERNAME = "employee";
+const MOCK_EMPLOYEE_EMAIL = "employee@cineprime.com";
+const MOCK_EMPLOYEE_PASSWORD = "employee";
+
+function base64UrlEncode(value: Record<string, unknown>): string {
+  return btoa(JSON.stringify(value))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function createMockEmployeeToken(): string {
+  const now = Math.floor(Date.now() / 1000);
+  return [
+    base64UrlEncode({ alg: "none", typ: "JWT" }),
+    base64UrlEncode({
+      sub: MOCK_EMPLOYEE_USERNAME,
+      accountId: "mock-employee-account",
+      role: "ROLE_EMPLOYEE",
+      scope: "ROLE_EMPLOYEE TICKET_SELL BOOKING_READ BOOKING_CONFIRM BOOKING_CANCEL",
+      iat: now,
+      exp: now + 60 * 60 * 24 * 7,
+    }),
+    "mock-signature",
+  ].join(".");
+}
+
+function isMockEmployeeLogin(username: string, password: string): boolean {
+  const normalizedUsername = username.trim().toLowerCase();
+  return (
+    (normalizedUsername === MOCK_EMPLOYEE_USERNAME || normalizedUsername === MOCK_EMPLOYEE_EMAIL) &&
+    password.trim() === MOCK_EMPLOYEE_PASSWORD
+  );
+}
+
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState("");
@@ -29,6 +64,15 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (isMockEmployeeLogin(username, password)) {
+      const token = createMockEmployeeToken();
+      localStorage.setItem("accessToken", token);
+      localStorage.setItem("role", "ROLE_EMPLOYEE");
+      window.location.href = "/admin/sell";
+      return;
+    }
+
     setIsLoading(true);
     try {
       await login({ username, password });

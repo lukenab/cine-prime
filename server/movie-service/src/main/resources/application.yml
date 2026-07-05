@@ -10,9 +10,9 @@ spring:
       max-request-size: 10MB
 
   datasource:
-    url: jdbc:postgresql://localhost:5433/movie_db
-    username: postgres
-    password: "123456"
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/movie_db}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:123456}
     driver-class-name: org.postgresql.Driver
   jpa:
     defer-datasource-initialization: true
