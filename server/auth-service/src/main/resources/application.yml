@@ -18,7 +18,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: create
+      ddl-auto: update   # dev: update | prod: validate (dùng Flyway/Liquibase)
     defer-datasource-initialization: true   # chạy data.sql SAU khi Hibernate tạo tables
     show-sql: false
     properties:
@@ -36,7 +36,7 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
         "[spring.json.add.type.headers]": true
-        "[spring.json.type.mapping]": "userRegistered:authservice.event.UserRegisteredEvent,userUpdated:authservice.event.UserUpdatedEvent,otpRequested:authservice.event.OtpRequestedEvent"
+        "[spring.json.type.mapping]": "userRegistered:authservice.event.UserRegisteredEvent,otpRequested:authservice.event.OtpRequestedEvent"
 
 eureka:
   instance:
@@ -48,12 +48,18 @@ eureka:
       defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
 
 jwt:
-  signerKey: 873bcf3b6023c6cfac735831cc01cbd59c6f64c2341050f12e5f0224d7edea62
-  valid-duration: 1800 # in second
-  refreshable-duration: 36000 # in second
+  signerKey: ${JWT_SIGNER_KEY:873bcf3b6023c6cfac735831cc01cbd59c6f64c2341050f12e5f0224d7edea62}
+  valid-duration: ${JWT_VALID_DURATION:1800}    
+  refreshable-duration: ${JWT_REFRESHABLE_DURATION:36000}
 
 app:
   admin:
     username: ${ADMIN_USERNAME:admin}
     password: ${ADMIN_PASSWORD:admin}
     email: ${ADMIN_EMAIL:admin@cineprime.vn}
+
+auth:
+  otp:
+    ttl-minutes: 5
+    cooldown-seconds: 60
+  default-role: USER

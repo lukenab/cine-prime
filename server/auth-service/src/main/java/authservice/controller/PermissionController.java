@@ -1,6 +1,6 @@
 package authservice.controller;
 
-import authservice.dto.request.PermissionRequest;
+import authservice.dto.request.CreatePermissionRequest;
 import authservice.dto.response.PermissionResponse;
 import authservice.service.PermissionService;
 import lombok.AccessLevel;
@@ -20,7 +20,7 @@ public class PermissionController {
     PermissionService permissionService;
 
     @PostMapping
-    ApiResponse<PermissionResponse> createPermission(@RequestBody PermissionRequest request){
+    ApiResponse<PermissionResponse> createPermission(@RequestBody CreatePermissionRequest request){
         return ApiResponse.<PermissionResponse>builder()
                 .result(permissionService.createPermission(request))
                 .build();

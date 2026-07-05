@@ -1,6 +1,6 @@
 package authservice.service;
 
-import authservice.dto.request.PermissionRequest;
+import authservice.dto.request.CreatePermissionRequest;
 import authservice.dto.response.PermissionResponse;
 import authservice.entity.Permission;
 import authservice.mapper.PermissionMapper;
@@ -19,14 +19,14 @@ public class PermissionService {
 
     PermissionRepository permissionRepository;
     PermissionMapper permissionMapper;
-    AuthAuditLogService authAuditLogService;
+    AuditLogService auditLogService;
 
-    public PermissionResponse createPermission(PermissionRequest request){
+    public PermissionResponse createPermission(CreatePermissionRequest request){
         Permission permission = permissionMapper.toPermission(request);
 
         Permission savedPermission = permissionRepository.save(permission);
-        authAuditLogService.success("PERMISSION_CREATED", null, "Permission created",
-                authAuditLogService.metadata("permission", savedPermission.getName()));
+        auditLogService.success("PERMISSION_CREATED", null, "Permission created",
+                auditLogService.metadata("permission", savedPermission.getName()));
 
         return permissionMapper.toPermissionResponse(savedPermission);
     }
@@ -37,7 +37,7 @@ public class PermissionService {
 
     public void deletePermission(String permission){
         permissionRepository.deleteById(permission);
-        authAuditLogService.success("PERMISSION_DELETED", null, "Permission deleted",
-                authAuditLogService.metadata("permission", permission));
+        auditLogService.success("PERMISSION_DELETED", null, "Permission deleted",
+                auditLogService.metadata("permission", permission));
     }
 }

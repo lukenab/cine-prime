@@ -11,12 +11,9 @@ import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "auth_token")
-@AllArgsConstructor
-@NoArgsConstructor
+@AllArgsConstructor @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@Getter
-@Setter
-@Builder
+@Getter @Setter @Builder
 public class AuthToken {
 
     @Id
@@ -25,17 +22,15 @@ public class AuthToken {
     Long tokenId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "account_id", referencedColumnName = "account_id", nullable = false)
+    @JoinColumn(name = "account_id", nullable = false)
     Account account;
-
-    @Column(name = "token_type", length = 20)
-    String tokenType;
 
     @Column(name = "jwt_id", nullable = false, unique = true, length = 100)
     String jwtId;
 
-    @Column(name = "token", nullable = false, columnDefinition = "TEXT")
-    String token;
+    @Column(name = "token_type", length = 20)
+    @Builder.Default
+    String tokenType = "BEARER";
 
     @Column(name = "expires_at", nullable = false)
     OffsetDateTime expiresAt;
@@ -43,11 +38,12 @@ public class AuthToken {
     @Column(name = "issued_at", nullable = false)
     OffsetDateTime issuedAt;
 
+    @Column(name = "is_revoked", nullable = false)
+    @Builder.Default
+    Boolean isRevoked = false;
+
     @Column(name = "revoked_at")
     OffsetDateTime revokedAt;
-
-    @Column(name = "is_revoked", columnDefinition = "boolean default false")
-    Boolean isRevoked;
 
     @Column(name = "created_ip", columnDefinition = "inet")
     @ColumnTransformer(write = "?::inet")
@@ -57,6 +53,8 @@ public class AuthToken {
     String userAgent;
 
     @CreationTimestamp
-    @Column(name = "created_at", insertable = false, updatable = false)
+    @Column(name = "created_at", updatable = false)
     LocalDateTime createdAt;
+
+
 }

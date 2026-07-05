@@ -8,6 +8,7 @@ import lombok.experimental.FieldDefaults;
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Builder
-public class LogoutRequest {
-    String token;
+public class CreatePermissionRequest {
+    String name;
+    String description;
 }

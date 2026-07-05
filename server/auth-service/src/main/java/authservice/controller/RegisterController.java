@@ -4,7 +4,7 @@ import authservice.dto.request.RegisterRequest;
 import authservice.dto.request.ResendOtpRequest;
 import authservice.dto.request.VerifyOtpRequest;
 import authservice.dto.response.RegisterResponse;
-import authservice.service.AuthenticationService;
+import authservice.service.RegistrationService;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -18,19 +18,19 @@ import org.springframework.web.bind.annotation.*;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class RegisterController {
 
-    AuthenticationService authenticationService;
+    RegistrationService registrationService;
 
     @GetMapping("/check")
     ApiResponse<Void> checkFieldAvailability(
             @RequestParam(required = false) String username,
             @RequestParam(required = false) String email) {
-        authenticationService.checkFieldAvailability(username, email);
+        registrationService.checkAvailability(username, email);
         return ApiResponse.<Void>builder().message("Available").build();
     }
 
     @PostMapping("/register/initiate")
     ApiResponse<String> initiateRegistration(@Valid @RequestBody RegisterRequest request) {
-        authenticationService.initiateRegistration(request);
+        registrationService.initiateRegistration(request);
         return ApiResponse.<String>builder()
                 .result("OTP has been sent to your email")
                 .build();
@@ -39,13 +39,13 @@ public class RegisterController {
     @PostMapping("/register/verify")
     ApiResponse<RegisterResponse> verifyAndRegister(@Valid @RequestBody VerifyOtpRequest request) {
         return ApiResponse.<RegisterResponse>builder()
-                .result(authenticationService.verifyOtpAndRegister(request))
+                .result(registrationService.completeRegistration(request))
                 .build();
     }
 
     @PostMapping("/resend-otp")
     ApiResponse<Void> resendOtp(@Valid @RequestBody ResendOtpRequest request) {
-        authenticationService.resendOtp(request);
+        registrationService.resendOtp(request);
         return ApiResponse.<Void>builder()
                 .message("New OTP has been sent to your email!")
                 .build();

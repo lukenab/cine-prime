@@ -1,5 +1,6 @@
 package authservice.dto.request;
 
+import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -8,7 +9,10 @@ import lombok.experimental.FieldDefaults;
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Builder
-public class AuthenticationRequest {
+public class LoginRequest {
+    @NotBlank(message = "Username cannot be blank!")
     String username;
+
+    @NotBlank(message = "Password cannot be blank!")
     String password;
 }

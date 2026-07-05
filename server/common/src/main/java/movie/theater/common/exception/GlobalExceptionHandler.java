@@ -6,16 +6,16 @@ import movie.theater.common.dto.ApiResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.nio.file.AccessDeniedException;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
 @Slf4j
-@ControllerAdvice
+@RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final String MIN_ATTRIBUTE = "min";
@@ -61,7 +61,7 @@ public class GlobalExceptionHandler {
 
 
             attributes = constraintViolation.getConstraintDescriptor().getAttributes();
-            log.info(attributes.toString());
+            log.debug(attributes.toString());
 
         } catch (IllegalArgumentException e) {
             log.warn("Unrecognized validation message key: {}", validationMessage);
@@ -93,10 +93,21 @@ public class GlobalExceptionHandler {
         return message.replace("{" + MIN_ATTRIBUTE + "}", String.valueOf(minRaw));
     }
 
-    @ExceptionHandler(value = AccessDeniedException.class)
-    ResponseEntity<ApiResponse<?>> handlingAccessDeniedException(AccessDeniedException exception){
-        GlobalErrorCode errorCode = GlobalErrorCode.UNAUTHORIZED;
+    // DB unique constraint bị vi phạm (race condition, duplicate insert...)
+    // Ví dụ: 2 request đăng ký cùng username đồng thời qua được service check nhưng bị DB chặn
+    @ExceptionHandler(value = DataIntegrityViolationException.class)
+    ResponseEntity<ApiResponse<?>> handlingDataIntegrity(DataIntegrityViolationException exception) {
+        log.error("Data integrity violation: ", exception);
+        GlobalErrorCode errorCode = GlobalErrorCode.DATA_INTEGRITY_VIOLATION;
+        return ResponseEntity.status(errorCode.getStatusCode()).body(ApiResponse.builder()
+                .code(errorCode.getCode())
+                .message(errorCode.getMessage())
+                .build());
+    }
 
+    @ExceptionHandler(value = AccessDeniedException.class)
+    ResponseEntity<ApiResponse<?>> handlingAccessDeniedException(AccessDeniedException exception) {
+        GlobalErrorCode errorCode = GlobalErrorCode.UNAUTHORIZED;
         return ResponseEntity.status(errorCode.getStatusCode()).body(ApiResponse.builder()
                 .code(errorCode.getCode())
                 .message(errorCode.getMessage())

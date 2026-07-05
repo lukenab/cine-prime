@@ -1,9 +1,8 @@
 package authservice.controller;
 
-import authservice.dto.request.AccountUpdateRequest;
-import authservice.dto.request.AdminCreateAccountRequest;
+import authservice.dto.request.UpdateAccountRequest;
+import authservice.dto.request.CreateAccountRequest;
 import authservice.dto.response.AccountResponse;
-import authservice.entity.Account;
 import authservice.service.AccountService;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
@@ -37,16 +36,23 @@ public class AccountController {
     }
 
     @PutMapping("/{accountId}")
-    ApiResponse<AccountResponse> updateAccount(@PathVariable String accountId, @RequestBody AccountUpdateRequest request){
+    ApiResponse<AccountResponse> updateAccount(@PathVariable String accountId, @RequestBody UpdateAccountRequest request){
         return ApiResponse.<AccountResponse>builder()
                 .result(accountService.updateAccount(accountId, request))
                 .build();
     }
 
     @PostMapping
-    ApiResponse<AccountResponse> createAccount(@RequestBody @Valid AdminCreateAccountRequest request){
+    ApiResponse<AccountResponse> createAccount(@RequestBody @Valid CreateAccountRequest request){
         return ApiResponse.<AccountResponse>builder()
                 .result(accountService.createAccount(request))
+                .build();
+    }
+
+    @GetMapping("/my-info")
+    ApiResponse<AccountResponse> myInfo(){
+        return ApiResponse.<AccountResponse>builder()
+                .result(accountService.myInfo())
                 .build();
     }
 }

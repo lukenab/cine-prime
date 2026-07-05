@@ -1,6 +1,6 @@
 package authservice.service;
 
-import authservice.entity.AuthAuditLog;
+import authservice.entity.AuditLog;
 import authservice.repository.AuthAuditLogRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,7 +25,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
-public class AuthAuditLogService {
+public class AuditLogService {
     AuthAuditLogRepository authAuditLogRepository;
     ObjectMapper objectMapper;
 
@@ -47,25 +47,11 @@ public class AuthAuditLogService {
         return metadata;
     }
 
-    public String maskPhone(String phoneNumber) {
-        if (phoneNumber == null || phoneNumber.length() < 7) {
-            return phoneNumber;
-        }
-        return phoneNumber.substring(0, 3) + "****" + phoneNumber.substring(phoneNumber.length() - 3);
-    }
-
-    public String maskIdentityCard(String identityCard) {
-        if (identityCard == null || identityCard.length() != 12) {
-            return identityCard;
-        }
-        return identityCard.substring(0, 3) + "******" + identityCard.substring(9);
-    }
-
     private void log(String action, String status, String targetAccountId, String message, Map<String, Object> metadata) {
         try {
             HttpServletRequest request = currentRequest();
 
-            authAuditLogRepository.save(AuthAuditLog.builder()
+            authAuditLogRepository.save(AuditLog.builder()
                     .actorAccountId(currentActorAccountId())
                     .targetAccountId(targetAccountId)
                     .action(action)
