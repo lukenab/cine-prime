@@ -1,0 +1,6 @@
+**/target/
+**/.mvn/
+**/node_modules/
+**/.git/
+**/*.log
+**/logs/

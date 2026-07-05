@@ -980,7 +980,7 @@ On successful registration, `auth-service` publishes the following event:
 
 > **Note:** The `email` field was intentionally removed. Email is owned exclusively by `auth-service` (authentication credential). `user-service` stores only the profile data above.
 
-For full Kafka contract details (retries, DLT, idempotency), see [docs/kafka-user-registration-contract.md](../../kafka-user-registration-contract.md).
+For full Kafka contract details (retries, DLT, idempotency), see [kafka-user-service-contract.md](../../architecture/kafka/kafka-user-service-contract.md).
 
 ### Timeout Recommendations
 

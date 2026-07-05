@@ -80,7 +80,7 @@ Event payload (JSON example):
 }
 ```
 
-On successful consumption the service responds to internal callers via its usual data model (no immediate synchronous HTTP response to the producer). For details about message format, error handling, retries, and DLT, see [docs/kafka-user-registration-contract.md](kafka-user-registration-contract.md).
+On successful consumption the service responds to internal callers via its usual data model (no immediate synchronous HTTP response to the producer). For details about message format, error handling, retries, and DLT, see [kafka-user-service-contract.md](../../architecture/kafka/kafka-user-service-contract.md).
 
 ---
 

@@ -5,7 +5,7 @@ info:
     API contract for booking-service. All responses use the shared ApiResponse<T>
     wrapper (code / message / result). Fields that are null are omitted from JSON output
     (@JsonInclude NON_NULL). Only implemented endpoints are listed here; planned endpoints
-    are noted in booking-service-api-design.md.
+    are noted in API_CONTRACT.md.
   version: 1.1.0
 servers:
   - url: http://localhost:8085
