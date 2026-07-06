@@ -95,9 +95,6 @@ public class ApplicationInitConfig {
 
     // ── Role → Permission mapping ─────────────────────────────────────────────
     private static final Map<String, Set<String>> ROLE_PERMISSIONS = Map.of(
-            "USER", Set.of(
-                    // No special permissions beyond basic auth
-            ),
             "MEMBER", Set.of(
                     "MOVIE_READ",
                     "SHOWTIME_READ",
@@ -154,7 +151,6 @@ public class ApplicationInitConfig {
     // ── Step 2: Seed roles with permissions ───────────────────────────────────
     private void seedRoles() {
         Map<String, String> roleDescriptions = Map.of(
-                "USER",     "Default customer role — read-only access",
                 "MEMBER",   "Registered member — can book tickets and manage account",
                 "EMPLOYEE", "Cinema staff — ticket sales and booking management",
                 "ADMIN",    "System administrator — full access to all modules"
@@ -218,8 +214,7 @@ public class ApplicationInitConfig {
         List<String[]> demoAccounts = List.of(
                 // { username, email, roleName }
                 new String[]{"employee", "employee@cineprime.com", "EMPLOYEE"},
-                new String[]{"member",   "member@cineprime.com",   "MEMBER"},
-                new String[]{"guest",    "guest@cineprime.com",    "USER"}
+                new String[]{"member",   "member@cineprime.com",   "MEMBER"}
         );
 
         for (String[] demo : demoAccounts) {

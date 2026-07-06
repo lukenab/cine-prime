@@ -21,7 +21,7 @@ interface FormData {
 type FormErrors = Partial<Record<keyof FormData, string>>;
 
 const INITIAL: FormData = {
-  role: "USER", fullName: "", username: "", email: "", password: "",
+  role: "MEMBER", fullName: "", username: "", email: "", password: "",
   phoneNumber: "", gender: "MALE", dateOfBirth: "", identityCard: "", address: "",
 };
 
@@ -107,7 +107,7 @@ export default function EditUserPage() {
         const account  = accounts.find((a: any) => a.accountId === id);
         if (!account) { setFetchError("User not found."); return; }
 
-        const rawRole = account?.roles?.[0]?.name || "USER";
+        const rawRole = account?.roles?.[0]?.name || "MEMBER";
         setForm({
           role:          String(rawRole).toUpperCase(),
           fullName:      profile.fullName     || "",
@@ -224,7 +224,7 @@ export default function EditUserPage() {
           </div>
           <span className="px-3 py-1 rounded-full text-xs font-semibold"
             style={{ background: accentColor + "18", color: accentColor }}>
-            {form.role === "MEMBER" ? "Member" : "User"}
+            {form.role === "ADMIN" ? "Admin" : form.role === "EMPLOYEE" ? "Employee" : "Member"}
           </span>
         </div>
 
@@ -243,7 +243,6 @@ export default function EditUserPage() {
                 <FormField label="Role" required>
                   <select value={form.role} onChange={(e) => update("role", e.target.value)}
                     style={{ ...inputStyle(), appearance: "none" }}>
-                    <option value="USER"   style={{ background: "var(--bg-card)" }}>User</option>
                     <option value="MEMBER" style={{ background: "var(--bg-card)" }}>Member</option>
                   </select>
                 </FormField>

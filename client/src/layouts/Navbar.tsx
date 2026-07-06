@@ -1,13 +1,24 @@
-import { useState } from "react";
-import { Film, Search, Menu, X, LogOut, User } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { Film, Search, Menu, X, LogOut, User, ChevronDown } from "lucide-react";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { userApi } from "../api/userApi";
 
 const ACCENT = "#3b82f6";
+const navItems = [
+  { label: "Home", to: "/" },
+  { label: "Movies", to: "/movies" },
+  { label: "Cinemas", to: "/cinemas" },
+  { label: "Events", to: "/events" },
+  { label: "Offers", to: "/offers" },
+];
 
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
@@ -15,8 +26,31 @@ export function Navbar() {
   const isLogged = !!token;
   const username = user?.username || "User";
 
+  // Fetch avatar khi user đăng nhập
+  useEffect(() => {
+    if (!user?.accountId) { setAvatarUrl(null); return; }
+    userApi.getUserById(user.accountId)
+      .then((res: any) => {
+        const p = res?.result ?? res?.data?.result ?? res?.data ?? res;
+        setAvatarUrl(p?.avatarUrl ?? null);
+      })
+      .catch(() => setAvatarUrl(null));
+  }, [user?.accountId]);
+
+  // Đóng dropdown khi click ra ngoài
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
   const handleLogout = () => {
     logout();
+    setDropdownOpen(false);
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -33,7 +67,7 @@ export function Navbar() {
       className="fixed top-0 left-0 right-0 z-50 border-b border-white/10"
     >
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-16">
-        <div className="flex items-center gap-2.5 cursor-pointer select-none group">
+        <Link to="/" className="flex items-center gap-2.5 cursor-pointer select-none group">
           <div
             className="flex items-center justify-center rounded-xl transition-all duration-300 group-hover:scale-105"
             style={{
@@ -68,18 +102,20 @@ export function Navbar() {
               Prime
             </span>
           </span>
-        </div>
+        </Link>
 
         <div className="hidden md:flex items-center gap-8">
-          {["Home", "Movies", "Cinemas", "Events", "Offers"].map((item) => (
-            <a
-              key={item}
-              href="#"
-              className="text-white/70 hover:text-white transition-colors duration-200"
+          {navItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) =>
+                `${isActive ? "text-white" : "text-white/70"} hover:text-white transition-colors duration-200`
+              }
               style={{ fontSize: "0.875rem", letterSpacing: "0.05em" }}
             >
-              {item}
-            </a>
+              {item.label}
+            </NavLink>
           ))}
         </div>
 
@@ -103,26 +139,63 @@ export function Navbar() {
           </form>
 
           {isLogged ? (
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 cursor-pointer group">
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center transition-transform group-hover:scale-105"
-                  style={{ backgroundColor: "rgba(59,130,246,0.15)", border: `1px solid ${ACCENT}` }}
-                >
-                  <span style={{ color: ACCENT, fontWeight: 700, fontSize: "0.85rem" }}>
-                    {username.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-                <span className="text-white/80 text-sm font-medium">{username}</span>
-              </div>
-
+            <div style={{ position: "relative" }} ref={dropdownRef}>
+              {/* Avatar trigger */}
               <button
-                onClick={handleLogout}
-                className="text-white/50 hover:text-[#3b82f6] transition-colors p-1"
-                title="Logout"
+                onClick={() => setDropdownOpen(o => !o)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  background: "rgba(59,130,246,0.08)", border: `1px solid ${dropdownOpen ? ACCENT : "rgba(59,130,246,0.3)"}`,
+                  borderRadius: 99, padding: "5px 12px 5px 5px",
+                  cursor: "pointer", transition: "all 0.2s",
+                }}
               >
-                <LogOut size={18} />
+                {/* Avatar circle */}
+                <div style={{ width: 28, height: 28, borderRadius: "50%", overflow: "hidden", flexShrink: 0, border: `1.5px solid ${ACCENT}` }}>
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#1e3a8a,#2563eb)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <span style={{ color: "#fff", fontWeight: 700, fontSize: 11 }}>{username.charAt(0).toUpperCase()}</span>
+                    </div>
+                  )}
+                </div>
+                <span style={{ color: "rgba(255,255,255,0.8)", fontSize: "0.85rem", fontWeight: 500 }}>{username}</span>
+                <ChevronDown size={14} style={{ color: "rgba(255,255,255,0.4)", transform: dropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }} />
               </button>
+
+              {/* Dropdown */}
+              {dropdownOpen && (
+                <div style={{
+                  position: "absolute", top: "calc(100% + 10px)", right: 0, width: 200,
+                  background: "#0f1117", border: "1px solid rgba(255,255,255,0.09)",
+                  borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+                  padding: 6, zIndex: 100,
+                  animation: "navDropdown 0.18s cubic-bezier(0.16,1,0.3,1) both",
+                }}>
+                  <div style={{ padding: "10px 12px 10px", borderBottom: "1px solid rgba(255,255,255,0.07)", marginBottom: 4 }}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#f1f5f9" }}>{username}</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 11, color: "rgba(255,255,255,0.3)" }}>Member</p>
+                  </div>
+                  <button
+                    onClick={() => { navigate("/profile"); setDropdownOpen(false); }}
+                    style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", border: "none", background: "transparent", cursor: "pointer", borderRadius: 8, color: "rgba(255,255,255,0.6)", fontSize: 13, transition: "all 0.15s" }}
+                    onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; e.currentTarget.style.color = "#fff"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "rgba(255,255,255,0.6)"; }}
+                  >
+                    <User size={15} /> My Profile
+                  </button>
+                  <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "4px 0" }} />
+                  <button
+                    onClick={handleLogout}
+                    style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", border: "none", background: "transparent", cursor: "pointer", borderRadius: 8, color: "#ef4444", fontSize: 13, fontWeight: 500, transition: "all 0.15s" }}
+                    onMouseEnter={e => { e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                  >
+                    <LogOut size={15} /> Sign Out
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <Link
@@ -198,15 +271,23 @@ export function Navbar() {
             />
           </form>
 
-          {["Home", "Movies", "Cinemas", "Events", "Offers"].map((item) => (
-            <a key={item} href="#" className="text-white/70 hover:text-white text-sm py-1">
-              {item}
-            </a>
+          {navItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              onClick={() => setMenuOpen(false)}
+              className={({ isActive }) =>
+                `${isActive ? "text-white" : "text-white/70"} hover:text-white text-sm py-1`
+              }
+            >
+              {item.label}
+            </NavLink>
           ))}
 
           {!isLogged && (
             <Link
               to="/login"
+              onClick={() => setMenuOpen(false)}
               className="flex items-center justify-center gap-2 px-5 py-3 rounded-full w-full mt-1 text-sm font-semibold transition-all duration-200"
               style={{
                 color: ACCENT,
@@ -220,6 +301,13 @@ export function Navbar() {
           )}
         </div>
       )}
+
+      <style>{`
+        @keyframes navDropdown {
+          from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+          to   { opacity: 1; transform: translateY(0)    scale(1); }
+        }
+      `}</style>
     </nav>
   );
 }

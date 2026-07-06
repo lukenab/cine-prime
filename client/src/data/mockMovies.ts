@@ -1,0 +1,58 @@
+import type { MovieApiResponse } from "../api/movieApi";
+
+const poster = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=900&h=1350&fit=crop";
+const backdrop = "https://images.unsplash.com/photo-1440404653325-ab127d49abc1?w=1400&h=800&fit=crop";
+
+export const mockMovies: MovieApiResponse[] = [
+  {
+    movieId: 9001,
+    movieNameVn: "Neon Horizon",
+    movieNameEnglish: "Neon Horizon",
+    director: "Ava Tran",
+    actor: "Maya Lee, Daniel Park",
+    content: "A pilot follows a mysterious signal across a city where memories can be projected onto the night sky.",
+    duration: 126,
+    version: "2D",
+    status: true,
+    movieProductionCompany: "CinePrime Studios",
+    largeImage: backdrop,
+    smallImage: poster,
+    movieType: ["Sci-Fi", "Action"],
+    showTimes: [],
+    createAt: "2026-07-01",
+  },
+  {
+    movieId: 9002,
+    movieNameVn: "Midnight Reel",
+    movieNameEnglish: "Midnight Reel",
+    director: "Jon Bell",
+    actor: "Lena Stone, Mark Ellis",
+    content: "A film archivist discovers that a lost thriller changes every time it is screened.",
+    duration: 112,
+    version: "2D",
+    status: true,
+    movieProductionCompany: "Northlight Pictures",
+    largeImage: "https://images.unsplash.com/photo-1505686994434-e3cc5abf1330?w=1400&h=800&fit=crop",
+    smallImage: "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=900&h=1350&fit=crop",
+    movieType: ["Thriller", "Drama"],
+    showTimes: [],
+    createAt: "2026-07-02",
+  },
+  {
+    movieId: 9003,
+    movieNameVn: "Summer Arcade",
+    movieNameEnglish: "Summer Arcade",
+    director: "Kim Nguyen",
+    actor: "Hannah Vo, Chris Tan",
+    content: "Two friends rebuild an old arcade and turn one last summer into a citywide tournament.",
+    duration: 104,
+    version: "2D",
+    status: true,
+    movieProductionCompany: "Pixel House",
+    largeImage: "https://images.unsplash.com/photo-1511512578047-dfb367046420?w=1400&h=800&fit=crop",
+    smallImage: "https://images.unsplash.com/photo-1511882150382-421056c89033?w=900&h=1350&fit=crop",
+    movieType: ["Comedy", "Family"],
+    showTimes: [],
+    createAt: "2026-07-03",
+  },
+];

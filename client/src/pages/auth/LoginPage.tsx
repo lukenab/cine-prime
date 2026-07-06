@@ -51,6 +51,7 @@ export default function LoginPage() {
 
   const { user, login } = useAuth();
 
+  // Redirect nếu user đã login sẵn (ví dụ: vào /login khi đang có token)
   useEffect(() => {
     if (user) {
       if (user.role === "ROLE_ADMIN" || user.role === "ROLE_EMPLOYEE") {
@@ -59,7 +60,7 @@ export default function LoginPage() {
         navigate("/", { replace: true });
       }
     }
-  }, [user, navigate]);
+  }, [user, navigate]); // Intentionally not checking needsProfileSetup here — CustomerLayout guards that
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,7 +76,12 @@ export default function LoginPage() {
 
     setIsLoading(true);
     try {
-      await login({ username, password });
+      const { role } = await login({ username, password });
+      if (role === "ROLE_ADMIN" || role === "ROLE_EMPLOYEE") {
+        navigate("/admin", { replace: true });
+      } else {
+        navigate("/", { replace: true });
+      }
     } catch (err: any) {
       const code = err?.response?.data?.code;
       if (code === 1008) {

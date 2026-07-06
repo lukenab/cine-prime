@@ -25,6 +25,5 @@ public class CreateAccountRequest {
     @Size(min = 6, message = "Password must be at least 6 characters")
     String password;
 
-    // Optional — defaults to USER if not provided
     String role;
 }

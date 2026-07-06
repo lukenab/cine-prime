@@ -12,7 +12,7 @@ export default function CreateUserPage() {
   const [error, setError] = useState<string | null>(null);
 
   const initialData: UserFormData = {
-    role: "USER",
+    role: "MEMBER",
     fullName: "",
     username: "",
     email: "",

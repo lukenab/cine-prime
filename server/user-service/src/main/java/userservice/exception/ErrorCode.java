@@ -23,7 +23,9 @@ public enum ErrorCode implements BaseErrorCode {
     USER_ALREADY_ACTIVE(2011, "User is already active", HttpStatus.BAD_REQUEST),
     EMPLOYEE_NOT_FOUND(2020, "Employee not found!", HttpStatus.NOT_FOUND),
     EMPLOYEE_ALREADY_DISABLED(2021, "Employee is already disabled!", HttpStatus.BAD_REQUEST),
-    ACCOUNT_ALREADY_EMPLOYEE(2022, "This account is already linked to an employee!", HttpStatus.CONFLICT)
+    ACCOUNT_ALREADY_EMPLOYEE(2022, "This account is already linked to an employee!", HttpStatus.CONFLICT),
+    INVALID_FILE(2030, "Invalid file. Only image files are accepted!", HttpStatus.BAD_REQUEST),
+    UPLOAD_FAILED(2031, "Failed to upload image. Please try again!", HttpStatus.INTERNAL_SERVER_ERROR)
     ;
 
     int code;

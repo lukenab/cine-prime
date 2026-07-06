@@ -22,19 +22,18 @@ import java.util.concurrent.TimeoutException;
 public class AuthEventPublisher {
     KafkaTemplate<String, Object> kafkaTemplate;
 
-    public void sendRegisteredEvent(UserRegisteredEvent event){
+    public void sendRegisteredEvent(UserRegisteredEvent event) {
         sendAndWait("user-register-topic", event);
     }
-    
+
     public void sendOtpRequestedEvent(OtpRequestedEvent event) {
-        kafkaTemplate.send("send-otp-email-topic", event)
-                .whenComplete((result, ex) -> {
-                    if (ex != null) {
-                        log.error("Failed to publish OtpRequestedEvent for email {}: {}", event.getEmail(), ex.getMessage());
-                    } else {
-                        log.info("Published OtpRequestedEvent to send-otp-email-topic for email: {}", event.getEmail());
-                    }
-                });
+        kafkaTemplate.send("send-otp-email-topic", event).whenComplete((result, ex) -> {
+            if (ex != null) {
+                log.error("Failed to publish OtpRequestedEvent for email {}: {}", event.getEmail(), ex.getMessage());
+            } else {
+                log.info("Published OtpRequestedEvent to send-otp-email-topic for email: {}", event.getEmail());
+            }
+        });
     }
 
     private void sendAndWait(String topic, Object event) {

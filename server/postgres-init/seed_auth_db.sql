@@ -7,8 +7,7 @@
 INSERT INTO roles (role_name, description) VALUES
 ('ADMIN',    'Highest privilege — full CRUD on all modules including employees, members, cinema rooms, statistics'),
 ('EMPLOYEE', 'Counter staff — ticket selling, ticket booking, search members, manage movies, promotions'),
-('MEMBER',   'Registered customer — book tickets, manage account, view booking history, manage loyalty points'),
-('USER',     'Guest / not-member — view movie list, view promotions, view ticket prices, view showtimes')
+('MEMBER',   'Registered customer — book tickets, manage account, view booking history, manage loyalty points')
 ON CONFLICT (role_name) DO NOTHING;
 
 -- ================================
@@ -77,13 +76,6 @@ INSERT INTO role_permissions (role_name, permission_name) VALUES
 ('MEMBER', 'SCORE_VIEW')
 ON CONFLICT DO NOTHING;
 
--- USER (guest): chỉ xem
-INSERT INTO role_permissions (role_name, permission_name) VALUES
-('USER', 'MOVIE_READ'),
-('USER', 'SHOWTIME_READ'),
-('USER', 'PROMOTION_READ')
-ON CONFLICT DO NOTHING;
-
 -- ================================
 -- DEMO ACCOUNTS
 -- password: 123456 (BCrypt strength 10)
@@ -91,8 +83,7 @@ ON CONFLICT DO NOTHING;
 INSERT INTO account (account_id, username, email, password_hash, status) VALUES
 (gen_random_uuid(), 'admin',    'admin@cineprime.com',    '$2a$10$slYQmyNdgTY18LjhChyOEOYEsEFPxBgUG1BNT/BqOKm0gsxbycv/G', 1),
 (gen_random_uuid(), 'employee', 'employee@cineprime.com', '$2a$10$slYQmyNdgTY18LjhChyOEOYEsEFPxBgUG1BNT/BqOKm0gsxbycv/G', 1),
-(gen_random_uuid(), 'member',   'member@cineprime.com',   '$2a$10$slYQmyNdgTY18LjhChyOEOYEsEFPxBgUG1BNT/BqOKm0gsxbycv/G', 1),
-(gen_random_uuid(), 'guest',    'guest@cineprime.com',    '$2a$10$slYQmyNdgTY18LjhChyOEOYEsEFPxBgUG1BNT/BqOKm0gsxbycv/G', 1)
+(gen_random_uuid(), 'member',   'member@cineprime.com',   '$2a$10$slYQmyNdgTY18LjhChyOEOYEsEFPxBgUG1BNT/BqOKm0gsxbycv/G', 1)
 ON CONFLICT (username) DO NOTHING;
 
 -- ================================
@@ -110,6 +101,3 @@ INSERT INTO account_role (account_id, role_name)
 SELECT account_id, 'MEMBER'   FROM account WHERE username = 'member'
 ON CONFLICT DO NOTHING;
 
-INSERT INTO account_role (account_id, role_name)
-SELECT account_id, 'USER'     FROM account WHERE username = 'guest'
-ON CONFLICT DO NOTHING;

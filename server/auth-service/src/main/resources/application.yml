@@ -62,4 +62,4 @@ auth:
   otp:
     ttl-minutes: 5
     cooldown-seconds: 60
-  default-role: USER
+  default-role: MEMBER

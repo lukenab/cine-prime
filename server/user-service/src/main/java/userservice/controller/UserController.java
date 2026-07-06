@@ -1,7 +1,9 @@
 package userservice.controller;
 
 import movie.theater.common.dto.ApiResponse;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.validation.Valid;
 import userservice.dto.PageResponse;
@@ -50,6 +52,16 @@ public class UserController {
     ){
         return ApiResponse.<PageResponse<UserResponse>>builder()
                 .result(userService.getAllUser(page, size))
+                .build();
+    }
+
+    @PostMapping(value = "/{id}/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<UserResponse> uploadAvatar(
+            @PathVariable String id,
+            @RequestParam("file") MultipartFile file) {
+        return ApiResponse.<UserResponse>builder()
+                .result(userService.uploadAvatar(id, file))
+                .message("Avatar updated successfully")
                 .build();
     }
 

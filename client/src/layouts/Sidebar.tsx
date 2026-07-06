@@ -6,7 +6,6 @@ const roleLabels: Record<string, string> = {
   ROLE_ADMIN: "Admin",
   ROLE_EMPLOYEE: "Employee",
   ROLE_MEMBER: "Member",
-  ROLE_USER: "User",
 };
 
 function getInitials(username: string): string {
