@@ -4,7 +4,12 @@ server:
 spring:
   application:
     name: user-service
-  
+
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 10MB
+
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/user_db}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
@@ -13,7 +18,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: create
+      ddl-auto: update
     show-sql: true
     properties:
       hibernate:
@@ -32,6 +37,15 @@ spring:
         "[spring.json.trusted.packages]": "*"
         "[spring.json.use.type.headers]": true
         "[spring.json.type.mapping]": "userRegistered:userservice.event.UserRegisteredEvent,userUpdated:userservice.event.UserUpdatedEvent"
+    # Producer cần thiết để DefaultErrorHandler publish message thất bại sang DLT
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:dzlfgmtbc}
+  api-key: ${CLOUDINARY_API_KEY:144287537763843}
+  api-secret: ${CLOUDINARY_API_SECRET:7kJ1TfEb7kEAVArwaY5jq0ctvlA}
 
 jwt:
   signerKey: 873bcf3b6023c6cfac735831cc01cbd59c6f64c2341050f12e5f0224d7edea62

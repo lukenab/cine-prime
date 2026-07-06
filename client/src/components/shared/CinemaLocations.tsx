@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { MapPin, Building2, Armchair, Phone, ArrowRight, RefreshCw } from "lucide-react";
 import { movieApi, type ClusterResponse } from "../../api/movieApi";
 
@@ -12,6 +13,7 @@ const MOCK_CLUSTERS: ClusterResponse[] = [
 ];
 
 export function CinemaLocations() {
+  const navigate = useNavigate();
   const [clusters, setClusters] = useState<ClusterResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeProvince, setActiveProvince] = useState<string>("");
@@ -32,6 +34,12 @@ export function CinemaLocations() {
 
   const provinces = Array.from(new Set(clusters.map((c) => c.province)));
   const visibleClusters = clusters.filter((c) => c.province === activeProvince);
+
+  const handleViewShowtimes = (cluster: ClusterResponse) => {
+    localStorage.setItem("cp_province", cluster.province);
+    localStorage.setItem("cp_cluster", JSON.stringify(cluster));
+    navigate("/movies");
+  };
 
   return (
     <section
@@ -127,6 +135,7 @@ export function CinemaLocations() {
             {visibleClusters.map((cluster) => (
               <div
                 key={cluster.clusterId}
+                onClick={() => handleViewShowtimes(cluster)}
                 className="group relative rounded-2xl p-6 cursor-pointer transition-all duration-300 hover:-translate-y-1"
                 style={{
                   border: "1px solid rgba(255,255,255,0.07)",
@@ -212,6 +221,11 @@ export function CinemaLocations() {
 
                 {/* CTA */}
                 <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleViewShowtimes(cluster);
+                  }}
                   className="flex items-center gap-2 transition-all duration-200 group-hover:gap-3"
                   style={{ color: "#FFD700", fontSize: "0.82rem", fontWeight: 600, background: "none", border: "none", cursor: "pointer", padding: 0 }}
                 >

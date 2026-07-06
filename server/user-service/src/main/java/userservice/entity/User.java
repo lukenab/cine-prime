@@ -5,11 +5,11 @@
 
     import org.hibernate.annotations.CreationTimestamp;
     import org.hibernate.annotations.UpdateTimestamp;
-    import org.springframework.data.annotation.CreatedDate;
 
     import jakarta.persistence.Column;
     import jakarta.persistence.Entity;
     import jakarta.persistence.Id;
+    import jakarta.persistence.Index;
     import jakarta.persistence.OneToOne;
     import jakarta.persistence.Table;
     import lombok.AllArgsConstructor;
@@ -19,7 +19,10 @@
     import lombok.Setter;
 
     @Entity
-    @Table(name = "users")
+    @Table(
+        name = "users",
+        indexes = @Index(name = "idx_users_profile_completed", columnList = "profile_completed")
+    )
     @Getter
     @Setter
     @NoArgsConstructor
@@ -30,7 +33,7 @@
         @Column(name = "account_id", length = 36)
         private String accountId;
 
-        @Column(name = "full_name", nullable = false, length = 100)
+        @Column(name = "full_name", length = 100)
         private String fullName;
 
         @Column(name = "phone_number", length = 15)
@@ -63,6 +66,15 @@
 
         @Column(name = "is_active", nullable = false)
         private Boolean isActive = true;
+
+        /**
+         * Progressive Profiling flag.
+         * false = skeleton record (chỉ có accountId + email, chưa điền form).
+         * true  = user đã hoàn tất form profile lần đầu.
+         * Định nghĩa "hoàn tất" được đóng gói tại UserService.isProfileComplete().
+         */
+        @Column(name = "profile_completed", nullable = false)
+        private Boolean profileCompleted = false;
 
         @OneToOne(mappedBy = "user")
         private Member member;

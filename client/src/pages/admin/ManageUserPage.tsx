@@ -41,8 +41,9 @@ function gradientFromId(id: string) {
 }
 
 const ROLE_STYLE: Record<string, { bg: string; text: string }> = {
-  ADMIN:  { bg: "rgba(139,92,246,0.12)", text: "#7c3aed" },
-  USER:   { bg: "rgba(16,185,129,0.12)", text: "#059669" },
+  ADMIN:    { bg: "rgba(139,92,246,0.12)", text: "#7c3aed" },
+  MEMBER:   { bg: "rgba(16,185,129,0.12)", text: "#059669" },
+  EMPLOYEE: { bg: "rgba(59,130,246,0.12)", text: "#2563eb" },
 };
 
 const ITEMS_PER_PAGE = 10;
@@ -172,7 +173,7 @@ export default function ManageUserPage() {
         })
         .map((acc: any) => {
           const profile = profiles.find((p: any) => p.accountId === acc.accountId) ?? {};
-          const rawRole = (acc.roles?.[0]?.roleName ?? "USER").toUpperCase();
+          const rawRole = (acc.roles?.[0]?.roleName ?? "MEMBER").toUpperCase();
           const displayRole = rawRole.charAt(0) + rawRole.slice(1).toLowerCase();
           const joinedDate = new Date(acc.createdAt ?? Date.now());
           return {

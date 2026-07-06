@@ -96,7 +96,7 @@ export function UserForm({
               className="px-3.5 py-2.5 text-sm rounded-xl border outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
               style={{ background: "transparent", color: "var(--text-main)", borderColor: "var(--border-color)" }}
             >
-              <option value="USER"   style={{ background: "var(--bg-card)" }}>User</option>
+              <option value="MEMBER" style={{ background: "var(--bg-card)" }}>Member</option>
               <option value="ADMIN"  style={{ background: "var(--bg-card)" }}>Admin</option>
             </select>
           </div>

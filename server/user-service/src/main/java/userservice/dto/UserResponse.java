@@ -17,6 +17,7 @@ import lombok.experimental.FieldDefaults;
 @Builder
 public class UserResponse {
     String accountId;
+    String email;
     String fullName;
     String phoneNumber;
     LocalDate dateOfBirth;
@@ -27,4 +28,5 @@ public class UserResponse {
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
     Boolean isActive;
+    Boolean profileCompleted;
 }

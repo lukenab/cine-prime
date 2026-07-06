@@ -1,7 +1,8 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Flame, RefreshCw } from "lucide-react";
 import { MovieCard, Movie } from "../../layouts/MovieCard";
 import type { MovieApiResponse } from "../../api/movieApi";
+import { MoviePreviewModal } from "./MoviePreviewModal";
 
 type Props = {
   movies: MovieApiResponse[];
@@ -31,7 +32,9 @@ function toCardMovie(movie: MovieApiResponse, index: number): Movie {
 
 export function NowShowing({ movies, loading = false, error = "" }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const cardMovies = movies.filter((movie) => movie.status !== false).map(toCardMovie);
+  const [selectedMovie, setSelectedMovie] = useState<MovieApiResponse | null>(null);
+  const visibleMovies = movies.filter((movie) => movie.status !== false);
+  const cardMovies = visibleMovies.map(toCardMovie);
 
   const scroll = (dir: "left" | "right") => {
     if (!scrollRef.current) return;
@@ -118,12 +121,17 @@ export function NowShowing({ movies, loading = false, error = "" }: Props) {
               msOverflowStyle: "none",
             }}
           >
-            {cardMovies.map((movie) => (
-              <MovieCard key={movie.id} movie={movie} />
+            {cardMovies.map((movie, index) => (
+              <MovieCard
+                key={movie.id}
+                movie={movie}
+                onBook={() => setSelectedMovie(visibleMovies[index])}
+              />
             ))}
           </div>
         )}
       </div>
+      <MoviePreviewModal movie={selectedMovie} onClose={() => setSelectedMovie(null)} />
     </section>
   );
 }

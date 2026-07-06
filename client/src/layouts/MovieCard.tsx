@@ -14,13 +14,18 @@ interface Movie {
 
 interface MovieCardProps {
   movie: Movie;
+  /** When provided, clicking the card / Book button opens the detail carousel
+   *  instead of navigating straight to the showtime page. */
+  onBook?: () => void;
 }
 
-export function MovieCard({ movie }: MovieCardProps) {
+export function MovieCard({ movie, onBook }: MovieCardProps) {
   const navigate = useNavigate();
+  const handleBook = () => (onBook ? onBook() : navigate(`/showtime/${movie.id}`));
 
   return (
     <div
+      onClick={handleBook}
       className="relative flex-shrink-0 rounded-2xl overflow-hidden cursor-pointer group"
       style={{
         width: "220px",
@@ -109,7 +114,7 @@ export function MovieCard({ movie }: MovieCardProps) {
         <button
           onClick={(e) => {
             e.stopPropagation();
-            navigate(`/showtime/${movie.id}`);
+            handleBook();
           }}
           className="flex items-center gap-2 px-5 py-2.5 rounded-full"
           style={{
@@ -123,7 +128,7 @@ export function MovieCard({ movie }: MovieCardProps) {
           }}
         >
           <Ticket size={13} />
-          Book Ticket
+          {onBook ? "View Details" : "Book Ticket"}
         </button>
       </div>
     </div>

@@ -1,16 +1,24 @@
+import { Route, Routes } from "react-router-dom";
+
 import AuthLayout from "../layouts/AuthLayout";
 import CustomerLayout from "../layouts/CustomerLayout";
+import AdminLayout from "../layouts/AdminLayout";
+
 import LoginPage from "../pages/auth/LoginPage";
+import RegisterPage from "../pages/auth/RegisterPage";
+import CompleteProfilePage from "../pages/auth/CompleteProfilePage";
+
 import HomePage from "../pages/customer/HomePage";
+import MoviesPage from "../pages/customer/MoviesPage";
+import CinemasPage from "../pages/customer/CinemasPage";
+import EventsPage from "../pages/customer/EventsPage";
+import OffersPage from "../pages/customer/OffersPage";
 import ShowtimePage from "../pages/customer/ShowtimePage";
 import SeatBookingPage from "../pages/customer/SeatBookingPage";
-import { Route, Routes } from "react-router-dom";
-import RootRedirect from "./RootRedirect";
-import ProtectedRoute from "./ProtectedRoute";
-import AdminLayout from "../layouts/AdminLayout";
+import ProfilePage from "../pages/customer/ProfilePage";
+
 import AdminDashboard from "../pages/admin/AdminDashboardPage";
 import ManageUserPage from "../pages/admin/ManageUserPage";
-import RegisterPage from "../pages/auth/RegisterPage";
 import ManageMoviePage from "../pages/admin/ManageMoviePage";
 import ManageCinemaRoomsPage from "../pages/admin/ManageCinemaRoomsPage";
 import ManageCinemaClusterPage from "../pages/admin/ManageCinemaClusterPage";
@@ -33,55 +41,65 @@ import ReportPage from "../pages/admin/ReportPage";
 import SettingsPage from "../pages/admin/SettingsPage";
 import TicketSalePage from "../pages/admin/TicketSalePage";
 
+import RootRedirect from "./RootRedirect";
+import ProtectedRoute from "./ProtectedRoute";
+
 export default function AppRoutes() {
   return (
     <Routes>
+      {/* Customer routes — open to browse; profile gate is inside SeatBookingPage */}
       <Route element={<CustomerLayout />}>
         <Route path="/" element={<RootRedirect />} />
+        <Route path="/movies" element={<MoviesPage />} />
+        <Route path="/cinemas" element={<CinemasPage />} />
+        <Route path="/events" element={<EventsPage />} />
+        <Route path="/offers" element={<OffersPage />} />
         <Route path="/showtime/:movieId" element={<ShowtimePage />} />
         <Route path="/booking/:showtimeId" element={<SeatBookingPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
       </Route>
 
-      <Route element={<AuthLayout/>}>
-        <Route path="/login" element={<LoginPage/>}/>
-        <Route path="register" element={<RegisterPage/>}/>
+      {/* Auth pages */}
+      <Route element={<AuthLayout />}>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
       </Route>
 
-      {/* ADMIN + EMPLOYEE shared */}
-      <Route element={<ProtectedRoute allowedRoles={["ROLE_ADMIN", "ROLE_EMPLOYEE"]}/>}>
-        <Route path="/admin" element={<AdminLayout/>}>
-          <Route index element={<AdminDashboard/>}/>
+      {/* Profile setup — standalone page, no layout wrapper */}
+      <Route path="/profile-setup" element={<CompleteProfilePage />} />
 
-          {/* Accessible by both ADMIN and EMPLOYEE */}
-          <Route path="movies"    element={<ManageMoviePage/>}/>
-          <Route path="showtimes" element={<ManageShowtimePage/>}/>
-          <Route path="bookings"  element={<ManageBookingPage/>}/>
-          <Route path="sell"      element={<TicketSalePage/>}/>
+      {/* Admin + Employee */}
+      <Route element={<ProtectedRoute allowedRoles={["ROLE_ADMIN", "ROLE_EMPLOYEE"]} />}>
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<AdminDashboard />} />
 
-          {/* ADMIN only */}
-          <Route element={<ProtectedRoute allowedRoles={["ROLE_ADMIN"]}/>}>
-            <Route path="employees"              element={<ManageEmployeePage/>}/>
-            <Route path="employees/create"       element={<CreateEmployeePage/>}/>
-            <Route path="employees/:id"          element={<EmployeeDetailPage/>}/>
-            <Route path="employees/edit/:id"     element={<EditEmployeePage/>}/>
-            <Route path="users"          element={<ManageUserPage/>}/>
-            <Route path="users/create"   element={<CreateUserPage/>}/>
-            <Route path="users/edit/:id" element={<EditUserPage/>}/>
-            <Route path="users/:id"      element={<UserDetailPage/>}/>
-            <Route path="clusters"       element={<ManageCinemaClusterPage/>}/>
-            <Route path="rooms"          element={<ManageCinemaRoomsPage/>}/>
-            <Route path="rooms/:id"      element={<RoomDetailPage/>}/>
-            <Route path="genres"         element={<ManageGenresPage/>}/>
-            <Route path="promotions"              element={<ManagePromotionPage/>}/>
-            <Route path="promotions/create"       element={<CreatePromotionPage/>}/>
-            <Route path="promotions/:id"          element={<PromotionDetailPage/>}/>
-            <Route path="promotions/edit/:id"     element={<EditPromotionPage/>}/>
-            <Route path="reports"   element={<ReportPage/>}/>
-            <Route path="settings" element={<SettingsPage/>}/>
+          <Route path="movies"    element={<ManageMoviePage />} />
+          <Route path="showtimes" element={<ManageShowtimePage />} />
+          <Route path="bookings"  element={<ManageBookingPage />} />
+          <Route path="sell"      element={<TicketSalePage />} />
+
+          <Route element={<ProtectedRoute allowedRoles={["ROLE_ADMIN"]} />}>
+            <Route path="employees"          element={<ManageEmployeePage />} />
+            <Route path="employees/create"   element={<CreateEmployeePage />} />
+            <Route path="employees/:id"      element={<EmployeeDetailPage />} />
+            <Route path="employees/edit/:id" element={<EditEmployeePage />} />
+            <Route path="users"              element={<ManageUserPage />} />
+            <Route path="users/create"       element={<CreateUserPage />} />
+            <Route path="users/edit/:id"     element={<EditUserPage />} />
+            <Route path="users/:id"          element={<UserDetailPage />} />
+            <Route path="clusters"           element={<ManageCinemaClusterPage />} />
+            <Route path="rooms"              element={<ManageCinemaRoomsPage />} />
+            <Route path="rooms/:id"          element={<RoomDetailPage />} />
+            <Route path="genres"             element={<ManageGenresPage />} />
+            <Route path="promotions"          element={<ManagePromotionPage />} />
+            <Route path="promotions/create"   element={<CreatePromotionPage />} />
+            <Route path="promotions/:id"      element={<PromotionDetailPage />} />
+            <Route path="promotions/edit/:id" element={<EditPromotionPage />} />
+            <Route path="reports"   element={<ReportPage />} />
+            <Route path="settings"  element={<SettingsPage />} />
           </Route>
         </Route>
       </Route>
     </Routes>
   );
 }
-

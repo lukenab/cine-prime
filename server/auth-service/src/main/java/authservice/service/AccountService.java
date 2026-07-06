@@ -104,7 +104,7 @@ public class AccountService {
 
         String requestedRole = (request.getRole() != null && !request.getRole().isBlank())
                 ? request.getRole().toUpperCase().trim()
-                : "USER";
+                : "MEMBER";
 
         Role accountRole = roleRepository.findById(requestedRole)
                 .orElseThrow(() -> new AppException(AuthErrorCode.ROLE_NOT_FOUND));

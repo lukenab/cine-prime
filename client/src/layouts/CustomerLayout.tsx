@@ -7,7 +7,7 @@ export default function CustomerLayout() {
     <div style={{ backgroundColor: "#050505", minHeight: "100vh", fontFamily: "'Inter', sans-serif" }}>
       <Navbar />
       <main>
-        <Outlet /> 
+        <Outlet />
       </main>
       <Footer />
     </div>

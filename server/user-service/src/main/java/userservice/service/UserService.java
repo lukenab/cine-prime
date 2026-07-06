@@ -1,6 +1,5 @@
 package userservice.service;
 
-import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -19,11 +18,9 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.web.client.RestClient;
 import userservice.dto.PageResponse;
 import userservice.dto.UserResponse;
 import userservice.dto.UserUpdateRequest;
@@ -33,7 +30,7 @@ import userservice.event.UserUpdatedEvent;
 import userservice.exception.ErrorCode;
 import userservice.mapper.UserMapper;
 import userservice.repository.UserRepository;
-import movie.theater.common.exception.AppException;
+import userservice.service.ImageStorageService;
 
 @Service
 @RequiredArgsConstructor
@@ -44,50 +41,30 @@ public class UserService {
     UserMapper userMapper;
     AuditLogService auditLogService;
     IdentityCardService identityCardService;
-    private final RestClient.Builder builder;
+    ImageStorageService imageStorageService;
 
+    /**
+     * Tạo skeleton profile khi nhận UserRegisteredEvent từ auth-service.
+     * Pattern: auth-service chỉ gửi {accountId, email} — profile fields
+     * được thu thập riêng qua PUT /api/users/{id} sau lần đăng nhập đầu tiên.
+     */
     @Transactional
     public void createUserProfile(UserRegisteredEvent event) {
-        // Check duplicate trước — tránh throw trước khi biết profile đã tồn tại
-        if (userRepository.findById(event.getAccountId()).isPresent()) {
-            log.warn("Profile for Account ID {} already exists. Skipping event to avoid duplication.", event.getAccountId());
+        if (userRepository.existsById(event.getAccountId())) {
+            log.warn("[KAFKA] Skeleton profile for accountId {} already exists. Skipping.", event.getAccountId());
             return;
         }
 
-        if (userRepository.existsByPhoneNumber(event.getPhoneNumber())) {
-            log.error("[DATA_INCONSISTENCY] Phone number {} already exists for accountId {}. Auth account created but profile skipped.", event.getPhoneNumber(), event.getAccountId());
-            auditLogService.log("User", event.getAccountId(), "CREATE_SKIPPED", null,
-                    "DATA_INCONSISTENCY: phone duplicate — " + event.getPhoneNumber(), "SYSTEM");
-            return;
-        }
+        User user = User.builder()
+                .accountId(event.getAccountId())
+                .email(event.getEmail())
+                .isActive(true)
+                .profileCompleted(false)   // skeleton — chưa điền form
+                .build();
 
-        if (userRepository.existsByIdentityCard(event.getIdentityCard())) {
-            log.error("[DATA_INCONSISTENCY] Identity card {} already exists for accountId {}. Auth account created but profile skipped.", event.getIdentityCard(), event.getAccountId());
-            auditLogService.log("User", event.getAccountId(), "CREATE_SKIPPED", null,
-                    "DATA_INCONSISTENCY: identityCard duplicate — " + event.getIdentityCard(), "SYSTEM");
-            return;
-        }
-
-        // Validate sau khi đã qua các guard checks
-        try {
-            identityCardService.validate(event.getIdentityCard());
-        } catch (Exception e) {
-            log.error("[DATA_INCONSISTENCY] Invalid identityCard for accountId {}: {}", event.getAccountId(), e.getMessage());
-            auditLogService.log("User", event.getAccountId(), "CREATE_SKIPPED", null,
-                    "DATA_INCONSISTENCY: invalid identityCard — " + e.getMessage(), "SYSTEM");
-            return;
-        }
-
-        User user = userMapper.toUser(event);
-        user.setAccountId(event.getAccountId()); // Ensure ID is synchronized with auth-service
-        user.setCreatedAt(LocalDateTime.now());
-        user.setIsActive(true);
-
-        // Ghi Log
-        User savedUser = userRepository.save(user);
-        auditLogService.log("User", savedUser.getAccountId(), "CREATE", null, savedUser, getCurrentAccountId());
-
-        log.info("Successfully created Profile for Account ID: {}", savedUser.getAccountId());
+        User saved = userRepository.save(user);
+        auditLogService.log("User", saved.getAccountId(), "CREATE", null, saved, "SYSTEM");
+        log.info("[KAFKA] Skeleton profile created for accountId: {}", saved.getAccountId());
     }
 
     @Transactional
@@ -103,7 +80,21 @@ public class UserService {
 
     @Transactional
     public UserResponse updateUser(String id, UserUpdateRequest request) {
-        User user = userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        /*
+         * UPSERT pattern — tạo skeleton nếu chưa tồn tại.
+         * Xảy ra khi: (1) Kafka event chưa kịp consume, (2) ddl-auto:create xóa data khi
+         * dev restart, (3) bất kỳ lý do nào khiến skeleton profile bị thiếu.
+         * Đây là intentional fallback của Progressive Profiling — REST endpoint luôn là
+         * last-resort để đảm bảo user không bị block.
+         */
+        User user = userRepository.findById(id).orElseGet(() -> {
+            log.warn("[UPSERT] User {} not found — creating skeleton before update (Kafka lag / dev reset)", id);
+            return userRepository.save(User.builder()
+                    .accountId(id)
+                    .isActive(true)
+                    .profileCompleted(false)
+                    .build());
+        });
         if (request.getIdentityCard() != null) {
             identityCardService.validate(request.getIdentityCard());
             if (!request.getIdentityCard().equals(user.getIdentityCard())
@@ -121,6 +112,11 @@ public class UserService {
 
         userMapper.updateUser(request, user);
         user.setUpdatedAt(LocalDateTime.now());
+
+        // Tự động set profileCompleted khi đủ tất cả required fields
+        if (!Boolean.TRUE.equals(user.getProfileCompleted())) {
+            user.setProfileCompleted(isProfileComplete(user));
+        }
 
         // Ghi Log
         User savedUser = userRepository.save(user);
@@ -145,6 +141,18 @@ public class UserService {
         User savedUser = userRepository.save(user);
         auditLogService.log("User", savedUser.getAccountId(), "DELETE", null, savedUser, getCurrentAccountId());
 
+    }
+
+    /**
+     * Single source of truth for "profile hoàn tất".
+     * Tất cả 5 required fields phải có giá trị hợp lệ.
+     */
+    private boolean isProfileComplete(User user) {
+        return user.getFullName() != null && !user.getFullName().isBlank()
+                && user.getPhoneNumber() != null && !user.getPhoneNumber().isBlank()
+                && user.getIdentityCard() != null && !user.getIdentityCard().isBlank()
+                && user.getDateOfBirth() != null
+                && user.getGender() != null && !user.getGender().isBlank();
     }
 
     private String getCurrentAccountId() {
@@ -219,6 +227,34 @@ public class UserService {
         result.put("identityCardExists", cccdExists);
 
         return result;
+    }
+
+    @Transactional
+    public UserResponse uploadAvatar(String id, MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new AppException(ErrorCode.INVALID_FILE);
+        }
+
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.startsWith("image/")) {
+            throw new AppException(ErrorCode.INVALID_FILE);
+        }
+
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+        try {
+            Map<String, Object> result = imageStorageService.uploadImage(file);
+            String secureUrl = (String) result.get("secure_url");
+            user.setAvatarUrl(secureUrl);
+            user.setUpdatedAt(java.time.LocalDateTime.now());
+            User saved = userRepository.save(user);
+            log.info("Avatar uploaded for user {}: {}", id, secureUrl);
+            return userMapper.toUserResponse(saved);
+        } catch (Exception e) {
+            log.error("Failed to upload avatar for user {}", id, e);
+            throw new AppException(ErrorCode.UPLOAD_FAILED);
+        }
     }
 
 
