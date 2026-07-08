@@ -1,12 +1,5 @@
 package movieservice.service;
 
-import java.math.BigDecimal;
-import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.List;
-
-import org.springframework.stereotype.Service;
-
 import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -17,10 +10,16 @@ import movieservice.dto.request.SeatRequest;
 import movieservice.dto.response.SeatResponse;
 import movieservice.entity.CinemaRoom;
 import movieservice.entity.Seat;
+import movieservice.enums.SeatStatus;
 import movieservice.enums.SeatType;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.SeatRepository;
+import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -31,23 +30,31 @@ public class SeatService {
     SeatRepository seatRepository;
     MovieMapper movieMapper;
 
+    /**
+     * Tự động sinh ghế cho phòng mới tạo.
+     * Mỗi ghế có rowLabel (A, B, C...) và colNumber (1, 2, 3...).
+     * seatCode = rowLabel + colNumber, e.g. "A1", "B12".
+     */
     @Transactional
     public void generateSeatsForRoom(CinemaRoom room, BigDecimal defaultPrice) {
-        int total = room.getSeatQuantity();
+        int total = room.getTotalSeatCapacity();
         int seatsPerRow = room.getRoomType().getSeatsPerRow();
         List<Seat> seats = new ArrayList<>(total);
 
         for (int i = 0; i < total; i++) {
-            char rowChar = (char) ('A' + (i / seatsPerRow));
-            int col = (i % seatsPerRow) + 1;
+            String rowLabel = String.valueOf((char) ('A' + (i / seatsPerRow)));
+            int colNumber = (i % seatsPerRow) + 1;
 
-            Seat seat = new Seat();
-            seat.setSeatCode(rowChar + String.valueOf(col));
-            seat.setSeatType(SeatType.STANDARD);
-            seat.setSeatStatus(1);
-            seat.setPrice(defaultPrice);
-            seat.setCinemaRoom(room);
-            seat.setCreatedAt(OffsetDateTime.now());
+            Seat seat = Seat.builder()
+                    .seatCode(rowLabel + colNumber)
+                    .rowLabel(rowLabel)
+                    .colNumber(colNumber)
+                    .seatType(SeatType.STANDARD)
+                    .status(SeatStatus.ACTIVE)
+                    .price(defaultPrice)
+                    .cinemaRoom(room)
+                    .build();
+
             seats.add(seat);
         }
 
@@ -72,7 +79,17 @@ public class SeatService {
                 .orElseThrow(() -> new AppException(MovieErrorCode.SEAT_NOT_FOUND));
         seat.setSeatType(request.getSeatType());
         seat.setPrice(request.getPrice());
-        seat.setUpdatedAt(OffsetDateTime.now());
         return movieMapper.toSeatResponse(seatRepository.save(seat));
+    }
+
+    /**
+     * Đặt ghế thành MAINTENANCE (e.g. ghế bị hỏng).
+     */
+    @Transactional
+    public void setSeatStatus(long seatId, SeatStatus newStatus) {
+        Seat seat = seatRepository.findById(seatId)
+                .orElseThrow(() -> new AppException(MovieErrorCode.SEAT_NOT_FOUND));
+        seat.setStatus(newStatus);
+        seatRepository.save(seat);
     }
 }

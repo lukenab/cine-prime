@@ -254,7 +254,7 @@ public class ShowTimeService {
 
         // 4. startTime in 08:00–23:00, endTime = startTime + duration <= 23:00
         LocalTime startTime = request.getStartTime();
-        LocalTime endTime   = startTime.plusMinutes(movie.getDuration());
+        LocalTime endTime   = startTime.plusMinutes(movie.getDurationMinutes());
         if (startTime.isBefore(OPENING_TIME) || endTime.isAfter(CLOSING_TIME)) {
             throw new AppException(MovieErrorCode.INVALID_SHOWTIME);
         }
@@ -304,7 +304,7 @@ public class ShowTimeService {
 
         if (request.getStartTime() != null) {
             LocalTime startTime = request.getStartTime();
-            LocalTime endTime   = startTime.plusMinutes(showTime.getMovie().getDuration());
+            LocalTime endTime   = startTime.plusMinutes(showTime.getMovie().getDurationMinutes());
             if (startTime.isBefore(OPENING_TIME) || endTime.isAfter(CLOSING_TIME)) {
                 throw new AppException(MovieErrorCode.INVALID_SHOWTIME);
             }
@@ -348,7 +348,7 @@ public class ShowTimeService {
         r.setUpdateAt(s.getUpdateAt());
         if (s.getMovie() != null) {
             r.setMovieId(s.getMovie().getMovieId());
-            r.setMovieName(s.getMovie().getMovieNameVn());
+            r.setMovieName(s.getMovie().getOriginalTitle());
         }
         if (s.getCinemaRoom() != null) {
             r.setCinemaRoomId(s.getCinemaRoom().getCinemaRoomId());

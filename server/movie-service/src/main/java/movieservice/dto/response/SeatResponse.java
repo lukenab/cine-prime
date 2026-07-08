@@ -1,22 +1,22 @@
 package movieservice.dto.response;
 
-import java.math.BigDecimal;
-
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import lombok.experimental.FieldDefaults;
+
+import java.math.BigDecimal;
 
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
+@Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class SeatResponse {
     Long seatId;
     String seatCode;
+    String rowLabel;
+    Integer colNumber;
     String seatType;
-    Integer seatStatus;
+    String status;
     BigDecimal price;
     Long cinemaRoomId;
     String cinemaRoomName;

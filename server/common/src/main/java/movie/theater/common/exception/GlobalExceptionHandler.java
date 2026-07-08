@@ -1,5 +1,6 @@
 package movie.theater.common.exception;
 
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import jakarta.validation.ConstraintViolation;
 import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.dto.ApiResponse;
@@ -11,8 +12,10 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RestControllerAdvice
@@ -78,9 +81,25 @@ public class GlobalExceptionHandler {
     ResponseEntity<ApiResponse<?>> handlingUnreadableRequest(HttpMessageNotReadableException exception){
         log.warn("Invalid request body: {}", exception.getMessage());
         GlobalErrorCode errorCode = GlobalErrorCode.INVALID_KEY;
+        String message = "Invalid request body or date format!";
+
+        Throwable cause = exception.getCause();
+        if (cause instanceof InvalidFormatException ife
+                && ife.getTargetType() != null
+                && ife.getTargetType().isEnum()) {
+            String field = ife.getPath().stream()
+                    .map(ref -> ref.getFieldName())
+                    .collect(Collectors.joining("."));
+            String accepted = Arrays.stream(ife.getTargetType().getEnumConstants())
+                    .map(Object::toString)
+                    .collect(Collectors.joining(", "));
+            message = "Invalid value '" + ife.getValue() + "' for field '" + field
+                    + "'. Accepted values: [" + accepted + "]";
+        }
+
         ApiResponse<?> apiResponse = ApiResponse.builder()
                 .code(errorCode.getCode())
-                .message("Invalid request body or date format!")
+                .message(message)
                 .build();
         return ResponseEntity.badRequest().body(apiResponse);
     }
