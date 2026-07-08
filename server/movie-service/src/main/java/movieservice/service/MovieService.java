@@ -1,122 +1,246 @@
 package movieservice.service;
 
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.exception.AppException;
+import movieservice.dto.request.CastRequest;
 import movieservice.dto.request.CreateMovieRequest;
-import movieservice.dto.request.ShowTimeRequest;
+import movieservice.dto.request.TranslationRequest;
 import movieservice.dto.request.UpdateMovieRequest;
-import movieservice.dto.response.ImageUploadResponse;
 import movieservice.dto.response.MovieResponse;
-import movieservice.entity.CinemaRoom;
-import movieservice.entity.Movie;
-import movieservice.entity.MovieType;
-import movieservice.entity.ShowTime;
+import movieservice.entity.*;
+import movieservice.enums.MovieStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
-import movieservice.repository.MovieRepository;
+import movieservice.dto.response.ImageUploadResponse;
+import movieservice.repository.*;
+import org.springframework.data.domain.Page;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Map;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class MovieService {
-    private static final long MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 
     MovieRepository movieRepository;
     MovieMapper movieMapper;
+    GenreRepository genreRepository;
+    AgeRatingRepository ageRatingRepository;
+    ScreeningFormatRepository screeningFormatRepository;
+    ProductionCompanyRepository productionCompanyRepository;
+    PersonRepository personRepository;
+    MovieCastRepository movieCastRepository;
+    MovieTranslationRepository movieTranslationRepository;
     CinemaRoomService cinemaRoomService;
-    ImageStorageService imageStorageService;
-    AuditLogService auditLogService;
-    MovieTypeService movieTypeService;
     ShowTimeService showTimeService;
+    AuditLogService auditLogService;
+    ImageStorageService imageStorageService;
+
+    private static final long MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+
+    // ── Create ────────────────────────────────────────────────
+
     @Transactional
     public MovieResponse createMovie(CreateMovieRequest request) {
-        // Prevent duplicates: same Vietnamese title + same format/version.
-        // (Same movie in a different format, e.g. 2D vs 3D, is still allowed.)
-        if (movieRepository.existsByMovieNameVnAndVersion(request.getMovieNameVn(), request.getVersion())) {
+        // Duplicate guard
+        if (movieRepository.existsByOriginalTitleIgnoreCase(request.getOriginalTitle())) {
             throw new AppException(MovieErrorCode.MOVIE_ALREADY_EXISTS);
         }
 
         Movie movie = movieMapper.toMovie(request);
-        movie = movieRepository.save(movie);
+        movie.setStatus(MovieStatus.DRAFT);
 
-        List<ShowTimeRequest> showTimeRequests = request.getShowTimes();
-        if (showTimeRequests != null && !showTimeRequests.isEmpty()) {
-            showTimeService.validateShowDates(showTimeRequests);
-            showTimeService.validateStartTimes(showTimeRequests);
-            showTimeService.validateLocalRequests(showTimeRequests, request.getDuration());
-            showTimeService.validateWithDatabase(showTimeRequests, request.getDuration());
-            List<ShowTime> showTimesToSave = new ArrayList<>();
-
-            for (ShowTimeRequest stReq : showTimeRequests) {
-                CinemaRoom cinemaRoom = cinemaRoomService.findByCinemaRoom(stReq.getCinemaRoomId().longValue());
-                if (cinemaRoom == null) {
-                    throw new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND);
-                }
-
-                LocalTime startTime = stReq.getStartTime();
-                LocalTime endTime = startTime.plusMinutes(request.getDuration());
-
-                ShowTime showTime = new ShowTime();
-                showTime.setShowDate(stReq.getShowDate());
-                showTime.setStartTime(startTime);
-                showTime.setEndTime(endTime);
-                showTime.setMovie(movie);
-                showTime.setCinemaRoom(cinemaRoom);
-
-                showTimesToSave.add(showTime);
-            }
-
-            List<ShowTime> savedShowTimes = showTimeService.saveSchedule(showTimesToSave);
-            movie.setShowTimes(savedShowTimes);
+        // Wire FK references
+        if (request.getAgeRatingId() != null) {
+            AgeRating ar = ageRatingRepository.findById(request.getAgeRatingId())
+                    .orElseThrow(() -> new AppException(MovieErrorCode.AGE_RATING_NOT_FOUND));
+            movie.setAgeRating(ar);
+        }
+        if (request.getCompanyId() != null) {
+            ProductionCompany company = productionCompanyRepository.findById(request.getCompanyId())
+                    .orElseThrow(() -> new AppException(MovieErrorCode.COMPANY_NOT_FOUND));
+            movie.setCompany(company);
         }
 
-        if (request.getTypeIds() != null && !request.getTypeIds().isEmpty()) {
-            List<MovieType> types = movieTypeService.findAllById(request.getTypeIds());
+        // Genres
+        List<Genre> genres = genreRepository.findAllByGenreIdIn(request.getGenreIds());
+        if (genres.size() != request.getGenreIds().size()) {
+            throw new AppException(MovieErrorCode.GENRE_NOT_FOUND);
+        }
+        movie.setGenres(genres);
 
-            if (types.size() != request.getTypeIds().size()) {
-                throw new AppException(MovieErrorCode.MOVIE_TYPE_NOT_FOUND);
-            }
-            movie.setMovieTypes(types);
+        // Screening formats
+        List<ScreeningFormat> formats = screeningFormatRepository.findAllByFormatIdIn(request.getFormatIds());
+        if (formats.size() != request.getFormatIds().size()) {
+            throw new AppException(MovieErrorCode.FORMAT_NOT_FOUND);
+        }
+        movie.setFormats(formats);
+
+        Movie saved = movieRepository.save(movie);
+
+        // Translations
+        if (request.getTranslations() != null) {
+            saveTranslations(saved, request.getTranslations());
         }
 
-        try {
-            movie.setSmallImage(resolveImageUrl(request.getSmallImage()));
-            movie.setLargeImage(resolveImageUrl(request.getLargeImage()));
-        } catch (Exception e) {
-            throw new AppException(MovieErrorCode.UPLOAD_IMAGE_FAILED);
+        // Cast
+        if (request.getCast() != null) {
+            saveCast(saved, request.getCast());
         }
-        Movie finalSavedMovie = movieRepository.save(movie);
 
-        auditLogService.logAction("1", "Admin System", "movie - id:" + finalSavedMovie.getMovieId(),
-                "Created new movie: " + finalSavedMovie.getMovieNameEnglish());
+        auditLogService.logAction("SYSTEM", "Admin", "movie:" + saved.getMovieId(),
+                "Created movie: " + saved.getOriginalTitle());
 
-        return movieMapper.toResponse(finalSavedMovie);
+        return movieMapper.toMovieResponse(movieRepository.findById(saved.getMovieId()).orElseThrow());
     }
 
+    // ── Read ──────────────────────────────────────────────────
+
+    public MovieResponse getMovie(Long id) {
+        Movie movie = movieRepository.findById(id)
+                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+        return movieMapper.toMovieResponse(movie);
+    }
+
+    public List<MovieResponse> findAllPublic() {
+        // Public: only visible statuses
+        List<Movie> movies = movieRepository.findByStatusIn(
+                List.of(MovieStatus.COMING_SOON, MovieStatus.NOW_SHOWING));
+        return movieMapper.toMovieResponseList(movies);
+    }
+
+    public List<MovieResponse> findAll() {
+        // Admin: all movies regardless of status
+        return movieMapper.toMovieResponseList(movieRepository.findAll());
+    }
+
+    public Page<MovieResponse> findPage(int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        return movieRepository.findAll(pageable).map(movieMapper::toMovieResponse);
+    }
+
+    // ── Update ────────────────────────────────────────────────
+
+    @Transactional
+    public MovieResponse updateMovie(Long id, UpdateMovieRequest request) {
+        Movie movie = movieRepository.findById(id)
+                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+
+        movieMapper.updateMovieFromRequest(request, movie);
+
+        if (request.getAgeRatingId() != null) {
+            movie.setAgeRating(ageRatingRepository.findById(request.getAgeRatingId())
+                    .orElseThrow(() -> new AppException(MovieErrorCode.AGE_RATING_NOT_FOUND)));
+        }
+        if (request.getCompanyId() != null) {
+            movie.setCompany(productionCompanyRepository.findById(request.getCompanyId())
+                    .orElseThrow(() -> new AppException(MovieErrorCode.COMPANY_NOT_FOUND)));
+        }
+        if (request.getGenreIds() != null) {
+            List<Genre> genres = genreRepository.findAllByGenreIdIn(request.getGenreIds());
+            if (genres.size() != request.getGenreIds().size()) {
+                throw new AppException(MovieErrorCode.GENRE_NOT_FOUND);
+            }
+            movie.setGenres(genres);
+        }
+        if (request.getFormatIds() != null) {
+            List<ScreeningFormat> formats = screeningFormatRepository.findAllByFormatIdIn(request.getFormatIds());
+            if (formats.size() != request.getFormatIds().size()) {
+                throw new AppException(MovieErrorCode.FORMAT_NOT_FOUND);
+            }
+            movie.setFormats(formats);
+        }
+        if (request.getTranslations() != null) {
+            movieTranslationRepository.deleteById_MovieId(id);
+            saveTranslations(movie, request.getTranslations());
+        }
+        if (request.getCast() != null) {
+            movieCastRepository.deleteByMovie_MovieId(id);
+            saveCast(movie, request.getCast());
+        }
+
+        return movieMapper.toMovieResponse(movieRepository.save(movie));
+    }
+
+    // ── Status transitions ────────────────────────────────────
+
+    @Transactional
+    public void submitForReview(Long id, String updatedBy) {
+        requireStatus(id, MovieStatus.DRAFT);
+        movieRepository.updateStatus(id, MovieStatus.PENDING_REVIEW, updatedBy);
+    }
+
+    @Transactional
+    public void approveMovie(Long id, String updatedBy) {
+        requireStatus(id, MovieStatus.PENDING_REVIEW);
+        movieRepository.updateStatus(id, MovieStatus.COMING_SOON, updatedBy);
+    }
+
+    @Transactional
+    public void rejectMovie(Long id, String note, String updatedBy) {
+        requireStatus(id, MovieStatus.PENDING_REVIEW);
+        movieRepository.rejectMovie(id, note, updatedBy);
+    }
+
+    @Transactional
+    public void suspendMovie(Long id, String reason, String updatedBy) {
+        Movie movie = movieRepository.findById(id)
+                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+        if (movie.getStatus() != MovieStatus.NOW_SHOWING && movie.getStatus() != MovieStatus.COMING_SOON) {
+            throw new AppException(MovieErrorCode.INVALID_STATUS_TRANSITION);
+        }
+        movieRepository.suspendMovie(id, reason, updatedBy);
+    }
+
+    @Transactional
+    public void endMovie(Long id, String updatedBy) {
+        movieRepository.updateStatus(id, MovieStatus.ENDED, updatedBy);
+    }
+
+    // ── Delete (soft via SUSPENDED/ENDED) ────────────────────
+
+    @Transactional
+    public void deleteMovie(Long id) {
+        Movie movie = movieRepository.findById(id)
+                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+
+        boolean hasFutureShowTimes = showTimeService.existsMovie(
+                movie.getMovieId(), LocalDate.now(), LocalTime.now());
+        if (hasFutureShowTimes) {
+            throw new AppException(MovieErrorCode.ACTIVE_SHOWTIMES_EXIST);
+        }
+
+        movieRepository.updateStatus(id, MovieStatus.ENDED, "SYSTEM");
+    }
+
+    // ── Image upload ──────────────────────────────────────────
+
     public ImageUploadResponse uploadMovieImage(MultipartFile file) {
-        validateImageFile(file);
-
+        if (file == null || file.isEmpty() || file.getSize() > MAX_IMAGE_SIZE_BYTES) {
+            throw new AppException(MovieErrorCode.INVALID_IMAGE_FILE);
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.matches("image/(jpeg|jpg|png|webp)")) {
+            throw new AppException(MovieErrorCode.INVALID_IMAGE_FILE);
+        }
         try {
-            Map uploadResult = imageStorageService.uploadImage(file);
-            String url = getUploadValue(uploadResult, "url");
-            String secureUrl = getUploadValue(uploadResult, "secure_url");
-            String publicId = getUploadValue(uploadResult, "public_id");
-
+            Map<?, ?> result = imageStorageService.uploadImage(file);
+            String secureUrl = result.get("secure_url") != null ? result.get("secure_url").toString() : null;
+            String url = result.get("url") != null ? result.get("url").toString() : null;
+            String publicId = result.get("public_id") != null ? result.get("public_id").toString() : null;
             return ImageUploadResponse.builder()
                     .url(secureUrl != null ? secureUrl : url)
                     .secureUrl(secureUrl)
@@ -127,93 +251,40 @@ public class MovieService {
         }
     }
 
-    private String resolveImageUrl(String imageUrl) throws java.io.IOException {
-        if (imageUrl != null && imageUrl.contains("res.cloudinary.com")) {
-            return imageUrl;
-        }
+    // ── Private helpers ───────────────────────────────────────
 
-        Map uploadResult = imageStorageService.uploadImage(imageUrl);
-        String secureUrl = getUploadValue(uploadResult, "secure_url");
-        String url = getUploadValue(uploadResult, "url");
-        return secureUrl != null ? secureUrl : url;
-    }
-
-    private void validateImageFile(MultipartFile file) {
-        if (file == null || file.isEmpty() || file.getSize() > MAX_IMAGE_SIZE_BYTES) {
-            throw new AppException(MovieErrorCode.INVALID_IMAGE_FILE);
-        }
-
-        String contentType = file.getContentType();
-        if (contentType == null || !contentType.matches("image/(jpeg|jpg|png|webp)")) {
-            throw new AppException(MovieErrorCode.INVALID_IMAGE_FILE);
+    private void saveTranslations(Movie movie, List<TranslationRequest> requests) {
+        for (TranslationRequest tr : requests) {
+            MovieTranslationId tid = new MovieTranslationId(movie.getMovieId(), tr.getLanguageCode());
+            MovieTranslation t = new MovieTranslation();
+            t.setId(tid);
+            t.setMovie(movie);
+            t.setTitle(tr.getTitle());
+            t.setSynopsis(tr.getSynopsis());
+            movieTranslationRepository.save(t);
         }
     }
 
-    private String getUploadValue(Map uploadResult, String key) {
-        Object value = uploadResult.get(key);
-        return value != null ? value.toString() : null;
-    }
-
-    public MovieResponse getMovie(Long id) {
-        Movie movie = movieRepository.findByMovieId(id);
-        if (movie == null) {
-           throw new AppException(MovieErrorCode.MOVIE_NOT_FOUND);
+    private void saveCast(Movie movie, List<CastRequest> requests) {
+        for (CastRequest cr : requests) {
+            Person person = personRepository.findById(cr.getPersonId())
+                    .orElseThrow(() -> new AppException(MovieErrorCode.PERSON_NOT_FOUND));
+            MovieCast cast = MovieCast.builder()
+                    .movie(movie)
+                    .person(person)
+                    .roleType(cr.getRoleType())
+                    .characterName(cr.getCharacterName())
+                    .billingOrder(cr.getBillingOrder())
+                    .build();
+            movieCastRepository.save(cast);
         }
-
-        return movieMapper.toResponse(movie);
     }
 
-
-    public Page<MovieResponse> findPageMovie(int page, int size) {
-        Pageable pageable = PageRequest.of(page, size);
-
-        Page<Movie> moviePage = movieRepository.findAll(pageable);
-
-        return moviePage.map(movieMapper::toResponse);
-    }
-
-    public List<MovieResponse> findAll() {
-        List<Movie> movies = movieRepository.findByStatusTrue();
-        return movieMapper.toResponseList(movies);
-    }
-
-    @Transactional
-    public MovieResponse updateMovie(Long id, UpdateMovieRequest request) {
+    private void requireStatus(Long id, MovieStatus required) {
         Movie movie = movieRepository.findById(id)
                 .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
-
-        movieMapper.updateMovieFromRequest(request, movie);
-
-        if (request.getTypeIds() != null) {
-            List<MovieType> updatedMovieTypes = new ArrayList<>();
-
-            for (Long typeId : request.getTypeIds()) {
-                MovieType type = movieTypeService.findByType(typeId);
-                if (type == null) {
-                    throw new AppException(MovieErrorCode.GENRE_NOT_FOUND);
-                }
-                updatedMovieTypes.add(type);
-            }
-            movie.setMovieTypes(updatedMovieTypes);
+        if (movie.getStatus() != required) {
+            throw new AppException(MovieErrorCode.INVALID_STATUS_TRANSITION);
         }
-
-        Movie savedMovie = movieRepository.save(movie);
-        return movieMapper.toResponse(savedMovie);
-    }
-
-    @Transactional
-    public void deleteMovie(Long id) {
-        Movie movie = movieRepository.findById(id)
-                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
-
-        LocalDate currentDate = LocalDate.now();
-        LocalTime currentTime = LocalTime.now();
-        boolean hasFutureShowTimes = showTimeService.existsMovie(
-                movie.getMovieId(), currentDate, currentTime);
-        if (hasFutureShowTimes) {
-            throw new AppException(MovieErrorCode.ACTIVE_SHOWTIMES_EXIST);
-        }
-
-        movieRepository.softDeleteMovie(movie.getMovieId());
     }
 }

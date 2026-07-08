@@ -2,55 +2,76 @@ package movieservice.dto.request;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
-import lombok.AccessLevel;
-import lombok.Data;
+import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class CreateMovieRequest {
 
-    @NotBlank(message = "Vietnamese movie name cannot be blank")
-    @Size(max = 255, message = "Vietnamese movie name must not exceed 255 characters")
-    String movieNameVn;
+    // ── Core ──────────────────────────────────────────────────
+    @NotBlank
+    @Size(max = 500)
+    String originalTitle;
 
-    @NotBlank(message = "English movie name cannot be blank")
-    @Size(max = 255, message = "English movie name must not exceed 255 characters")
-    String movieNameEnglish;
+    /** ISO 639-1, e.g. "en", "ko", "ja" */
+    @NotBlank
+    @Size(min = 2, max = 2)
+    String originalLanguage;
 
-    @NotBlank(message = "Director cannot be blank")
-    String director;
+    @NotNull
+    @Min(1)
+    Integer durationMinutes;
 
-    @NotBlank(message = "Actors cannot be blank")
-    String actor;
+    LocalDate releaseDate;
 
-    @NotNull(message = "Duration cannot be null")
-    Integer duration;
+    @Size(max = 100)
+    String country;
 
-    @NotBlank(message = "Content cannot be blank")
-    String content;
+    // ── FK references ─────────────────────────────────────────
+    /** AgeRating.ratingId */
+    Integer ageRatingId;
 
-    @NotBlank(message = "Version cannot be blank")
-    String version;
+    /** ProductionCompany.companyId */
+    Long companyId;
 
-    @NotNull(message = "Status cannot be null")
-    Boolean status;
+    /** Genre IDs — min 1 required */
+    @NotEmpty
+    List<Long> genreIds;
 
-    @NotBlank(message = "Movie production company cannot be blank")
-    String movieProductionCompany;
+    /** ScreeningFormat IDs — min 1 required */
+    @NotEmpty
+    List<Integer> formatIds;
 
-    @NotBlank(message = "Large image URL must not be blank")
-    String largeImage;
+    // ── Media ─────────────────────────────────────────────────
+    @Size(max = 500)
+    String posterUrl;
 
-    @NotBlank(message = "Small image URL must not be blank")
-    String smallImage;
+    @Size(max = 500)
+    String thumbnailUrl;
 
-    @NotEmpty(message = "At least one type ID must be selected")
-    List<Long> typeIds;
+    @Size(max = 500)
+    String trailerUrl;
 
-    // Optional: showtimes are scheduled separately via Showtime Management.
+    String synopsis;
+
+    // ── External IDs (optional, from TMDB import) ─────────────
+    Integer tmdbId;
+
+    @Size(max = 20)
+    String imdbId;
+
+    // ── Translations ──────────────────────────────────────────
     @Valid
-    List<ShowTimeRequest> showTimes;
+    List<TranslationRequest> translations;
+
+    // ── Cast ─────────────────────────────────────────────────
+    @Valid
+    List<CastRequest> cast;
 }

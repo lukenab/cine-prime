@@ -1,43 +1,53 @@
 package movieservice.dto.response;
 
-import lombok.AccessLevel;
-import lombok.Data;
+import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class MovieResponse {
 
     Long movieId;
 
-    String actor;
+    // ── Identifiers ───────────────────────────────────────────
+    Integer tmdbId;
+    String imdbId;
+    String originalTitle;
+    String originalLanguage;
 
-    String content;
+    // ── Metadata ──────────────────────────────────────────────
+    Integer durationMinutes;
+    LocalDate releaseDate;
+    String country;
+    String status;
 
-    String director;
+    // ── Lookup objects ────────────────────────────────────────
+    AgeRatingResponse ageRating;
 
-    Integer duration;
+    // ── Production ────────────────────────────────────────────
+    String companyName;
 
-    String movieProductionCompany;
+    // ── Media ─────────────────────────────────────────────────
+    String posterUrl;
+    String thumbnailUrl;
+    String trailerUrl;
+    String synopsis;
 
-    String version;
+    // ── Collections ───────────────────────────────────────────
+    List<GenreResponse> genres;
+    List<ScreeningFormatResponse> formats;
+    List<TranslationResponse> translations;
+    List<CastResponse> cast;
 
-    String movieNameEnglish;
-
-    String movieNameVn;
-
-    String largeImage;
-
-    String smallImage;
-
-    Boolean status;
-
-    List<String> movieType;
-
-    List<ShowTimeResponse> showTimes;
-
-    LocalDateTime createAt;
+    // ── Audit ─────────────────────────────────────────────────
+    LocalDateTime createdAt;
+    LocalDateTime updatedAt;
+    String createdBy;
 }
