@@ -637,3 +637,4 @@ ON CONFLICT (genre_code) DO NOTHING;
 -- 5. ShowtimeSeat.SeatStatus enum: thêm BLOCKED, CANCELLED
 -- 6. CreateMovieRequest: bỏ movieNameVn/English, director/actor VARCHAR, version VARCHAR
 --    → thêm originalTitle, translations List<TranslationDto>, castIds List<CastDto>, formatIds List<Long>
+                     
