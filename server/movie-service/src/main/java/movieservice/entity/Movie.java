@@ -1,92 +1,134 @@
 package movieservice.entity;
 
+import jakarta.persistence.*;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
+import movieservice.enums.MovieStatus;
+
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
-import com.fasterxml.jackson.annotation.JsonFormat;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonManagedReference;
-
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EntityListeners;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.ManyToMany;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.Table;
-import lombok.AccessLevel;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.experimental.FieldDefaults;
-
-import org.hibernate.annotations.SQLRestriction;
 
 @Entity
 @Table(name = "movie")
-@SQLRestriction("status = true")
-@EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class Movie {
-        @Id
-        @GeneratedValue(strategy = GenerationType.IDENTITY)
-        @Column(name = "movie_id")
-        Long movieId;
 
-        @Column(name = "actor")
-        String actor;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "movie_id")
+    Long movieId;
 
-        @Column(name = "content")
-        String content;
+    // ── External identifiers ──────────────────────────────────
+    @Column(name = "tmdb_id", unique = true)
+    Integer tmdbId;
 
-        @Column(name = "director")
-        String director;
+    @Column(name = "imdb_id", unique = true, length = 20)
+    String imdbId;
 
-        @Column(name = "duration")
-        Long duration;
+    // ── Tên gốc — bản dịch lưu ở movie_translation ───────────
+    @Column(name = "original_title", nullable = false, length = 500)
+    String originalTitle;
 
-        @Column(name = "movie_production_company")
-        String movieProductionCompany;
+    @Column(name = "original_language", nullable = false, length = 2)
+    String originalLanguage = "en";
 
-        @Column(name = "version")
-        String version;
+    // ── Metadata ──────────────────────────────────────────────
+    @Column(name = "duration_minutes", nullable = false)
+    Integer durationMinutes;
 
-        @Column(name = "movie_name_english")
-        String movieNameEnglish;
+    @Column(name = "release_date")
+    LocalDate releaseDate;
 
-        @Column(name = "movie_name_vn")
-        String movieNameVn;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "age_rating_id")
+    AgeRating ageRating;
 
-        @Column(name = "large_image")
-        String largeImage;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id")
+    ProductionCompany company;
 
-        @Column(name = "small_image")
-        String smallImage;
+    @Column(name = "country", length = 100)
+    String country;
 
-        Boolean status;
+    // ── Media ─────────────────────────────────────────────────
+    @Column(name = "poster_url", length = 500)
+    String posterUrl;
 
-        @ManyToMany
-        @JsonManagedReference
-        List<MovieType> movieTypes;
+    @Column(name = "thumbnail_url", length = 500)
+    String thumbnailUrl;
 
-        @OneToMany(mappedBy = "movie", fetch = FetchType.EAGER)
-        @JsonManagedReference
-        @JsonIgnore
-        List<ShowTime> showTimes;
+    @Column(name = "trailer_url", length = 500)
+    String trailerUrl;
 
-        @CreatedDate
-        @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy HH:mm", timezone = "Asia/Ho_Chi_Minh")
-        LocalDateTime createAt;
+    @Column(name = "synopsis", columnDefinition = "TEXT")
+    String synopsis;
 
-        @LastModifiedDate
-        @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy HH:mm", timezone = "Asia/Ho_Chi_Minh")
-        @Column(name = "updated_at")
-        LocalDateTime updatedAt;
+    // ── Status / lifecycle ────────────────────────────────────
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    MovieStatus status = MovieStatus.DRAFT;
+
+    @Column(name = "suspended_reason", columnDefinition = "TEXT")
+    String suspendedReason;
+
+    @Column(name = "rejection_note", columnDefinition = "TEXT")
+    String rejectionNote;
+
+    // ── Relationships ─────────────────────────────────────────
+    @ManyToMany
+    @JoinTable(
+            name = "movie_genre",
+            joinColumns = @JoinColumn(name = "movie_id"),
+            inverseJoinColumns = @JoinColumn(name = "genre_id")
+    )
+    List<Genre> genres;
+
+    @ManyToMany
+    @JoinTable(
+            name = "movie_format",
+            joinColumns = @JoinColumn(name = "movie_id"),
+            inverseJoinColumns = @JoinColumn(name = "format_id")
+    )
+    List<ScreeningFormat> formats;
+
+    @OneToMany(mappedBy = "movie", cascade = CascadeType.ALL, orphanRemoval = true)
+    List<MovieTranslation> translations;
+
+    @OneToMany(mappedBy = "movie", cascade = CascadeType.ALL, orphanRemoval = true)
+    List<MovieCast> cast;
+
+    @OneToMany(mappedBy = "movie", fetch = FetchType.LAZY)
+    List<ShowTime> showTimes;
+
+    // ── Audit ─────────────────────────────────────────────────
+    @Column(name = "created_at", updatable = false)
+    LocalDateTime createdAt;
+
+    @Column(name = "updated_at")
+    LocalDateTime updatedAt;
+
+    @Column(name = "created_by", length = 100)
+    String createdBy;
+
+    @Column(name = "updated_by", length = 100)
+    String updatedBy;
+
+    // ── Lifecycle hooks ───────────────────────────────────────
+    @PrePersist
+    void prePersist() {
+        createdAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
+        if (status == null) status = MovieStatus.DRAFT;
+    }
+
+    @PreUpdate
+    void preUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 }

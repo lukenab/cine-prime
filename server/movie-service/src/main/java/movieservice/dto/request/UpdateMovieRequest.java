@@ -1,47 +1,58 @@
 package movieservice.dto.request;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
-import lombok.AccessLevel;
-import lombok.Data;
+import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class UpdateMovieRequest {
 
-    @NotBlank(message = "Tên phim tiếng Việt không được để trống")
-    @Size(max = 255)
-    String movieNameVn;
+    // ── Core (all optional — only provided fields are updated) ─
+    @Size(max = 500)
+    String originalTitle;
 
-    @NotBlank(message = "Tên phim tiếng Anh không được để trống")
-    @Size(max = 255)
-    String movieNameEnglish;
+    @Size(min = 2, max = 2)
+    String originalLanguage;
 
-    @NotBlank(message = "Đạo diễn không được để trống")
-    String director;
+    @Min(1)
+    Integer durationMinutes;
 
-    @NotBlank(message = "Diễn viên không được để trống")
-    String actor;
+    LocalDate releaseDate;
 
-    @NotNull(message = "Thời lượng không được để trống")
-    @Min(value = 1, message = "Thời lượng phải lớn hơn 0")
-    Integer duration;
+    @Size(max = 100)
+    String country;
 
-    @NotBlank(message = "Nội dung không được để trống")
-    String content;
+    // ── FK references ─────────────────────────────────────────
+    Integer ageRatingId;
+    Long companyId;
+    List<Long> genreIds;
+    List<Integer> formatIds;
 
-    @NotBlank(message = "Phiên bản không được để trống")
-    String version;
+    // ── Media ─────────────────────────────────────────────────
+    @Size(max = 500)
+    String posterUrl;
 
-    @NotNull(message = "Trạng thái không được để trống")
-    Boolean status;
+    @Size(max = 500)
+    String thumbnailUrl;
 
-    @NotBlank(message = "Hãng sản xuất không được để trống")
-    String movieProductionCompany;
+    @Size(max = 500)
+    String trailerUrl;
 
-    String largeImage;
-    String smallImage;
-    List<Long> typeIds;
+    String synopsis;
+
+    // ── Translations (full replacement when provided) ─────────
+    @Valid
+    List<TranslationRequest> translations;
+
+    // ── Cast (full replacement when provided) ─────────────────
+    @Valid
+    List<CastRequest> cast;
 }

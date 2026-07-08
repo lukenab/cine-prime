@@ -1,55 +1,59 @@
 package movieservice.repository;
 
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
-
+import jakarta.transaction.Transactional;
+import movieservice.entity.Movie;
+import movieservice.enums.MovieStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import jakarta.transaction.Transactional;
-import movieservice.entity.Movie;
+import java.util.List;
+import java.util.Optional;
 
 @Repository
-
 public interface MovieRepository extends JpaRepository<Movie, Long> {
-        List<Movie> findByStatusTrue();
-        Movie findByMovieId(Long movieId);
 
-        // Duplicate guard: same Vietnamese title + same format/version already exists
-        boolean existsByMovieNameVnAndVersion(String movieNameVn, String version);
-        // Tự sinh query: DELETE FROM Movie WHERE createAt <= :time
-        void deleteByCreateAtLessThanEqual(LocalDateTime time);
+    // ── Public-facing queries ─────────────────────────────────
+    List<Movie> findByStatusIn(List<MovieStatus> statuses);
 
-        // @Query("SELECT m FROM Movie m " +
-        //                 "JOIN m.movieSchedules ms " +
-        //                 "WHERE m.movieId = :movieId " +
-        //                 "AND m.roomId = :roomId " +
-        //                 "AND ms.showTime.showTimeId = :showTimeId")
-        // Movie checkBookingValid(
-        //                 @Param("movieId") Integer movieId,
-        //                 @Param("roomId") Integer roomId,
-        //                 @Param("showTimeId") Integer showTimeId);
+    List<Movie> findByStatus(MovieStatus status);
 
-        List<Movie> findByStatus(Boolean Status);
+    // ── Admin / duplicate guard ───────────────────────────────
+    boolean existsByOriginalTitleIgnoreCase(String originalTitle);
 
-        @Query("SELECT COUNT(m) FROM Movie m " +
-                        "WHERE EXTRACT(MONTH FROM m.createAt) = :month " +
-                        "AND EXTRACT(YEAR FROM m.createAt) = :year")
-        long countMoviesByMonthAndYear(@Param("month") int month, @Param("year") int year);
+    boolean existsByTmdbId(Integer tmdbId);
 
-        List<Movie> findAllByMovieIdIn(List<Integer> ids);
+    boolean existsByImdbId(String imdbId);
 
-        @Transactional
-        @Modifying
-        @Query("""
-                            UPDATE Movie m
-                            SET m.status = false
-                            WHERE m.movieId = :movieId
-                        """)
-        int softDeleteMovie(@Param("movieId") Long movieId);
+    // ── Status transitions (soft lifecycle) ───────────────────
+    @Transactional
+    @Modifying
+    @Query("UPDATE Movie m SET m.status = :status, m.updatedBy = :updatedBy WHERE m.movieId = :movieId")
+    int updateStatus(@Param("movieId") Long movieId,
+                     @Param("status") MovieStatus status,
+                     @Param("updatedBy") String updatedBy);
 
+    @Transactional
+    @Modifying
+    @Query("UPDATE Movie m SET m.status = :#{T(movieservice.enums.MovieStatus).SUSPENDED}, " +
+           "m.suspendedReason = :reason, m.updatedBy = :updatedBy WHERE m.movieId = :movieId")
+    int suspendMovie(@Param("movieId") Long movieId,
+                     @Param("reason") String reason,
+                     @Param("updatedBy") String updatedBy);
+
+    @Transactional
+    @Modifying
+    @Query("UPDATE Movie m SET m.status = :#{T(movieservice.enums.MovieStatus).REJECTED}, " +
+           "m.rejectionNote = :note, m.updatedBy = :updatedBy WHERE m.movieId = :movieId")
+    int rejectMovie(@Param("movieId") Long movieId,
+                    @Param("note") String note,
+                    @Param("updatedBy") String updatedBy);
+
+    // ── Stats ─────────────────────────────────────────────────
+    @Query("SELECT COUNT(m) FROM Movie m " +
+           "WHERE EXTRACT(MONTH FROM m.createdAt) = :month " +
+           "AND EXTRACT(YEAR FROM m.createdAt) = :year")
+    long countByMonthAndYear(@Param("month") int month, @Param("year") int year);
 }

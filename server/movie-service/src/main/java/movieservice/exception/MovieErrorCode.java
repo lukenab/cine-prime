@@ -56,7 +56,13 @@ public enum MovieErrorCode implements BaseErrorCode {
 
     MOVIE_ALREADY_EXISTS(2014, "A movie with this Vietnamese title and format already exists.", HttpStatus.CONFLICT),
 
-    SHOWTIME_NOT_FOUND(2015, "Showtime not found.", HttpStatus.NOT_FOUND);
+    SHOWTIME_NOT_FOUND(2015, "Showtime not found.", HttpStatus.NOT_FOUND),
+
+    AGE_RATING_NOT_FOUND(2016, "Age rating not found.", HttpStatus.NOT_FOUND),
+    COMPANY_NOT_FOUND(2017, "Production company not found.", HttpStatus.NOT_FOUND),
+    FORMAT_NOT_FOUND(2018, "Screening format not found.", HttpStatus.NOT_FOUND),
+    PERSON_NOT_FOUND(2019, "Person (cast member) not found.", HttpStatus.NOT_FOUND),
+    INVALID_STATUS_TRANSITION(2020, "This status transition is not allowed.", HttpStatus.BAD_REQUEST);
 
     int code;
     String message;
