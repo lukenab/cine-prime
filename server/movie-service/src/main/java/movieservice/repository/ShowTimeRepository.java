@@ -12,7 +12,7 @@ import movieservice.entity.ShowTime;
 
 public interface ShowTimeRepository extends JpaRepository<ShowTime, Long> {
 
-        @Query("SELECT COUNT(s) > 0 FROM ShowTime s WHERE s.cinemaRoom.id = :roomId " +
+        @Query("SELECT COUNT(s) > 0 FROM ShowTime s WHERE s.cinemaRoom.cinemaRoomId = :roomId " +
                         "AND s.showDate = :showDate " +
                         "AND :startTime < s.endTime AND :endTime > s.startTime")
         boolean existsByCinemaRoomAndOverlappingTime(
@@ -35,7 +35,7 @@ public interface ShowTimeRepository extends JpaRepository<ShowTime, Long> {
                         @Param("currentDate") LocalDate currentDate,
                         @Param("currentTime") LocalTime currentTime);
 
-        @Query("SELECT COUNT(s) > 0 FROM ShowTime s WHERE s.cinemaRoom.id = :roomId " +
+        @Query("SELECT COUNT(s) > 0 FROM ShowTime s WHERE s.cinemaRoom.cinemaRoomId = :roomId " +
                         "AND s.showDate = :showDate " +
                         "AND :startTime < s.endTime AND :endTime > s.startTime " +
                         "AND s.showTimeId <> :excludeId")

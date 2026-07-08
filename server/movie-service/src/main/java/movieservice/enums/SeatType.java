@@ -8,7 +8,8 @@ import lombok.Getter;
 public enum SeatType {
     STANDARD("Standard"),
     VIP("VIP"),
-    COUPLE("Couple");
+    COUPLE("Couple"),
+    SWEETBOX("Sweetbox");
 
     private final String displayName;
 }

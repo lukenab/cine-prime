@@ -64,7 +64,7 @@ public interface MovieMapper {
     @Mapping(target = "personId", source = "person.personId")
     @Mapping(target = "fullName", source = "person.fullName")
     @Mapping(target = "photoUrl", source = "person.photoUrl")
-    @Mapping(target = "roleType", expression = "java(cast.getRoleType() != null ? cast.getRoleType().name() : null)")
+    @Mapping(target = "roleType", source = "roleType")
     CastResponse toCastResponse(MovieCast cast);
 
     List<CastResponse> toCastResponseList(List<MovieCast> castList);
@@ -76,7 +76,13 @@ public interface MovieMapper {
 
     // ── Cinema room ───────────────────────────────────────────
 
+    @Mapping(target = "cinemaRoomId", ignore = true)
+    @Mapping(target = "status", ignore = true)
+    @Mapping(target = "seats", ignore = true)
+    @Mapping(target = "showTimes", ignore = true)
+    @Mapping(target = "maintenanceHistory", ignore = true)
     CinemaRoom toCinemaRoom(CinemaRoomRequest request);
+
     CinemaRoomResponse toCinemaRoomResponse(CinemaRoom cinemaRoom);
     List<CinemaRoomResponse> toCinemaRoomResponseList(List<CinemaRoom> cinemaRooms);
 
@@ -94,6 +100,8 @@ public interface MovieMapper {
 
     @Mapping(target = "cinemaRoomId", source = "cinemaRoom.cinemaRoomId")
     @Mapping(target = "cinemaRoomName", source = "cinemaRoom.cinemaRoomName")
+    @Mapping(target = "seatType", expression = "java(seat.getSeatType() != null ? seat.getSeatType().name() : null)")
+    @Mapping(target = "status", expression = "java(seat.getStatus() != null ? seat.getStatus().name() : null)")
     SeatResponse toSeatResponse(Seat seat);
 
     List<SeatResponse> toSeatResponseList(List<Seat> seats);

@@ -2,7 +2,6 @@ package movieservice.controller;
 
 import java.util.List;
 
-import org.apache.hc.core5.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -30,7 +29,7 @@ public class SeatController {
     @GetMapping("/room/{roomId}")
     public ApiResponse<List<SeatResponse>> getSeatsByRoom(@PathVariable Long roomId) {
         return ApiResponse.<List<SeatResponse>>builder()
-                .code(HttpStatus.SC_OK)
+                .code(200)
                 .result(seatService.getSeatsByRoom(roomId))
                 .build();
     }
@@ -38,7 +37,7 @@ public class SeatController {
     @GetMapping("/{id}")
     public ApiResponse<SeatResponse> getSeatById(@PathVariable long id) {
         return ApiResponse.<SeatResponse>builder()
-                .code(HttpStatus.SC_OK)
+                .code(200)
                 .result(seatService.getSeatById(id))
                 .build();
     }
@@ -47,7 +46,7 @@ public class SeatController {
     public ApiResponse<SeatResponse> updateSeat(@PathVariable long id,
                                                 @Valid @RequestBody SeatRequest request) {
         return ApiResponse.<SeatResponse>builder()
-                .code(HttpStatus.SC_OK)
+                .code(200)
                 .result(seatService.updateSeat(id, request))
                 .build();
     }

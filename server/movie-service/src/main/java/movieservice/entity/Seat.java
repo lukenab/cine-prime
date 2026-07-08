@@ -1,29 +1,25 @@
 package movieservice.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
-import movieservice.enums.SeatType;
-import lombok.AccessLevel;
-import lombok.Getter;
-import lombok.Setter;
+import jakarta.persistence.*;
+import lombok.*;
 import lombok.experimental.FieldDefaults;
+import movieservice.enums.SeatStatus;
+import movieservice.enums.SeatType;
 
 import java.math.BigDecimal;
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 @Entity
-@Table(name = "seat")
+@Table(name = "seat",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_seat_room_position",
+                columnNames = {"cinema_room_id", "row_label", "col_number"}
+        ))
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class Seat {
 
@@ -32,26 +28,50 @@ public class Seat {
     @Column(name = "seat_id")
     Long seatId;
 
-    @Column(name = "seat_code", nullable = false)
+    // Mã ghế rút gọn, e.g. "A1", "B12" — VARCHAR(10)
+    @Column(name = "seat_code", nullable = false, length = 10)
     String seatCode;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "seat_type", length = 20)
-    SeatType seatType;
+    // Row label để render layout: A, B, C...
+    @Column(name = "row_label", nullable = false, length = 3)
+    String rowLabel;
 
-    @Column(name = "seat_status", nullable = false)
-    Integer seatStatus = 1;
+    // Số thứ tự trong hàng: 1, 2, 3...
+    @Column(name = "col_number", nullable = false)
+    Integer colNumber;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "seat_type", nullable = false, length = 20)
+    SeatType seatType = SeatType.STANDARD;
+
+    // Integer seatStatus → SeatStatus enum
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    SeatStatus status = SeatStatus.ACTIVE;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "cinema_room_id")
+    @JoinColumn(name = "cinema_room_id", nullable = false)
     CinemaRoom cinemaRoom;
 
-    @Column(name = "price", nullable = false, precision = 10, scale = 2)
+    @Column(name = "base_price", nullable = false, precision = 10, scale = 2)
     BigDecimal price;
 
     @Column(name = "created_at", updatable = false)
-    OffsetDateTime createdAt;
+    LocalDateTime createdAt;
 
     @Column(name = "updated_at")
-    OffsetDateTime updatedAt;
+    LocalDateTime updatedAt;
+
+    @PrePersist
+    void prePersist() {
+        createdAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
+        if (status == null) status = SeatStatus.ACTIVE;
+        if (seatType == null) seatType = SeatType.STANDARD;
+    }
+
+    @PreUpdate
+    void preUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 }

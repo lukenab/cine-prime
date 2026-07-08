@@ -31,7 +31,6 @@ public class Movie {
     @Column(name = "imdb_id", unique = true, length = 20)
     String imdbId;
 
-    // ── Tên gốc — bản dịch lưu ở movie_translation ───────────
     @Column(name = "original_title", nullable = false, length = 500)
     String originalTitle;
 
