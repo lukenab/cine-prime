@@ -33,6 +33,10 @@ import ManageEmployeePage from "../pages/admin/ManageEmployeePage";
 import CreateEmployeePage from "../pages/admin/CreateEmployeePage";
 import EmployeeDetailPage from "../pages/admin/EmployeeDetailPage";
 import EditEmployeePage from "../pages/admin/EditEmployeePage";
+import ManagePersonsPage from "../pages/admin/ManagePersonsPage";
+import ManageAgeRatingsPage from "../pages/admin/ManageAgeRatingsPage";
+import ManageFormatsPage from "../pages/admin/ManageFormatsPage";
+import ManageCompaniesPage from "../pages/admin/ManageCompaniesPage";
 import ManagePromotionPage from "../pages/admin/ManagePromotionPage";
 import CreatePromotionPage from "../pages/admin/CreatePromotionPage";
 import EditPromotionPage from "../pages/admin/EditPromotionPage";
@@ -91,6 +95,10 @@ export default function AppRoutes() {
             <Route path="rooms"              element={<ManageCinemaRoomsPage />} />
             <Route path="rooms/:id"          element={<RoomDetailPage />} />
             <Route path="genres"             element={<ManageGenresPage />} />
+            <Route path="persons"            element={<ManagePersonsPage />} />
+            <Route path="age-ratings"        element={<ManageAgeRatingsPage />} />
+            <Route path="formats"            element={<ManageFormatsPage />} />
+            <Route path="companies"          element={<ManageCompaniesPage />} />
             <Route path="promotions"          element={<ManagePromotionPage />} />
             <Route path="promotions/create"   element={<CreatePromotionPage />} />
             <Route path="promotions/:id"      element={<PromotionDetailPage />} />

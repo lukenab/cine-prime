@@ -9,18 +9,23 @@ import { MovieDetailModal } from "../../layouts/MovieDetailModal";
 import {
   movieApi,
   type MovieApiResponse,
-  type TypeResponse,
-  type RoomResponse,
-  type CreateMoviePayload,
-  type UpdateMoviePayload,
+  type GenreResponse,
+  type ScreeningFormatResponse,
+  type AgeRatingResponse,
+  type CreateMovieRequest,
+  type UpdateMovieRequest,
+  type MovieV2,
 } from "../../api/movieApi";
 
 export default function ManageMoviePage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
 
   const [movies, setMovies] = useState<MovieApiResponse[]>([]);
-  const [types, setTypes] = useState<TypeResponse[]>([]);
-  const [rooms, setRooms] = useState<RoomResponse[]>([]);
+
+  // v2 lookup data for MovieModal
+  const [genres, setGenres] = useState<GenreResponse[]>([]);
+  const [formats, setFormats] = useState<ScreeningFormatResponse[]>([]);
+  const [ageRatings, setAgeRatings] = useState<AgeRatingResponse[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +37,8 @@ export default function ManageMoviePage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editMovie, setEditMovie] = useState<MovieApiResponse | null>(null);
-  const [detailMovie, setDetailMovie] = useState<MovieApiResponse | null>(null);
+  const [detailMovie, setDetailMovie] = useState<MovieV2 | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   // ── Load movies from API ──────────────────────────────────────────────────
   const loadMovies = useCallback(async () => {
@@ -49,11 +55,12 @@ export default function ManageMoviePage() {
     }
   }, []);
 
-  // ── Load types + rooms once on mount ─────────────────────────────────────
+  // ── Load lookup data + movies on mount ────────────────────────────────────
   useEffect(() => {
     loadMovies();
-    movieApi.getTypes().then((res) => setTypes(res.result ?? [])).catch(() => {});
-    movieApi.getRooms().then((res) => setRooms(res.result ?? [])).catch(() => {});
+    movieApi.getGenres().then((r) => setGenres(r.result ?? [])).catch(() => {});
+    movieApi.getScreeningFormats().then((r) => setFormats(r.result ?? [])).catch(() => {});
+    movieApi.getAgeRatings().then((r) => setAgeRatings(r.result ?? [])).catch(() => {});
   }, [loadMovies]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -67,42 +74,58 @@ export default function ManageMoviePage() {
     setModalOpen(true);
   };
 
-  const handleViewMovie = (movie: MovieApiResponse) => {
-    setDetailMovie(movie);
+  const handleViewMovie = async (movie: MovieApiResponse) => {
+    setDetailLoading(true);
+    setDetailMovie(null);
+    try {
+      const res = await movieApi.getMovieById(movie.movieId);
+      setDetailMovie(res.result);
+    } catch {
+      setDetailMovie(null);
+    } finally {
+      setDetailLoading(false);
+    }
   };
 
   const handleDeleteMovie = async (id: number) => {
     try {
       await movieApi.deleteMovie(id);
-      setMovies((prev) => prev.filter((m) => m.movieId !== id));
+      await loadMovies();
     } catch (err: any) {
-      const msg = err?.response?.data?.message ?? "Delete failed.";
+      const msg = err?.response?.data?.message ?? "Archive failed.";
       alert(`Error: ${msg}`);
     }
   };
 
-  const handleCreate = async (data: CreateMoviePayload) => {
-    try {
-      const res = await movieApi.createMovie(data);
-      setMovies((prev) => [res.result, ...prev]);
-    } catch (err) {
-      // Let MovieModal surface the error in its inline banner
-      throw err;
-    }
+  // ── Workflow handlers (all follow: call API → reload) ─────────────────────
+
+  const makeWorkflowHandler = (fn: () => Promise<unknown>, label: string) => async () => {
+    try { await fn(); await loadMovies(); }
+    catch (err: any) { alert(`Error: ${err?.response?.data?.message ?? label + " failed."}`); }
   };
 
-  const handleUpdate = async (id: number, data: UpdateMoviePayload) => {
-    try {
-      const res = await movieApi.updateMovie(id, data);
-      setMovies((prev) => prev.map((m) => (m.movieId === id ? res.result : m)));
-    } catch (err) {
-      // Let MovieModal surface the error in its inline banner
-      throw err;
-    }
+  const handleSubmit    = (id: number) => makeWorkflowHandler(() => movieApi.submitForReview(id),   "Submit")();
+  const handleApprove   = (id: number) => makeWorkflowHandler(() => movieApi.approveMovie(id),      "Approve")();
+  const handleReject    = (id: number, note: string)   => makeWorkflowHandler(() => movieApi.rejectMovie(id, note),   "Reject")();
+  const handleSuspend   = (id: number, reason: string) => makeWorkflowHandler(() => movieApi.suspendMovie(id, reason),"Suspend")();
+  const handleEnd       = (id: number) => makeWorkflowHandler(() => movieApi.endMovie(id),          "End")();
+  const handleRework    = (id: number) => makeWorkflowHandler(() => movieApi.reworkMovie(id),       "Rework")();
+  const handleRelease   = (id: number) => makeWorkflowHandler(() => movieApi.releaseMovie(id),      "Release")();
+  const handleReinstate = (id: number) => makeWorkflowHandler(() => movieApi.reinstateMovie(id),    "Reinstate")();
+
+  const handleCreate = async (data: CreateMovieRequest): Promise<MovieV2> => {
+    const res = await movieApi.createMovieV2(data);
+    await loadMovies();
+    return res.result;
   };
 
-  // ── Genre filter list derived from loaded types ───────────────────────────
-  const genreNames = types.map((t) => t.typeName);
+  const handleUpdate = async (id: number, data: UpdateMovieRequest) => {
+    await movieApi.updateMovieV2(id, data);
+    await loadMovies();
+  };
+
+  // ── Genre names for filter panel (from v2 genres) ─────────────────────────
+  const genreNames = genres.map((g) => g.genreName);
 
   return (
     <>
@@ -204,22 +227,25 @@ export default function ManageMoviePage() {
 
           <div className="w-px h-5 mx-1" style={{ background: "var(--border-color)" }} />
 
-          <div className="flex items-center gap-1 filter-btns">
-            <button onClick={() => setStatusFilter("")} className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${!statusFilter ? "active" : ""}`}>
-              All Status
-            </button>
-            <button
-              onClick={() => setStatusFilter(statusFilter === "Showing" ? "" : "Showing")}
-              className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${statusFilter === "Showing" ? "active-green" : ""}`}
-            >
-              Showing
-            </button>
-            <button
-              onClick={() => setStatusFilter(statusFilter === "No Upcoming" ? "" : "No Upcoming")}
-              className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${statusFilter === "No Upcoming" ? "active-rose" : ""}`}
-            >
-              No Upcoming
-            </button>
+          <div className="flex items-center gap-1 flex-wrap filter-btns">
+            <button onClick={() => setStatusFilter("")} className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${!statusFilter ? "active" : ""}`}>All Status</button>
+            {([
+              { value: "DRAFT",          label: "Draft",          cls: "active"       },
+              { value: "PENDING_REVIEW", label: "Pending Review", cls: "active-amber" },
+              { value: "COMING_SOON",    label: "Coming Soon",    cls: "active"       },
+              { value: "NOW_SHOWING",    label: "Now Showing",    cls: "active-green" },
+              { value: "SUSPENDED",      label: "Suspended",      cls: "active-orange"},
+              { value: "ENDED",          label: "Ended",          cls: "active-gray"  },
+              { value: "REJECTED",       label: "Rejected",       cls: "active-rose"  },
+            ] as const).map(({ value, label, cls }) => (
+              <button
+                key={value}
+                onClick={() => setStatusFilter(statusFilter === value ? "" : value)}
+                className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${statusFilter === value ? cls : ""}`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -238,6 +264,14 @@ export default function ManageMoviePage() {
           onView={handleViewMovie}
           onEdit={handleEditMovie}
           onDelete={handleDeleteMovie}
+          onSubmit={handleSubmit}
+          onApprove={handleApprove}
+          onReject={handleReject}
+          onSuspend={handleSuspend}
+          onEnd={handleEnd}
+          onRework={handleRework}
+          onRelease={handleRelease}
+          onReinstate={handleReinstate}
           searchQuery={searchQuery}
           genreFilter={genreFilter}
           statusFilter={statusFilter}
@@ -249,15 +283,17 @@ export default function ManageMoviePage() {
         onClose={() => setModalOpen(false)}
         onCreate={handleCreate}
         onUpdate={handleUpdate}
-        editMovie={editMovie}
-        types={types}
-        rooms={rooms}
+        editMovieId={editMovie?.movieId ?? null}
+        genres={genres}
+        formats={formats}
+        ageRatings={ageRatings}
       />
 
       <MovieDetailModal
-        open={Boolean(detailMovie)}
+        open={Boolean(detailMovie) || detailLoading}
         movie={detailMovie}
-        onClose={() => setDetailMovie(null)}
+        loading={detailLoading}
+        onClose={() => { setDetailMovie(null); setDetailLoading(false); }}
       />
 
       <style>{`
@@ -267,9 +303,12 @@ export default function ManageMoviePage() {
 
         .filter-btns button { background: transparent; color: var(--text-sub); border-color: var(--border-color); }
         .filter-btns button:hover { background: rgba(128,128,128,0.1); color: var(--text-main); }
-        .filter-btns button.active      { background: #2563eb !important; color: white !important; border-color: #2563eb !important; }
-        .filter-btns button.active-green{ background: #059669 !important; color: white !important; border-color: #059669 !important; }
-        .filter-btns button.active-rose { background: #e11d48 !important; color: white !important; border-color: #e11d48 !important; }
+        .filter-btns button.active        { background: #2563eb !important; color: white !important; border-color: #2563eb !important; }
+        .filter-btns button.active-green  { background: #059669 !important; color: white !important; border-color: #059669 !important; }
+        .filter-btns button.active-rose   { background: #e11d48 !important; color: white !important; border-color: #e11d48 !important; }
+        .filter-btns button.active-amber  { background: #d97706 !important; color: white !important; border-color: #d97706 !important; }
+        .filter-btns button.active-orange { background: #ea580c !important; color: white !important; border-color: #ea580c !important; }
+        .filter-btns button.active-gray   { background: #6b7280 !important; color: white !important; border-color: #6b7280 !important; }
       `}</style>
     </>
   );

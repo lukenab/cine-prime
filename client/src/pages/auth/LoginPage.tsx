@@ -54,11 +54,9 @@ export default function LoginPage() {
   // Redirect nếu user đã login sẵn (ví dụ: vào /login khi đang có token)
   useEffect(() => {
     if (user) {
-      if (user.role === "ROLE_ADMIN" || user.role === "ROLE_EMPLOYEE") {
-        navigate("/admin", { replace: true });
-      } else {
-        navigate("/", { replace: true });
-      }
+      if (user.role === "ROLE_ADMIN")    navigate("/admin", { replace: true });
+      else if (user.role === "ROLE_EMPLOYEE") navigate("/admin/movies", { replace: true });
+      else navigate("/", { replace: true });
     }
   }, [user, navigate]); // Intentionally not checking needsProfileSetup here — CustomerLayout guards that
 
@@ -70,18 +68,16 @@ export default function LoginPage() {
       const token = createMockEmployeeToken();
       localStorage.setItem("accessToken", token);
       localStorage.setItem("role", "ROLE_EMPLOYEE");
-      window.location.href = "/admin/sell";
+      window.location.href = "/admin/movies";
       return;
     }
 
     setIsLoading(true);
     try {
       const { role } = await login({ username, password });
-      if (role === "ROLE_ADMIN" || role === "ROLE_EMPLOYEE") {
-        navigate("/admin", { replace: true });
-      } else {
-        navigate("/", { replace: true });
-      }
+      if (role === "ROLE_ADMIN")         navigate("/admin",         { replace: true });
+      else if (role === "ROLE_EMPLOYEE") navigate("/admin/movies",  { replace: true });
+      else                               navigate("/",              { replace: true });
     } catch (err: any) {
       const code = err?.response?.data?.code;
       if (code === 1008) {

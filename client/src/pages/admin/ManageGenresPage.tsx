@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { Plus, Search, RefreshCw, AlertCircle, Tags, Film, Hash, X } from "lucide-react";
 import { useOutletContext } from "react-router-dom";
-import { movieApi, type TypeResponse, type MovieApiResponse, type CreateTypePayload } from "../../api/movieApi";
+import { movieApi, type GenreResponse, type MovieApiResponse, type CreateGenrePayload } from "../../api/movieApi";
 
 // ── Add Genre Modal ───────────────────────────────────────────────────────────
 
 type ModalProps = {
   open: boolean;
   onClose: () => void;
-  onSave: (data: CreateTypePayload) => void;
+  onSave: (data: CreateGenrePayload) => void;
   submitting: boolean;
 };
 
@@ -48,7 +48,7 @@ function AddGenreModal({ open, onClose, onSave, submitting }: ModalProps) {
 
         {/* Form */}
         <form
-          onSubmit={(e) => { e.preventDefault(); onSave({ typeName }); }}
+          onSubmit={(e) => { e.preventDefault(); onSave({ genreName: typeName }); }}
           className="px-6 py-5 space-y-4"
         >
           <div>
@@ -113,7 +113,7 @@ function getTagColor(index: number) {
 export default function ManageGenresPage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
 
-  const [types, setTypes] = useState<TypeResponse[]>([]);
+  const [types, setTypes] = useState<GenreResponse[]>([]);
   const [movies, setMovies] = useState<MovieApiResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -126,7 +126,7 @@ export default function ManageGenresPage() {
     setError(null);
     try {
       const [typesRes, moviesRes] = await Promise.all([
-        movieApi.getTypes(),
+        movieApi.getGenres(),
         movieApi.getAllMovies(),
       ]);
       setTypes(typesRes.result ?? []);
@@ -140,10 +140,10 @@ export default function ManageGenresPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const handleCreate = async (data: CreateTypePayload) => {
+  const handleCreate = async (data: CreateGenrePayload) => {
     setSubmitting(true);
     try {
-      const res = await movieApi.createType(data);
+      const res = await movieApi.createGenre(data);
       setTypes((prev) => [...prev, res.result]);
       setModalOpen(false);
     } catch (err: any) {
@@ -158,7 +158,7 @@ export default function ManageGenresPage() {
     movies.filter((m) => m.movieType?.includes(typeName)).length;
 
   const filtered = types.filter((t) =>
-    !searchQuery || t.typeName?.toLowerCase().includes(searchQuery.toLowerCase()),
+    !searchQuery || t.genreName?.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const inputStyle: React.CSSProperties = {
@@ -188,7 +188,7 @@ export default function ManageGenresPage() {
           {
             label: "Most Used Genre",
             value: loading || types.length === 0 ? "—"
-              : types.reduce((best, t) => movieCountByGenre(t.typeName) > movieCountByGenre(best.typeName) ? t : best, types[0])?.typeName ?? "—",
+              : types.reduce((best, t) => movieCountByGenre(t.genreName) > movieCountByGenre(best.genreName) ? t : best, types[0])?.genreName ?? "—",
             icon: Hash,
             color: "emerald",
           },
@@ -281,17 +281,17 @@ export default function ManageGenresPage() {
               </tr>
             ) : (
               filtered.map((type, idx) => {
-                const count = movieCountByGenre(type.typeName);
+                const count = movieCountByGenre(type.genreName);
                 const c = getTagColor(idx);
                 return (
-                  <tr key={type.typeId} className="hover-row border-b transition-colors" style={{ borderColor: "var(--border-color)" }}>
+                  <tr key={type.genreId} className="hover-row border-b transition-colors" style={{ borderColor: "var(--border-color)" }}>
                     <td className="px-5 py-3.5">
                       <span style={{ fontSize: "13px", color: "var(--text-sub)" }}>{idx + 1}</span>
                     </td>
                     <td className="px-5 py-3.5">
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium ${c.bg} ${c.text} ${c.border}`}>
                         <Tags size={12} />
-                        {type.typeName}
+                        {type.genreName}
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
@@ -315,7 +315,7 @@ export default function ManageGenresPage() {
                     </td>
                     <td className="px-5 py-3.5">
                       <span style={{ fontSize: "12px", color: "var(--text-sub)", fontFamily: "monospace" }}>
-                        #{type.typeId}
+                        #{type.genreId}
                       </span>
                     </td>
                   </tr>
