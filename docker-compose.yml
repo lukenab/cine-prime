@@ -117,11 +117,15 @@ services:
     restart: unless-stopped
     ports:
       - "8081:8081"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/movie_db
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: "123456"
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      TMDB_API_KEY: 4cf6e7ff7b2095ae0d09da1cae2f1606
     depends_on:
       postgres:
         condition: service_healthy

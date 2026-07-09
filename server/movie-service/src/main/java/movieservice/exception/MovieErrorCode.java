@@ -62,7 +62,9 @@ public enum MovieErrorCode implements BaseErrorCode {
     COMPANY_NOT_FOUND(2017, "Production company not found.", HttpStatus.NOT_FOUND),
     FORMAT_NOT_FOUND(2018, "Screening format not found.", HttpStatus.NOT_FOUND),
     PERSON_NOT_FOUND(2019, "Person (cast member) not found.", HttpStatus.NOT_FOUND),
-    INVALID_STATUS_TRANSITION(2020, "This status transition is not allowed.", HttpStatus.BAD_REQUEST);
+    INVALID_STATUS_TRANSITION(2020, "This status transition is not allowed.", HttpStatus.BAD_REQUEST),
+    TMDB_MOVIE_ALREADY_EXISTS(2021, "This TMDB movie has already been imported.", HttpStatus.CONFLICT),
+    TMDB_API_ERROR(2022, "Failed to connect to TMDB API. Check your API key or network.", HttpStatus.BAD_GATEWAY);
 
     int code;
     String message;
