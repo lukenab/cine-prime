@@ -6,12 +6,16 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import movie.theater.common.dto.ApiResponse;
 import movieservice.dto.request.CreateMovieRequest;
+import movieservice.dto.request.RejectRequest;
+import movieservice.dto.request.SuspendRequest;
 import movieservice.dto.request.UpdateMovieRequest;
 import movieservice.dto.response.ImageUploadResponse;
 import movieservice.dto.response.MovieResponse;
 import movieservice.service.MovieService;
 import org.springframework.data.domain.Page;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -25,8 +29,7 @@ public class MovieController {
 
     MovieService movieService;
 
-    // ── CRUD ──────────────────────────────────────────────────
-
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
     @PostMapping
     public ApiResponse<MovieResponse> createMovie(@Valid @RequestBody CreateMovieRequest request) {
         return ApiResponse.<MovieResponse>builder()
@@ -53,7 +56,7 @@ public class MovieController {
                 .build();
     }
 
-    /** Admin: returns all movies regardless of status */
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/all")
     public ApiResponse<List<MovieResponse>> getAll() {
         return ApiResponse.<List<MovieResponse>>builder()
@@ -62,7 +65,6 @@ public class MovieController {
                 .build();
     }
 
-    /** Public: only COMING_SOON / NOW_SHOWING */
     @GetMapping("/public")
     public ApiResponse<List<MovieResponse>> getPublic() {
         return ApiResponse.<List<MovieResponse>>builder()
@@ -71,6 +73,7 @@ public class MovieController {
                 .build();
     }
 
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
     @PutMapping("/{id}")
     public ApiResponse<MovieResponse> updateMovie(@PathVariable Long id,
             @Valid @RequestBody UpdateMovieRequest request) {
@@ -81,6 +84,7 @@ public class MovieController {
                 .build();
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ApiResponse<Void> deleteMovie(@PathVariable Long id) {
         movieService.deleteMovie(id);
@@ -90,44 +94,84 @@ public class MovieController {
                 .build();
     }
 
-    // ── Status transitions ────────────────────────────────────
 
     /** DRAFT → PENDING_REVIEW */
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
     @PostMapping("/{id}/submit")
-    public ApiResponse<Void> submit(@PathVariable Long id,
-            @RequestHeader(value = "X-User-Name", defaultValue = "unknown") String updatedBy) {
+    public ApiResponse<Void> submit(@PathVariable Long id) {
+        String updatedBy = SecurityContextHolder.getContext().getAuthentication().getName();
         movieService.submitForReview(id, updatedBy);
         return ApiResponse.<Void>builder().code(200).message("Submitted for review").build();
     }
 
     /** PENDING_REVIEW → COMING_SOON */
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/{id}/approve")
-    public ApiResponse<Void> approve(@PathVariable Long id,
-            @RequestHeader(value = "X-User-Name", defaultValue = "unknown") String updatedBy) {
+    public ApiResponse<Void> approve(@PathVariable Long id) {
+        String updatedBy = SecurityContextHolder.getContext().getAuthentication().getName();
         movieService.approveMovie(id, updatedBy);
         return ApiResponse.<Void>builder().code(200).message("Movie approved").build();
     }
 
     /** PENDING_REVIEW → REJECTED */
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/{id}/reject")
     public ApiResponse<Void> reject(@PathVariable Long id,
-            @RequestParam String note,
-            @RequestHeader(value = "X-User-Name", defaultValue = "unknown") String updatedBy) {
-        movieService.rejectMovie(id, note, updatedBy);
+            @Valid @RequestBody RejectRequest request) {
+        String updatedBy = SecurityContextHolder.getContext().getAuthentication().getName();
+        movieService.rejectMovie(id, request.getNote(), updatedBy);
         return ApiResponse.<Void>builder().code(200).message("Movie rejected").build();
     }
 
     /** NOW_SHOWING | COMING_SOON → SUSPENDED */
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/{id}/suspend")
     public ApiResponse<Void> suspend(@PathVariable Long id,
-            @RequestParam String reason,
-            @RequestHeader(value = "X-User-Name", defaultValue = "unknown") String updatedBy) {
-        movieService.suspendMovie(id, reason, updatedBy);
+            @Valid @RequestBody SuspendRequest request) {
+        String updatedBy = SecurityContextHolder.getContext().getAuthentication().getName();
+        movieService.suspendMovie(id, request.getReason(), updatedBy);
         return ApiResponse.<Void>builder().code(200).message("Movie suspended").build();
+    }
+
+    /** COMING_SOON | NOW_SHOWING | SUSPENDED → ENDED */
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/{id}/end")
+    public ApiResponse<Void> end(@PathVariable Long id) {
+        String updatedBy = SecurityContextHolder.getContext().getAuthentication().getName();
+        movieService.endMovie(id, updatedBy);
+        return ApiResponse.<Void>builder().code(200).message("Movie ended").build();
+    }
+
+    /** REJECTED → DRAFT: employee chỉnh sửa lại */
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
+    @PostMapping("/{id}/rework")
+    public ApiResponse<Void> rework(@PathVariable Long id) {
+        String updatedBy = SecurityContextHolder.getContext().getAuthentication().getName();
+        movieService.reworkMovie(id, updatedBy);
+        return ApiResponse.<Void>builder().code(200).message("Movie moved back to Draft for rework").build();
+    }
+
+    /** COMING_SOON → NOW_SHOWING: admin mở bán vé */
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/{id}/release")
+    public ApiResponse<Void> release(@PathVariable Long id) {
+        String updatedBy = SecurityContextHolder.getContext().getAuthentication().getName();
+        movieService.releaseMovie(id, updatedBy);
+        return ApiResponse.<Void>builder().code(200).message("Movie is now showing").build();
+    }
+
+    /** SUSPENDED → NOW_SHOWING: admin phục hồi sau sự cố */
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/{id}/reinstate")
+    public ApiResponse<Void> reinstate(@PathVariable Long id) {
+        String updatedBy = SecurityContextHolder.getContext().getAuthentication().getName();
+        movieService.reinstateMovie(id, updatedBy);
+        return ApiResponse.<Void>builder().code(200).message("Movie reinstated to Now Showing").build();
     }
 
     // ── Image upload ──────────────────────────────────────────
 
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
     @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<ImageUploadResponse> uploadImage(@RequestParam("file") MultipartFile file) {
         return ApiResponse.<ImageUploadResponse>builder()

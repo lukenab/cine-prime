@@ -92,6 +92,7 @@ public interface MovieMapper {
     @Mapping(source = "cinemaRoom.cinemaRoomName", target = "cinemaRoomName")
     @Mapping(source = "movie.movieId", target = "movieId")
     @Mapping(source = "movie.originalTitle", target = "movieName")
+    @Mapping(target = "status", expression = "java(showTime.getStatus() != null ? showTime.getStatus().name() : null)")
     ShowTimeResponse toShowTimeResponse(ShowTime showTime);
 
     List<ShowTimeResponse> toShowTimeResponseList(List<ShowTime> showTimes);

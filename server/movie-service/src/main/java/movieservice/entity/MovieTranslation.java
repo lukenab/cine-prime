@@ -32,4 +32,9 @@ public class MovieTranslation {
 
     @Column(name = "created_at", updatable = false)
     LocalDateTime createdAt;
+
+    @PrePersist
+    void prePersist() {
+        if (createdAt == null) createdAt = LocalDateTime.now();
+    }
 }

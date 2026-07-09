@@ -277,6 +277,8 @@ public class ShowTimeService {
         showTime.setEndTime(endTime);
         showTime.setStatus(ShowTimeStatus.SCHEDULED);
         showTime.setTotalSeats(room.getTotalSeatCapacity());
+        showTime.setLanguageCode(request.getLanguageCode() != null ? request.getLanguageCode() : "vi");
+        showTime.setSubtitleCode(request.getSubtitleCode());
 
         return toShowTimeResponse(showTimeRepository.save(showTime));
     }
