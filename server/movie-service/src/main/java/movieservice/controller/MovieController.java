@@ -11,14 +11,17 @@ import movieservice.dto.request.SuspendRequest;
 import movieservice.dto.request.UpdateMovieRequest;
 import movieservice.dto.response.ImageUploadResponse;
 import movieservice.dto.response.MovieResponse;
+import movieservice.enums.MovieStatus;
 import movieservice.service.MovieService;
 import org.springframework.data.domain.Page;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -39,20 +42,25 @@ public class MovieController {
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<MovieResponse> findById(@PathVariable Long id) {
+    public ApiResponse<MovieResponse> findById(
+            @PathVariable Long id,
+            @RequestParam(required = false) String lang) {
         return ApiResponse.<MovieResponse>builder()
                 .code(200)
-                .result(movieService.getMovie(id))
+                .result(lang != null ? movieService.getMovieByLang(id, lang) : movieService.getMovie(id))
                 .build();
     }
 
     @GetMapping
     public ApiResponse<Page<MovieResponse>> getPage(
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) MovieStatus status,
+            @RequestParam(required = false) Long genreId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return ApiResponse.<Page<MovieResponse>>builder()
                 .code(200)
-                .result(movieService.findPage(page - 1, size))
+                .result(movieService.findPageWithFilters(page - 1, size, status, genreId, date))
                 .build();
     }
 

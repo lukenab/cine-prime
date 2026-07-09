@@ -28,6 +28,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -115,12 +116,30 @@ public class MovieService {
     public MovieResponse getMovie(Long id) {
         Movie movie = movieRepository.findById(id)
                 .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
-        // Touch collections trong transaction để tránh LazyInitializationException
         movie.getTranslations().size();
         movie.getCast().size();
         movie.getGenres().size();
         movie.getFormats().size();
         return movieMapper.toMovieResponse(movie);
+    }
+
+    /** GET /api/movies/{id}?lang=vi — trả response với translations filter theo ngôn ngữ */
+    @Transactional
+    public MovieResponse getMovieByLang(Long id, String lang) {
+        Movie movie = movieRepository.findById(id)
+                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+        movie.getCast().size();
+        movie.getGenres().size();
+        movie.getFormats().size();
+        MovieResponse response = movieMapper.toMovieResponse(movie);
+        if (lang != null && !lang.isBlank() && response.getTranslations() != null) {
+            response.setTranslations(
+                    response.getTranslations().stream()
+                            .filter(t -> lang.equalsIgnoreCase(t.getLanguageCode()))
+                            .collect(Collectors.toList())
+            );
+        }
+        return response;
     }
 
     public List<MovieResponse> findAllPublic() {
@@ -138,6 +157,15 @@ public class MovieService {
     public Page<MovieResponse> findPage(int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         return movieRepository.findAll(pageable).map(movieMapper::toMovieResponse);
+    }
+
+    /** GET /api/movies?status=NOW_SHOWING&genreId=1&date=2026-07-09 */
+    public Page<MovieResponse> findPageWithFilters(
+            int page, int size,
+            MovieStatus status, Long genreId, LocalDate releaseDate) {
+        Pageable pageable = PageRequest.of(page, size);
+        return movieRepository.findWithFilters(status, genreId, releaseDate, pageable)
+                .map(movieMapper::toMovieResponse);
     }
 
     // ── Update ────────────────────────────────────────────────
