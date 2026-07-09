@@ -91,27 +91,35 @@ public class MovieService {
 
         Movie saved = movieRepository.save(movie);
 
-        // Translations
+        // Translations — save và set thẳng vào entity để mapper có data
         if (request.getTranslations() != null) {
-            saveTranslations(saved, request.getTranslations());
+            List<MovieTranslation> translations = saveTranslations(saved, request.getTranslations());
+            saved.setTranslations(translations);
         }
 
-        // Cast
+        // Cast — save và set thẳng vào entity
         if (request.getCast() != null) {
-            saveCast(saved, request.getCast());
+            List<MovieCast> cast = saveCast(saved, request.getCast());
+            saved.setCast(cast);
         }
 
         auditLogService.logAction("SYSTEM", "Admin", "movie:" + saved.getMovieId(),
                 "Created movie: " + saved.getOriginalTitle());
 
-        return movieMapper.toMovieResponse(movieRepository.findById(saved.getMovieId()).orElseThrow());
+        return movieMapper.toMovieResponse(saved);
     }
 
     // ── Read ──────────────────────────────────────────────────
 
+    @Transactional
     public MovieResponse getMovie(Long id) {
         Movie movie = movieRepository.findById(id)
                 .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+        // Touch collections trong transaction để tránh LazyInitializationException
+        movie.getTranslations().size();
+        movie.getCast().size();
+        movie.getGenres().size();
+        movie.getFormats().size();
         return movieMapper.toMovieResponse(movie);
     }
 
@@ -207,7 +215,34 @@ public class MovieService {
 
     @Transactional
     public void endMovie(Long id, String updatedBy) {
+        Movie movie = movieRepository.findById(id)
+                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+        if (movie.getStatus() == MovieStatus.DRAFT || movie.getStatus() == MovieStatus.PENDING_REVIEW
+                || movie.getStatus() == MovieStatus.REJECTED) {
+            throw new AppException(MovieErrorCode.INVALID_STATUS_TRANSITION);
+        }
         movieRepository.updateStatus(id, MovieStatus.ENDED, updatedBy);
+    }
+
+    /** REJECTED → DRAFT: employee chỉnh sửa lại sau khi bị từ chối */
+    @Transactional
+    public void reworkMovie(Long id, String updatedBy) {
+        requireStatus(id, MovieStatus.REJECTED);
+        movieRepository.updateStatus(id, MovieStatus.DRAFT, updatedBy);
+    }
+
+    /** COMING_SOON → NOW_SHOWING: admin mở bán vé khi phim bắt đầu chiếu */
+    @Transactional
+    public void releaseMovie(Long id, String updatedBy) {
+        requireStatus(id, MovieStatus.COMING_SOON);
+        movieRepository.updateStatus(id, MovieStatus.NOW_SHOWING, updatedBy);
+    }
+
+    /** SUSPENDED → NOW_SHOWING: admin phục hồi phim sau khi xử lý sự cố */
+    @Transactional
+    public void reinstateMovie(Long id, String updatedBy) {
+        requireStatus(id, MovieStatus.SUSPENDED);
+        movieRepository.updateStatus(id, MovieStatus.NOW_SHOWING, updatedBy);
     }
 
     // ── Delete (soft via SUSPENDED/ENDED) ────────────────────
@@ -253,7 +288,8 @@ public class MovieService {
 
     // ── Private helpers ───────────────────────────────────────
 
-    private void saveTranslations(Movie movie, List<TranslationRequest> requests) {
+    private List<MovieTranslation> saveTranslations(Movie movie, List<TranslationRequest> requests) {
+        List<MovieTranslation> result = new java.util.ArrayList<>();
         for (TranslationRequest tr : requests) {
             MovieTranslationId tid = new MovieTranslationId(movie.getMovieId(), tr.getLanguageCode());
             MovieTranslation t = new MovieTranslation();
@@ -261,11 +297,13 @@ public class MovieService {
             t.setMovie(movie);
             t.setTitle(tr.getTitle());
             t.setSynopsis(tr.getSynopsis());
-            movieTranslationRepository.save(t);
+            result.add(movieTranslationRepository.save(t));
         }
+        return result;
     }
 
-    private void saveCast(Movie movie, List<CastRequest> requests) {
+    private List<MovieCast> saveCast(Movie movie, List<CastRequest> requests) {
+        List<MovieCast> result = new java.util.ArrayList<>();
         for (CastRequest cr : requests) {
             Person person = personRepository.findById(cr.getPersonId())
                     .orElseThrow(() -> new AppException(MovieErrorCode.PERSON_NOT_FOUND));
@@ -276,8 +314,9 @@ public class MovieService {
                     .characterName(cr.getCharacterName())
                     .billingOrder(cr.getBillingOrder())
                     .build();
-            movieCastRepository.save(cast);
+            result.add(movieCastRepository.save(cast));
         }
+        return result;
     }
 
     private void requireStatus(Long id, MovieStatus required) {

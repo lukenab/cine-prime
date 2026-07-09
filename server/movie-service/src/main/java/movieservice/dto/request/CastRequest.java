@@ -11,18 +11,11 @@ import lombok.experimental.FieldDefaults;
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class CastRequest {
-
-    /** Person.personId — must exist in DB */
     @NotNull
     Long personId;
 
-    /** ACTOR | DIRECTOR | WRITER | PRODUCER | COMPOSER */
     @NotBlank
     String roleType;
-
-    /** Nullable — only meaningful for actors */
     String characterName;
-
-    /** Display order in credits */
     Integer billingOrder;
 }

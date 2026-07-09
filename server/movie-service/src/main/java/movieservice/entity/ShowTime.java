@@ -96,6 +96,7 @@ public class ShowTime {
         updatedAt = LocalDateTime.now();
         if (status == null) status = ShowTimeStatus.SCHEDULED;
         if (soldSeats == null) soldSeats = 0;
+        if (languageCode == null) languageCode = "vi";
     }
 
     @PreUpdate

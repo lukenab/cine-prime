@@ -15,7 +15,6 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class UpdateMovieRequest {
 
-    // ── Core (all optional — only provided fields are updated) ─
     @Size(max = 500)
     String originalTitle;
 
@@ -30,13 +29,11 @@ public class UpdateMovieRequest {
     @Size(max = 100)
     String country;
 
-    // ── FK references ─────────────────────────────────────────
     Integer ageRatingId;
     Long companyId;
     List<Long> genreIds;
     List<Integer> formatIds;
 
-    // ── Media ─────────────────────────────────────────────────
     @Size(max = 500)
     String posterUrl;
 
@@ -45,14 +42,10 @@ public class UpdateMovieRequest {
 
     @Size(max = 500)
     String trailerUrl;
-
     String synopsis;
 
-    // ── Translations (full replacement when provided) ─────────
     @Valid
     List<TranslationRequest> translations;
-
-    // ── Cast (full replacement when provided) ─────────────────
     @Valid
     List<CastRequest> cast;
 }

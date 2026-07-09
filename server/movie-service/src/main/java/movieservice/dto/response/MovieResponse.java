@@ -16,37 +16,29 @@ public class MovieResponse {
 
     Long movieId;
 
-    // ── Identifiers ───────────────────────────────────────────
     Integer tmdbId;
     String imdbId;
     String originalTitle;
     String originalLanguage;
 
-    // ── Metadata ──────────────────────────────────────────────
     Integer durationMinutes;
     LocalDate releaseDate;
     String country;
     String status;
 
-    // ── Lookup objects ────────────────────────────────────────
     AgeRatingResponse ageRating;
 
-    // ── Production ────────────────────────────────────────────
     String companyName;
-
-    // ── Media ─────────────────────────────────────────────────
     String posterUrl;
     String thumbnailUrl;
     String trailerUrl;
     String synopsis;
 
-    // ── Collections ───────────────────────────────────────────
     List<GenreResponse> genres;
     List<ScreeningFormatResponse> formats;
     List<TranslationResponse> translations;
     List<CastResponse> cast;
-
-    // ── Audit ─────────────────────────────────────────────────
+    
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
     String createdBy;

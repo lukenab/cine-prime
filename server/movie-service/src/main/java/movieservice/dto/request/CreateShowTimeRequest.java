@@ -25,6 +25,12 @@ public class CreateShowTimeRequest {
     @NotNull(message = "Start time cannot be null")
     LocalTime startTime;
 
+    /** Ngôn ngữ âm thanh — mặc định "vi" nếu không truyền */
+    String languageCode;
+
+    /** Ngôn ngữ phụ đề — null nếu không có */
+    String subtitleCode;
+
     /** Optional — overrides default seat price when provided. */
     BigDecimal basePrice;
 }
