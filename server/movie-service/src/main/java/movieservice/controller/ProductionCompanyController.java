@@ -8,7 +8,7 @@ import movie.theater.common.dto.ApiResponse;
 import movieservice.dto.request.ProductionCompanyRequest;
 import movieservice.dto.response.ProductionCompanyResponse;
 import movieservice.entity.ProductionCompany;
-import movieservice.exception.AppException;
+import movie.theater.common.exception.AppException;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.ProductionCompanyRepository;

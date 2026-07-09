@@ -8,7 +8,7 @@ import movie.theater.common.dto.ApiResponse;
 import movieservice.dto.request.ScreeningFormatRequest;
 import movieservice.dto.response.ScreeningFormatResponse;
 import movieservice.entity.ScreeningFormat;
-import movieservice.exception.AppException;
+import movie.theater.common.exception.AppException;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.ScreeningFormatRepository;
