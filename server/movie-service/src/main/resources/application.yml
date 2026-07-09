@@ -37,6 +37,9 @@ eureka:
 jwt:
   signerKey: 873bcf3b6023c6cfac735831cc01cbd59c6f64c2341050f12e5f0224d7edea62
 
+tmdb:
+  api-key: 4cf6e7ff7b2095ae0d09da1cae2f1606
+
 CLOUDINARY:
   CLOUD_NAME: dzlfgmtbc
   API_KEY: 144287537763843
