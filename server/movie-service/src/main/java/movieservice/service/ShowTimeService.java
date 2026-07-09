@@ -26,6 +26,9 @@ import movieservice.entity.Movie;
 import movieservice.entity.Seat;
 import movieservice.entity.ShowTime;
 import movieservice.entity.ShowtimeSeat;
+import movieservice.enums.SeatType;
+import movieservice.enums.ShowTimeStatus;
+import movieservice.enums.ShowtimeSeatStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.CinemaRoomRepository;
@@ -66,9 +69,9 @@ public class ShowTimeService {
                 showtimeSeat.setShowTime(showTime);
                 showtimeSeat.setSeat(seat);
                 showtimeSeat.setSeatCode(seat.getSeatCode());
-                showtimeSeat.setSeatType(seat.getSeatType() != null ? seat.getSeatType().name() : "STANDARD");
+                showtimeSeat.setSeatType(seat.getSeatType() != null ? seat.getSeatType() : SeatType.STANDARD);
                 showtimeSeat.setPrice(seat.getPrice() != null ? seat.getPrice() : new java.math.BigDecimal("100000.00"));
-                showtimeSeat.setStatus(ShowtimeSeat.SeatStatus.AVAILABLE);
+                showtimeSeat.setStatus(ShowtimeSeatStatus.AVAILABLE);
                 return showtimeSeat;
             }).collect(Collectors.toList());
             
@@ -85,16 +88,16 @@ public class ShowTimeService {
             ShowtimeSeat seat = showtimeSeatRepository.findById(seatId)
                     .orElseThrow(() -> new RuntimeException("Seat not found"));
             
-            if (seat.getStatus() != ShowtimeSeat.SeatStatus.AVAILABLE) {
+            if (seat.getStatus() != ShowtimeSeatStatus.AVAILABLE) {
                 // Check if reserved lock has expired
-                if (seat.getStatus() == ShowtimeSeat.SeatStatus.RESERVED && seat.getReservedExpiresAt() != null && seat.getReservedExpiresAt().isBefore(LocalDateTime.now())) {
+                if (seat.getStatus() == ShowtimeSeatStatus.RESERVED && seat.getReservedExpiresAt() != null && seat.getReservedExpiresAt().isBefore(LocalDateTime.now())) {
                     // Lock expired, we can proceed
                 } else {
                     throw new RuntimeException("Seat is not available"); // Ideal: specialized exception
                 }
             }
             
-            seat.setStatus(ShowtimeSeat.SeatStatus.RESERVED);
+            seat.setStatus(ShowtimeSeatStatus.RESERVED);
             seat.setReservedAt(LocalDateTime.now());
             seat.setReservedExpiresAt(LocalDateTime.now().plusMinutes(15));
             showtimeSeatRepository.save(seat);
@@ -103,9 +106,9 @@ public class ShowTimeService {
 
     private ShowtimeSeatDto toDto(ShowtimeSeat seat) {
         String status = "AVAILABLE";
-        if (seat.getStatus() == ShowtimeSeat.SeatStatus.SOLD) {
+        if (seat.getStatus() == ShowtimeSeatStatus.SOLD) {
             status = "BOOKED";
-        } else if (seat.getStatus() == ShowtimeSeat.SeatStatus.RESERVED) {
+        } else if (seat.getStatus() == ShowtimeSeatStatus.RESERVED) {
             if (seat.getReservedExpiresAt() != null && seat.getReservedExpiresAt().isBefore(LocalDateTime.now())) {
                 status = "AVAILABLE"; // lock expired
             } else {
@@ -132,7 +135,7 @@ public class ShowTimeService {
                 .seatId(seat.getShowtimeSeatId())
                 .row(row)
                 .number(number)
-                .type(seat.getSeatType())
+                .type(seat.getSeatType() != null ? seat.getSeatType().name() : null)
                 .status(status)
                 .price(seat.getPrice())
                 .build();
@@ -272,7 +275,8 @@ public class ShowTimeService {
         showTime.setShowDate(request.getShowDate());
         showTime.setStartTime(startTime);
         showTime.setEndTime(endTime);
-        showTime.setUpdateAt(LocalDateTime.now());
+        showTime.setStatus(ShowTimeStatus.SCHEDULED);
+        showTime.setTotalSeats(room.getTotalSeatCapacity());
 
         return toShowTimeResponse(showTimeRepository.save(showTime));
     }
@@ -324,7 +328,7 @@ public class ShowTimeService {
             }
         }
 
-        showTime.setUpdateAt(LocalDateTime.now());
+        // updatedAt được set tự động bởi @PreUpdate
         return toShowTimeResponse(showTimeRepository.save(showTime));
     }
 
@@ -345,7 +349,8 @@ public class ShowTimeService {
         r.setShowDate(s.getShowDate());
         r.setStartTime(s.getStartTime());
         r.setEndTime(s.getEndTime());
-        r.setUpdateAt(s.getUpdateAt());
+        r.setStatus(s.getStatus() != null ? s.getStatus().name() : null);
+        r.setUpdatedAt(s.getUpdatedAt());
         if (s.getMovie() != null) {
             r.setMovieId(s.getMovie().getMovieId());
             r.setMovieName(s.getMovie().getOriginalTitle());

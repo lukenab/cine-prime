@@ -28,5 +28,7 @@ public class ShowTimeResponse {
 
     String cinemaRoomName;
 
-    LocalDateTime updateAt;
+    String status;
+
+    LocalDateTime updatedAt;
 }
