@@ -102,7 +102,7 @@ function InputModal({
             rows={3}
             autoFocus
             className="w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 resize-none"
-            style={{ fontSize: "13px", background: "var(--bg-main)", color: "var(--text-main)", borderColor: "var(--border-color)", focusRingColor: confirmColor }}
+            style={{ fontSize: "13px", background: "var(--bg-main)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
           />
         </div>
         <div className="flex gap-3">
@@ -298,7 +298,7 @@ export function MovieTable({
                 </tr>
               ) : (
                 pageMovies.map((movie) => {
-                  const cfg = STATUS_CONFIG[movie.movieStatus] ?? STATUS_CONFIG.DRAFT;
+                  const cfg = STATUS_CONFIG[movie.movieStatus ?? "DRAFT"] ?? STATUS_CONFIG.DRAFT;
                   const isEnded = movie.movieStatus === "ENDED";
                   return (
                     <tr
@@ -422,15 +422,22 @@ export function MovieTable({
               .filter((p) => Math.abs(p - safePage) <= 2)
               .map((p) => (
                 <button key={p} onClick={() => setPage(p)} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style={{ fontSize: "13px", fontWeight: p === safePage ? 600 : 400, background: p === safePage ? "#2563eb" : "transparent", color: p === safePage ? "#fff" : "var(--text-sub)" }}>
-                  {p}
-                </button>
-              ))}
+
+                {p}
+              </button>
+            ))}
             <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage === totalPages} className="w-8 h-8 rounded-lg flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed action-btn" style={{ color: "var(--text-sub)" }}>
               <ChevronRight size={15} />
             </button>
           </div>
         </div>
       </div>
+
+      <style>{`
+        .hover-row:hover { background-color: rgba(128,128,128,0.04); }
+        .theme-dark .hover-row:hover { background-color: rgba(255,255,255,0.03); }
+        .action-btn:hover { background-color: rgba(128,128,128,0.08); }
+      `}</style>
     </>
   );
 }

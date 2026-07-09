@@ -26,13 +26,17 @@ export type MovieApiResponse = {
   /** Legacy boolean — use movieStatus for real workflow state */
   status: boolean;
   /** Real V2 workflow status */
-  movieStatus: MovieStatus;
+  movieStatus?: MovieStatus;
   movieProductionCompany: string;
   largeImage: string;
   smallImage: string;
   movieType: string[];
   showTimes: ShowTimeResponse[];
   createAt: string | number[];
+  // Extended fields (V2)
+  gallery?: string[];
+  backdrops?: string[];
+  trailerUrl?: string;
 };
 
 export type RoomType = "STANDARD" | "LARGE" | "IMAX";
@@ -215,6 +219,9 @@ export type PersonResponse = {
   fullName: string;
   photoUrl: string;
   nationality: string;
+  birthDate?: string;   // ISO "YYYY-MM-DD"
+  biography?: string;
+  tmdbId?: number;
 };
 
 export type TranslationResponse = {
@@ -571,4 +578,6 @@ export function todayPlusDays(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() + n);
   return d.toISOString().split('T')[0];
+}
+0];
 }
