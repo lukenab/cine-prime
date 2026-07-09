@@ -34,8 +34,31 @@ public class TmdbMovieDetail {
 
     String overview;
 
+    @JsonProperty("production_countries")
+    List<TmdbCountry> productionCountries;
+
     @JsonProperty("production_companies")
     List<TmdbCompany> productionCompanies;
+
+    List<TmdbGenre> genres;
+
+    @Getter
+    @Setter
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class TmdbGenre {
+        Integer id;
+        String name;
+    }
+
+    @Getter
+    @Setter
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class TmdbCountry {
+        @JsonProperty("iso_3166_1")
+        String code;
+
+        String name;
+    }
 
     @Getter
     @Setter

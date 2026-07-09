@@ -45,6 +45,7 @@ public interface MovieMapper {
     @Mapping(target = "formats", source = "formats")
     @Mapping(target = "translations", source = "translations")
     @Mapping(target = "cast", source = "cast")
+    @Mapping(target = "images", source = "images")
     MovieResponse toMovieResponse(Movie movie);
 
     List<MovieResponse> toMovieResponseList(List<Movie> movies);
@@ -55,9 +56,16 @@ public interface MovieMapper {
     List<GenreResponse> toGenreResponseList(List<Genre> genres);
 
     AgeRatingResponse toAgeRatingResponse(AgeRating ageRating);
+    List<AgeRatingResponse> toAgeRatingResponseList(List<AgeRating> ageRatings);
 
     ScreeningFormatResponse toScreeningFormatResponse(ScreeningFormat format);
     List<ScreeningFormatResponse> toScreeningFormatResponseList(List<ScreeningFormat> formats);
+
+    PersonResponse toPersonResponse(Person person);
+    List<PersonResponse> toPersonResponseList(List<Person> persons);
+
+    ProductionCompanyResponse toProductionCompanyResponse(ProductionCompany company);
+    List<ProductionCompanyResponse> toProductionCompanyResponseList(List<ProductionCompany> companies);
 
     // ── Cast / Translation ────────────────────────────────────
 
@@ -73,6 +81,9 @@ public interface MovieMapper {
     TranslationResponse toTranslationResponse(MovieTranslation translation);
 
     List<TranslationResponse> toTranslationResponseList(List<MovieTranslation> translations);
+
+    MovieImageResponse toMovieImageResponse(MovieImage image);
+    List<MovieImageResponse> toMovieImageResponseList(List<MovieImage> images);
 
     // ── Cinema room ───────────────────────────────────────────
 

@@ -1,9 +1,11 @@
 package movieservice.controller;
 
+import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import movie.theater.common.dto.ApiResponse;
+import movieservice.dto.request.GenreRequest;
 import movieservice.dto.response.GenreResponse;
 import movieservice.service.GenreService;
 import org.springframework.web.bind.annotation.*;
@@ -31,6 +33,14 @@ public class GenreController {
         return ApiResponse.<GenreResponse>builder()
                 .code(200)
                 .result(genreService.getById(id))
+                .build();
+    }
+
+    @PostMapping
+    public ApiResponse<GenreResponse> create(@Valid @RequestBody GenreRequest request) {
+        return ApiResponse.<GenreResponse>builder()
+                .code(201)
+                .result(genreService.create(request.getGenreName()))
                 .build();
     }
 }

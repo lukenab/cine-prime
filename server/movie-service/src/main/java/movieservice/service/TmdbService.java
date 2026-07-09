@@ -3,10 +3,14 @@ package movieservice.service;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.exception.AppException;
+import movieservice.dto.response.CastResponse;
 import movieservice.dto.response.TmdbImportResponse;
+import movieservice.dto.response.TmdbMovieDetailsResponse;
 import movieservice.dto.response.TmdbSearchResultItem;
+import movieservice.dto.response.TranslationResponse;
 import movieservice.dto.tmdb.TmdbCreditsResponse;
 import movieservice.dto.tmdb.TmdbMovieDetail;
+import movieservice.dto.tmdb.TmdbReleaseDatesResponse;
 import movieservice.dto.tmdb.TmdbSearchResponse;
 import movieservice.dto.tmdb.TmdbTranslationsResponse;
 import movieservice.entity.*;
@@ -35,12 +39,49 @@ public class TmdbService {
     private final PersonRepository personRepository;
     private final ProductionCompanyRepository productionCompanyRepository;
     private final ScreeningFormatRepository screeningFormatRepository;
+    private final GenreRepository genreRepository;
+    private final AgeRatingRepository ageRatingRepository;
     private final String apiKey;
     private final RestTemplate restTemplate;
 
     private static final String TMDB_BASE = "https://api.themoviedb.org/3";
     private static final String POSTER_BASE = "https://image.tmdb.org/t/p/w500";
     private static final int MAX_CAST = 15;
+
+    /**
+     * Maps US MPAA certification → local VN rating code.
+     * VN certifications from TMDB (P/K/T13/T16/T18) already match local codes directly.
+     */
+    private static final Map<String, String> US_CERT_TO_LOCAL = Map.of(
+            "G",     "P",
+            "PG",    "K",
+            "PG-13", "T13",
+            "R",     "T18",
+            "NC-17", "T18"
+    );
+
+    // TMDB genre ID → genre_code in local DB (stable slug, language-independent)
+    private static final Map<Integer, String> TMDB_GENRE_CODES = Map.ofEntries(
+            Map.entry(28,    "action"),
+            Map.entry(12,    "adventure"),
+            Map.entry(16,    "animation"),
+            Map.entry(35,    "comedy"),
+            Map.entry(80,    "crime"),
+            Map.entry(99,    "documentary"),
+            Map.entry(18,    "drama"),
+            Map.entry(10751, "family"),
+            Map.entry(14,    "fantasy"),
+            Map.entry(36,    "history"),
+            Map.entry(27,    "horror"),
+            Map.entry(10402, "music"),
+            Map.entry(9648,  "mystery"),
+            Map.entry(10749, "romance"),
+            Map.entry(878,   "sci-fi"),
+            Map.entry(10770, "tv-movie"),
+            Map.entry(53,    "thriller"),
+            Map.entry(10752, "war"),
+            Map.entry(37,    "western")
+    );
 
     public TmdbService(
             MovieRepository movieRepository,
@@ -49,6 +90,8 @@ public class TmdbService {
             PersonRepository personRepository,
             ProductionCompanyRepository productionCompanyRepository,
             ScreeningFormatRepository screeningFormatRepository,
+            GenreRepository genreRepository,
+            AgeRatingRepository ageRatingRepository,
             @Value("${tmdb.api-key}") String apiKey) {
         this.movieRepository = movieRepository;
         this.movieTranslationRepository = movieTranslationRepository;
@@ -56,6 +99,8 @@ public class TmdbService {
         this.personRepository = personRepository;
         this.productionCompanyRepository = productionCompanyRepository;
         this.screeningFormatRepository = screeningFormatRepository;
+        this.genreRepository = genreRepository;
+        this.ageRatingRepository = ageRatingRepository;
         this.apiKey = apiKey;
         this.restTemplate = new RestTemplate();
     }
@@ -88,6 +133,54 @@ public class TmdbService {
         }
     }
 
+    @Transactional
+    public TmdbMovieDetailsResponse getDetails(Integer tmdbId) {
+        TmdbMovieDetail detail = fetchMovieDetail(tmdbId);
+        TmdbCreditsResponse credits = fetchCredits(tmdbId);
+        TmdbTranslationsResponse translations = fetchTranslations(tmdbId);
+        ProductionCompany primaryCompany = null;
+        if (detail.getProductionCompanies() != null) {
+            for (TmdbMovieDetail.TmdbCompany company : detail.getProductionCompanies()) {
+                if (company.getName() != null && !company.getName().isBlank()) {
+                    ProductionCompany saved = upsertCompany(company);
+                    if (primaryCompany == null) {
+                        primaryCompany = saved;
+                    }
+                }
+            }
+        }
+
+        String country = detail.getProductionCountries() == null
+                ? null
+                : detail.getProductionCountries().stream()
+                        .map(TmdbMovieDetail.TmdbCountry::getName)
+                        .filter(Objects::nonNull)
+                        .filter(name -> !name.isBlank())
+                        .collect(Collectors.joining(", "));
+
+        List<Genre> matchedGenres = resolveGenres(detail.getGenres());
+        TmdbReleaseDatesResponse releaseDates = fetchReleaseDates(tmdbId);
+        AgeRating resolvedRating = resolveAgeRating(releaseDates);
+
+        return TmdbMovieDetailsResponse.builder()
+                .tmdbId(tmdbId)
+                .imdbId(detail.getImdbId())
+                .originalTitle(detail.getOriginalTitle())
+                .originalLanguage(detail.getOriginalLanguage())
+                .durationMinutes(detail.getRuntime())
+                .releaseDate(detail.getReleaseDate())
+                .country(country)
+                .posterUrl(buildPosterUrl(detail.getPosterPath()))
+                .overview(detail.getOverview())
+                .companyId(primaryCompany != null ? primaryCompany.getCompanyId() : null)
+                .companyName(primaryCompany != null ? primaryCompany.getName() : null)
+                .translations(buildTranslationPreview(detail, translations))
+                .cast(buildCastPreview(credits))
+                .genreIds(matchedGenres.stream().map(Genre::getGenreId).collect(Collectors.toList()))
+                .ageRatingId(resolvedRating != null ? resolvedRating.getRatingId() : null)
+                .build();
+    }
+
     // ── Import ────────────────────────────────────────────────
 
     @Transactional
@@ -116,6 +209,13 @@ public class TmdbService {
         List<ScreeningFormat> formats = new ArrayList<>();
         screeningFormatRepository.findByFormatCode("2D").ifPresent(formats::add);
 
+        // 4b. Resolve TMDB genres to local genres
+        List<Genre> resolvedGenres = resolveGenres(detail.getGenres());
+
+        // 4c. Resolve age rating from release dates
+        TmdbReleaseDatesResponse releaseDates = fetchReleaseDates(tmdbId);
+        AgeRating resolvedRating = resolveAgeRating(releaseDates);
+
         // 5. Build & save movie
         Movie movie = Movie.builder()
                 .tmdbId(tmdbId)
@@ -125,12 +225,20 @@ public class TmdbService {
                 .durationMinutes(detail.getRuntime() != null && detail.getRuntime() > 0
                         ? detail.getRuntime() : 90)
                 .releaseDate(parseDate(detail.getReleaseDate()))
+                .country(detail.getProductionCountries() == null
+                        ? null
+                        : detail.getProductionCountries().stream()
+                                .map(TmdbMovieDetail.TmdbCountry::getName)
+                                .filter(Objects::nonNull)
+                                .filter(name -> !name.isBlank())
+                                .collect(Collectors.joining(", ")))
                 .posterUrl(buildPosterUrl(detail.getPosterPath()))
                 .synopsis(detail.getOverview())
                 .status(MovieStatus.DRAFT)
                 .company(companies.isEmpty() ? null : companies.get(0))
                 .formats(formats)
-                .genres(new ArrayList<>())
+                .genres(new ArrayList<>(resolvedGenres))
+                .ageRating(resolvedRating)
                 .build();
         movie = movieRepository.save(movie);
 
@@ -255,6 +363,79 @@ public class TmdbService {
         }
     }
 
+    private List<TranslationResponse> buildTranslationPreview(
+            TmdbMovieDetail detail,
+            TmdbTranslationsResponse translationsResponse) {
+        Map<String, TmdbTranslationsResponse.TranslationData> translationMap = new HashMap<>();
+        if (translationsResponse.getTranslations() != null) {
+            translationsResponse.getTranslations().stream()
+                    .filter(item -> "vi".equals(item.getIso6391()) || "en".equals(item.getIso6391()))
+                    .filter(item -> item.getData() != null)
+                    .forEach(item -> translationMap.put(item.getIso6391(), item.getData()));
+        }
+
+        List<TranslationResponse> result = new ArrayList<>();
+        TmdbTranslationsResponse.TranslationData english = translationMap.get("en");
+        result.add(TranslationResponse.builder()
+                .languageCode("en")
+                .title(english != null && english.getTitle() != null
+                        ? english.getTitle() : detail.getOriginalTitle())
+                .synopsis(english != null && english.getOverview() != null
+                        ? english.getOverview() : detail.getOverview())
+                .build());
+
+        TmdbTranslationsResponse.TranslationData vietnamese = translationMap.get("vi");
+        if (vietnamese != null && vietnamese.getTitle() != null
+                && !vietnamese.getTitle().isBlank()) {
+            result.add(TranslationResponse.builder()
+                    .languageCode("vi")
+                    .title(vietnamese.getTitle())
+                    .synopsis(vietnamese.getOverview())
+                    .build());
+        }
+        return result;
+    }
+
+    private List<CastResponse> buildCastPreview(TmdbCreditsResponse credits) {
+        List<CastResponse> result = new ArrayList<>();
+        if (credits.getCrew() != null) {
+            credits.getCrew().stream()
+                    .filter(item -> "Director".equals(item.getJob()) && item.getId() != null)
+                    .forEach(item -> {
+                        Person person = upsertPerson(
+                                item.getId(), item.getName(), item.getProfilePath());
+                        result.add(CastResponse.builder()
+                                .personId(person.getPersonId())
+                                .fullName(person.getFullName())
+                                .photoUrl(person.getPhotoUrl())
+                                .roleType("DIRECTOR")
+                                .build());
+                    });
+        }
+        if (credits.getCast() != null) {
+            List<TmdbCreditsResponse.CastMember> actors = credits.getCast().stream()
+                    .filter(item -> item.getId() != null)
+                    .sorted(Comparator.comparingInt(
+                            item -> item.getOrder() != null ? item.getOrder() : 999))
+                    .limit(MAX_CAST)
+                    .toList();
+            for (int index = 0; index < actors.size(); index++) {
+                TmdbCreditsResponse.CastMember item = actors.get(index);
+                Person person = upsertPerson(
+                        item.getId(), item.getName(), item.getProfilePath());
+                result.add(CastResponse.builder()
+                        .personId(person.getPersonId())
+                        .fullName(person.getFullName())
+                        .photoUrl(person.getPhotoUrl())
+                        .roleType("ACTOR")
+                        .characterName(item.getCharacter())
+                        .billingOrder(index + 1)
+                        .build());
+            }
+        }
+        return result;
+    }
+
     private void saveOneTranslation(Movie movie, String langCode, String title, String synopsis) {
         MovieTranslationId id = new MovieTranslationId(movie.getMovieId(), langCode);
         MovieTranslation t = new MovieTranslation();
@@ -307,6 +488,93 @@ public class TmdbService {
                 .billingOrder(billingOrder)
                 .build();
         movieCastRepository.save(cast);
+    }
+
+    // ── Age rating resolution ─────────────────────────────────
+
+    private TmdbReleaseDatesResponse fetchReleaseDates(Integer tmdbId) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(TMDB_BASE + "/movie/" + tmdbId + "/release_dates")
+                .queryParam("api_key", apiKey)
+                .build().toUri();
+        try {
+            TmdbReleaseDatesResponse r = restTemplate.getForObject(uri, TmdbReleaseDatesResponse.class);
+            return r != null ? r : new TmdbReleaseDatesResponse();
+        } catch (RestClientException e) {
+            log.warn("TMDB fetchReleaseDates failed for tmdbId={}: {}", tmdbId, e.getMessage());
+            return new TmdbReleaseDatesResponse();
+        }
+    }
+
+    /**
+     * Resolves local AgeRating from TMDB release dates.
+     * Priority: (1) VN certification (matches local codes directly),
+     *           (2) US MPAA certification mapped to local codes.
+     */
+    private AgeRating resolveAgeRating(TmdbReleaseDatesResponse releaseDates) {
+        if (releaseDates == null || releaseDates.getResults() == null) return null;
+
+        String vnCert = null;
+        String usCert = null;
+
+        for (TmdbReleaseDatesResponse.CountryRelease country : releaseDates.getResults()) {
+            if (country.getReleaseDates() == null) continue;
+            String cert = country.getReleaseDates().stream()
+                    .filter(rd -> rd.getCertification() != null && !rd.getCertification().isBlank())
+                    .map(TmdbReleaseDatesResponse.ReleaseDate::getCertification)
+                    .findFirst().orElse(null);
+            if (cert == null) continue;
+            if ("VN".equals(country.getCountryCode())) vnCert = cert;
+            if ("US".equals(country.getCountryCode())) usCert = cert;
+        }
+
+        // 1. Try VN cert first — already matches local codes (P, K, T13, T16, T18)
+        if (vnCert != null) {
+            Optional<AgeRating> found = ageRatingRepository.findByRatingCode(vnCert);
+            if (found.isPresent()) return found.get();
+        }
+
+        // 2. Map US MPAA → local code
+        if (usCert != null) {
+            String localCode = US_CERT_TO_LOCAL.get(usCert);
+            if (localCode != null) {
+                return ageRatingRepository.findByRatingCode(localCode).orElse(null);
+            }
+        }
+
+        return null;
+    }
+
+    // ── Genre resolution ──────────────────────────────────────
+
+    /**
+     * Matches a list of TMDB genre objects to local Genre entities.
+     * Strategy: (1) TMDB ID → genre_code lookup (language-independent),
+     *           (2) fallback: case-insensitive name match.
+     */
+    private List<Genre> resolveGenres(List<TmdbMovieDetail.TmdbGenre> tmdbGenres) {
+        if (tmdbGenres == null || tmdbGenres.isEmpty()) return List.of();
+        // Build name lookup as fallback
+        List<Genre> allLocal = genreRepository.findAll();
+        Map<String, Genre> byNameLower = allLocal.stream()
+                .collect(Collectors.toMap(
+                        g -> g.getGenreName().toLowerCase().trim(),
+                        g -> g,
+                        (a, b) -> a));
+        List<Genre> result = new ArrayList<>();
+        for (TmdbMovieDetail.TmdbGenre tg : tmdbGenres) {
+            Genre found = null;
+            // 1. Match by genre_code (stable, language-independent)
+            String code = TMDB_GENRE_CODES.get(tg.getId());
+            if (code != null) {
+                found = genreRepository.findByGenreCode(code).orElse(null);
+            }
+            // 2. Fallback: case-insensitive name match (handles custom/future genres)
+            if (found == null && tg.getName() != null) {
+                found = byNameLower.get(tg.getName().toLowerCase().trim());
+            }
+            if (found != null && !result.contains(found)) result.add(found);
+        }
+        return result;
     }
 
     // ── Utilities ─────────────────────────────────────────────

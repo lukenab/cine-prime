@@ -1,5 +1,6 @@
 import { useAuth } from "../context/AuthContext";
-import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, Users, UserCog, BarChart2, Settings, Clapperboard, LogOut, Gift, ShoppingCart, MapPin } from "lucide-react";
+import { useState } from "react";
+import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, Users, UserCog, BarChart2, Settings, Clapperboard, LogOut, Gift, ShoppingCart, MapPin, UserSquare2, ChevronDown, List, ShieldCheck, Monitor, Factory } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 
 const roleLabels: Record<string, string> = {
@@ -12,21 +13,36 @@ function getInitials(username: string): string {
   return username.slice(0, 2).toUpperCase();
 }
 
-// roles: which roles can see this item. undefined = all roles.
-const navItems = [
+type NavChild = { icon: React.ElementType; label: string; path: string; roles?: string[] };
+type NavItem = {
+  icon: React.ElementType; label: string; id: string;
+  path: string; group: string; roles?: string[];
+  children?: NavChild[];
+};
+
+const navItems: NavItem[] = [
   { icon: LayoutDashboard, label: "Dashboard",   id: "dashboard", path: "/admin",          group: "main" },
-  { icon: Film,            label: "Movies",       id: "movies",    path: "/admin/movies",    group: "catalog" },
-  { icon: MapPin,          label: "Clusters",     id: "clusters",  path: "/admin/clusters",  group: "catalog",  roles: ["ROLE_ADMIN"] },
-  { icon: Building2,       label: "Cinema Rooms", id: "rooms",     path: "/admin/rooms",     group: "catalog",  roles: ["ROLE_ADMIN"] },
-  { icon: Tags,            label: "Genres",       id: "genres",    path: "/admin/genres",    group: "catalog",  roles: ["ROLE_ADMIN"] },
-  { icon: Calendar,        label: "Showtimes",    id: "showtimes", path: "/admin/showtimes", group: "ops" },
-  { icon: Ticket,          label: "Bookings",     id: "bookings",   path: "/admin/bookings",   group: "ops" },
-  { icon: ShoppingCart,    label: "Sell Tickets", id: "sell",       path: "/admin/sell",       group: "ops" },
-  { icon: UserCog,         label: "Employees",    id: "employees",  path: "/admin/employees",  group: "ops",      roles: ["ROLE_ADMIN"] },
-  { icon: Users,           label: "Users",        id: "users",      path: "/admin/users",      group: "ops",      roles: ["ROLE_ADMIN"] },
-  { icon: Gift,            label: "Promotions",   id: "promotions", path: "/admin/promotions", group: "ops",      roles: ["ROLE_ADMIN"] },
-  { icon: BarChart2,       label: "Reports",      id: "reports",   path: "/admin/reports",   group: "system",   roles: ["ROLE_ADMIN"] },
-  { icon: Settings,        label: "Settings",     id: "settings",  path: "/admin/settings",  group: "system",   roles: ["ROLE_ADMIN"] },
+  {
+    icon: Film, label: "Movies", id: "movies", path: "/admin/movies", group: "catalog",
+    children: [
+      { icon: List,         label: "Movie List",   path: "/admin/movies" },
+      { icon: ShieldCheck,  label: "Age Ratings",  path: "/admin/age-ratings",  roles: ["ROLE_ADMIN"] },
+      { icon: Monitor,      label: "Formats",      path: "/admin/formats",       roles: ["ROLE_ADMIN"] },
+      { icon: Factory,      label: "Companies",    path: "/admin/companies",     roles: ["ROLE_ADMIN"] },
+    ],
+  },
+  { icon: MapPin,      label: "Clusters",     id: "clusters",  path: "/admin/clusters",  group: "catalog",  roles: ["ROLE_ADMIN"] },
+  { icon: Building2,   label: "Cinema Rooms", id: "rooms",     path: "/admin/rooms",     group: "catalog",  roles: ["ROLE_ADMIN"] },
+  { icon: Tags,        label: "Genres",       id: "genres",    path: "/admin/genres",    group: "catalog",  roles: ["ROLE_ADMIN"] },
+  { icon: UserSquare2, label: "Persons",      id: "persons",   path: "/admin/persons",   group: "catalog",  roles: ["ROLE_ADMIN"] },
+  { icon: Calendar,    label: "Showtimes",    id: "showtimes", path: "/admin/showtimes", group: "ops" },
+  { icon: Ticket,      label: "Bookings",     id: "bookings",  path: "/admin/bookings",  group: "ops" },
+  { icon: ShoppingCart,label: "Sell Tickets", id: "sell",      path: "/admin/sell",      group: "ops" },
+  { icon: UserCog,     label: "Employees",    id: "employees", path: "/admin/employees", group: "ops",    roles: ["ROLE_ADMIN"] },
+  { icon: Users,       label: "Users",        id: "users",     path: "/admin/users",     group: "ops",    roles: ["ROLE_ADMIN"] },
+  { icon: Gift,        label: "Promotions",   id: "promotions",path: "/admin/promotions",group: "ops",    roles: ["ROLE_ADMIN"] },
+  { icon: BarChart2,   label: "Reports",      id: "reports",   path: "/admin/reports",   group: "system", roles: ["ROLE_ADMIN"] },
+  { icon: Settings,    label: "Settings",     id: "settings",  path: "/admin/settings",  group: "system", roles: ["ROLE_ADMIN"] },
 ];
 
 interface SidebarProps {
@@ -35,9 +51,17 @@ interface SidebarProps {
 
 export function Sidebar({ isDarkMode = true }: SidebarProps) {
   const navigate = useNavigate();
-  const location = useLocation(); 
-
+  const location = useLocation();
   const { user, logout } = useAuth();
+
+  // Auto-expand items whose children match the current path
+  const autoExpanded = navItems
+    .filter(item => item.children?.some(c => location.pathname.startsWith(c.path) && c.path !== "/admin/movies" || location.pathname === c.path))
+    .map(item => item.id);
+  const [expandedIds, setExpandedIds] = useState<string[]>(autoExpanded);
+
+  const toggleExpand = (id: string) =>
+    setExpandedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
   const handleLogout = () => {
     void logout();
@@ -131,18 +155,41 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
 
       {/* Nav items */}
       <nav style={{ padding: "0 10px", flex: 1, overflowY: "auto", minHeight: 0 }}>
-        {navItems.filter(({ roles }) => !roles || roles.includes(user?.role ?? "")).map(({ icon: Icon, label, id, path, group }, idx, visibleItems) => {
-          const isActive =
-            path === "/admin"
-              ? location.pathname === "/admin"
-              : location.pathname.startsWith(path);
+        {navItems.filter(({ roles }) => !roles || roles.includes(user?.role ?? "")).map((item, idx, visibleItems) => {
+          const { icon: Icon, label, id, path, group, children } = item;
+          const hasChildren = !!children?.length;
+          const isExpanded = expandedIds.includes(id);
+          const role = user?.role ?? "";
+
+          // Active: exact for /admin, startsWith for others
+          const isActive = path === "/admin"
+            ? location.pathname === "/admin"
+            : !hasChildren && location.pathname.startsWith(path);
+
+          // Parent is "active" style when any child is active
+          const childActive = hasChildren && children!.some(c => location.pathname.startsWith(c.path));
 
           const prevGroup = idx > 0 ? visibleItems[idx - 1].group : group;
           const showSectionLabel = group !== prevGroup;
-          const sectionLabels: Record<string, string> = {
-            catalog: "Catalog",
-            ops: "Operations",
-            system: "System",
+          const sectionLabels: Record<string, string> = { catalog: "Catalog", ops: "Operations", system: "System" };
+
+          const btnStyle = (active: boolean): React.CSSProperties => ({
+            width: "100%", display: "flex", alignItems: "center", gap: "11px",
+            padding: "10px 12px", marginBottom: "2px", borderRadius: "8px",
+            border: "none", cursor: "pointer",
+            background: active ? (isDarkMode ? "rgba(59,130,246,0.1)" : "rgba(37,99,235,0.08)") : "transparent",
+            color: active ? (isDarkMode ? "#3b82f6" : "#2563eb") : "var(--text-sub)",
+            fontSize: "13.5px", fontWeight: active ? 600 : 500,
+            letterSpacing: "0.01em", transition: "all 0.15s ease",
+            position: "relative", textAlign: "left",
+            boxShadow: active ? (isDarkMode ? "inset 0 0 0 1px rgba(59,130,246,0.15)" : "inset 0 0 0 1px rgba(37,99,235,0.2)") : "none",
+          });
+
+          const hoverOn = (e: React.MouseEvent<HTMLButtonElement>, active: boolean) => {
+            if (!active) { e.currentTarget.style.background = isDarkMode ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.04)"; e.currentTarget.style.color = "var(--text-main)"; }
+          };
+          const hoverOff = (e: React.MouseEvent<HTMLButtonElement>, active: boolean) => {
+            if (!active) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-sub)"; }
           };
 
           return (
@@ -152,59 +199,55 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
                   {sectionLabels[group] ?? group}
                 </div>
               )}
-            <button
-              onClick={() => navigate(path)}
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                gap: "11px",
-                padding: "10px 12px",
-                marginBottom: "2px",
-                borderRadius: "8px",
-                border: "none",
-                cursor: "pointer",
-                background: isActive ? (isDarkMode ? "rgba(59, 130, 246, 0.1)" : "rgba(37, 99, 235, 0.08)") : "transparent",
-                color: isActive ? (isDarkMode ? "#3b82f6" : "#2563eb") : "var(--text-sub)",
-                fontSize: "13.5px",
-                fontWeight: isActive ? 600 : 500,
-                letterSpacing: "0.01em",
-                transition: "all 0.15s ease",
-                position: "relative",
-                textAlign: "left",
-                boxShadow: isActive ? (isDarkMode ? "inset 0 0 0 1px rgba(59, 130, 246, 0.15)" : "inset 0 0 0 1px rgba(37, 99, 235, 0.2)") : "none",
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.background = isDarkMode ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.04)";
-                  e.currentTarget.style.color = "var(--text-main)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.background = "transparent";
-                  e.currentTarget.style.color = "var(--text-sub)";
-                }
-              }}
-            >
-              {isActive && (
-                <span
-                  style={{
-                    position: "absolute",
-                    left: 0,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    width: "3px",
-                    height: "18px",
-                    background: isDarkMode ? "#3b82f6" : "#2563eb",
-                    borderRadius: "0 2px 2px 0",
-                    boxShadow: isDarkMode ? "0 0 8px rgba(59, 130, 246, 0.7)" : "0 0 6px rgba(37, 99, 235, 0.4)",
-                  }}
-                />
+
+              {/* Parent button */}
+              <button
+                onClick={() => hasChildren ? toggleExpand(id) : navigate(path)}
+                style={btnStyle(isActive || childActive)}
+                onMouseEnter={(e) => hoverOn(e, isActive || childActive)}
+                onMouseLeave={(e) => hoverOff(e, isActive || childActive)}
+              >
+                {(isActive || childActive) && (
+                  <span style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", width: "3px", height: "18px", background: isDarkMode ? "#3b82f6" : "#2563eb", borderRadius: "0 2px 2px 0", boxShadow: isDarkMode ? "0 0 8px rgba(59,130,246,0.7)" : "0 0 6px rgba(37,99,235,0.4)" }} />
+                )}
+                <Icon size={16} style={(isActive || childActive) && isDarkMode ? { filter: "drop-shadow(0 0 4px rgba(59,130,246,0.5))" } : {}} />
+                <span style={{ flex: 1 }}>{label}</span>
+                {hasChildren && (
+                  <ChevronDown size={13} style={{ flexShrink: 0, transition: "transform 0.2s ease", transform: isExpanded ? "rotate(0deg)" : "rotate(-90deg)", opacity: 0.5 }} />
+                )}
+              </button>
+
+              {/* Children */}
+              {hasChildren && (
+                <div style={{ overflow: "hidden", maxHeight: isExpanded ? "200px" : "0", transition: "max-height 0.22s ease" }}>
+                  {children!
+                    .filter(c => !c.roles || c.roles.includes(role))
+                    .map(child => {
+                      const ChildIcon = child.icon;
+                      const childIsActive = location.pathname === child.path || (child.path !== "/admin/movies" && location.pathname.startsWith(child.path));
+                      return (
+                        <button
+                          key={child.path}
+                          onClick={() => navigate(child.path)}
+                          style={{
+                            width: "100%", display: "flex", alignItems: "center", gap: "9px",
+                            padding: "8px 12px 8px 36px", marginBottom: "1px",
+                            borderRadius: "8px", border: "none", cursor: "pointer",
+                            background: childIsActive ? (isDarkMode ? "rgba(59,130,246,0.08)" : "rgba(37,99,235,0.06)") : "transparent",
+                            color: childIsActive ? (isDarkMode ? "#3b82f6" : "#2563eb") : "var(--text-sub)",
+                            fontSize: "12.5px", fontWeight: childIsActive ? 600 : 400,
+                            transition: "all 0.15s ease", textAlign: "left",
+                          }}
+                          onMouseEnter={(e) => { if (!childIsActive) { e.currentTarget.style.background = isDarkMode ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)"; e.currentTarget.style.color = "var(--text-main)"; } }}
+                          onMouseLeave={(e) => { if (!childIsActive) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-sub)"; } }}
+                        >
+                          <ChildIcon size={13} />
+                          {child.label}
+                        </button>
+                      );
+                    })}
+                </div>
               )}
-              <Icon size={16} style={isActive && isDarkMode ? { filter: "drop-shadow(0 0 4px rgba(59, 130, 246, 0.5))" } : {}} />
-              {label}
-            </button>
             </div>
           );
         })}

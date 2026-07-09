@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import movie.theater.common.dto.ApiResponse;
 import movieservice.dto.request.TmdbImportRequest;
 import movieservice.dto.response.TmdbImportResponse;
+import movieservice.dto.response.TmdbMovieDetailsResponse;
 import movieservice.dto.response.TmdbSearchResultItem;
 import movieservice.service.TmdbService;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -26,6 +27,15 @@ public class TmdbController {
         return ApiResponse.<List<TmdbSearchResultItem>>builder()
                 .code(200)
                 .result(tmdbService.search(q))
+                .build();
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/{tmdbId}/details")
+    public ApiResponse<TmdbMovieDetailsResponse> getDetails(@PathVariable Integer tmdbId) {
+        return ApiResponse.<TmdbMovieDetailsResponse>builder()
+                .code(200)
+                .result(tmdbService.getDetails(tmdbId))
                 .build();
     }
 
