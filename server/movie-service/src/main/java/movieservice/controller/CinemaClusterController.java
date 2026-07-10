@@ -40,7 +40,11 @@ public class CinemaClusterController {
             clusters = clusterRepository
                     .findByClusterNameContainingIgnoreCaseOrProvinceContainingIgnoreCase(q, q);
         } else if (status != null && !status.isBlank()) {
-            clusters = clusterRepository.findByStatus(ClusterStatus.valueOf(status.toUpperCase()));
+            try {
+                clusters = clusterRepository.findByStatus(ClusterStatus.valueOf(status.toUpperCase()));
+            } catch (IllegalArgumentException e) {
+                throw new AppException(MovieErrorCode.INVALID_CLUSTER_STATUS);
+            }
         } else {
             clusters = clusterRepository.findAll();
         }
@@ -69,6 +73,10 @@ public class CinemaClusterController {
     @PostMapping
     public ApiResponse<CinemaClusterResponse> create(@Valid @RequestBody CinemaClusterRequest req) {
         CinemaCluster cluster = movieMapper.toCinemaCluster(req);
+        cluster.setClusterName(req.getClusterName().trim());
+        cluster.setProvince(req.getProvince().trim());
+        cluster.setAddress(req.getAddress().trim());
+        if (req.getPhoneNumber() != null) cluster.setPhoneNumber(req.getPhoneNumber().trim());
         if (req.getStatus() != null) cluster.setStatus(req.getStatus());
         CinemaCluster saved = clusterRepository.save(cluster);
         return ApiResponse.<CinemaClusterResponse>builder()
