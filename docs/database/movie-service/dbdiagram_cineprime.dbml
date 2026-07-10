@@ -1,0 +1,209 @@
+// =============================================================================
+// CinePrime — Database Schema (movie_db v2 + cinema_cluster)
+// Paste vào https://dbdiagram.io để xem diagram
+// =============================================================================
+
+Table genre {
+  genre_id    bigint      [pk, increment]
+  genre_name  varchar(100) [not null, unique]
+  genre_code  varchar(50)  [not null, unique, note: 'slug: action, romance…']
+  created_at  timestamptz  [not null, default: `now()`]
+}
+
+Table age_rating {
+  rating_id    int         [pk, increment]
+  rating_code  varchar(5)  [not null, unique, note: 'P / K / T13 / T16 / T18 / C']
+  min_age      smallint    [not null, default: 0]
+  description  varchar(255) [not null]
+}
+
+Table screening_format {
+  format_id    int           [pk, increment]
+  format_code  varchar(20)   [not null, unique, note: '2D / 3D / IMAX / 4DX / SCREENX / ATMOS']
+  format_name  varchar(100)  [not null]
+  description  varchar(255)
+  surcharge    decimal(10,2) [not null, default: 0, note: 'Phụ phí thêm vào giá vé cơ bản (VND)']
+}
+
+Table production_company {
+  company_id   bigint       [pk, increment]
+  name         varchar(255) [not null, unique]
+  country      varchar(100)
+  logo_url     varchar(500)
+  website_url  varchar(500)
+  created_at   timestamptz  [not null, default: `now()`]
+}
+
+Table person {
+  person_id   bigint       [pk, increment]
+  full_name   varchar(255) [not null]
+  birth_date  date
+  nationality varchar(100)
+  photo_url   varchar(500)
+  biography   text
+  tmdb_id     int          [unique, note: 'TMDB person ID — dedup khi import']
+  created_at  timestamptz  [not null, default: `now()`]
+  updated_at  timestamptz  [not null, default: `now()`]
+}
+
+Table movie {
+  movie_id          bigint       [pk, increment]
+  tmdb_id           int          [unique]
+  imdb_id           varchar(20)  [unique]
+  original_title    varchar(500) [not null]
+  original_language char(2)      [not null, default: 'en']
+  duration_minutes  smallint     [not null, note: 'CHECK 1–600']
+  release_date      date
+  age_rating_id     smallint     [ref: > age_rating.rating_id]
+  company_id        bigint       [ref: > production_company.company_id]
+  country           varchar(100)
+  poster_url        varchar(500)
+  thumbnail_url     varchar(500)
+  trailer_url       varchar(500)
+  synopsis          text
+  status            varchar(20)  [not null, default: 'DRAFT', note: 'DRAFT | PENDING_REVIEW | REJECTED | COMING_SOON | NOW_SHOWING | SUSPENDED | ENDED']
+  suspended_reason  text
+  rejection_note    text
+  created_at        timestamptz  [not null, default: `now()`]
+  updated_at        timestamptz  [not null, default: `now()`]
+  created_by        varchar(100)
+  updated_by        varchar(100)
+}
+
+Table movie_translation {
+  movie_id      bigint      [ref: > movie.movie_id]
+  language_code char(2)     [note: 'ISO 639-1: vi / en / ko / ja']
+  title         varchar(500) [not null]
+  synopsis      text
+  created_at    timestamptz [not null, default: `now()`]
+
+  indexes {
+    (movie_id, language_code) [pk]
+  }
+}
+
+Table movie_genre {
+  movie_id  bigint [ref: > movie.movie_id]
+  genre_id  bigint [ref: > genre.genre_id]
+
+  indexes {
+    (movie_id, genre_id) [pk]
+  }
+}
+
+Table movie_format {
+  movie_id   bigint   [ref: > movie.movie_id]
+  format_id  smallint [ref: > screening_format.format_id]
+
+  indexes {
+    (movie_id, format_id) [pk]
+  }
+}
+
+Table movie_cast {
+  cast_id        bigint      [pk, increment]
+  movie_id       bigint      [ref: > movie.movie_id]
+  person_id      bigint      [ref: > person.person_id]
+  role_type      varchar(20) [not null, note: 'ACTOR | DIRECTOR | WRITER | PRODUCER | COMPOSER']
+  character_name varchar(255)
+  billing_order  smallint    [note: '1 = top billing']
+}
+
+Table movie_action_log {
+  id                 varchar(36)  [pk, note: 'UUID']
+  movie_id           bigint       [ref: > movie.movie_id]
+  account_id         varchar(100) [not null]
+  action_type        varchar(50)  [not null, note: 'CREATE | UPDATE | SUSPEND | ACTIVATE | DELETE']
+  action_description text
+  old_status         varchar(20)
+  new_status         varchar(20)
+  note               text
+  created_at         timestamptz  [not null, default: `now()`]
+}
+
+Table cinema_cluster {
+  cluster_id   bigint       [pk, increment]
+  cluster_name varchar(100) [not null]
+  province     varchar(100) [not null, note: 'Hà Nội / TP. Hồ Chí Minh / Đà Nẵng…']
+  address      varchar(255) [not null]
+  phone_number varchar(20)
+  status       varchar(10)  [not null, default: 'ACTIVE', note: 'ACTIVE | INACTIVE']
+  created_at   timestamptz  [not null, default: `now()`]
+  updated_at   timestamptz  [not null, default: `now()`]
+}
+
+Table cinema_room {
+  cinema_room_id      bigint      [pk, increment]
+  cluster_id          bigint      [ref: > cinema_cluster.cluster_id, note: 'nullable — phòng chưa gán cluster']
+  cinema_room_name    varchar(100) [not null]
+  room_type           varchar(20)  [not null, default: 'STANDARD', note: 'STANDARD | LARGE | IMAX | 4DX | SCREENX']
+  total_seat_capacity int          [not null, default: 0]
+  status              varchar(30)  [not null, default: 'ACTIVE', note: 'ACTIVE | MAINTENANCE | TEMPORARILY_UNAVAILABLE | CLOSED']
+  maintenance_note    text
+  created_at          timestamptz  [not null, default: `now()`]
+  updated_at          timestamptz  [not null, default: `now()`]
+  created_by          varchar(100)
+  updated_by          varchar(100)
+}
+
+Table cinema_room_maintenance {
+  maintenance_id  bigint      [pk, increment]
+  cinema_room_id  bigint      [ref: > cinema_room.cinema_room_id]
+  reason          text        [not null]
+  severity        varchar(20) [not null, default: 'MEDIUM', note: 'LOW | MEDIUM | HIGH | CRITICAL']
+  started_at      timestamptz [not null, default: `now()`]
+  resolved_at     timestamptz
+  resolved        boolean     [not null, default: false]
+  resolution_note text
+  created_by      varchar(100) [not null]
+  created_at      timestamptz  [not null, default: `now()`]
+}
+
+Table seat {
+  seat_id        bigint        [pk, increment]
+  cinema_room_id bigint        [ref: > cinema_room.cinema_room_id]
+  seat_code      varchar(10)   [not null, note: 'A1, B12, VIP-C3']
+  row_label      varchar(5)    [not null, note: 'A, B, AA — dùng render layout map']
+  col_number     smallint      [not null]
+  seat_type      varchar(20)   [not null, default: 'STANDARD', note: 'STANDARD | VIP | COUPLE | SWEETBOX']
+  status         varchar(20)   [not null, default: 'ACTIVE', note: 'ACTIVE | INACTIVE | MAINTENANCE']
+  base_price     decimal(10,2) [not null, default: 0]
+  created_at     timestamptz   [not null, default: `now()`]
+  updated_at     timestamptz   [not null, default: `now()`]
+}
+
+Table show_time {
+  showtime_id         bigint        [pk, increment]
+  movie_id            bigint        [ref: > movie.movie_id]
+  cinema_room_id      bigint        [ref: > cinema_room.cinema_room_id]
+  format_id           smallint      [ref: > screening_format.format_id]
+  language_code       char(2)       [not null, default: 'vi', note: 'vi=lồng tiếng / en=tiếng Anh']
+  subtitle_code       char(2)       [note: 'NULL = không phụ đề']
+  show_date           date          [not null]
+  start_time          time          [not null]
+  end_time            time          [not null]
+  base_price          decimal(10,2) [not null, default: 0]
+  status              varchar(20)   [not null, default: 'SCHEDULED', note: 'SCHEDULED | ON_SALE | CANCELLED | COMPLETED | SUSPENDED']
+  cancellation_reason text
+  cancelled_at        timestamptz
+  cancelled_by        varchar(100)
+  total_seats         int           [not null, default: 0]
+  sold_seats          int           [not null, default: 0]
+  created_at          timestamptz   [not null, default: `now()`]
+  updated_at          timestamptz   [not null, default: `now()`]
+  created_by          varchar(100)
+  updated_by          varchar(100)
+}
+
+Table showtime_seat {
+  showtime_seat_id    bigint        [pk, increment]
+  showtime_id         bigint        [ref: > show_time.showtime_id]
+  seat_id             bigint        [ref: > seat.seat_id]
+  seat_code           varchar(10)   [not null]
+  seat_type           varchar(20)   [not null, default: 'STANDARD']
+  price               decimal(10,2) [not null]
+  status              varchar(20)   [not null, default: 'AVAILABLE', note: 'AVAILABLE | RESERVED | SOLD | BLOCKED | CANCELLED']
+  reserved_at         timestamptz
+  reserved_expires_at timestamptz
+  booking_id          varchar(36)   [note: 'UUID từ booking-service — không FK vì cross-DB']
+}
