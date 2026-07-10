@@ -67,7 +67,8 @@ public enum MovieErrorCode implements BaseErrorCode {
     TMDB_API_ERROR(2022, "Failed to connect to TMDB API. Check your API key or network.", HttpStatus.BAD_GATEWAY),
 
     CLUSTER_NOT_FOUND(2023, "Cinema cluster not found.", HttpStatus.NOT_FOUND),
-    CLUSTER_HAS_ROOMS(2024, "Cannot delete cluster that still has cinema rooms.", HttpStatus.CONFLICT);
+    CLUSTER_HAS_ROOMS(2024, "Cannot delete cluster that still has cinema rooms.", HttpStatus.CONFLICT),
+    INVALID_CLUSTER_STATUS(2025, "Invalid status. Accepted values: ACTIVE, INACTIVE", HttpStatus.BAD_REQUEST);
 
     int code;
     String message;
