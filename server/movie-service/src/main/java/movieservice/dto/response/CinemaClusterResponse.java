@@ -3,6 +3,8 @@ package movieservice.dto.response;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.math.BigDecimal;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -14,6 +16,8 @@ public class CinemaClusterResponse {
     String province;
     String address;
     String phoneNumber;
+    BigDecimal latitude;
+    BigDecimal longitude;
     String status;
     Integer totalRooms;
     Integer totalSeats;
