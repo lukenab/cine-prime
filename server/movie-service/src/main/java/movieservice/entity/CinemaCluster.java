@@ -5,6 +5,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 import movieservice.enums.ClusterStatus;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -34,6 +35,12 @@ public class CinemaCluster {
 
     @Column(name = "phone_number", length = 20)
     String phoneNumber;
+
+    @Column(name = "latitude", precision = 10, scale = 7)
+    BigDecimal latitude;
+
+    @Column(name = "longitude", precision = 10, scale = 7)
+    BigDecimal longitude;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 10)
