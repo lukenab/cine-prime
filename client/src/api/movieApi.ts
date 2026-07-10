@@ -579,5 +579,3 @@ export function todayPlusDays(n: number): string {
   d.setDate(d.getDate() + n);
   return d.toISOString().split('T')[0];
 }
-0];
-}
