@@ -1,7 +1,8 @@
 import { useAuth } from "../context/AuthContext";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, Users, UserCog, BarChart2, Settings, Clapperboard, LogOut, Gift, ShoppingCart, MapPin, UserSquare2, ChevronDown, List, ShieldCheck, Monitor, Factory } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { movieApi } from "../api/movieApi";
 
 const roleLabels: Record<string, string> = {
   ROLE_ADMIN: "Admin",
@@ -21,28 +22,33 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { icon: LayoutDashboard, label: "Dashboard",   id: "dashboard", path: "/admin",          group: "main" },
+  { icon: LayoutDashboard, label: "Dashboard", id: "dashboard", path: "/admin", group: "main" },
   {
     icon: Film, label: "Movies", id: "movies", path: "/admin/movies", group: "catalog",
     children: [
-      { icon: List,         label: "Movie List",   path: "/admin/movies" },
-      { icon: ShieldCheck,  label: "Age Ratings",  path: "/admin/age-ratings",  roles: ["ROLE_ADMIN"] },
-      { icon: Monitor,      label: "Formats",      path: "/admin/formats",       roles: ["ROLE_ADMIN"] },
-      { icon: Factory,      label: "Companies",    path: "/admin/companies",     roles: ["ROLE_ADMIN"] },
+      { icon: List,        label: "Movie List",  path: "/admin/movies" },
+      { icon: Tags,        label: "Genres",      path: "/admin/genres",      roles: ["ROLE_ADMIN"] },
+      { icon: ShieldCheck, label: "Age Ratings", path: "/admin/age-ratings", roles: ["ROLE_ADMIN"] },
+      { icon: Monitor,     label: "Formats",     path: "/admin/formats",     roles: ["ROLE_ADMIN"] },
+      { icon: Factory,     label: "Companies",   path: "/admin/companies",   roles: ["ROLE_ADMIN"] },
+      { icon: UserSquare2, label: "Persons",     path: "/admin/persons",     roles: ["ROLE_ADMIN"] },
     ],
   },
-  { icon: MapPin,      label: "Clusters",     id: "clusters",  path: "/admin/clusters",  group: "catalog",  roles: ["ROLE_ADMIN"] },
-  { icon: Building2,   label: "Cinema Rooms", id: "rooms",     path: "/admin/rooms",     group: "catalog",  roles: ["ROLE_ADMIN"] },
-  { icon: Tags,        label: "Genres",       id: "genres",    path: "/admin/genres",    group: "catalog",  roles: ["ROLE_ADMIN"] },
-  { icon: UserSquare2, label: "Persons",      id: "persons",   path: "/admin/persons",   group: "catalog",  roles: ["ROLE_ADMIN"] },
-  { icon: Calendar,    label: "Showtimes",    id: "showtimes", path: "/admin/showtimes", group: "ops" },
-  { icon: Ticket,      label: "Bookings",     id: "bookings",  path: "/admin/bookings",  group: "ops" },
-  { icon: ShoppingCart,label: "Sell Tickets", id: "sell",      path: "/admin/sell",      group: "ops" },
-  { icon: UserCog,     label: "Employees",    id: "employees", path: "/admin/employees", group: "ops",    roles: ["ROLE_ADMIN"] },
-  { icon: Users,       label: "Users",        id: "users",     path: "/admin/users",     group: "ops",    roles: ["ROLE_ADMIN"] },
-  { icon: Gift,        label: "Promotions",   id: "promotions",path: "/admin/promotions",group: "ops",    roles: ["ROLE_ADMIN"] },
-  { icon: BarChart2,   label: "Reports",      id: "reports",   path: "/admin/reports",   group: "system", roles: ["ROLE_ADMIN"] },
-  { icon: Settings,    label: "Settings",     id: "settings",  path: "/admin/settings",  group: "system", roles: ["ROLE_ADMIN"] },
+  {
+    icon: Building2, label: "Cinemas", id: "cinemas", path: "/admin/clusters", group: "catalog",
+    children: [
+      { icon: MapPin,    label: "Clusters",     path: "/admin/clusters", roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"] },
+      { icon: Building2, label: "Cinema Rooms", path: "/admin/rooms",    roles: ["ROLE_ADMIN"] },
+    ],
+  },
+  { icon: Calendar,    label: "Showtimes",    id: "showtimes",  path: "/admin/showtimes",  group: "ops" },
+  { icon: Ticket,      label: "Bookings",     id: "bookings",   path: "/admin/bookings",   group: "ops" },
+  { icon: ShoppingCart,label: "Sell Tickets", id: "sell",       path: "/admin/sell",       group: "ops" },
+  { icon: UserCog,     label: "Employees",    id: "employees",  path: "/admin/employees",  group: "ops",    roles: ["ROLE_ADMIN"] },
+  { icon: Users,       label: "Users",        id: "users",      path: "/admin/users",      group: "ops",    roles: ["ROLE_ADMIN"] },
+  { icon: Gift,        label: "Promotions",   id: "promotions", path: "/admin/promotions", group: "ops",    roles: ["ROLE_ADMIN"] },
+  { icon: BarChart2,   label: "Reports",      id: "reports",    path: "/admin/reports",    group: "system", roles: ["ROLE_ADMIN"] },
+  { icon: Settings,    label: "Settings",     id: "settings",   path: "/admin/settings",   group: "system", roles: ["ROLE_ADMIN"] },
 ];
 
 interface SidebarProps {
@@ -62,6 +68,18 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
 
   const toggleExpand = (id: string) =>
     setExpandedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  // Badge: số phim đang PENDING_REVIEW (chỉ fetch cho ADMIN)
+  const [pendingMovies, setPendingMovies] = useState(0);
+  useEffect(() => {
+    if (user?.role !== "ROLE_ADMIN") return;
+    movieApi.getAllMovies()
+      .then(res => {
+        const count = (res.result ?? []).filter(m => m.movieStatus === "PENDING_REVIEW").length;
+        setPendingMovies(count);
+      })
+      .catch(() => {});
+  }, [user?.role]);
 
   const handleLogout = () => {
     void logout();
@@ -212,6 +230,17 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
                 )}
                 <Icon size={16} style={(isActive || childActive) && isDarkMode ? { filter: "drop-shadow(0 0 4px rgba(59,130,246,0.5))" } : {}} />
                 <span style={{ flex: 1 }}>{label}</span>
+                {id === "movies" && pendingMovies > 0 && (
+                  <span style={{
+                    minWidth: "18px", height: "18px", padding: "0 5px",
+                    background: "#ef4444", color: "#fff",
+                    borderRadius: "9px", fontSize: "10px", fontWeight: 700,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    flexShrink: 0, lineHeight: 1,
+                  }}>
+                    {pendingMovies > 99 ? "99+" : pendingMovies}
+                  </span>
+                )}
                 {hasChildren && (
                   <ChevronDown size={13} style={{ flexShrink: 0, transition: "transform 0.2s ease", transform: isExpanded ? "rotate(0deg)" : "rotate(-90deg)", opacity: 0.5 }} />
                 )}
@@ -219,7 +248,7 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
 
               {/* Children */}
               {hasChildren && (
-                <div style={{ overflow: "hidden", maxHeight: isExpanded ? "200px" : "0", transition: "max-height 0.22s ease" }}>
+                <div style={{ overflow: "hidden", maxHeight: isExpanded ? "400px" : "0", transition: "max-height 0.25s ease" }}>
                   {children!
                     .filter(c => !c.roles || c.roles.includes(role))
                     .map(child => {

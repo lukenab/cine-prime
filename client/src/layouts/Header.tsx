@@ -1,5 +1,5 @@
 import { useAuth } from "../context/AuthContext";
-import { Bell, Search, ChevronRight, User, Settings, LogOut, Sun, Moon } from "lucide-react";
+import { Bell, Search, ChevronRight, User, Settings, LogOut, Sun, Moon, ExternalLink } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -20,15 +20,23 @@ interface HeaderProps {
 }
 
 const pageTitles: Record<string, string> = {
-  dashboard: "Dashboard",
-  movies: "Movies",
-  rooms: "Cinema Rooms",
-  genres: "Movie Genres",
-  showtimes: "Showtimes",
-  bookings: "Bookings",
-  users: "Users",
-  reports: "Reports",
-  settings: "Settings",
+  dashboard:  "Dashboard",
+  movies:     "Movies",
+  clusters:   "Cinema Clusters",
+  rooms:      "Cinema Rooms",
+  genres:     "Movie Genres",
+  persons:    "Persons",
+  "age-ratings": "Age Ratings",
+  formats:    "Formats",
+  companies:  "Companies",
+  showtimes:  "Showtimes",
+  bookings:   "Bookings",
+  sell:       "Sell Tickets",
+  employees:  "Employees",
+  users:      "Users",
+  promotions: "Promotions",
+  reports:    "Reports",
+  settings:   "Settings",
 };
 
 export function Header({ activePage, isDarkMode = true, onToggleTheme }: HeaderProps) {
@@ -190,7 +198,16 @@ const handleLogout = () => {
                   <User size={15} />
                   My Profile
                 </button>
-                
+
+                <button
+                  className="dropdown-item"
+                  onClick={() => { navigate("/home"); setIsProfileOpen(false); }}
+                  style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "10px 12px", border: "none", background: "transparent", cursor: "pointer", borderRadius: "6px", color: "var(--text-muted)", fontSize: "13px", transition: "all 0.2s ease" }}
+                >
+                  <ExternalLink size={15} />
+                  View Customer Site
+                </button>
+
                 <button
                   className="dropdown-item"
                   onClick={() => navigate("/admin/settings")}

@@ -123,8 +123,8 @@ function ActionBtn({ icon: Icon, title, onClick, color = "var(--text-sub)" }: {
   icon: React.ElementType; title: string; onClick: () => void; color?: string;
 }) {
   return (
-    <button onClick={onClick} title={title} className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors action-btn flex-shrink-0" style={{ color }}>
-      <Icon size={13} />
+    <button onClick={onClick} title={title} className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors action-btn flex-shrink-0" style={{ color }}>
+      <Icon size={16} />
     </button>
   );
 }
@@ -370,6 +370,14 @@ export function MovieTable({
                           <div className="flex items-center gap-1 mt-1">
                             <AlertCircle size={10} style={{ color: "#dc2626" }} />
                             <span style={{ fontSize: "10.5px", color: "#dc2626" }}>Needs rework</span>
+                          </div>
+                        )}
+                        {/* End date hint */}
+                        {movie.endDate && (
+                          <div className="flex items-center gap-1 mt-1">
+                            <span style={{ fontSize: "10.5px", color: "var(--text-sub)" }}>
+                              ends {movie.endDate}
+                            </span>
                           </div>
                         )}
                       </td>

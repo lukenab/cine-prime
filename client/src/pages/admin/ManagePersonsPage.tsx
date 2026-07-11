@@ -357,11 +357,11 @@ export default function ManagePersonsPage() {
                     <div className="flex items-center gap-1 justify-end">
                       <button
                         onClick={() => { setEditPerson(person); setModalOpen(true); }}
-                        className="action-btn w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+                        className="action-btn w-9 h-9 rounded-lg flex items-center justify-center transition-colors"
                         style={{ color: "var(--text-sub)" }}
                         title="Edit"
                       >
-                        <Edit2 size={14} />
+                        <Edit2 size={16} />
                       </button>
                       <button
                         onClick={() => setDeleteConfirm(person)}
@@ -369,7 +369,7 @@ export default function ManagePersonsPage() {
                         style={{ color: "var(--text-sub)" }}
                         title="Delete"
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   </td>

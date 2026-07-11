@@ -68,6 +68,10 @@ public interface MovieRepository extends JpaRepository<Movie, Long> {
                     @Param("note") String note,
                     @Param("updatedBy") String updatedBy);
 
+    // ── Scheduler queries ─────────────────────────────────────
+    /** Dùng bởi MovieScheduler: tìm phim NOW_SHOWING có endDate < today */
+    List<Movie> findByStatusAndEndDateBefore(MovieStatus status, LocalDate date);
+
     // ── Stats ─────────────────────────────────────────────────
     @Query("SELECT COUNT(m) FROM Movie m " +
            "WHERE EXTRACT(MONTH FROM m.createdAt) = :month " +

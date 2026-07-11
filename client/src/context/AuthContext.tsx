@@ -4,9 +4,6 @@ import { jwtDecode } from "jwt-decode";
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
 const ROLE_PRIORITY = ["ROLE_ADMIN", "ROLE_EMPLOYEE", "ROLE_MEMBER"];
-const MOCK_EMPLOYEE_USERNAME = "employee";
-const MOCK_EMPLOYEE_EMAIL = "employee@cineprime.com";
-const MOCK_EMPLOYEE_PASSWORD = "employee";
 
 function extractPrimaryRole(rolesClaim: string): string {
     const roles = (rolesClaim || "").split(" ").filter(r => r.startsWith("ROLE_"));
@@ -25,37 +22,6 @@ function isTokenExpired(token: string): boolean {
     }
 }
 
-function base64UrlEncode(value: Record<string, unknown>): string {
-    return btoa(JSON.stringify(value))
-        .replace(/\+/g, "-")
-        .replace(/\//g, "_")
-        .replace(/=+$/g, "");
-}
-
-function createMockEmployeeToken(): string {
-    const now = Math.floor(Date.now() / 1000);
-    return [
-        base64UrlEncode({ alg: "none", typ: "JWT" }),
-        base64UrlEncode({
-            sub: MOCK_EMPLOYEE_USERNAME,
-            accountId: "mock-employee-account",
-            scope: "ROLE_EMPLOYEE TICKET_SELL BOOKING_READ BOOKING_CONFIRM BOOKING_CANCEL",
-            iat: now,
-            exp: now + 60 * 60 * 24 * 7,
-        }),
-        "mock-signature",
-    ].join(".");
-}
-
-function isMockEmployeeCredentials(credentials: any): boolean {
-    const username = String(credentials?.username ?? "").trim().toLowerCase();
-    const password = String(credentials?.password ?? "").trim();
-    return (
-        (username === MOCK_EMPLOYEE_USERNAME || username === MOCK_EMPLOYEE_EMAIL) &&
-        password === MOCK_EMPLOYEE_PASSWORD
-    );
-}
-
 async function checkProfileComplete(accountId: string): Promise<boolean> {
     try {
         const res: any = await userApi.getUserById(accountId);
@@ -63,9 +29,7 @@ async function checkProfileComplete(accountId: string): Promise<boolean> {
         return profile?.profileCompleted === true;
     } catch (err: any) {
         const status = err?.response?.status;
-        // 404 = user record chưa tồn tại trong user-service → cần hoàn thiện profile
         if (status === 404) return false;
-        // Lỗi khác (network, 5xx) → fail open, không chặn user
         return true;
     }
 }
@@ -81,7 +45,7 @@ interface AuthContextType {
     needsProfileSetup: boolean;
     setNeedsProfileSetup: (v: boolean) => void;
     login: (credentials: any) => Promise<{ role: string; needsSetup: boolean }>;
-    logout: () => Promise<void>;
+    logout: () => void;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -107,7 +71,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             setUser({ username: decoded.sub, role: primaryRole, accountId });
 
-            // Re-check profile completeness on page refresh
             if (primaryRole === "ROLE_MEMBER" && accountId) {
                 if (localStorage.getItem("__dev_forceProfileSetup") === "1") {
                     setNeedsProfileSetup(true);
@@ -122,15 +85,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     const login = async (credentials: any): Promise<{ role: string; needsSetup: boolean }> => {
-        if (isMockEmployeeCredentials(credentials)) {
-            const token = createMockEmployeeToken();
-            localStorage.setItem("accessToken", token);
-            localStorage.setItem("role", "ROLE_EMPLOYEE");
-            setUser({ username: MOCK_EMPLOYEE_USERNAME, role: "ROLE_EMPLOYEE", accountId: "mock-employee-account" });
-            setNeedsProfileSetup(false);
-            return { role: "ROLE_EMPLOYEE", needsSetup: false };
-        }
-
         const response = await authApi.login(credentials);
         const resBody = response?.data ?? response;
         const token = resBody?.result?.token || resBody?.token || response?.result?.token;
@@ -162,11 +116,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { role: primaryRole, needsSetup };
     };
 
-    const logout = async () => {
-        const token = localStorage.getItem("accessToken");
-        if (token) {
-            try { await authApi.logout(); } catch { /* ignore */ }
-        }
+    const logout = () => {
+        authApi.logout().catch(() => {});
+
         localStorage.removeItem("accessToken");
         localStorage.removeItem("role");
         localStorage.removeItem("jwt_token");

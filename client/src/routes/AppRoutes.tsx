@@ -54,6 +54,7 @@ export default function AppRoutes() {
       {/* Customer routes — open to browse; profile gate is inside SeatBookingPage */}
       <Route element={<CustomerLayout />}>
         <Route path="/" element={<RootRedirect />} />
+        <Route path="/home" element={<HomePage />} />
         <Route path="/movies" element={<MoviesPage />} />
         <Route path="/cinemas" element={<CinemasPage />} />
         <Route path="/events" element={<EventsPage />} />
@@ -77,7 +78,9 @@ export default function AppRoutes() {
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
 
+          {/* ADMIN + EMPLOYEE */}
           <Route path="movies"    element={<ManageMoviePage />} />
+          <Route path="clusters"  element={<ManageCinemaClusterPage />} />
           <Route path="showtimes" element={<ManageShowtimePage />} />
           <Route path="bookings"  element={<ManageBookingPage />} />
           <Route path="sell"      element={<TicketSalePage />} />
@@ -91,7 +94,6 @@ export default function AppRoutes() {
             <Route path="users/create"       element={<CreateUserPage />} />
             <Route path="users/edit/:id"     element={<EditUserPage />} />
             <Route path="users/:id"          element={<UserDetailPage />} />
-            <Route path="clusters"           element={<ManageCinemaClusterPage />} />
             <Route path="rooms"              element={<ManageCinemaRoomsPage />} />
             <Route path="rooms/:id"          element={<RoomDetailPage />} />
             <Route path="genres"             element={<ManageGenresPage />} />

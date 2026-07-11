@@ -1,17 +1,23 @@
 import { useState, useEffect, useRef } from "react";
-import { Film, Search, Menu, X, LogOut, User, ChevronDown } from "lucide-react";
+import { Film, Search, Menu, X, LogOut, User, ChevronDown, LayoutDashboard } from "lucide-react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { userApi } from "../api/userApi";
 
 const ACCENT = "#3b82f6";
 const navItems = [
-  { label: "Home", to: "/" },
+  { label: "Home", to: "/home" },
   { label: "Movies", to: "/movies" },
   { label: "Cinemas", to: "/cinemas" },
   { label: "Events", to: "/events" },
   { label: "Offers", to: "/offers" },
 ];
+
+const roleLabels: Record<string, string> = {
+  ROLE_ADMIN: "Admin",
+  ROLE_EMPLOYEE: "Employee",
+  ROLE_MEMBER: "Member",
+};
 
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -25,6 +31,7 @@ export function Navbar() {
   const token = localStorage.getItem("accessToken");
   const isLogged = !!token;
   const username = user?.username || "User";
+  const isStaff = user?.role === "ROLE_ADMIN" || user?.role === "ROLE_EMPLOYEE";
 
   // Fetch avatar khi user đăng nhập
   useEffect(() => {
@@ -175,7 +182,7 @@ export function Navbar() {
                 }}>
                   <div style={{ padding: "10px 12px 10px", borderBottom: "1px solid rgba(255,255,255,0.07)", marginBottom: 4 }}>
                     <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#f1f5f9" }}>{username}</p>
-                    <p style={{ margin: "2px 0 0", fontSize: 11, color: "rgba(255,255,255,0.3)" }}>Member</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 11, color: "rgba(255,255,255,0.3)" }}>{roleLabels[user?.role ?? ""] ?? "Member"}</p>
                   </div>
                   <button
                     onClick={() => { navigate("/profile"); setDropdownOpen(false); }}
@@ -185,6 +192,16 @@ export function Navbar() {
                   >
                     <User size={15} /> My Profile
                   </button>
+                  {isStaff && (
+                    <button
+                      onClick={() => { navigate("/admin"); setDropdownOpen(false); }}
+                      style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", border: "none", background: "transparent", cursor: "pointer", borderRadius: 8, color: "rgba(255,255,255,0.6)", fontSize: 13, transition: "all 0.15s" }}
+                      onMouseEnter={e => { e.currentTarget.style.background = "rgba(59,130,246,0.1)"; e.currentTarget.style.color = "#60a5fa"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "rgba(255,255,255,0.6)"; }}
+                    >
+                      <LayoutDashboard size={15} /> Back to Admin
+                    </button>
+                  )}
                   <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "4px 0" }} />
                   <button
                     onClick={handleLogout}
@@ -283,6 +300,17 @@ export function Navbar() {
               {item.label}
             </NavLink>
           ))}
+
+          {isStaff && (
+            <button
+              onClick={() => { navigate("/admin"); setMenuOpen(false); }}
+              className="flex items-center justify-center gap-2 px-5 py-3 rounded-full w-full mt-1 text-sm font-semibold"
+              style={{ color: "#60a5fa", border: "1px solid rgba(59,130,246,0.4)", backgroundColor: "rgba(59,130,246,0.08)" }}
+            >
+              <LayoutDashboard size={16} />
+              Back to Admin
+            </button>
+          )}
 
           {!isLogged && (
             <Link
