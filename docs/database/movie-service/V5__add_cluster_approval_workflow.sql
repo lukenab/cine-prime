@@ -3,8 +3,11 @@
 -- Run on: movie_db
 -- =============================================================================
 
--- 1. Mở rộng CHECK constraint trên cinema_cluster.status
---    (thêm DRAFT và PENDING_REVIEW vào danh sách giá trị hợp lệ)
+-- 1. Mở rộng cột status và CHECK constraint trên cinema_cluster
+--    VARCHAR(10) → VARCHAR(20) để chứa 'PENDING_REVIEW' (14 ký tự)
+
+ALTER TABLE cinema_cluster
+    ALTER COLUMN status TYPE VARCHAR(20);
 
 ALTER TABLE cinema_cluster
     DROP CONSTRAINT IF EXISTS chk_cluster_status;
