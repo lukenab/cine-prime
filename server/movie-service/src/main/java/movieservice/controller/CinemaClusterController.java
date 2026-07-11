@@ -117,7 +117,7 @@ public class CinemaClusterController {
 
     // ── PUT update data (+ ACTIVE↔INACTIVE toggle) ────────────────────────────
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @PutMapping("/{id}")
     public ApiResponse<CinemaClusterResponse> update(
             @PathVariable Long id,
@@ -129,12 +129,21 @@ public class CinemaClusterController {
 
         ClusterStatus oldStatus = cluster.getStatus();
         ClusterAction action = ClusterAction.UPDATE;
+        boolean isAdmin = isAdminRole(authentication);
 
-        // Handle optional status change — only ACTIVE↔INACTIVE allowed via PUT
+        // EMPLOYEE chỉ được sửa cluster đang DRAFT (chưa submit hoặc đã bị reject)
+        if (!isAdmin && oldStatus != ClusterStatus.DRAFT) {
+            throw new AppException(MovieErrorCode.CLUSTER_INVALID_TRANSITION);
+        }
+
+        // Handle optional status change — only ACTIVE↔INACTIVE allowed via PUT (ADMIN only)
         if (req.getStatus() != null) {
             ClusterStatus newStatus = req.getStatus();
             if (newStatus == ClusterStatus.DRAFT || newStatus == ClusterStatus.PENDING_REVIEW) {
-                // DRAFT/PENDING_REVIEW transitions are handled by workflow endpoints
+                throw new AppException(MovieErrorCode.CLUSTER_INVALID_TRANSITION);
+            }
+            if (!isAdmin) {
+                // EMPLOYEE không được đổi status qua PUT
                 throw new AppException(MovieErrorCode.CLUSTER_INVALID_TRANSITION);
             }
             boolean validToggle =
@@ -155,6 +164,8 @@ public class CinemaClusterController {
         cluster.setPhoneNumber(req.getPhoneNumber());
         if (req.getLatitude() != null) cluster.setLatitude(req.getLatitude());
         if (req.getLongitude() != null) cluster.setLongitude(req.getLongitude());
+        // Xóa rejection note khi employee cập nhật lại data
+        if (oldStatus == ClusterStatus.DRAFT) cluster.setRejectionNote(null);
 
         CinemaCluster saved = clusterRepository.save(cluster);
 
@@ -321,6 +332,13 @@ public class CinemaClusterController {
         return authentication.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN")
                         || a.getAuthority().equals("ROLE_EMPLOYEE"));
+    }
+
+    /** Kiểm tra đúng role ADMIN (không bao gồm EMPLOYEE) */
+    private boolean isAdminRole(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) return false;
+        return authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
     }
 
     private String getActor(Authentication authentication) {
