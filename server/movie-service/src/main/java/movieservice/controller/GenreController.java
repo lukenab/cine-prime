@@ -8,6 +8,7 @@ import movie.theater.common.dto.ApiResponse;
 import movieservice.dto.request.GenreRequest;
 import movieservice.dto.response.GenreResponse;
 import movieservice.service.GenreService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -36,6 +37,7 @@ public class GenreController {
                 .build();
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public ApiResponse<GenreResponse> create(@Valid @RequestBody GenreRequest request) {
         return ApiResponse.<GenreResponse>builder()

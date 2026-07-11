@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Search, Plus, SlidersHorizontal, RefreshCw, AlertCircle } from "lucide-react";
 import { useOutletContext } from "react-router-dom";
 
@@ -15,15 +15,14 @@ import {
 export default function ManageShowtimePage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
 
-  const [showtimes, setShowtimes]     = useState<ShowtimeResponse[]>([]);
-  const [loading, setLoading]         = useState(false);
-  const [error, setError]             = useState<string | null>(null);
+  const [showtimes, setShowtimes]   = useState<ShowtimeResponse[]>([]);
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState<string | null>(null);
 
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery]   = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [dateFilter, setDateFilter]   = useState("");
-  const [cinemaFilter, setCinemaFilter] = useState<number | "">("");
-  const [roomFilter, setRoomFilter]   = useState<number | "">("");
+  const [dateFilter, setDateFilter]     = useState("");
+  const [roomFilter, setRoomFilter]     = useState<number | "">("");
 
   const [modalOpen, setModalOpen]       = useState(false);
   const [editShowtime, setEditShowtime] = useState<ShowtimeResponse | null>(null);
@@ -45,26 +44,18 @@ export default function ManageShowtimePage() {
 
   useEffect(() => { loadShowtimes(); }, [loadShowtimes]);
 
-  // Derive filter options from loaded showtimes (no extra API calls)
-  const cinemaOptions = useMemo(() => {
-    const map = new Map<number, string>();
-    showtimes.forEach((s) => map.set(s.cinemaId, s.cinemaName));
-    return Array.from(map, ([cinemaId, cinemaName]) => ({ cinemaId, cinemaName }));
-  }, [showtimes]);
-
+  // Derive room filter options from loaded showtimes (no extra API calls)
   const roomOptions = useMemo(() => {
     const map = new Map<number, string>();
-    showtimes
-      .filter((s) => !cinemaFilter || s.cinemaId === cinemaFilter)
-      .forEach((s) => map.set(s.cinemaRoomId, s.roomName));
-    return Array.from(map, ([cinemaRoomId, roomName]) => ({ cinemaRoomId, roomName }));
-  }, [showtimes, cinemaFilter]);
+    showtimes.forEach((s) => map.set(s.cinemaRoomId, s.cinemaRoomName));
+    return Array.from(map, ([cinemaRoomId, cinemaRoomName]) => ({ cinemaRoomId, cinemaRoomName }));
+  }, [showtimes]);
 
   const handleSaveShowtime = async (payload: ShowtimeAssignPayload | ShowtimeUpdatePayload) => {
     if (editShowtime) {
-      const res = await showtimeApi.updateShowtime(editShowtime.showtimeId, payload as ShowtimeUpdatePayload);
+      const res = await showtimeApi.updateShowtime(editShowtime.showTimeId, payload as ShowtimeUpdatePayload);
       setShowtimes((prev) =>
-        prev.map((s) => (s.showtimeId === editShowtime.showtimeId ? res.result : s))
+        prev.map((s) => (s.showTimeId === editShowtime.showTimeId ? res.result : s))
       );
     } else {
       const res = await showtimeApi.createShowtime(payload as ShowtimeAssignPayload);
@@ -75,7 +66,7 @@ export default function ManageShowtimePage() {
   const handleDeleteShowtime = async (id: number) => {
     try {
       await showtimeApi.deleteShowtime(id);
-      setShowtimes((prev) => prev.filter((s) => s.showtimeId !== id));
+      setShowtimes((prev) => prev.filter((s) => s.showTimeId !== id));
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(msg ?? "Failed to delete showtime. Please try again.");
@@ -85,11 +76,10 @@ export default function ManageShowtimePage() {
   const handleResetFilters = () => {
     setStatusFilter("");
     setDateFilter("");
-    setCinemaFilter("");
     setRoomFilter("");
   };
 
-  const hasActiveFilters = !!(statusFilter || dateFilter || cinemaFilter || roomFilter);
+  const hasActiveFilters = !!(statusFilter || dateFilter || roomFilter);
 
   return (
     <>
@@ -171,7 +161,7 @@ export default function ManageShowtimePage() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block mb-1.5" style={{ fontSize: "12px", color: "var(--text-sub)" }}>Status</label>
               <select
@@ -182,9 +172,10 @@ export default function ManageShowtimePage() {
               >
                 <option value="">All Statuses</option>
                 <option value="SCHEDULED">Scheduled</option>
-                <option value="ONGOING">Ongoing</option>
-                <option value="FINISHED">Finished</option>
+                <option value="ON_SALE">On Sale</option>
+                <option value="COMPLETED">Completed</option>
                 <option value="CANCELLED">Cancelled</option>
+                <option value="SUSPENDED">Suspended</option>
               </select>
             </div>
 
@@ -200,21 +191,6 @@ export default function ManageShowtimePage() {
             </div>
 
             <div>
-              <label className="block mb-1.5" style={{ fontSize: "12px", color: "var(--text-sub)" }}>Cinema</label>
-              <select
-                value={cinemaFilter}
-                onChange={(e) => { setCinemaFilter(e.target.value ? Number(e.target.value) : ""); setRoomFilter(""); }}
-                className="w-full px-3 py-2 rounded-lg border outline-none cursor-pointer"
-                style={{ fontSize: "13px", background: "var(--bg-main)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
-              >
-                <option value="">All Cinemas</option>
-                {cinemaOptions.map((c) => (
-                  <option key={c.cinemaId} value={c.cinemaId}>{c.cinemaName}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
               <label className="block mb-1.5" style={{ fontSize: "12px", color: "var(--text-sub)" }}>Room</label>
               <select
                 value={roomFilter}
@@ -224,7 +200,7 @@ export default function ManageShowtimePage() {
               >
                 <option value="">All Rooms</option>
                 {roomOptions.map((r) => (
-                  <option key={r.cinemaRoomId} value={r.cinemaRoomId}>{r.roomName}</option>
+                  <option key={r.cinemaRoomId} value={r.cinemaRoomId}>{r.cinemaRoomName}</option>
                 ))}
               </select>
             </div>
@@ -245,7 +221,6 @@ export default function ManageShowtimePage() {
           searchQuery={searchQuery}
           statusFilter={statusFilter}
           dateFilter={dateFilter}
-          cinemaFilter={cinemaFilter}
           roomFilter={roomFilter}
         />
       )}

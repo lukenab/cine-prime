@@ -1,5 +1,5 @@
-﻿import { useState } from "react";
-import { Pencil, Trash2, ChevronLeft, ChevronRight, Monitor, Clock, Building2, Tag } from "lucide-react";
+import { useState } from "react";
+import { Pencil, Trash2, ChevronLeft, ChevronRight, Monitor, Clock } from "lucide-react";
 import type { ShowtimeResponse, ShowtimeStatus } from "../api/showtimeApi";
 
 type Props = {
@@ -9,21 +9,29 @@ type Props = {
   searchQuery: string;
   statusFilter: string;
   dateFilter: string;
-  cinemaFilter: number | "";
   roomFilter: number | "";
 };
 
 const ITEMS_PER_PAGE = 8;
 
 const STATUS_STYLE: Record<ShowtimeStatus, { badge: string; dot: string }> = {
-  SCHEDULED: { badge: "bg-blue-50 text-blue-700 border-blue-100",         dot: "bg-blue-500"    },
-  ONGOING:   { badge: "bg-emerald-50 text-emerald-700 border-emerald-100", dot: "bg-emerald-500" },
-  FINISHED:  { badge: "bg-gray-100 text-gray-500 border-gray-200",         dot: "bg-gray-400"    },
-  CANCELLED: { badge: "bg-rose-50 text-rose-600 border-rose-100",          dot: "bg-rose-400"    },
+  SCHEDULED:  { badge: "bg-blue-50 text-blue-700 border-blue-100",         dot: "bg-blue-500"    },
+  ON_SALE:    { badge: "bg-emerald-50 text-emerald-700 border-emerald-100", dot: "bg-emerald-500" },
+  COMPLETED:  { badge: "bg-gray-100 text-gray-500 border-gray-200",         dot: "bg-gray-400"    },
+  CANCELLED:  { badge: "bg-rose-50 text-rose-600 border-rose-100",          dot: "bg-rose-400"    },
+  SUSPENDED:  { badge: "bg-amber-50 text-amber-700 border-amber-100",       dot: "bg-amber-400"   },
 };
 
-const formatPrice = (price: number) =>
-  new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(price);
+const STATUS_LABEL: Record<ShowtimeStatus, string> = {
+  SCHEDULED: "Scheduled",
+  ON_SALE:   "On Sale",
+  COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
+  SUSPENDED: "Suspended",
+};
+
+/** "HH:mm:ss" → "HH:mm" */
+const fmt = (time: string) => time?.slice(0, 5) ?? "—";
 
 export function ShowtimeTable({
   showtimes,
@@ -32,7 +40,6 @@ export function ShowtimeTable({
   searchQuery,
   statusFilter,
   dateFilter,
-  cinemaFilter,
   roomFilter,
 }: Props) {
   const [page, setPage] = useState(1);
@@ -43,13 +50,11 @@ export function ShowtimeTable({
     const matchSearch =
       !q ||
       s.movieName.toLowerCase().includes(q) ||
-      s.roomName.toLowerCase().includes(q) ||
-      s.cinemaName.toLowerCase().includes(q);
+      s.cinemaRoomName.toLowerCase().includes(q);
     const matchStatus = !statusFilter || s.status === statusFilter;
     const matchDate   = !dateFilter   || s.showDate === dateFilter;
-    const matchCinema = !cinemaFilter || s.cinemaId === cinemaFilter;
     const matchRoom   = !roomFilter   || s.cinemaRoomId === roomFilter;
-    return matchSearch && matchStatus && matchDate && matchCinema && matchRoom;
+    return matchSearch && matchStatus && matchDate && matchRoom;
   });
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
@@ -90,7 +95,7 @@ export function ShowtimeTable({
                 Cancel
               </button>
               <button
-                onClick={() => { onDelete(confirmDelete.showtimeId); setConfirmDelete(null); }}
+                onClick={() => { onDelete(confirmDelete.showTimeId); setConfirmDelete(null); }}
                 className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white transition-colors hover:opacity-90"
                 style={{ background: "#ef4444" }}
               >
@@ -106,7 +111,7 @@ export function ShowtimeTable({
           <table className="w-full">
             <thead>
               <tr className="border-b" style={{ borderColor: "var(--border-color)", backgroundColor: "rgba(128,128,128,0.04)" }}>
-                {["Movie & Room", "Cinema", "Date", "Time", "Base Price", "Status", "Actions"].map((h) => (
+                {["Movie & Room", "Date", "Time", "Status", "Actions"].map((h) => (
                   <th key={h} className={`px-5 py-3.5 ${h === "Actions" ? "text-right" : "text-left"}`}>
                     <span style={{ color: "var(--text-sub)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>
                       {h}
@@ -119,27 +124,20 @@ export function ShowtimeTable({
             <tbody>
               {pageItems.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>
+                  <td colSpan={5} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>
                     No showtimes found matching your filters.
                   </td>
                 </tr>
               ) : (
                 pageItems.map((item) => {
-                  const st = STATUS_STYLE[item.status] ?? STATUS_STYLE.FINISHED;
+                  const st = STATUS_STYLE[item.status] ?? STATUS_STYLE.COMPLETED;
                   return (
-                    <tr key={item.showtimeId} className="border-b last:border-none hover-row transition-colors" style={{ borderColor: "var(--border-color)" }}>
+                    <tr key={item.showTimeId} className="border-b last:border-none hover-row transition-colors" style={{ borderColor: "var(--border-color)" }}>
                       <td className="px-5 py-3.5">
                         <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-main)" }}>{item.movieName}</p>
                         <div className="flex items-center gap-1.5 mt-1" style={{ color: "var(--text-sub)" }}>
                           <Monitor size={12} />
-                          <span style={{ fontSize: "12px" }}>{item.roomName}</span>
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-1.5" style={{ color: "var(--text-main)" }}>
-                          <Building2 size={13} style={{ color: "var(--text-sub)" }} />
-                          <span style={{ fontSize: "13.5px" }}>{item.cinemaName}</span>
+                          <span style={{ fontSize: "12px" }}>{item.cinemaRoomName}</span>
                         </div>
                       </td>
 
@@ -151,17 +149,8 @@ export function ShowtimeTable({
                         <div className="flex items-center gap-2">
                           <Clock size={14} style={{ color: "var(--text-sub)" }} />
                           <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-main)" }}>
-                            {item.startTime}{" "}
-                            <span style={{ color: "var(--text-sub)", fontWeight: 400 }}>– {item.endTime}</span>
-                          </span>
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-1">
-                          <Tag size={13} style={{ color: "var(--text-sub)" }} />
-                          <span style={{ fontSize: "13.5px", fontWeight: 500, color: "var(--text-main)" }}>
-                            {formatPrice(item.basePrice)}
+                            {fmt(item.startTime)}{" "}
+                            <span style={{ color: "var(--text-sub)", fontWeight: 400 }}>– {fmt(item.endTime)}</span>
                           </span>
                         </div>
                       </td>
@@ -169,7 +158,7 @@ export function ShowtimeTable({
                       <td className="px-5 py-3.5">
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${st.badge}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
-                          {item.status}
+                          {STATUS_LABEL[item.status] ?? item.status}
                         </span>
                       </td>
 
@@ -205,7 +194,7 @@ export function ShowtimeTable({
             Showing{" "}
             <span style={{ color: "var(--text-main)", fontWeight: 500 }}>
               {filtered.length === 0 ? 0 : (safePage - 1) * ITEMS_PER_PAGE + 1}
-              {`–`}
+              {"–"}
               {Math.min(safePage * ITEMS_PER_PAGE, filtered.length)}
             </span>{" "}
             of{" "}
