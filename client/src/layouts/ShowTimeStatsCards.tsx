@@ -5,7 +5,7 @@ type Props = { showtimes: ShowtimeResponse[] };
 
 export function ShowtimeStatsCards({ showtimes }: Props) {
   const total     = showtimes.length;
-  const ongoing   = showtimes.filter((s) => s.status === "ONGOING").length;
+  const ongoing   = showtimes.filter((s) => s.status === "ON_SALE").length;
   const scheduled = showtimes.filter((s) => s.status === "SCHEDULED").length;
 
   const avgMinutes = (() => {
