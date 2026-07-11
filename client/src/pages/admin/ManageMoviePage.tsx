@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Search, Plus, SlidersHorizontal, RefreshCw, AlertCircle } from "lucide-react";
+import { useRole } from "../../hooks/useRole";
 import { useOutletContext } from "react-router-dom";
 
 import { MovieStatsCards } from "../../layouts/MovieStatsCards";
@@ -19,6 +20,7 @@ import {
 
 export default function ManageMoviePage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
+  const { isAdmin } = useRole();
 
   const [movies, setMovies] = useState<MovieApiResponse[]>([]);
 
@@ -156,7 +158,7 @@ export default function ManageMoviePage() {
       )}
 
       {/* Toolbar */}
-      <div className="flex items-center gap-3 flex-wrap mb-6">
+      <div className="flex items-center gap-3 flex-wrap mb-4">
         <div className="relative flex-1 min-w-64">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-sub)" }} />
           <input
@@ -166,26 +168,21 @@ export default function ManageMoviePage() {
             style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", border: "1px solid var(--border-color)" }}
           />
           {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 hover:text-rose-500"
-              style={{ fontSize: "16px", color: "var(--text-sub)" }}
-            >×</button>
+            <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 hover:text-rose-500" style={{ fontSize: "16px", color: "var(--text-sub)" }}>×</button>
           )}
         </div>
 
         <button
           onClick={() => setShowFilters((v) => !v)}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all hover:opacity-80"
-          style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
+          style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: genreFilter ? "#2563eb" : "var(--border-color)" }}
         >
-          <SlidersHorizontal size={15} /> Filters
-          {(genreFilter || statusFilter) && <span className="w-2 h-2 bg-blue-600 rounded-full ml-0.5" />}
+          <SlidersHorizontal size={15} /> Genre
+          {genreFilter && <span className="w-2 h-2 bg-blue-600 rounded-full ml-0.5" />}
         </button>
 
         <button
-          onClick={loadMovies}
-          disabled={loading}
+          onClick={loadMovies} disabled={loading}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all hover:opacity-80 disabled:opacity-50"
           style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
         >
@@ -202,53 +199,89 @@ export default function ManageMoviePage() {
         </button>
       </div>
 
-      {/* Filter panel */}
+      {/* Genre filter panel */}
       {showFilters && (
-        <div
-          className="flex items-center gap-3 flex-wrap p-4 rounded-xl border transition-all mb-6"
-          style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
-        >
-          <p style={{ fontSize: "13px", color: "var(--text-sub)" }}>Filter by:</p>
-
-          <div className="flex items-center gap-1 flex-wrap filter-btns">
-            <button onClick={() => setGenreFilter("")} className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${!genreFilter ? "active" : ""}`}>
-              All Genres
+        <div className="flex items-center gap-2 flex-wrap p-3 rounded-xl border mb-4 filter-btns"
+          style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+          <button onClick={() => setGenreFilter("")} className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${!genreFilter ? "active" : ""}`}>
+            All Genres
+          </button>
+          {genreNames.map((g) => (
+            <button key={g} onClick={() => setGenreFilter(genreFilter === g ? "" : g)}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${genreFilter === g ? "active" : ""}`}>
+              {g}
             </button>
-            {genreNames.map((g) => (
-              <button
-                key={g}
-                onClick={() => setGenreFilter(genreFilter === g ? "" : g)}
-                className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${genreFilter === g ? "active" : ""}`}
-              >
-                {g}
-              </button>
-            ))}
-          </div>
-
-          <div className="w-px h-5 mx-1" style={{ background: "var(--border-color)" }} />
-
-          <div className="flex items-center gap-1 flex-wrap filter-btns">
-            <button onClick={() => setStatusFilter("")} className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${!statusFilter ? "active" : ""}`}>All Status</button>
-            {([
-              { value: "DRAFT",          label: "Draft",          cls: "active"       },
-              { value: "PENDING_REVIEW", label: "Pending Review", cls: "active-amber" },
-              { value: "COMING_SOON",    label: "Coming Soon",    cls: "active"       },
-              { value: "NOW_SHOWING",    label: "Now Showing",    cls: "active-green" },
-              { value: "SUSPENDED",      label: "Suspended",      cls: "active-orange"},
-              { value: "ENDED",          label: "Ended",          cls: "active-gray"  },
-              { value: "REJECTED",       label: "Rejected",       cls: "active-rose"  },
-            ] as const).map(({ value, label, cls }) => (
-              <button
-                key={value}
-                onClick={() => setStatusFilter(statusFilter === value ? "" : value)}
-                className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${statusFilter === value ? cls : ""}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          ))}
         </div>
       )}
+
+      {/* Status tabs */}
+      {(() => {
+        const counts: Record<string, number> = {};
+        movies.forEach(m => { counts[m.movieStatus] = (counts[m.movieStatus] ?? 0) + 1; });
+        const pendingCount = counts["PENDING_REVIEW"] ?? 0;
+
+        const tabs = [
+          { value: "",               label: "All",           color: "var(--text-sub)" },
+          { value: "DRAFT",          label: "Draft",         color: "#6b7280" },
+          { value: "PENDING_REVIEW", label: "Pending Review",color: "#d97706" },
+          { value: "COMING_SOON",    label: "Coming Soon",   color: "#2563eb" },
+          { value: "NOW_SHOWING",    label: "Now Showing",   color: "#059669" },
+          { value: "SUSPENDED",      label: "Suspended",     color: "#ea580c" },
+          { value: "ENDED",          label: "Ended",         color: "#6b7280" },
+          { value: "REJECTED",       label: "Rejected",      color: "#dc2626" },
+        ] as const;
+
+        return (
+          <div className="flex items-center gap-1 mb-5 overflow-x-auto" style={{ borderBottom: "1px solid var(--border-color)", paddingBottom: "0" }}>
+            {tabs.map(({ value, label, color }) => {
+              const count = value === "" ? movies.length : (counts[value] ?? 0);
+              const isActive = statusFilter === value;
+              const isPending = value === "PENDING_REVIEW";
+              return (
+                <button
+                  key={value}
+                  onClick={() => setStatusFilter(value)}
+                  style={{
+                    padding: "8px 14px",
+                    fontSize: "13px",
+                    fontWeight: isActive ? 600 : 400,
+                    color: isActive ? color : "var(--text-sub)",
+                    background: "transparent",
+                    border: "none",
+                    borderBottom: isActive ? `2px solid ${color}` : "2px solid transparent",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    transition: "all 0.15s ease",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    marginBottom: "-1px",
+                  }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.color = "var(--text-main)"; }}
+                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.color = "var(--text-sub)"; }}
+                >
+                  {label}
+                  {count > 0 && (
+                    <span style={{
+                      minWidth: "18px", height: "18px", padding: "0 5px",
+                      borderRadius: "9px", fontSize: "10px", fontWeight: 700,
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      background: isActive
+                        ? color
+                        : (isPending && isAdmin && pendingCount > 0 ? "#ef4444" : "rgba(128,128,128,0.15)"),
+                      color: (isActive || (isPending && isAdmin && pendingCount > 0)) ? "#fff" : "var(--text-sub)",
+                      transition: "all 0.15s ease",
+                    }}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Loading skeleton */}
       {loading && movies.length === 0 && (
@@ -300,15 +333,9 @@ export default function ManageMoviePage() {
         .hover-row:hover { background-color: rgba(128,128,128,0.04); }
         .theme-dark .hover-row:hover { background-color: rgba(255,255,255,0.03); }
         .action-btn:hover { background-color: rgba(128,128,128,0.1); color: var(--text-main) !important; }
-
         .filter-btns button { background: transparent; color: var(--text-sub); border-color: var(--border-color); }
         .filter-btns button:hover { background: rgba(128,128,128,0.1); color: var(--text-main); }
-        .filter-btns button.active        { background: #2563eb !important; color: white !important; border-color: #2563eb !important; }
-        .filter-btns button.active-green  { background: #059669 !important; color: white !important; border-color: #059669 !important; }
-        .filter-btns button.active-rose   { background: #e11d48 !important; color: white !important; border-color: #e11d48 !important; }
-        .filter-btns button.active-amber  { background: #d97706 !important; color: white !important; border-color: #d97706 !important; }
-        .filter-btns button.active-orange { background: #ea580c !important; color: white !important; border-color: #ea580c !important; }
-        .filter-btns button.active-gray   { background: #6b7280 !important; color: white !important; border-color: #6b7280 !important; }
+        .filter-btns button.active { background: #2563eb !important; color: white !important; border-color: #2563eb !important; }
       `}</style>
     </>
   );

@@ -484,30 +484,30 @@ export default function ManageUserPage() {
                     <td className="px-5 py-3.5">
                       <div className="flex items-center justify-end gap-0.5">
                         <button onClick={() => navigate(`/admin/users/${user.id}`)}
-                          className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors opacity-50 group-hover:opacity-100"
+                          className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors opacity-50 group-hover:opacity-100"
                           style={{ color: "var(--text-sub)" }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(59,130,246,0.1)"; (e.currentTarget as HTMLButtonElement).style.color = "#3b82f6"; }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--text-sub)"; }}
                           title="View">
-                          <Eye size={14} />
+                          <Eye size={16} />
                         </button>
                         <button onClick={() => navigate(`/admin/users/edit/${user.id}`)}
-                          className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors opacity-50 group-hover:opacity-100"
+                          className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors opacity-50 group-hover:opacity-100"
                           style={{ color: "var(--text-sub)" }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(107,114,128,0.1)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--text-main)"; }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--text-sub)"; }}
                           title="Edit">
-                          <Pencil size={14} />
+                          <Pencil size={16} />
                         </button>
                         <button
                           onClick={() => user.status === "Active" && setConfirmTarget(user)}
                           disabled={user.status === "Inactive"}
-                          className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors opacity-50 group-hover:opacity-100 disabled:!opacity-20 disabled:cursor-not-allowed"
+                          className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors opacity-50 group-hover:opacity-100 disabled:!opacity-20 disabled:cursor-not-allowed"
                           style={{ color: "var(--text-sub)" }}
                           onMouseEnter={(e) => { if (user.status === "Active") { (e.currentTarget as HTMLButtonElement).style.background = "rgba(239,68,68,0.1)"; (e.currentTarget as HTMLButtonElement).style.color = "#ef4444"; } }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--text-sub)"; }}
                           title={user.status === "Active" ? "Deactivate" : "Already inactive"}>
-                          <UserX size={14} />
+                          <UserX size={16} />
                         </button>
                       </div>
                     </td>

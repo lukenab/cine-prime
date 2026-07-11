@@ -343,11 +343,11 @@ export default function ManageCompaniesPage() {
                   </td>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-2">
-                      <button onClick={() => openEdit(c)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-colors" style={{ fontSize: "12px", color: "var(--text-sub)", borderColor: "var(--border-color)" }}>
-                        <Pencil size={12} /> Edit
+                      <button onClick={() => openEdit(c)} className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-colors" style={{ fontSize: "13px", color: "var(--text-sub)", borderColor: "var(--border-color)" }}>
+                        <Pencil size={14} /> Edit
                       </button>
-                      <button onClick={() => setDeleteTarget(c)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600 transition-colors" style={{ fontSize: "12px", color: "var(--text-sub)", borderColor: "var(--border-color)" }}>
-                        <Trash2 size={12} /> Delete
+                      <button onClick={() => setDeleteTarget(c)} className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600 transition-colors" style={{ fontSize: "13px", color: "var(--text-sub)", borderColor: "var(--border-color)" }}>
+                        <Trash2 size={14} /> Delete
                       </button>
                     </div>
                   </td>

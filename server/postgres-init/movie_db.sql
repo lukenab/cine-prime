@@ -173,6 +173,7 @@ CREATE TABLE IF NOT EXISTS movie (
     duration_minutes  SMALLINT      NOT NULL
                       CONSTRAINT chk_duration CHECK (duration_minutes BETWEEN 1 AND 600),
     release_date      DATE,
+    end_date          DATE,             -- ngày kết thúc chiếu (scheduler tự chuyển NOW_SHOWING → ENDED)
     age_rating_id     SMALLINT      REFERENCES age_rating(rating_id),
     company_id        BIGINT        REFERENCES production_company(company_id),
     country           VARCHAR(100),
@@ -221,6 +222,7 @@ CREATE TRIGGER trg_movie_updated_at
 
 CREATE INDEX IF NOT EXISTS idx_movie_status        ON movie(status);
 CREATE INDEX IF NOT EXISTS idx_movie_release_date  ON movie(release_date);
+CREATE INDEX IF NOT EXISTS idx_movie_end_date      ON movie(end_date) WHERE end_date IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_movie_tmdb          ON movie(tmdb_id) WHERE tmdb_id IS NOT NULL;
 
 COMMENT ON TABLE  movie IS 'Bảng phim chính — status enum kiểm soát vòng đời với review workflow';

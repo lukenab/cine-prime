@@ -37,6 +37,8 @@ export type MovieApiResponse = {
   gallery?: string[];
   backdrops?: string[];
   trailerUrl?: string;
+  releaseDate?: string;
+  endDate?: string;
 };
 
 export type RoomType = "STANDARD" | "LARGE" | "IMAX";
@@ -100,7 +102,7 @@ export type CreateRoomPayload = {
 
 // ── Cinema Cluster ────────────────────────────────────────────────────────────
 
-export type ClusterStatus = "ACTIVE" | "INACTIVE";
+export type ClusterStatus = "DRAFT" | "PENDING_REVIEW" | "ACTIVE" | "INACTIVE";
 
 export type ClusterResponse = {
   clusterId: number;
@@ -111,6 +113,7 @@ export type ClusterResponse = {
   latitude?: number;
   longitude?: number;
   status: ClusterStatus;
+  rejectionNote?: string;
   totalRooms?: number;
   totalSeats?: number;
 };
@@ -251,6 +254,7 @@ export type MovieV2 = {
   originalLanguage: string;
   durationMinutes: number;
   releaseDate?: string;
+  endDate?: string;
   country?: string;
   status: MovieStatus;
   ageRating?: AgeRatingResponse;
@@ -313,6 +317,7 @@ export type CreateMovieRequest = {
   originalLanguage: string;
   durationMinutes: number;
   releaseDate?: string;
+  endDate?: string;
   country?: string;
   ageRatingId?: number;
   companyId?: number;
@@ -383,6 +388,8 @@ const toLegacyMovie = (movie: MovieV2): MovieApiResponse => {
     movieType: movie.genres?.map((item) => item.genreName) ?? [],
     showTimes: [],
     createAt: movie.createdAt ?? '',
+    releaseDate: movie.releaseDate,
+    endDate: movie.endDate,
   };
 };
 
@@ -557,6 +564,18 @@ export const movieApi = {
 
   deleteCluster: (id: number) =>
     axiosClient.delete(`/api/cinema-clusters/${id}`) as Promise<ApiWrapper<void>>,
+
+  /** DRAFT → PENDING_REVIEW */
+  submitCluster: (id: number) =>
+    axiosClient.post(`/api/cinema-clusters/${id}/submit`) as Promise<ApiWrapper<ClusterResponse>>,
+
+  /** PENDING_REVIEW → ACTIVE */
+  approveCluster: (id: number) =>
+    axiosClient.post(`/api/cinema-clusters/${id}/approve`) as Promise<ApiWrapper<ClusterResponse>>,
+
+  /** PENDING_REVIEW → DRAFT + rejectionNote */
+  rejectCluster: (id: number, note: string) =>
+    axiosClient.post(`/api/cinema-clusters/${id}/reject`, { note }) as Promise<ApiWrapper<ClusterResponse>>,
 
   getRoomsByCluster: (clusterId: number) =>
     axiosClient.get(`/api/cinema-rooms?clusterId=${clusterId}`) as Promise<ApiWrapper<RoomResponse[]>>,

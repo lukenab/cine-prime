@@ -36,6 +36,7 @@ type FormState = {
   originalLanguage: string;
   durationMinutes: number;
   releaseDate: string;
+  endDate: string;
   country: string;
   ageRatingId: number | null;
   companyId: number | null;
@@ -59,6 +60,7 @@ const emptyForm: FormState = {
   originalLanguage: "en",
   durationMinutes: 120,
   releaseDate: "",
+  endDate: "",
   country: "",
   ageRatingId: null,
   companyId: null,
@@ -83,6 +85,7 @@ function movieToForm(mv: MovieV2): FormState {
     originalLanguage: mv.originalLanguage ?? "en",
     durationMinutes: mv.durationMinutes ?? 120,
     releaseDate: mv.releaseDate ?? "",
+    endDate: mv.endDate ?? "",
     country: mv.country ?? "",
     ageRatingId: mv.ageRating?.ratingId ?? null,
     companyId: null,
@@ -345,6 +348,7 @@ export function MovieModal({
       originalLanguage: form.originalLanguage,
       durationMinutes: form.durationMinutes,
       releaseDate: form.releaseDate || undefined,
+      endDate: form.endDate || undefined,
       country: form.country.trim() || undefined,
       ageRatingId: form.ageRatingId ?? undefined,
       companyId: form.companyId ?? undefined,
@@ -771,6 +775,19 @@ export function MovieModal({
                       type="date"
                       value={form.releaseDate}
                       onChange={(e) => set("releaseDate", e.target.value)}
+                      className={IC}
+                      style={IS}
+                    />
+                  </div>
+
+                  {/* End date */}
+                  <div>
+                    <label style={FL}>End Date <span style={{ fontWeight: 400, color: "var(--text-sub)" }}>(auto-ends showing)</span></label>
+                    <input
+                      type="date"
+                      value={form.endDate}
+                      min={form.releaseDate || undefined}
+                      onChange={(e) => set("endDate", e.target.value)}
                       className={IC}
                       style={IS}
                     />

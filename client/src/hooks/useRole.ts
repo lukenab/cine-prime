@@ -25,7 +25,7 @@ export function useRole() {
      */
     can: {
       // ADMIN or EMPLOYEE
-      submit  : isAdmin || isEmployee,   // DRAFT → PENDING_REVIEW
+      submit  : isEmployee,              // DRAFT → PENDING_REVIEW (admin dùng approve thẳng)
       rework  : isAdmin || isEmployee,   // REJECTED → DRAFT
       edit    : isAdmin || isEmployee,
       view    : isAdmin || isEmployee,

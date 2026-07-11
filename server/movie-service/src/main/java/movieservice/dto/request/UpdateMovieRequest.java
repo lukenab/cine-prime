@@ -26,6 +26,8 @@ public class UpdateMovieRequest {
 
     LocalDate releaseDate;
 
+    LocalDate endDate;
+
     @Size(max = 100)
     String country;
 
