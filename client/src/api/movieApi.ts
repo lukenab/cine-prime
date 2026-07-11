@@ -108,6 +108,8 @@ export type ClusterResponse = {
   province: string;
   address: string;
   phoneNumber?: string;
+  latitude?: number;
+  longitude?: number;
   status: ClusterStatus;
   totalRooms?: number;
   totalSeats?: number;
@@ -118,6 +120,8 @@ export type CreateClusterPayload = {
   province: string;
   address: string;
   phoneNumber?: string;
+  latitude?: number;
+  longitude?: number;
   status?: ClusterStatus;
 };
 
