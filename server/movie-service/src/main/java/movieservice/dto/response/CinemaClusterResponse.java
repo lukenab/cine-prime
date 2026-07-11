@@ -19,6 +19,7 @@ public class CinemaClusterResponse {
     BigDecimal latitude;
     BigDecimal longitude;
     String status;
+    String rejectionNote;
     Integer totalRooms;
     Integer totalSeats;
 }

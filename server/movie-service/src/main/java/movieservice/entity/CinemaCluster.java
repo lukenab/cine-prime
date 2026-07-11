@@ -43,8 +43,11 @@ public class CinemaCluster {
     BigDecimal longitude;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 10)
-    ClusterStatus status = ClusterStatus.ACTIVE;
+    @Column(name = "status", nullable = false, length = 20)
+    ClusterStatus status = ClusterStatus.DRAFT;
+
+    @Column(name = "rejection_note", columnDefinition = "TEXT")
+    String rejectionNote;
 
     @Column(name = "created_at", updatable = false)
     LocalDateTime createdAt;
@@ -59,7 +62,7 @@ public class CinemaCluster {
     void prePersist() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
-        if (status == null) status = ClusterStatus.ACTIVE;
+        if (status == null) status = ClusterStatus.DRAFT;
     }
 
     @PreUpdate
