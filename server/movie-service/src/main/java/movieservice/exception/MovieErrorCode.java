@@ -68,7 +68,8 @@ public enum MovieErrorCode implements BaseErrorCode {
 
     CLUSTER_NOT_FOUND(2023, "Cinema cluster not found.", HttpStatus.NOT_FOUND),
     CLUSTER_HAS_ROOMS(2024, "Cannot delete cluster that still has cinema rooms.", HttpStatus.CONFLICT),
-    INVALID_CLUSTER_STATUS(2025, "Invalid status. Accepted values: ACTIVE, INACTIVE", HttpStatus.BAD_REQUEST);
+    INVALID_CLUSTER_STATUS(2025, "Invalid status. Accepted values: DRAFT, PENDING_REVIEW, ACTIVE, INACTIVE", HttpStatus.BAD_REQUEST),
+    CLUSTER_INVALID_TRANSITION(2026, "Invalid status transition. Check the cluster's current status and use the correct workflow endpoint.", HttpStatus.BAD_REQUEST);
 
     int code;
     String message;
