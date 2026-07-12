@@ -2,6 +2,7 @@ package movieservice.dto.request;
 
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.AccessLevel;
 import lombok.Data;
 import lombok.experimental.FieldDefaults;
@@ -30,7 +31,8 @@ public class BulkShowTimeRequest {
     @NotEmpty(message = "At least one start time is required")
     List<LocalTime> startTimes;
 
-    /** Base ticket price applied to all generated showtimes */
+    @NotNull(message = "Base price cannot be null")
+    @Positive(message = "Base price must be greater than 0")
     BigDecimal basePrice;
 
     /** Audio language code — defaults to "vi" if omitted */

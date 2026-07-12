@@ -298,6 +298,9 @@ public class ShowTimeService {
      * Dry-run: generates candidate showtimes and detects conflicts without saving anything.
      */
     public BulkShowTimePreviewResponse generatePreview(BulkShowTimeRequest request) {
+        if (request.getFromDate().isAfter(request.getToDate())) {
+            throw new AppException(MovieErrorCode.INVALID_SHOWDATE);
+        }
         Movie movie = movieRepository.findById(request.getMovieId())
                 .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
 
@@ -320,6 +323,9 @@ public class ShowTimeService {
      */
     @Transactional
     public BulkShowTimeCreateResponse bulkCreate(BulkShowTimeRequest request) {
+         if (request.getFromDate().isAfter(request.getToDate())) {
+            throw new AppException(MovieErrorCode.INVALID_SHOWDATE);
+        }
         Movie movie = movieRepository.findById(request.getMovieId())
                 .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
 
