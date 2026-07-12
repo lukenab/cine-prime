@@ -26,6 +26,7 @@ public class SecurityConfig {
             "/api/auth/register/initiate",
             "/api/auth/register/verify",
             "/api/auth/resend-otp",
+            "/api/auth/activate-account",
     };
 
     private final CustomJwtDecoder customJwtDecoder;
@@ -38,6 +39,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/auth/check").permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/accounts").hasAuthority("ROLE_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/accounts/*/resend-activation").hasAuthority("ROLE_ADMIN")
                         .anyRequest().authenticated());
 
         http.oauth2ResourceServer(oauth2 -> oauth2

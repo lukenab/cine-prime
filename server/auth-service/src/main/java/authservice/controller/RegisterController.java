@@ -1,9 +1,11 @@
 package authservice.controller;
 
+import authservice.dto.request.ActivateAccountRequest;
 import authservice.dto.request.RegisterRequest;
 import authservice.dto.request.ResendOtpRequest;
 import authservice.dto.request.VerifyOtpRequest;
 import authservice.dto.response.RegisterResponse;
+import authservice.service.AccountService;
 import authservice.service.RegistrationService;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 public class RegisterController {
 
     RegistrationService registrationService;
+    AccountService accountService;
 
     @GetMapping("/check")
     ApiResponse<Void> checkFieldAvailability(
@@ -48,6 +51,18 @@ public class RegisterController {
         registrationService.resendOtp(request);
         return ApiResponse.<Void>builder()
                 .message("New OTP has been sent to your email!")
+                .build();
+    }
+
+    /**
+     * Public — employee sets their own password using the single-use token from the
+     * activation email sent when an admin created their account. See Issue #161.
+     */
+    @PostMapping("/activate-account")
+    ApiResponse<Void> activateAccount(@Valid @RequestBody ActivateAccountRequest request) {
+        accountService.activateAccount(request);
+        return ApiResponse.<Void>builder()
+                .message("Account activated successfully. You can now log in.")
                 .build();
     }
 }

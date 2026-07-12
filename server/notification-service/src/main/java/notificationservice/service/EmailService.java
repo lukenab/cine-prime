@@ -37,4 +37,26 @@ public class EmailService {
             log.error("Failed to send OTP email to {}: {}", to, e.getMessage(), e);
         }
     }
+
+    public void sendAccountActivationEmail(String to, String fullName, String activationLink, int expiryHours) {
+        try {
+            Context context = new Context();
+            context.setVariable("fullName", fullName);
+            context.setVariable("activationLink", activationLink);
+            context.setVariable("expiryHours", expiryHours);
+
+            String html = templateEngine.process("email/account-activation-email", context);
+
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setTo(to);
+            helper.setSubject("CinePrime - Activate Your Account");
+            helper.setText(html, true);
+
+            mailSender.send(message);
+            log.info("Account activation email sent to: {}", to);
+        } catch (Exception e) {
+            log.error("Failed to send account activation email to {}: {}", to, e.getMessage(), e);
+        }
+    }
 }

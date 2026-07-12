@@ -5,7 +5,10 @@ import { Camera, User, Save } from "lucide-react";
 export interface UserFormData {
   role: string;
   fullName: string;
-  username: string;
+  // Issue #161/#162: username/password are only relevant in Edit mode now.
+  // Create mode no longer collects them — the backend auto-generates username
+  // and sends an activation-link email instead of an admin-set password.
+  username?: string;
   email: string;
   password?: string;
   phoneNumber: string;
@@ -81,6 +84,13 @@ export function UserForm({
 
       {error && <div className="mb-5 p-3.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm font-medium">{error}</div>}
 
+      {!isEditMode && (
+        <div className="mb-5 p-3.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-sm" style={{ color: "var(--text-sub)" }}>
+          No password needed here — an activation email will be sent so the new user can set
+          their own password.
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         {/* Row 1: Role & Full Name */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -117,27 +127,26 @@ export function UserForm({
           </div>
         </div>
 
-        {/* Row 2: Username & Email */}
+        {/* Row 2: Username (Edit only) & Email */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[13px] font-semibold transition-colors" style={{ color: "var(--text-main)" }}>
-              Username <span className="text-red-500">*</span>
-            </label>
-            <input
-              required
-              type="text"
-              name="username"
-              minLength={5}
-              maxLength={50}
-              disabled={isEditMode} // Không cho phép đổi Username khi Update
-              placeholder="johndoe123"
-              value={formData.username}
-              onChange={handleChange}
-              className={`px-3.5 py-2.5 text-sm rounded-xl border outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isEditMode ? 'opacity-50 cursor-not-allowed' : ''}`}
-              style={{ background: "transparent", color: "var(--text-main)", borderColor: "var(--border-color)" }}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
+          {isEditMode && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[13px] font-semibold transition-colors" style={{ color: "var(--text-main)" }}>
+                Username
+              </label>
+              <input
+                type="text"
+                name="username"
+                disabled // Không cho phép đổi Username khi Update — do backend tự sinh khi Tạo mới
+                placeholder="johndoe123"
+                value={formData.username ?? ""}
+                onChange={handleChange}
+                className="px-3.5 py-2.5 text-sm rounded-xl border outline-none opacity-50 cursor-not-allowed transition-all"
+                style={{ background: "transparent", color: "var(--text-main)", borderColor: "var(--border-color)" }}
+              />
+            </div>
+          )}
+          <div className={`flex flex-col gap-1.5 ${isEditMode ? "" : "md:col-span-2"}`}>
             <label className="text-[13px] font-semibold transition-colors" style={{ color: "var(--text-main)" }}>
               Email <span className="text-red-500">*</span>
             </label>
@@ -155,26 +164,27 @@ export function UserForm({
           </div>
         </div>
 
-        {/* Row 3: Password & Phone */}
+        {/* Row 3: Password (Edit only) & Phone */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[13px] font-semibold transition-colors" style={{ color: "var(--text-main)" }}>
-              Password {!isEditMode && <span className="text-red-500">*</span>}
-            </label>
-            <input
-              required={!isEditMode} // Khi update thì password có thể để trống
-              type="password"
-              name="password"
-              minLength={6}
-              autoComplete={isEditMode ? "new-password" : "current-password"}
-              placeholder={isEditMode ? "Leave blank to keep current password" : "Min 6 characters"}
-              value={formData.password}
-              onChange={handleChange}
-              className="px-3.5 py-2.5 text-sm rounded-xl border outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
-              style={{ background: "transparent", color: "var(--text-main)", borderColor: "var(--border-color)" }}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
+          {isEditMode && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[13px] font-semibold transition-colors" style={{ color: "var(--text-main)" }}>
+                Password
+              </label>
+              <input
+                type="password"
+                name="password"
+                minLength={6}
+                autoComplete="new-password"
+                placeholder="Leave blank to keep current password"
+                value={formData.password ?? ""}
+                onChange={handleChange}
+                className="px-3.5 py-2.5 text-sm rounded-xl border outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                style={{ background: "transparent", color: "var(--text-main)", borderColor: "var(--border-color)" }}
+              />
+            </div>
+          )}
+          <div className={`flex flex-col gap-1.5 ${isEditMode ? "" : "md:col-span-2"}`}>
             <label className="text-[13px] font-semibold transition-colors" style={{ color: "var(--text-main)" }}>
               Phone <span className="text-red-500">*</span>
             </label>
