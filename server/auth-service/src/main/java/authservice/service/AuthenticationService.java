@@ -1,6 +1,6 @@
 package authservice.service;
-
 import authservice.annotation.Auditable;
+
 import authservice.dto.request.IntrospectTokenRequest;
 import authservice.dto.request.LoginRequest;
 import authservice.dto.request.RefreshTokenRequest;
@@ -67,8 +67,14 @@ public class AuthenticationService {
 
         // 2. Check account status
         if (account.getStatus() == null || account.getStatus() != AccountStatus.ACTIVE) {
-            auditLogService.failed("LOGIN_FAILED", account.getAccountId(), "Account inactive",
+            auditLogService.failed("LOGIN_FAILED", account.getAccountId(),
+                    "Account status " + account.getStatus(),
                     auditLogService.metadata("username", request.getUsername()));
+            // PENDING = admin created the account but the employee hasn't used the
+            // activation email yet — distinct from INACTIVE (admin disabled the account).
+            if (account.getStatus() == AccountStatus.PENDING) {
+                throw new AppException(AuthErrorCode.ACCOUNT_PENDING_ACTIVATION);
+            }
             throw new AppException(AuthErrorCode.ACCOUNT_INACTIVE);
         }
 

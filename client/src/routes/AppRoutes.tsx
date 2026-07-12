@@ -7,6 +7,7 @@ import AdminLayout from "../layouts/AdminLayout";
 import LoginPage from "../pages/auth/LoginPage";
 import RegisterPage from "../pages/auth/RegisterPage";
 import CompleteProfilePage from "../pages/auth/CompleteProfilePage";
+import ActivateAccountPage from "../pages/auth/ActivateAccountPage";
 
 import HomePage from "../pages/customer/HomePage";
 import MoviesPage from "../pages/customer/MoviesPage";
@@ -68,6 +69,7 @@ export default function AppRoutes() {
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/activate-account" element={<ActivateAccountPage />} />
       </Route>
 
       {/* Profile setup — standalone page, no layout wrapper */}

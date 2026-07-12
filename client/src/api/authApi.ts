@@ -5,6 +5,19 @@ export interface LoginPayLoad {
     password: string;
 }
 
+/** Admin creates an account — Issue #161/#162: no username/password anymore.
+ *  The backend auto-generates the username and sends an activation-link email. */
+export interface CreateAccountPayload {
+    fullName: string;
+    email: string;
+    role: string;
+}
+
+export interface ActivateAccountPayload {
+    token: string;
+    newPassword: string;
+}
+
 const MOCK_EMPLOYEE_USERNAME = "employee";
 const MOCK_EMPLOYEE_EMAIL = "employee@cineprime.com";
 const MOCK_EMPLOYEE_PASSWORD = "employee";
@@ -72,9 +85,23 @@ export const authApi = {
     resendOtp: (payload: { email: string }) => {
         return axiosClient.post('/api/auth/resend-otp', payload);
     },
-  
-    createAccount: (payload: any) => {
-        return axiosClient.post('/api/accounts', payload); 
+
+    /** Admin-only. Issue #161/#162: payload is now { fullName, email, role } — no
+     *  username/password. Account is created PENDING; an activation email is sent. */
+    createAccount: (payload: CreateAccountPayload) => {
+        return axiosClient.post('/api/accounts', payload);
+    },
+
+    /** Public — employee sets their own password using the token from the
+     *  activation email. See Issue #161/#162. */
+    activateAccount: (payload: ActivateAccountPayload) => {
+        return axiosClient.post('/api/auth/activate-account', payload);
+    },
+
+    /** Admin-only. Resends the activation email when the original link (24h TTL)
+     *  expired before the employee used it. */
+    resendActivation: (accountId: string) => {
+        return axiosClient.post(`/api/accounts/${accountId}/resend-activation`);
     },
 
     getAllAccounts: () => {
