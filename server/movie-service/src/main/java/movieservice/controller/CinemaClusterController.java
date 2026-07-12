@@ -90,7 +90,7 @@ public class CinemaClusterController {
                 .code(200).result(toResponseWithStats(cluster)).build();
     }
 
-    // ── POST create → status DRAFT ────────────────────────────────────────────
+    // ── POST create → EMPLOYEE: DRAFT (needs approval) / ADMIN: ACTIVE (self-approved) ──
 
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @PostMapping
@@ -103,13 +103,15 @@ public class CinemaClusterController {
         cluster.setProvince(req.getProvince().trim());
         cluster.setAddress(req.getAddress().trim());
         if (req.getPhoneNumber() != null) cluster.setPhoneNumber(req.getPhoneNumber().trim());
-        // Always DRAFT on create — approval workflow handles activation
-        cluster.setStatus(ClusterStatus.DRAFT);
+        // EMPLOYEE submissions go through DRAFT → PENDING_REVIEW → ACTIVE.
+        // ADMIN already holds approval authority, so their own creations skip the review queue.
+        ClusterStatus initialStatus = isAdminRole(authentication) ? ClusterStatus.ACTIVE : ClusterStatus.DRAFT;
+        cluster.setStatus(initialStatus);
 
         CinemaCluster saved = clusterRepository.save(cluster);
 
         logAction(saved.getClusterId(), ClusterAction.CREATE, getActor(authentication),
-                null, ClusterStatus.DRAFT, null);
+                null, initialStatus, null);
 
         return ApiResponse.<CinemaClusterResponse>builder()
                 .code(201).result(toResponseWithStats(saved)).build();

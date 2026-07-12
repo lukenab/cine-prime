@@ -452,10 +452,12 @@ function ClusterModal({ open, mode, initial, onClose, onSave, submitting, isAdmi
 
             <div>
               <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
-                Phone Number
+                Hotline
               </label>
               <input
-                type="tel" placeholder="028 xxxx xxxx"
+                type="tel" placeholder="1900 xxxx"
+                pattern="1(900|800)[0-9]{4,6}"
+                title="Hotline must start with 1900 or 1800, followed by 4-6 digits."
                 value={form.phoneNumber ?? ""}
                 onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
                 className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-blue-400 transition-colors"
@@ -645,11 +647,7 @@ export default function ManageCinemaClusterPage() {
       const res = await movieApi.getClusters();
       setClusters(res.result ?? []);
     } catch (err: any) {
-      if (err?.response?.status === 404 || err?.code === "ERR_NETWORK") {
-        setClusters(MOCK_CLUSTERS);
-      } else {
-        setError(err?.response?.data?.message ?? "Failed to load cinema clusters.");
-      }
+      setError(err?.response?.data?.message ?? "Failed to load cinema clusters.");
     } finally {
       setLoading(false);
     }
@@ -1021,14 +1019,3 @@ export default function ManageCinemaClusterPage() {
     </>
   );
 }
-
-// ── Mock data ─────────────────────────────────────────────────────────────────
-
-const MOCK_CLUSTERS: ClusterResponse[] = [
-  { clusterId: 1, clusterName: "CinePrime Quận 1",    province: "TP. Hồ Chí Minh", address: "123 Nguyễn Huệ, Quận 1",        phoneNumber: "028 3822 1234", latitude: 10.776966, longitude: 106.700965, status: "ACTIVE",         totalRooms: 5, totalSeats: 650 },
-  { clusterId: 2, clusterName: "CinePrime Thủ Đức",   province: "TP. Hồ Chí Minh", address: "456 Võ Văn Ngân, TP. Thủ Đức", phoneNumber: "028 3896 5678", latitude: 10.850000, longitude: 106.771667, status: "ACTIVE",         totalRooms: 4, totalSeats: 480 },
-  { clusterId: 3, clusterName: "CinePrime Hoàn Kiếm", province: "Hà Nội",           address: "78 Hàng Bài, Hoàn Kiếm",       phoneNumber: "024 3936 9012", latitude: 21.028511, longitude: 105.834160, status: "PENDING_REVIEW", totalRooms: 0, totalSeats: 0   },
-  { clusterId: 4, clusterName: "CinePrime Cầu Giấy",  province: "Hà Nội",           address: "22 Xuân Thủy, Cầu Giấy",       phoneNumber: "024 3768 3456", latitude: 21.036389, longitude: 105.782222, status: "DRAFT",         totalRooms: 0, totalSeats: 0,  rejectionNote: "Địa chỉ chưa đầy đủ, vui lòng bổ sung số nhà." },
-  { clusterId: 5, clusterName: "CinePrime Hải Châu",  province: "Đà Nẵng",          address: "30 Trần Phú, Hải Châu",        phoneNumber: "0236 382 7890", latitude: 16.068000, longitude: 108.212000, status: "ACTIVE",         totalRooms: 3, totalSeats: 360 },
-  { clusterId: 6, clusterName: "CinePrime Ninh Kiều", province: "Cần Thơ",          address: "15 Hai Bà Trưng, Ninh Kiều",   phoneNumber: "0292 381 2345", latitude: 10.033333, longitude: 105.783333, status: "INACTIVE",       totalRooms: 2, totalSeats: 220 },
-];
