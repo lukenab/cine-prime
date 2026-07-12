@@ -5,6 +5,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 import movieservice.enums.ShowTimeStatus;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -53,6 +54,10 @@ public class ShowTime {
     /** Ngôn ngữ phụ đề, e.g. "vi", "en" — null nếu không có phụ đề */
     @Column(name = "subtitle_code", length = 10)
     String subtitleCode;
+
+    @Column(name = "base_price", nullable = false, precision = 10, scale = 2)
+    @Builder.Default
+    BigDecimal basePrice = BigDecimal.ZERO;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)

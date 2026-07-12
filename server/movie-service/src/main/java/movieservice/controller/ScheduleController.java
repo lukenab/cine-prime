@@ -3,8 +3,11 @@ package movieservice.controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import movie.theater.common.dto.ApiResponse;
+import movieservice.dto.request.BulkShowTimeRequest;
 import movieservice.dto.request.CreateShowTimeRequest;
 import movieservice.dto.request.UpdateShowTimeRequest;
+import movieservice.dto.response.BulkShowTimeCreateResponse;
+import movieservice.dto.response.BulkShowTimePreviewResponse;
 import movieservice.dto.response.ShowTimeResponse;
 import movieservice.service.ShowTimeService;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -64,6 +67,30 @@ public class ScheduleController {
                 .result(showTimeService.createStandalone(request))
                 .build();
     }
+
+    @PostMapping("/generate-preview")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<BulkShowTimePreviewResponse> generatePreview(
+            @Valid @RequestBody BulkShowTimeRequest request) {
+        return ApiResponse.<BulkShowTimePreviewResponse>builder()
+                .code(1000)
+                .message("Bulk showtime preview generated successfully")
+                .result(showTimeService.generatePreview(request))
+                .build();
+    }
+
+    @PostMapping("/bulk")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<BulkShowTimeCreateResponse> bulkCreate(
+            @Valid @RequestBody BulkShowTimeRequest request) {
+        return ApiResponse.<BulkShowTimeCreateResponse>builder()
+                .code(1000)
+                .message("Bulk showtimes created successfully")
+                .result(showTimeService.bulkCreate(request))
+                .build();
+    }
+
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")

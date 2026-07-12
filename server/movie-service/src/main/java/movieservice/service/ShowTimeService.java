@@ -1,8 +1,10 @@
 package movieservice.service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.regex.Matcher;
@@ -16,9 +18,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.exception.AppException;
+import movieservice.dto.request.BulkShowTimeRequest;
 import movieservice.dto.request.CreateShowTimeRequest;
 import movieservice.dto.request.ShowTimeRequest;
 import movieservice.dto.request.UpdateShowTimeRequest;
+import movieservice.dto.response.BulkShowTimeCreateResponse;
+import movieservice.dto.response.BulkShowTimePreviewResponse;
+import movieservice.dto.response.ShowTimeCandidateDto;
+import movieservice.dto.response.ShowTimeConflictDto;
 import movieservice.dto.response.ShowTimeResponse;
 import movieservice.dto.response.ShowtimeSeatDto;
 import movieservice.entity.CinemaRoom;
@@ -279,9 +286,167 @@ public class ShowTimeService {
         showTime.setTotalSeats(room.getTotalSeatCapacity());
         showTime.setLanguageCode(request.getLanguageCode() != null ? request.getLanguageCode() : "vi");
         showTime.setSubtitleCode(request.getSubtitleCode());
+        showTime.setBasePrice(request.getBasePrice() != null ? request.getBasePrice() : BigDecimal.ZERO);
 
         return toShowTimeResponse(showTimeRepository.save(showTime));
     }
+
+    // ── Bulk Generation API ───────────────────────────────────────────────────
+
+    /**
+     * POST /api/schedules/generate-preview
+     * Dry-run: generates candidate showtimes and detects conflicts without saving anything.
+     */
+    public BulkShowTimePreviewResponse generatePreview(BulkShowTimeRequest request) {
+        Movie movie = movieRepository.findById(request.getMovieId())
+                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+
+        List<ShowTimeCandidateDto> valid = new ArrayList<>();
+        List<ShowTimeConflictDto> conflicts = new ArrayList<>();
+
+        buildCandidateResult(request, movie, valid, conflicts);
+
+        return BulkShowTimePreviewResponse.builder()
+                .validCount(valid.size())
+                .conflictCount(conflicts.size())
+                .valid(valid)
+                .conflicts(conflicts)
+                .build();
+    }
+
+    /**
+     * POST /api/schedules/bulk
+     * Persists only the valid, non-conflicting candidates in a single transaction.
+     */
+    @Transactional
+    public BulkShowTimeCreateResponse bulkCreate(BulkShowTimeRequest request) {
+        Movie movie = movieRepository.findById(request.getMovieId())
+                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+
+        List<ShowTimeCandidateDto> valid = new ArrayList<>();
+        List<ShowTimeConflictDto> conflicts = new ArrayList<>();
+
+        buildCandidateResult(request, movie, valid, conflicts);
+
+        // Build entities for all valid candidates
+        List<ShowTime> toSave = valid.stream().map(candidate -> {
+            CinemaRoom room = cinemaRoomRepository.findByCinemaRoomId(candidate.getCinemaRoomId());
+            ShowTime st = new ShowTime();
+            st.setMovie(movie);
+            st.setCinemaRoom(room);
+            st.setShowDate(candidate.getShowDate());
+            st.setStartTime(candidate.getStartTime());
+            st.setEndTime(candidate.getEndTime());
+            st.setStatus(ShowTimeStatus.SCHEDULED);
+            st.setTotalSeats(room.getTotalSeatCapacity());
+            st.setLanguageCode(request.getLanguageCode() != null ? request.getLanguageCode() : "vi");
+            st.setSubtitleCode(request.getSubtitleCode());
+            st.setBasePrice(request.getBasePrice() != null ? request.getBasePrice() : BigDecimal.ZERO);
+            return st;
+        }).collect(Collectors.toList());
+
+        List<ShowTime> saved = showTimeRepository.saveAll(toSave);
+        List<ShowTimeResponse> createdResponses = saved.stream()
+                .map(this::toShowTimeResponse)
+                .collect(Collectors.toList());
+
+        return BulkShowTimeCreateResponse.builder()
+                .createdCount(createdResponses.size())
+                .skippedCount(conflicts.size())
+                .created(createdResponses)
+                .skipped(conflicts)
+                .build();
+    }
+
+    /**
+     * Shared candidate generation logic.
+     * Iterates every (room × date × startTime) combination, checks all validation rules,
+     * and sorts each candidate into either {@code valid} or {@code conflicts}.
+     */
+    private void buildCandidateResult(
+            BulkShowTimeRequest request,
+            Movie movie,
+            List<ShowTimeCandidateDto> valid,
+            List<ShowTimeConflictDto> conflicts) {
+
+        int duration = movie.getDurationMinutes();
+        LocalDate minAllowedDate = LocalDate.now().plusDays(3);
+
+        for (Long roomId : request.getCinemaRoomIds()) {
+            CinemaRoom room = cinemaRoomRepository.findByCinemaRoomId(roomId);
+            if (room == null) {
+                // If the room doesn't exist, mark every slot for that room as a conflict
+                for (LocalDate date = request.getFromDate();
+                        !date.isAfter(request.getToDate()); date = date.plusDays(1)) {
+                    for (LocalTime startTime : request.getStartTimes()) {
+                        conflicts.add(ShowTimeConflictDto.builder()
+                                .showDate(date)
+                                .startTime(startTime)
+                                .endTime(startTime.plusMinutes(duration))
+                                .cinemaRoomId(roomId)
+                                .cinemaRoomName("Unknown")
+                                .reason("Cinema room not found")
+                                .build());
+                    }
+                }
+                continue;
+            }
+
+            for (LocalDate date = request.getFromDate();
+                    !date.isAfter(request.getToDate()); date = date.plusDays(1)) {
+
+                for (LocalTime startTime : request.getStartTimes()) {
+                    LocalTime endTime = startTime.plusMinutes(duration);
+                    String conflictReason = null;
+
+                    // 1. Minimum show date: must be >= today + 3
+                    if (date.isBefore(minAllowedDate)) {
+                        conflictReason = "Show date must be at least 3 days from today";
+                    }
+                    // 2. Operating hours: startTime in 08:00–23:00, endTime <= 23:00
+                    else if (startTime.isBefore(OPENING_TIME) || endTime.isAfter(CLOSING_TIME)) {
+                        conflictReason = "Showtime falls outside operating hours (08:00–23:00)";
+                    }
+                    // 3. Room overlap with existing DB records
+                    else if (showTimeRepository.existsByCinemaRoomAndOverlappingTime(
+                            roomId, date, startTime, endTime)) {
+                        conflictReason = "Room is already booked for an overlapping showtime";
+                    }
+                    // 4. Overlap with other newly generated showtimes in this request
+                    else {
+                        for (ShowTimeCandidateDto val : valid) {
+                            if (val.getCinemaRoomId().equals(roomId) && val.getShowDate().equals(date)) {
+                                if (startTime.isBefore(val.getEndTime()) && endTime.isAfter(val.getStartTime())) {
+                                    conflictReason = "Conflict with another generated showtime in this request";
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (conflictReason != null) {
+                        conflicts.add(ShowTimeConflictDto.builder()
+                                .showDate(date)
+                                .startTime(startTime)
+                                .endTime(endTime)
+                                .cinemaRoomId(roomId)
+                                .cinemaRoomName(room.getCinemaRoomName())
+                                .reason(conflictReason)
+                                .build());
+                    } else {
+                        valid.add(ShowTimeCandidateDto.builder()
+                                .showDate(date)
+                                .startTime(startTime)
+                                .endTime(endTime)
+                                .cinemaRoomId(roomId)
+                                .cinemaRoomName(room.getCinemaRoomName())
+                                .build());
+                    }
+                }
+            }
+        }
+    }
+
 
     @Transactional
     public ShowTimeResponse update(Long id, UpdateShowTimeRequest request) {
@@ -348,6 +513,7 @@ public class ShowTimeService {
     private ShowTimeResponse toShowTimeResponse(ShowTime s) {
         ShowTimeResponse r = new ShowTimeResponse();
         r.setShowTimeId(s.getShowTimeId());
+        r.setBasePrice(s.getBasePrice());
         r.setShowDate(s.getShowDate());
         r.setStartTime(s.getStartTime());
         r.setEndTime(s.getEndTime());
