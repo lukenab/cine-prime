@@ -27,5 +27,6 @@ public class CreateAccountRequest {
     @Email(message = "Invalid email format")
     String email;
 
+    /** Role name, e.g. "MEMBER" / "EMPLOYEE" / "ADMIN". Free-text for now — see Issue #157. */
     String role;
 }

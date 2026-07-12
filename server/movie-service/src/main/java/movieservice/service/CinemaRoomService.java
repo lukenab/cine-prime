@@ -9,11 +9,13 @@ import movie.theater.common.exception.AppException;
 import movieservice.dto.request.CinemaRoomRequest;
 import movieservice.dto.request.MaintenanceRequest;
 import movieservice.dto.response.CinemaRoomResponse;
+import movieservice.entity.CinemaCluster;
 import movieservice.entity.CinemaRoom;
 import movieservice.entity.CinemaRoomMaintenance;
 import movieservice.enums.CinemaRoomStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
+import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.CinemaRoomMaintenanceRepository;
 import movieservice.repository.CinemaRoomRepository;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,7 @@ public class CinemaRoomService {
 
     CinemaRoomRepository cinemaRoomRepository;
     CinemaRoomMaintenanceRepository maintenanceRepository;
+    CinemaClusterRepository cinemaClusterRepository;
     MovieMapper movieMapper;
     AuditLogService auditLogService;
     SeatService seatService;
@@ -44,7 +47,11 @@ public class CinemaRoomService {
             throw new AppException(MovieErrorCode.SEAT_QUANTITY_EXCEEDS_LIMIT);
         }
 
+        CinemaCluster cluster = cinemaClusterRepository.findById(request.getClusterId())
+                .orElseThrow(() -> new AppException(MovieErrorCode.CLUSTER_NOT_FOUND));
+
         CinemaRoom room = movieMapper.toCinemaRoom(request);
+        room.setCluster(cluster);
         room.setStatus(CinemaRoomStatus.ACTIVE);
         room = cinemaRoomRepository.save(room);
 
@@ -61,8 +68,11 @@ public class CinemaRoomService {
         return cinemaRoomRepository.findByCinemaRoomId(cinemaId);
     }
 
-    public List<CinemaRoomResponse> getAllRooms() {
-        return movieMapper.toCinemaRoomResponseList(cinemaRoomRepository.findAll());
+    public List<CinemaRoomResponse> getAllRooms(Long clusterId) {
+        List<CinemaRoom> rooms = (clusterId != null)
+                ? cinemaRoomRepository.findByCluster_ClusterId(clusterId)
+                : cinemaRoomRepository.findAll();
+        return movieMapper.toCinemaRoomResponseList(rooms);
     }
 
     // ── Maintenance ───────────────────────────────────────────

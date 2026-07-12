@@ -33,6 +33,6 @@ public class TokenCleanupScheduler {
     @Transactional
     public void purgeExpiredPasswordResets() {
         passwordResetRepository.deleteExpiredResets(OffsetDateTime.now());
-        log.info("Purged expired password reset/activation tokens");
+        log.info("Purged expired password resets");
     }
 }

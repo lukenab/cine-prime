@@ -288,6 +288,7 @@ export default function UserDetailPage() {
                     label="Last Updated"
                     value={profile.updatedAt ? new Date(profile.updatedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "Never"}
                   />
+       
                 </>
               ) : (
                 <p style={{ fontSize: "13px", color: "var(--text-sub)", fontStyle: "italic" }}>

@@ -292,12 +292,7 @@ export function UserForm({
             }`}
             style={{ background: isDarkMode ? "#3b82f6" : "#2563eb" }}
           >
-            {isLoading ? "Saving..." : (
-              <>
-                <Save size={16} />
-                {isEditMode ? "Update Customer" : "Add New Customer"}
-              </>
-            )}
+            {isLoading ? "Saving..." : isEditMode ? "Save Changes" : "Create Account"}
           </button>
         </div>
       </form>

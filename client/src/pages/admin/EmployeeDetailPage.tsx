@@ -336,7 +336,7 @@ export default function EmployeeDetailPage() {
               <p style={{ fontSize: "12px", color: "var(--text-sub)", marginBottom: "16px" }}>Profile data from User Service</p>
               <InfoRow icon={<Phone size={15} />}      label="Phone Number"   value={employee.phoneNumber} />
               <InfoRow icon={<Calendar size={15} />}   label="Date of Birth"  value={employee.dateOfBirth} />
-              <InfoRow icon={<User size={15} />}       label="Gender"         value={employee.gender} />
+              <InfoRow icon={<User size={15} />}       label="Gender" value={employee.gender} />
               <InfoRow icon={<CreditCard size={15} />} label="Identity Card"  value={employee.identityCard} />
               <InfoRow icon={<MapPin size={15} />}     label="Address"        value={employee.address} />
             </div>

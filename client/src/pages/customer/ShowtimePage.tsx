@@ -339,7 +339,7 @@ export default function ShowtimePage() {
 
     const fallback = () => mockMovies.find((m) => m.movieId === Number(movieId)) ?? null;
 
-    movieApi.getAllMovies()
+    movieApi.getPublicMovies()
       .then((res) => {
         const found = res.result?.find((m) => m.movieId === Number(movieId));
         setMovie(found ? enrich(found) : fallback());

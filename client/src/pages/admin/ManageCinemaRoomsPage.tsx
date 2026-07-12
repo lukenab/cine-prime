@@ -10,6 +10,7 @@ type ModalProps = {
   onClose: () => void;
   onSave: (data: CreateRoomPayload) => void;
   submitting: boolean;
+  clusters: ClusterResponse[];
 };
 
 const ROOM_TYPES = Object.keys(ROOM_TYPE_CONFIG) as RoomType[];
@@ -20,16 +21,18 @@ const roomTypeBorderActive: Record<RoomType, string> = {
   IMAX:     "#8b5cf6",
 };
 
-function AddRoomModal({ open, onClose, onSave, submitting }: ModalProps) {
+function AddRoomModal({ open, onClose, onSave, submitting, clusters }: ModalProps) {
   const [form, setForm] = useState<CreateRoomPayload>({
-    cinemaRoomName: "", roomType: "STANDARD", seatQuantity: 50, defaultPrice: 90000,
+    cinemaRoomName: "", roomType: "STANDARD", seatQuantity: 50, defaultPrice: 90000, clusterId: 0,
   });
 
   useEffect(() => {
-    if (open) setForm({ cinemaRoomName: "", roomType: "STANDARD", seatQuantity: 50, defaultPrice: 90000 });
-  }, [open]);
+    if (open) setForm({ cinemaRoomName: "", roomType: "STANDARD", seatQuantity: 50, defaultPrice: 90000, clusterId: clusters[0]?.clusterId ?? 0 });
+  }, [open, clusters]);
 
   if (!open) return null;
+
+  const noClusters = clusters.length === 0;
 
   const cfg = ROOM_TYPE_CONFIG[form.roomType];
   const seatsPerRow = cfg.seatsPerRow;
@@ -67,9 +70,33 @@ function AddRoomModal({ open, onClose, onSave, submitting }: ModalProps) {
 
         {/* Form */}
         <form
-          onSubmit={(e) => { e.preventDefault(); if (!overLimit) onSave(form); }}
+          onSubmit={(e) => { e.preventDefault(); if (!overLimit && form.clusterId) onSave(form); }}
           className="px-6 py-5 space-y-4"
         >
+          <div>
+            <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+              Cinema Cluster <span className="text-rose-500">*</span>
+            </label>
+            {noClusters ? (
+              <p style={{ fontSize: "12px", color: "#ef4444" }}>
+                No cinema clusters found — create a cluster first before adding rooms.
+              </p>
+            ) : (
+              <select
+                required
+                value={form.clusterId || ""}
+                onChange={(e) => setForm({ ...form, clusterId: parseInt(e.target.value) || 0 })}
+                className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-blue-400 transition-colors"
+                style={inputStyle}
+              >
+                <option value="" disabled>Select a cluster…</option>
+                {clusters.map((c) => (
+                  <option key={c.clusterId} value={c.clusterId}>{c.clusterName}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
           <div>
             <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
               Room Name <span className="text-rose-500">*</span>
@@ -174,7 +201,7 @@ function AddRoomModal({ open, onClose, onSave, submitting }: ModalProps) {
               Cancel
             </button>
             <button
-              type="submit" disabled={submitting}
+              type="submit" disabled={submitting || !form.clusterId}
               className="flex-1 px-4 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-60"
               style={{ fontSize: "14px", fontWeight: 500 }}
             >
@@ -235,7 +262,7 @@ export default function ManageCinemaRoomsPage() {
 
   const filtered = rooms.filter((r) => {
     const matchSearch = !searchQuery || r.cinemaRoomName?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchCluster = filterCluster === "ALL" || String((r as any).clusterId) === filterCluster;
+    const matchCluster = filterCluster === "ALL" || String(r.clusterId) === filterCluster;
     return matchSearch && matchCluster;
   });
 
@@ -347,7 +374,7 @@ export default function ManageCinemaRoomsPage() {
         <table className="w-full">
           <thead>
             <tr className="border-b" style={{ borderColor: "var(--border-color)", backgroundColor: "rgba(128,128,128,0.04)" }}>
-              {["#", "Room Name", "Type", "Seat Quantity", "Seat Layout", ""].map((h) => (
+              {["#", "Room Name", "Cluster", "Type", "Seat Quantity", "Seat Layout", ""].map((h) => (
                 <th key={h} className="px-5 py-3.5 text-left">
                   <span style={{ color: "var(--text-sub)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>{h}</span>
                 </th>
@@ -393,6 +420,11 @@ export default function ManageCinemaRoomsPage() {
                           <p style={{ fontSize: "11px", color: "var(--text-sub)" }}>ID: {room.cinemaRoomId}</p>
                         </div>
                       </div>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span style={{ fontSize: "13px", color: room.clusterName ? "var(--text-main)" : "#ef4444" }}>
+                        {room.clusterName ?? "Unassigned"}
+                      </span>
                     </td>
                     <td className="px-5 py-3.5">
                       {room.roomType && (() => {
@@ -445,6 +477,7 @@ export default function ManageCinemaRoomsPage() {
         onClose={() => setModalOpen(false)}
         onSave={handleCreate}
         submitting={submitting}
+        clusters={clusters}
       />
 
       <style>{`

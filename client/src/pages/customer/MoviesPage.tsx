@@ -82,7 +82,7 @@ export default function MoviesPage() {
     let active = true;
     setLoading(true);
     movieApi
-      .getAllMovies()
+      .getPublicMovies()
       .then((res) => {
         const data = res.result ?? [];
         if (active) setMovies(data.length > 0 ? data : mockMovies);

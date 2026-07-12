@@ -109,6 +109,8 @@ public interface MovieMapper {
     @Mapping(target = "cluster", ignore = true)
     CinemaRoom toCinemaRoom(CinemaRoomRequest request);
 
+    @Mapping(target = "clusterId", expression = "java(cinemaRoom.getCluster() != null ? cinemaRoom.getCluster().getClusterId() : null)")
+    @Mapping(target = "clusterName", expression = "java(cinemaRoom.getCluster() != null ? cinemaRoom.getCluster().getClusterName() : null)")
     CinemaRoomResponse toCinemaRoomResponse(CinemaRoom cinemaRoom);
     List<CinemaRoomResponse> toCinemaRoomResponseList(List<CinemaRoom> cinemaRooms);
 
