@@ -403,17 +403,15 @@ export default function CreateEmployeePage() {
           >
             {loading ? (
               <>
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span className="inline-block h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
                 {stepLabel}
               </>
             ) : (
-              <><Save size={16} /> Create Employee</>
+              "Create Employee"
             )}
           </button>
         </div>
       </form>
-
-      <style>{`.theme-dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); }`}</style>
     </div>
   );
 }

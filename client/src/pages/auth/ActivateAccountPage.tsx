@@ -302,12 +302,6 @@ export default function ActivateAccountPage() {
           )}
         </button>
 
-        <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "13px", textAlign: "center" }}>
-          Already activated?{" "}
-          <Link to="/login" style={{ color: "#3b82f6", textDecoration: "none", fontWeight: 500 }}>
-            Sign in
-          </Link>
-        </p>
       </form>
     </div>
   );

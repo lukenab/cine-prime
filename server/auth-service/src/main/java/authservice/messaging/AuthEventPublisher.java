@@ -57,7 +57,7 @@ public class AuthEventPublisher {
             throw new AppException(GlobalErrorCode.UNCATEGORIZED_EXCEPTION);
         } catch (ExecutionException | TimeoutException e) {
             log.error("Failed to publish event to topic {}", topic, e);
-            throw new AppException(GlobalErrorCode.UNCATEGORIZED_EXCEPTION);
+            throw new AppException(GGlobalErrorCode.UNCATEGORIZED_EXCEPTION);
         }
     }
 }

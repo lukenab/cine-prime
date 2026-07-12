@@ -26,10 +26,11 @@ public class CinemaRoomController {
     SeatService seatService;
 
     @GetMapping
-    public ApiResponse<List<CinemaRoomResponse>> getAllRooms() {
+    public ApiResponse<List<CinemaRoomResponse>> getAllRooms(
+            @RequestParam(required = false) Long clusterId) {
         return ApiResponse.<List<CinemaRoomResponse>>builder()
                 .code(200)
-                .result(cinemaRoomService.getAllRooms())
+                .result(cinemaRoomService.getAllRooms(clusterId))
                 .build();
     }
 

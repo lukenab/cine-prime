@@ -54,6 +54,22 @@ export type RoomResponse = {
   cinemaRoomName: string;
   roomType: RoomType;
   seatQuantity: number;
+  clusterId: number;
+  clusterName?: string;
+};
+
+/** Raw shape returned by the backend (movieservice.dto.response.CinemaRoomResponse) —
+ *  field is `totalSeatCapacity`, not `seatQuantity`. Kept separate so the legacy
+ *  `seatQuantity` name used throughout the UI keeps working via toLegacyRoom(). */
+export type RoomApiResponse = {
+  cinemaRoomId: number;
+  cinemaRoomName: string;
+  roomType: RoomType;
+  totalSeatCapacity: number;
+  status?: string;
+  maintenanceNote?: string;
+  clusterId: number;
+  clusterName?: string;
 };
 
 export type ShowTimePayload = {
@@ -98,6 +114,7 @@ export type CreateRoomPayload = {
   roomType: RoomType;
   seatQuantity: number;
   defaultPrice: number;
+  clusterId: number;
 };
 
 // ── Cinema Cluster ────────────────────────────────────────────────────────────
@@ -393,9 +410,33 @@ const toLegacyMovie = (movie: MovieV2): MovieApiResponse => {
   };
 };
 
+/** Backend uses `totalSeatCapacity`; UI has used `seatQuantity` throughout —
+ *  bridge the two here so callers don't have to change. */
+const toLegacyRoom = (room: RoomApiResponse): RoomResponse => ({
+  cinemaRoomId: room.cinemaRoomId,
+  cinemaRoomName: room.cinemaRoomName,
+  roomType: room.roomType,
+  seatQuantity: room.totalSeatCapacity,
+  clusterId: room.clusterId,
+  clusterName: room.clusterName,
+});
+
 export const movieApi = {
+  /** ADMIN/EMPLOYEE only (@PreAuthorize on the backend) — returns movies of every
+   *  status (DRAFT/PENDING_REVIEW/...). Use only from authenticated admin pages. */
   getAllMovies: async () => {
     const response = await axiosClient.get('/api/movies/all') as ApiWrapper<MovieV2[]>;
+    return {
+      ...response,
+      result: (response.result ?? []).map(toLegacyMovie),
+    } as ApiWrapper<MovieApiResponse[]>;
+  },
+
+  /** Public — no auth required. Only COMING_SOON/NOW_SHOWING movies (see
+   *  MovieService.findAllPublic()). Use from guest/customer-facing pages
+   *  (HomePage, MoviesPage, ShowtimePage) — getAllMovies() 401/403s for guests. */
+  getPublicMovies: async () => {
+    const response = await axiosClient.get('/api/movies/public') as ApiWrapper<MovieV2[]>;
     return {
       ...response,
       result: (response.result ?? []).map(toLegacyMovie),
@@ -419,11 +460,22 @@ export const movieApi = {
   deleteMovie: (id: number) =>
     axiosClient.delete(`/api/movies/${id}`) as Promise<ApiWrapper<void>>,
 
-  getRooms: () =>
-    axiosClient.get('/api/cinema-rooms') as Promise<ApiWrapper<RoomResponse[]>>,
+  getRooms: async () => {
+    const response = await axiosClient.get('/api/cinema-rooms') as ApiWrapper<RoomApiResponse[]>;
+    return { ...response, result: (response.result ?? []).map(toLegacyRoom) } as ApiWrapper<RoomResponse[]>;
+  },
 
-  createRoom: (payload: CreateRoomPayload) =>
-    axiosClient.post('/api/cinema-rooms', payload) as Promise<ApiWrapper<RoomResponse>>,
+  createRoom: async (payload: CreateRoomPayload) => {
+    const wirePayload = {
+      cinemaRoomName: payload.cinemaRoomName,
+      roomType: payload.roomType,
+      totalSeatCapacity: payload.seatQuantity,
+      defaultPrice: payload.defaultPrice,
+      clusterId: payload.clusterId,
+    };
+    const response = await axiosClient.post('/api/cinema-rooms', wirePayload) as ApiWrapper<RoomApiResponse>;
+    return { ...response, result: toLegacyRoom(response.result) } as ApiWrapper<RoomResponse>;
+  },
 
   getSeatsByRoom: (roomId: number) =>
     axiosClient.get(`/api/seats/room/${roomId}`) as Promise<ApiWrapper<SeatResponse[]>>,
@@ -577,8 +629,10 @@ export const movieApi = {
   rejectCluster: (id: number, note: string) =>
     axiosClient.post(`/api/cinema-clusters/${id}/reject`, { note }) as Promise<ApiWrapper<ClusterResponse>>,
 
-  getRoomsByCluster: (clusterId: number) =>
-    axiosClient.get(`/api/cinema-rooms?clusterId=${clusterId}`) as Promise<ApiWrapper<RoomResponse[]>>,
+  getRoomsByCluster: async (clusterId: number) => {
+    const response = await axiosClient.get(`/api/cinema-rooms?clusterId=${clusterId}`) as ApiWrapper<RoomApiResponse[]>;
+    return { ...response, result: (response.result ?? []).map(toLegacyRoom) } as ApiWrapper<RoomResponse[]>;
+  },
 };
 
 export function toDateStr(val: string | number[] | undefined): string {

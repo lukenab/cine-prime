@@ -181,9 +181,8 @@ public class AuthenticationService {
                     .createdIp(ip)
                     .userAgent(userAgent)
                     .build());
-        } catch (ParseException | RuntimeException e) {
-            log.error("Failed to save auth token record", e);
-            throw new AppException(GlobalErrorCode.UNCATEGORIZED_EXCEPTION);
+        } catch (ParseException e) {
+            log.error("Failed to parse JWT while saving auth token for account {}: {}", account.getAccountId(), e.getMessage());
         }
     }
 }

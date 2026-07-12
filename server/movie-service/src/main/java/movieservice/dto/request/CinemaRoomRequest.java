@@ -32,4 +32,7 @@ public class CinemaRoomRequest {
     @NotNull
     @DecimalMin(value = "0.0", inclusive = false)
     BigDecimal defaultPrice;
+
+    @NotNull(message = "Cluster is required — every room must belong to a cinema cluster")
+    Long clusterId;
 }
