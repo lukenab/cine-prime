@@ -1,22 +1,18 @@
-import { X, CalendarClock, AlertCircle } from "lucide-react";
+import { X, CalendarClock, AlertCircle, RefreshCw } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import {
   type ShowtimeResponse,
   type ShowtimeAssignPayload,
   type ShowtimeUpdatePayload,
-  type ShowtimeStatus,
 } from "../api/showtimeApi";
-import { getMockMovies, getMockCinemas, getMockRooms } from "../api/mockShowtime";
+import { movieApi, type MovieApiResponse, type RoomResponse } from "../api/movieApi";
 
 type FormState = {
   movieId: number;
-  cinemaId: number;
   cinemaRoomId: number;
   showDate: string;
   startTime: string;
-  endTime: string;
-  basePrice: number;
-  status: ShowtimeStatus;
+  basePrice: string; // string for input; sent as number only when > 0
 };
 
 type Props = {
@@ -26,70 +22,56 @@ type Props = {
   editShowtime?: ShowtimeResponse | null;
 };
 
-const timeToMinutes = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+const EMPTY_FORM: FormState = {
+  movieId: 0,
+  cinemaRoomId: 0,
+  showDate: "",
+  startTime: "",
+  basePrice: "",
+};
 
 export function ShowtimeModal({ open, onClose, onSave, editShowtime }: Props) {
-  const movies  = useMemo(() => getMockMovies(),  []);
-  const cinemas = useMemo(() => getMockCinemas(), []);
-  const allRooms = useMemo(() => getMockRooms(),  []);
+  const [movies, setMovies]   = useState<MovieApiResponse[]>([]);
+  const [rooms, setRooms]     = useState<RoomResponse[]>([]);
+  const [loadingData, setLoadingData] = useState(false);
 
-  const [form, setForm] = useState<FormState>({
-    movieId: movies[0]?.movieId ?? 0,
-    cinemaId: cinemas[0]?.cinemaId ?? 0,
-    cinemaRoomId: 0,
-    showDate: "",
-    startTime: "",
-    endTime: "",
-    basePrice: 90000,
-    status: "SCHEDULED",
-  });
+  const [form, setForm]         = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg]     = useState<string | null>(null);
 
-  const rooms = useMemo(
-    () => allRooms.filter(r => r.cinemaId === form.cinemaId),
-    [allRooms, form.cinemaId]
-  );
-
-  // Populate form when opening
+  // Load movies + rooms once when modal opens
   useEffect(() => {
     if (!open) return;
     setErrorMsg(null);
-    if (editShowtime) {
-      setForm({
-        movieId:      editShowtime.movieId,
-        cinemaId:     editShowtime.cinemaId,
-        cinemaRoomId: editShowtime.cinemaRoomId,
-        showDate:     editShowtime.showDate,
-        startTime:    editShowtime.startTime,
-        endTime:      editShowtime.endTime,
-        basePrice:    editShowtime.basePrice,
-        status:       editShowtime.status,
-      });
-    } else {
-      const defaultCinema = cinemas[0]?.cinemaId ?? 0;
-      const defaultRoom   = allRooms.find(r => r.cinemaId === defaultCinema)?.cinemaRoomId ?? 0;
-      setForm({
-        movieId: movies[0]?.movieId ?? 0,
-        cinemaId: defaultCinema,
-        cinemaRoomId: defaultRoom,
-        showDate: "",
-        startTime: "",
-        endTime: "",
-        basePrice: 90000,
-        status: "SCHEDULED",
-      });
-    }
-  }, [open, editShowtime, movies, cinemas, allRooms]);
 
-  // Auto-select first room when cinema changes
-  useEffect(() => {
-    const firstRoom = allRooms.find(r => r.cinemaId === form.cinemaId)?.cinemaRoomId ?? 0;
-    setForm(f => {
-      const roomStillValid = allRooms.some(r => r.cinemaId === f.cinemaId && r.cinemaRoomId === f.cinemaRoomId);
-      return roomStillValid ? f : { ...f, cinemaRoomId: firstRoom };
-    });
-  }, [form.cinemaId, allRooms]);
+    setLoadingData(true);
+    Promise.all([
+      movieApi.getAllMovies().catch(() => ({ result: [] as MovieApiResponse[] })),
+      movieApi.getRooms().catch(() => ({ result: [] as RoomResponse[] })),
+    ]).then(([movRes, roomRes]) => {
+      const movList  = (movRes as any)?.result ?? [];
+      const roomList = (roomRes as any)?.result ?? [];
+      setMovies(movList);
+      setRooms(roomList);
+
+      // Populate form
+      if (editShowtime) {
+        setForm({
+          movieId:     editShowtime.movieId,
+          cinemaRoomId: editShowtime.cinemaRoomId,
+          showDate:    editShowtime.showDate,
+          startTime:   editShowtime.startTime.slice(0, 5), // "HH:mm:ss" → "HH:mm"
+          basePrice:   "",
+        });
+      } else {
+        setForm({
+          ...EMPTY_FORM,
+          movieId:     movList[0]?.movieId ?? 0,
+          cinemaRoomId: roomList[0]?.cinemaRoomId ?? 0,
+        });
+      }
+    }).finally(() => setLoadingData(false));
+  }, [open, editShowtime]);
 
   if (!open) return null;
 
@@ -100,46 +82,38 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime }: Props) {
     e.preventDefault();
     setErrorMsg(null);
 
-    if (!form.movieId || !form.cinemaId || !form.cinemaRoomId || !form.showDate || !form.startTime || !form.endTime) {
+    if (!form.movieId || !form.cinemaRoomId || !form.showDate || !form.startTime) {
       setErrorMsg("Please fill in all required fields.");
-      return;
-    }
-    if (timeToMinutes(form.startTime) >= timeToMinutes(form.endTime)) {
-      setErrorMsg("Start time must be before end time.");
-      return;
-    }
-    if (form.basePrice <= 0) {
-      setErrorMsg("Base price must be a positive number.");
       return;
     }
 
     setSubmitting(true);
     try {
+      const basePriceNum = form.basePrice ? Number(form.basePrice) : undefined;
+
       const payload = editShowtime
         ? ({
-            movieId: form.movieId,
-            cinemaRoomId: form.cinemaRoomId,
-            showDate: form.showDate,
-            startTime: form.startTime,
-            endTime: form.endTime,
-            basePrice: form.basePrice,
-            status: form.status,
+            movieId:     form.movieId     || undefined,
+            cinemaRoomId: form.cinemaRoomId || undefined,
+            showDate:    form.showDate    || undefined,
+            startTime:   form.startTime   || undefined,
           } as ShowtimeUpdatePayload)
         : ({
-            movieId: form.movieId,
+            movieId:     form.movieId,
             cinemaRoomId: form.cinemaRoomId,
-            showDate: form.showDate,
-            startTime: form.startTime,
-            endTime: form.endTime,
-            basePrice: form.basePrice,
+            showDate:    form.showDate,
+            startTime:   form.startTime,
+            basePrice:   basePriceNum && basePriceNum > 0 ? basePriceNum : undefined,
           } as ShowtimeAssignPayload);
 
       await onSave(payload);
       onClose();
     } catch (err: unknown) {
-      setErrorMsg(
-        (err as { message?: string })?.message ?? "An error occurred while saving."
-      );
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        (err as { message?: string })?.message ??
+        "An error occurred while saving.";
+      setErrorMsg(msg);
     } finally {
       setSubmitting(false);
     }
@@ -152,6 +126,12 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime }: Props) {
     color: "var(--text-main)",
     borderColor: "var(--border-color)",
   };
+
+  // For the "end time calculated automatically" hint
+  const selectedMovie = useMemo(
+    () => movies.find((m) => m.movieId === form.movieId),
+    [movies, form.movieId]
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -188,172 +168,134 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime }: Props) {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          {/* Movie */}
-          <div>
-            <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
-              Movie <span className="text-red-500">*</span>
-            </label>
-            <select
-              required
-              value={form.movieId}
-              onChange={e => set("movieId", Number(e.target.value))}
-              className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors appearance-none cursor-pointer"
-              style={inputStyle}
-            >
-              <option value={0} disabled>Choose a movie…</option>
-              {movies.map(m => (
-                <option key={m.movieId} value={m.movieId} style={{ background: "var(--bg-card)" }}>
-                  {m.movieNameEnglish} ({m.duration}m)
-                </option>
-              ))}
-            </select>
+        {loadingData ? (
+          <div className="flex items-center justify-center py-16 gap-3">
+            <RefreshCw size={18} className="animate-spin text-purple-600" />
+            <span style={{ fontSize: "14px", color: "var(--text-sub)" }}>Loading movies and rooms…</span>
           </div>
-
-          {/* Cinema → Room cascade */}
-          <div className="grid grid-cols-2 gap-3">
+        ) : (
+          <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+            {/* Movie */}
             <div>
               <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
-                Cinema <span className="text-red-500">*</span>
+                Movie <span className="text-red-500">*</span>
               </label>
               <select
                 required
-                value={form.cinemaId}
-                onChange={e => set("cinemaId", Number(e.target.value))}
+                value={form.movieId}
+                onChange={e => set("movieId", Number(e.target.value))}
                 className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors appearance-none cursor-pointer"
                 style={inputStyle}
               >
-                <option value={0} disabled>Choose cinema…</option>
-                {cinemas.map(c => (
-                  <option key={c.cinemaId} value={c.cinemaId} style={{ background: "var(--bg-card)" }}>
-                    {c.cinemaName}
+                <option value={0} disabled>Choose a movie…</option>
+                {movies.map(m => (
+                  <option key={m.movieId} value={m.movieId} style={{ background: "var(--bg-card)" }}>
+                    {m.movieNameEnglish || m.movieNameVn}
+                    {m.duration ? ` (${m.duration}m)` : ""}
                   </option>
                 ))}
               </select>
+              {selectedMovie && (
+                <p style={{ fontSize: "11px", color: "var(--text-sub)", marginTop: "4px" }}>
+                  End time is calculated automatically from movie duration.
+                </p>
+              )}
             </div>
+
+            {/* Room */}
             <div>
               <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
-                Room <span className="text-red-500">*</span>
+                Screening Room <span className="text-red-500">*</span>
               </label>
               <select
                 required
                 value={form.cinemaRoomId}
-                disabled={!form.cinemaId}
                 onChange={e => set("cinemaRoomId", Number(e.target.value))}
-                className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors appearance-none cursor-pointer disabled:opacity-50"
+                className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors appearance-none cursor-pointer"
                 style={inputStyle}
               >
-                <option value={0} disabled>Choose room…</option>
+                <option value={0} disabled>Choose a room…</option>
                 {rooms.map(r => (
                   <option key={r.cinemaRoomId} value={r.cinemaRoomId} style={{ background: "var(--bg-card)" }}>
-                    {r.cinemaRoomName}
+                    {r.cinemaRoomName} · {r.roomType} · {r.seatQuantity} seats
                   </option>
                 ))}
               </select>
             </div>
-          </div>
 
-          {/* Show Date */}
-          <div>
-            <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
-              Show Date <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="date"
-              required
-              value={form.showDate}
-              onChange={e => set("showDate", e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors"
-              style={inputStyle}
-            />
-          </div>
-
-          {/* Start / End Time */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
-                Start Time <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="time"
-                required
-                value={form.startTime}
-                onChange={e => set("startTime", e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors"
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
-                End Time <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="time"
-                required
-                value={form.endTime}
-                onChange={e => set("endTime", e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors"
-                style={inputStyle}
-              />
-            </div>
-          </div>
-
-          {/* Base Price + Status (on edit) */}
-          <div className={editShowtime ? "grid grid-cols-2 gap-3" : ""}>
-            <div>
-              <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
-                Base Price (VND) <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                required
-                min={1000}
-                step={1000}
-                value={form.basePrice}
-                onChange={e => set("basePrice", Number(e.target.value))}
-                className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors"
-                style={inputStyle}
-              />
-            </div>
-            {editShowtime && (
+            {/* Show Date + Start Time */}
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>Status</label>
-                <select
-                  value={form.status}
-                  onChange={e => set("status", e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors appearance-none cursor-pointer"
+                <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+                  Show Date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={form.showDate}
+                  onChange={e => set("showDate", e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors"
                   style={inputStyle}
-                >
-                  <option value="SCHEDULED"  style={{ background: "var(--bg-card)" }}>Scheduled</option>
-                  <option value="ONGOING"    style={{ background: "var(--bg-card)" }}>Ongoing</option>
-                  <option value="FINISHED"   style={{ background: "var(--bg-card)" }}>Finished</option>
-                  <option value="CANCELLED"  style={{ background: "var(--bg-card)" }}>Cancelled</option>
-                </select>
+                />
+              </div>
+              <div>
+                <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+                  Start Time <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="time"
+                  required
+                  value={form.startTime}
+                  onChange={e => set("startTime", e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors"
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+
+            {/* Base Price — create only, optional */}
+            {!editShowtime && (
+              <div>
+                <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+                  Base Price (VND){" "}
+                  <span style={{ fontSize: "11px", fontWeight: 400, color: "var(--text-sub)" }}>(optional — leave blank to use room defaults)</span>
+                </label>
+                <input
+                  type="number"
+                  min={1000}
+                  step={1000}
+                  placeholder="e.g. 90000"
+                  value={form.basePrice}
+                  onChange={e => set("basePrice", e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors"
+                  style={inputStyle}
+                />
               </div>
             )}
-          </div>
 
-          {/* Actions */}
-          <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={submitting}
-              className="flex-1 px-4 py-2.5 rounded-xl border transition-colors hover:opacity-80 disabled:opacity-50"
-              style={{ fontSize: "14px", borderColor: "var(--border-color)", color: "var(--text-main)", background: "transparent" }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex-1 px-4 py-2.5 rounded-xl bg-purple-600 text-white hover:bg-purple-700 transition-colors disabled:opacity-50"
-              style={{ fontSize: "14px", fontWeight: 500 }}
-            >
-              {submitting ? "Saving…" : editShowtime ? "Update Schedule" : "Schedule Movie"}
-            </button>
-          </div>
-        </form>
+            {/* Actions */}
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={submitting}
+                className="flex-1 px-4 py-2.5 rounded-xl border transition-colors hover:opacity-80 disabled:opacity-50"
+                style={{ fontSize: "14px", borderColor: "var(--border-color)", color: "var(--text-main)", background: "transparent" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-purple-600 text-white hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                style={{ fontSize: "14px", fontWeight: 500 }}
+              >
+                {submitting && <RefreshCw size={14} className="animate-spin" />}
+                {submitting ? "Saving…" : editShowtime ? "Update Schedule" : "Schedule Movie"}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

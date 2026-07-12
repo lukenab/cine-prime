@@ -17,4 +17,6 @@ public class CinemaRoomResponse {
     Integer totalSeatCapacity;
     CinemaRoomStatus status;
     String maintenanceNote;
+    Long clusterId;
+    String clusterName;
 }

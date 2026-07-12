@@ -1,5 +1,6 @@
 package authservice.messaging;
 
+import authservice.event.AccountActivationRequestedEvent;
 import authservice.event.OtpRequestedEvent;
 import authservice.event.UserRegisteredEvent;
 import lombok.AccessLevel;
@@ -36,6 +37,16 @@ public class AuthEventPublisher {
         });
     }
 
+    public void sendAccountActivationEvent(AccountActivationRequestedEvent event) {
+        kafkaTemplate.send("send-activation-email-topic", event).whenComplete((result, ex) -> {
+            if (ex != null) {
+                log.error("Failed to publish AccountActivationRequestedEvent for email {}: {}", event.getEmail(), ex.getMessage());
+            } else {
+                log.info("Published AccountActivationRequestedEvent to send-activation-email-topic for email: {}", event.getEmail());
+            }
+        });
+    }
+
     private void sendAndWait(String topic, Object event) {
         try {
             kafkaTemplate.send(topic, event).get(5, TimeUnit.SECONDS);
@@ -46,8 +57,7 @@ public class AuthEventPublisher {
             throw new AppException(GlobalErrorCode.UNCATEGORIZED_EXCEPTION);
         } catch (ExecutionException | TimeoutException e) {
             log.error("Failed to publish event to topic {}", topic, e);
-            throw new AppException(GlobalErrorCode.UNCATEGORIZED_EXCEPTION);
+            throw new AppException(GGlobalErrorCode.UNCATEGORIZED_EXCEPTION);
         }
     }
 }
-

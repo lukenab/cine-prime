@@ -3,7 +3,6 @@ import { format, addDays, isSameDay } from "date-fns";
 import { useNavigate, useParams } from "react-router-dom";
 import { movieApi, MovieApiResponse, ShowTimeResponse } from "../../api/movieApi";
 import { mockMovies } from "../../data/mockMovies";
-import { mockClusters } from "../../data/mockClusters";
 import { MovieDetailCarousel } from "../../components/shared/MovieDetailCarousel";
 import { TrailerModal } from "../../components/shared/TrailerModal";
 import {
@@ -305,21 +304,31 @@ export default function ShowtimePage() {
   const today = new Date();
   const dates = Array.from({ length: 7 }, (_, i) => addDays(today, i));
   const [selectedDate, setSelectedDate] = useState<Date>(today);
-  const CINEMAS = useMemo(() => mockClusters.filter((c) => c.status === "ACTIVE").map((c) => c.clusterName), []);
+  const [CINEMAS, setCinemas] = useState<string[]>([]);
   // Default to the cinema chosen via "View showtimes" or the search location picker.
   const [selectedCinema, setSelectedCinema] = useState<string>(() => {
     try {
       const saved = localStorage.getItem("cp_cluster");
       const parsed = saved ? JSON.parse(saved) : null;
-      return parsed?.clusterName && CINEMAS.includes(parsed.clusterName) ? parsed.clusterName : CINEMAS[0];
+      return parsed?.clusterName ?? "";
     } catch {
-      return CINEMAS[0];
+      return "";
     }
   });
 
   const [showSoldOutModal, setShowSoldOutModal] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const [showTrailer, setShowTrailer] = useState(false);
+
+  useEffect(() => {
+    movieApi.getClusters()
+      .then((res) => {
+        const names = (res.result ?? []).filter((c) => c.status === "ACTIVE").map((c) => c.clusterName);
+        setCinemas(names);
+        setSelectedCinema((prev) => (names.includes(prev) ? prev : names[0] ?? ""));
+      })
+      .catch(() => setCinemas([]));
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -339,7 +348,7 @@ export default function ShowtimePage() {
 
     const fallback = () => mockMovies.find((m) => m.movieId === Number(movieId)) ?? null;
 
-    movieApi.getAllMovies()
+    movieApi.getPublicMovies()
       .then((res) => {
         const found = res.result?.find((m) => m.movieId === Number(movieId));
         setMovie(found ? enrich(found) : fallback());

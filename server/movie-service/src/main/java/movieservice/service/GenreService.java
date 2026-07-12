@@ -13,7 +13,9 @@ import movieservice.mapper.MovieMapper;
 import movieservice.repository.GenreRepository;
 import org.springframework.stereotype.Service;
 
+import java.text.Normalizer;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -35,8 +37,17 @@ public class GenreService {
     }
 
     @Transactional
-    public GenreResponse create(String genreName, String genreCode) {
+    public GenreResponse create(String genreName) {
+        genreName = genreName.trim();
         if (genreRepository.existsByGenreName(genreName)) {
+            throw new AppException(MovieErrorCode.MOVIE_TYPE_NAME_EXISTED);
+        }
+        String genreCode = Normalizer.normalize(genreName, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .replaceAll("[^a-zA-Z0-9]+", "_")
+                .replaceAll("^_+|_+$", "")
+                .toUpperCase(Locale.ROOT);
+        if (genreRepository.findByGenreCode(genreCode).isPresent()) {
             throw new AppException(MovieErrorCode.MOVIE_TYPE_NAME_EXISTED);
         }
         Genre genre = Genre.builder()

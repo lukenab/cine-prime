@@ -1,62 +1,42 @@
 import axiosClient from './api';
 
-export type ShowtimeStatus = 'SCHEDULED' | 'ONGOING' | 'FINISHED' | 'CANCELLED';
+// ── Status ────────────────────────────────────────────────────────────────────
+// Matches backend: movieservice.enums.ShowTimeStatus
+export type ShowtimeStatus = 'SCHEDULED' | 'ON_SALE' | 'CANCELLED' | 'COMPLETED' | 'SUSPENDED';
 
+// ── Response (mirrors ShowTimeResponse.java) ──────────────────────────────────
 export interface ShowtimeResponse {
-  showtimeId: number;
+  showTimeId: number;
   movieId: number;
   movieName: string;
-  duration: number;
-  cinemaId: number;
-  cinemaName: string;
   cinemaRoomId: number;
-  roomName: string;
-  showDate: string;
-  startTime: string;
-  endTime: string;
-  basePrice: number;
+  cinemaRoomName: string;
+  showDate: string;      // "YYYY-MM-DD"
+  startTime: string;     // "HH:mm:ss"
+  endTime: string;       // "HH:mm:ss"  — calculated by backend from movie duration
   status: ShowtimeStatus;
-  createdAt?: string;
   updatedAt?: string;
 }
 
+// ── Create payload (mirrors CreateShowTimeRequest.java) ───────────────────────
+// NOTE: endTime is NOT sent — backend calculates it from movie.durationMinutes
 export interface ShowtimeAssignPayload {
   movieId: number;
   cinemaRoomId: number;
   showDate: string;
   startTime: string;
-  endTime: string;
-  basePrice: number;
+  languageCode?: string;
+  subtitleCode?: string;
+  basePrice?: number;   // optional — overrides per-seat default price
 }
 
+// ── Update payload (mirrors UpdateShowTimeRequest.java) ───────────────────────
+// NOTE: basePrice and status are NOT supported by the update endpoint yet
 export interface ShowtimeUpdatePayload {
   movieId?: number;
   cinemaRoomId?: number;
   showDate?: string;
   startTime?: string;
-  endTime?: string;
-  basePrice?: number;
-  status?: ShowtimeStatus;
-}
-
-export interface MovieDropdownResponse {
-  movieId: number;
-  movieNameVn: string;
-  movieNameEnglish: string;
-  duration: number;
-}
-
-export interface CinemaResponse {
-  cinemaId: number;
-  cinemaName: string;
-  address?: string;
-}
-
-export interface RoomDropdownResponse {
-  cinemaRoomId: number;
-  cinemaRoomName: string;
-  seatQuantity: number;
-  cinemaId: number;
 }
 
 export interface ApiWrapper<T> {
@@ -65,25 +45,29 @@ export interface ApiWrapper<T> {
   result: T;
 }
 
+// ── API ───────────────────────────────────────────────────────────────────────
 export const showtimeApi = {
+  /** GET /api/schedules — list all showtimes */
   getShowtimes: () =>
-    axiosClient.get('/api/showtimes') as Promise<ApiWrapper<ShowtimeResponse[]>>,
+    axiosClient.get('/api/schedules') as Promise<ApiWrapper<ShowtimeResponse[]>>,
 
+  /** GET /api/schedules/{id} */
+  getById: (id: number) =>
+    axiosClient.get(`/api/schedules/${id}`) as Promise<ApiWrapper<ShowtimeResponse>>,
+
+  /** GET /api/schedules/movie/{movieId}?date=YYYY-MM-DD */
+  getByMovie: (movieId: number, date?: string) =>
+    axiosClient.get(`/api/schedules/movie/${movieId}${date ? `?date=${date}` : ''}`) as Promise<ApiWrapper<ShowtimeResponse[]>>,
+
+  /** POST /api/schedules — ADMIN only */
   createShowtime: (payload: ShowtimeAssignPayload) =>
-    axiosClient.post('/api/showtimes/assign', payload) as Promise<ApiWrapper<ShowtimeResponse>>,
+    axiosClient.post('/api/schedules', payload) as Promise<ApiWrapper<ShowtimeResponse>>,
 
+  /** PUT /api/schedules/{id} — ADMIN only */
   updateShowtime: (id: number, payload: ShowtimeUpdatePayload) =>
-    axiosClient.put(`/api/showtimes/${id}`, payload) as Promise<ApiWrapper<ShowtimeResponse>>,
+    axiosClient.put(`/api/schedules/${id}`, payload) as Promise<ApiWrapper<ShowtimeResponse>>,
 
+  /** DELETE /api/schedules/{id} — ADMIN only */
   deleteShowtime: (id: number) =>
-    axiosClient.delete(`/api/showtimes/${id}`) as Promise<ApiWrapper<void>>,
-
-  getMovies: () =>
-    axiosClient.get('/api/movies') as Promise<ApiWrapper<MovieDropdownResponse[]>>,
-
-  getCinemas: () =>
-    axiosClient.get('/api/cinemas') as Promise<ApiWrapper<CinemaResponse[]>>,
-
-  getRooms: (cinemaId: number) =>
-    axiosClient.get(`/api/cinemas/${cinemaId}/rooms`) as Promise<ApiWrapper<RoomDropdownResponse[]>>,
+    axiosClient.delete(`/api/schedules/${id}`) as Promise<ApiWrapper<void>>,
 };

@@ -64,7 +64,12 @@ public enum MovieErrorCode implements BaseErrorCode {
     PERSON_NOT_FOUND(2019, "Person (cast member) not found.", HttpStatus.NOT_FOUND),
     INVALID_STATUS_TRANSITION(2020, "This status transition is not allowed.", HttpStatus.BAD_REQUEST),
     TMDB_MOVIE_ALREADY_EXISTS(2021, "This TMDB movie has already been imported.", HttpStatus.CONFLICT),
-    TMDB_API_ERROR(2022, "Failed to connect to TMDB API. Check your API key or network.", HttpStatus.BAD_GATEWAY);
+    TMDB_API_ERROR(2022, "Failed to connect to TMDB API. Check your API key or network.", HttpStatus.BAD_GATEWAY),
+
+    CLUSTER_NOT_FOUND(2023, "Cinema cluster not found.", HttpStatus.NOT_FOUND),
+    CLUSTER_HAS_ROOMS(2024, "Cannot delete cluster that still has cinema rooms.", HttpStatus.CONFLICT),
+    INVALID_CLUSTER_STATUS(2025, "Invalid status. Accepted values: DRAFT, PENDING_REVIEW, ACTIVE, INACTIVE", HttpStatus.BAD_REQUEST),
+    CLUSTER_INVALID_TRANSITION(2026, "Invalid status transition. Check the cluster's current status and use the correct workflow endpoint.", HttpStatus.BAD_REQUEST);
 
     int code;
     String message;

@@ -23,18 +23,22 @@ export type MovieApiResponse = {
   content: string;
   duration: number;
   version: string;
+  /** Legacy boolean — use movieStatus for real workflow state */
   status: boolean;
+  /** Real V2 workflow status */
+  movieStatus?: MovieStatus;
   movieProductionCompany: string;
   largeImage: string;
   smallImage: string;
   movieType: string[];
   showTimes: ShowTimeResponse[];
   createAt: string | number[];
-};
-
-export type TypeResponse = {
-  typeId: number;
-  typeName: string;
+  // Extended fields (V2)
+  gallery?: string[];
+  backdrops?: string[];
+  trailerUrl?: string;
+  releaseDate?: string;
+  endDate?: string;
 };
 
 export type RoomType = "STANDARD" | "LARGE" | "IMAX";
@@ -50,6 +54,22 @@ export type RoomResponse = {
   cinemaRoomName: string;
   roomType: RoomType;
   seatQuantity: number;
+  clusterId: number;
+  clusterName?: string;
+};
+
+/** Raw shape returned by the backend (movieservice.dto.response.CinemaRoomResponse) —
+ *  field is `totalSeatCapacity`, not `seatQuantity`. Kept separate so the legacy
+ *  `seatQuantity` name used throughout the UI keeps working via toLegacyRoom(). */
+export type RoomApiResponse = {
+  cinemaRoomId: number;
+  cinemaRoomName: string;
+  roomType: RoomType;
+  totalSeatCapacity: number;
+  status?: string;
+  maintenanceNote?: string;
+  clusterId: number;
+  clusterName?: string;
 };
 
 export type ShowTimePayload = {
@@ -94,11 +114,12 @@ export type CreateRoomPayload = {
   roomType: RoomType;
   seatQuantity: number;
   defaultPrice: number;
+  clusterId: number;
 };
 
 // ── Cinema Cluster ────────────────────────────────────────────────────────────
 
-export type ClusterStatus = "ACTIVE" | "INACTIVE";
+export type ClusterStatus = "DRAFT" | "PENDING_REVIEW" | "ACTIVE" | "INACTIVE";
 
 export type ClusterResponse = {
   clusterId: number;
@@ -106,7 +127,10 @@ export type ClusterResponse = {
   province: string;
   address: string;
   phoneNumber?: string;
+  latitude?: number;
+  longitude?: number;
   status: ClusterStatus;
+  rejectionNote?: string;
   totalRooms?: number;
   totalSeats?: number;
 };
@@ -116,6 +140,8 @@ export type CreateClusterPayload = {
   province: string;
   address: string;
   phoneNumber?: string;
+  latitude?: number;
+  longitude?: number;
   status?: ClusterStatus;
 };
 
@@ -138,8 +164,8 @@ export type UpdateSeatPayload = {
   price: number;
 };
 
-export type CreateTypePayload = {
-  typeName: string;
+export type CreateGenrePayload = {
+  genreName: string;
 };
 
 export type ImageUploadResponse = {
@@ -150,9 +176,272 @@ export type ImageUploadResponse = {
 
 type ApiWrapper<T> = { code: number; message?: string; result: T };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// V2 Types (movie-service v2 API)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type MovieStatus =
+  | 'DRAFT'
+  | 'PENDING_REVIEW'
+  | 'COMING_SOON'
+  | 'NOW_SHOWING'
+  | 'SUSPENDED'
+  | 'ENDED'
+  | 'REJECTED';
+
+export type GenreResponse = {
+  genreId: number;
+  genreCode: string;
+  genreName: string;
+};
+
+export type AgeRatingResponse = {
+  ratingId: number;
+  ratingCode: string;
+  minAge: number;
+  description: string;
+};
+
+export type ScreeningFormatResponse = {
+  formatId: number;
+  formatCode: string;
+  formatName: string;
+  description: string;
+  surcharge: number;
+};
+
+export type ProductionCompanyResponse = {
+  companyId: number;
+  name: string;
+  country: string;
+  logoUrl: string;
+  websiteUrl?: string;
+};
+
+export type AgeRatingRequest = {
+  ratingCode: string;
+  minAge: number;
+  description: string;
+};
+
+export type ScreeningFormatRequest = {
+  formatCode: string;
+  formatName: string;
+  description?: string;
+  surcharge: number;
+};
+
+export type ProductionCompanyRequest = {
+  name: string;
+  country?: string;
+  logoUrl?: string;
+  websiteUrl?: string;
+};
+
+export type PersonResponse = {
+  personId: number;
+  fullName: string;
+  photoUrl: string;
+  nationality: string;
+  birthDate?: string;   // ISO "YYYY-MM-DD"
+  biography?: string;
+  tmdbId?: number;
+};
+
+export type TranslationResponse = {
+  languageCode: string;
+  title: string;
+  synopsis: string;
+};
+
+export type CastResponse = {
+  personId: number;
+  fullName: string;
+  photoUrl: string;
+  roleType: string;
+  characterName: string;
+  billingOrder: number;
+};
+
+export type MovieV2 = {
+  movieId: number;
+  tmdbId?: number;
+  imdbId?: string;
+  originalTitle: string;
+  originalLanguage: string;
+  durationMinutes: number;
+  releaseDate?: string;
+  endDate?: string;
+  country?: string;
+  status: MovieStatus;
+  ageRating?: AgeRatingResponse;
+  companyName?: string;
+  posterUrl?: string;
+  thumbnailUrl?: string;
+  trailerUrl?: string;
+  synopsis?: string;
+  genres: GenreResponse[];
+  formats: ScreeningFormatResponse[];
+  translations: TranslationResponse[];
+  cast: CastResponse[];
+  images: MovieImageResponse[];
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type TmdbSearchItem = {
+  tmdbId: number;
+  title: string;
+  originalTitle: string;
+  releaseDate?: string;
+  posterUrl?: string;
+  overview?: string;
+};
+
+export type TmdbMovieDetails = {
+  tmdbId: number;
+  imdbId?: string;
+  originalTitle: string;
+  originalLanguage: string;
+  durationMinutes?: number;
+  releaseDate?: string;
+  country?: string;
+  posterUrl?: string;
+  overview?: string;
+  companyId?: number;
+  companyName?: string;
+  translations: TranslationResponse[];
+  cast: CastResponse[];
+  genreIds?: number[];
+  ageRatingId?: number;
+};
+
+export type TranslationRequest = {
+  languageCode: string;
+  title: string;
+  synopsis?: string;
+};
+
+export type CastRequest = {
+  personId: number;
+  roleType: string;
+  characterName?: string;
+  billingOrder?: number;
+};
+
+export type CreateMovieRequest = {
+  originalTitle: string;
+  originalLanguage: string;
+  durationMinutes: number;
+  releaseDate?: string;
+  endDate?: string;
+  country?: string;
+  ageRatingId?: number;
+  companyId?: number;
+  genreIds: number[];
+  formatIds: number[];
+  posterUrl?: string;
+  thumbnailUrl?: string;
+  trailerUrl?: string;
+  synopsis?: string;
+  tmdbId?: number;
+  imdbId?: string;
+  translations?: TranslationRequest[];
+  cast?: CastRequest[];
+};
+
+export type UpdateMovieRequest = Partial<CreateMovieRequest>;
+
+export type PersonRequest = {
+  fullName: string;
+  nationality?: string;
+  birthDate?: string;   // ISO "YYYY-MM-DD"
+  photoUrl?: string;
+  biography?: string;
+  tmdbId?: number;
+};
+
+export type MovieImageResponse = {
+  imageId: number;
+  imageUrl: string;
+  imageType: 'POSTER' | 'BACKDROP' | 'STILL' | 'PROMOTIONAL';
+  displayOrder?: number;
+  caption?: string;
+};
+
+export type MovieImageRequest = {
+  imageUrl: string;
+  imageType?: 'POSTER' | 'BACKDROP' | 'STILL' | 'PROMOTIONAL';
+  displayOrder?: number;
+  caption?: string;
+};
+
+const toLegacyMovie = (movie: MovieV2): MovieApiResponse => {
+  const english = movie.translations?.find((item) => item.languageCode === 'en');
+  const vietnamese = movie.translations?.find((item) => item.languageCode === 'vi');
+  const directors = movie.cast
+    ?.filter((item) => item.roleType === 'DIRECTOR')
+    .map((item) => item.fullName)
+    .join(', ');
+  const actors = movie.cast
+    ?.filter((item) => item.roleType === 'ACTOR')
+    .map((item) => item.fullName)
+    .join(', ');
+
+  return {
+    movieId: movie.movieId,
+    movieNameVn: vietnamese?.title ?? movie.originalTitle,
+    movieNameEnglish: english?.title ?? movie.originalTitle,
+    director: directors ?? '',
+    actor: actors ?? '',
+    content: vietnamese?.synopsis ?? english?.synopsis ?? movie.synopsis ?? '',
+    duration: movie.durationMinutes,
+    version: movie.formats?.map((item) => item.formatName).join(', ') ?? '',
+    status: movie.status === 'NOW_SHOWING' || movie.status === 'COMING_SOON',
+    movieStatus: movie.status,
+    movieProductionCompany: movie.companyName ?? '',
+    largeImage: movie.posterUrl ?? '',
+    smallImage: movie.thumbnailUrl ?? movie.posterUrl ?? '',
+    movieType: movie.genres?.map((item) => item.genreName) ?? [],
+    showTimes: [],
+    createAt: movie.createdAt ?? '',
+    releaseDate: movie.releaseDate,
+    endDate: movie.endDate,
+  };
+};
+
+/** Backend uses `totalSeatCapacity`; UI has used `seatQuantity` throughout —
+ *  bridge the two here so callers don't have to change. */
+const toLegacyRoom = (room: RoomApiResponse): RoomResponse => ({
+  cinemaRoomId: room.cinemaRoomId,
+  cinemaRoomName: room.cinemaRoomName,
+  roomType: room.roomType,
+  seatQuantity: room.totalSeatCapacity,
+  clusterId: room.clusterId,
+  clusterName: room.clusterName,
+});
+
 export const movieApi = {
-  getAllMovies: () =>
-    axiosClient.get('/api/movies/all') as Promise<ApiWrapper<MovieApiResponse[]>>,
+  /** ADMIN/EMPLOYEE only (@PreAuthorize on the backend) — returns movies of every
+   *  status (DRAFT/PENDING_REVIEW/...). Use only from authenticated admin pages. */
+  getAllMovies: async () => {
+    const response = await axiosClient.get('/api/movies/all') as ApiWrapper<MovieV2[]>;
+    return {
+      ...response,
+      result: (response.result ?? []).map(toLegacyMovie),
+    } as ApiWrapper<MovieApiResponse[]>;
+  },
+
+  /** Public — no auth required. Only COMING_SOON/NOW_SHOWING movies (see
+   *  MovieService.findAllPublic()). Use from guest/customer-facing pages
+   *  (HomePage, MoviesPage, ShowtimePage) — getAllMovies() 401/403s for guests. */
+  getPublicMovies: async () => {
+    const response = await axiosClient.get('/api/movies/public') as ApiWrapper<MovieV2[]>;
+    return {
+      ...response,
+      result: (response.result ?? []).map(toLegacyMovie),
+    } as ApiWrapper<MovieApiResponse[]>;
+  },
 
   createMovie: (payload: CreateMoviePayload) =>
     axiosClient.post('/api/movies', payload) as Promise<ApiWrapper<MovieApiResponse>>,
@@ -171,14 +460,22 @@ export const movieApi = {
   deleteMovie: (id: number) =>
     axiosClient.delete(`/api/movies/${id}`) as Promise<ApiWrapper<void>>,
 
-  getTypes: () =>
-    axiosClient.get('/api/movie-types') as Promise<ApiWrapper<TypeResponse[]>>,
+  getRooms: async () => {
+    const response = await axiosClient.get('/api/cinema-rooms') as ApiWrapper<RoomApiResponse[]>;
+    return { ...response, result: (response.result ?? []).map(toLegacyRoom) } as ApiWrapper<RoomResponse[]>;
+  },
 
-  getRooms: () =>
-    axiosClient.get('/api/cinema-rooms') as Promise<ApiWrapper<RoomResponse[]>>,
-
-  createRoom: (payload: CreateRoomPayload) =>
-    axiosClient.post('/api/cinema-rooms', payload) as Promise<ApiWrapper<RoomResponse>>,
+  createRoom: async (payload: CreateRoomPayload) => {
+    const wirePayload = {
+      cinemaRoomName: payload.cinemaRoomName,
+      roomType: payload.roomType,
+      totalSeatCapacity: payload.seatQuantity,
+      defaultPrice: payload.defaultPrice,
+      clusterId: payload.clusterId,
+    };
+    const response = await axiosClient.post('/api/cinema-rooms', wirePayload) as ApiWrapper<RoomApiResponse>;
+    return { ...response, result: toLegacyRoom(response.result) } as ApiWrapper<RoomResponse>;
+  },
 
   getSeatsByRoom: (roomId: number) =>
     axiosClient.get(`/api/seats/room/${roomId}`) as Promise<ApiWrapper<SeatResponse[]>>,
@@ -186,8 +483,126 @@ export const movieApi = {
   updateSeat: (seatId: number, payload: UpdateSeatPayload) =>
     axiosClient.put(`/api/seats/${seatId}`, payload) as Promise<ApiWrapper<SeatResponse>>,
 
-  createType: (payload: CreateTypePayload) =>
-    axiosClient.post('/api/movie-types', payload) as Promise<ApiWrapper<TypeResponse>>,
+  // ── V2 Movie APIs ─────────────────────────────────────────────────────────
+
+  getMovieById: (id: number, lang?: string) => {
+    const url = lang ? `/api/movies/${id}?lang=${lang}` : `/api/movies/${id}`;
+    return axiosClient.get(url) as Promise<ApiWrapper<MovieV2>>;
+  },
+
+  createMovieV2: (payload: CreateMovieRequest) =>
+    axiosClient.post('/api/movies', payload) as Promise<ApiWrapper<MovieV2>>,
+
+  updateMovieV2: (id: number, payload: UpdateMovieRequest) =>
+    axiosClient.put(`/api/movies/${id}`, payload) as Promise<ApiWrapper<MovieV2>>,
+
+  // Lookup APIs
+  getGenres: () =>
+    axiosClient.get('/api/genres') as Promise<ApiWrapper<GenreResponse[]>>,
+
+  createGenre: (payload: CreateGenrePayload) =>
+    axiosClient.post('/api/genres', payload) as Promise<ApiWrapper<GenreResponse>>,
+
+  // Age Ratings
+  getAgeRatings: () =>
+    axiosClient.get('/api/age-ratings') as Promise<ApiWrapper<AgeRatingResponse[]>>,
+  createAgeRating: (payload: AgeRatingRequest) =>
+    axiosClient.post('/api/age-ratings', payload) as Promise<ApiWrapper<AgeRatingResponse>>,
+  updateAgeRating: (id: number, payload: AgeRatingRequest) =>
+    axiosClient.put(`/api/age-ratings/${id}`, payload) as Promise<ApiWrapper<AgeRatingResponse>>,
+  deleteAgeRating: (id: number) =>
+    axiosClient.delete(`/api/age-ratings/${id}`) as Promise<ApiWrapper<void>>,
+
+  // Screening Formats
+  getScreeningFormats: () =>
+    axiosClient.get('/api/screening-formats') as Promise<ApiWrapper<ScreeningFormatResponse[]>>,
+  createScreeningFormat: (payload: ScreeningFormatRequest) =>
+    axiosClient.post('/api/screening-formats', payload) as Promise<ApiWrapper<ScreeningFormatResponse>>,
+  updateScreeningFormat: (id: number, payload: ScreeningFormatRequest) =>
+    axiosClient.put(`/api/screening-formats/${id}`, payload) as Promise<ApiWrapper<ScreeningFormatResponse>>,
+  deleteScreeningFormat: (id: number) =>
+    axiosClient.delete(`/api/screening-formats/${id}`) as Promise<ApiWrapper<void>>,
+
+  // Production Companies
+  searchCompanies: (q?: string) => {
+    const url = q ? `/api/companies?q=${encodeURIComponent(q)}` : '/api/companies';
+    return axiosClient.get(url) as Promise<ApiWrapper<ProductionCompanyResponse[]>>;
+  },
+  createCompany: (payload: ProductionCompanyRequest) =>
+    axiosClient.post('/api/companies', payload) as Promise<ApiWrapper<ProductionCompanyResponse>>,
+  updateCompany: (id: number, payload: ProductionCompanyRequest) =>
+    axiosClient.put(`/api/companies/${id}`, payload) as Promise<ApiWrapper<ProductionCompanyResponse>>,
+  deleteCompany: (id: number) =>
+    axiosClient.delete(`/api/companies/${id}`) as Promise<ApiWrapper<void>>,
+
+  searchPersons: (q: string) =>
+    axiosClient.get(`/api/persons/search?q=${encodeURIComponent(q)}`) as Promise<ApiWrapper<PersonResponse[]>>,
+
+  // Person CRUD
+  getPersons: (q?: string) => {
+    const url = q ? `/api/persons?q=${encodeURIComponent(q)}` : '/api/persons';
+    return axiosClient.get(url) as Promise<ApiWrapper<PersonResponse[]>>;
+  },
+  getPersonById: (id: number) =>
+    axiosClient.get(`/api/persons/${id}`) as Promise<ApiWrapper<PersonResponse>>,
+  createPerson: (payload: PersonRequest) =>
+    axiosClient.post('/api/persons', payload) as Promise<ApiWrapper<PersonResponse>>,
+  updatePerson: (id: number, payload: PersonRequest) =>
+    axiosClient.put(`/api/persons/${id}`, payload) as Promise<ApiWrapper<PersonResponse>>,
+  deletePerson: (id: number) =>
+    axiosClient.delete(`/api/persons/${id}`) as Promise<ApiWrapper<void>>,
+
+  // Movie image APIs
+  getMovieImages: (movieId: number) =>
+    axiosClient.get(`/api/movies/${movieId}/images`) as Promise<ApiWrapper<MovieImageResponse[]>>,
+  addMovieImage: (movieId: number, payload: MovieImageRequest) =>
+    axiosClient.post(`/api/movies/${movieId}/images`, payload) as Promise<ApiWrapper<MovieImageResponse>>,
+  deleteMovieImage: (movieId: number, imageId: number) =>
+    axiosClient.delete(`/api/movies/${movieId}/images/${imageId}`) as Promise<ApiWrapper<void>>,
+
+  // ── Workflow / Status transitions ─────────────────────────────────────────
+
+  /** DRAFT → PENDING_REVIEW */
+  submitForReview: (id: number) =>
+    axiosClient.post(`/api/movies/${id}/submit`) as Promise<ApiWrapper<void>>,
+
+  /** PENDING_REVIEW → COMING_SOON */
+  approveMovie: (id: number) =>
+    axiosClient.post(`/api/movies/${id}/approve`) as Promise<ApiWrapper<void>>,
+
+  /** PENDING_REVIEW → REJECTED */
+  rejectMovie: (id: number, note: string) =>
+    axiosClient.post(`/api/movies/${id}/reject`, { note }) as Promise<ApiWrapper<void>>,
+
+  /** NOW_SHOWING / COMING_SOON → SUSPENDED */
+  suspendMovie: (id: number, reason: string) =>
+    axiosClient.post(`/api/movies/${id}/suspend`, { reason }) as Promise<ApiWrapper<void>>,
+
+  /** COMING_SOON / NOW_SHOWING / SUSPENDED → ENDED */
+  endMovie: (id: number) =>
+    axiosClient.post(`/api/movies/${id}/end`) as Promise<ApiWrapper<void>>,
+
+  /** REJECTED → DRAFT */
+  reworkMovie: (id: number) =>
+    axiosClient.post(`/api/movies/${id}/rework`) as Promise<ApiWrapper<void>>,
+
+  /** COMING_SOON → NOW_SHOWING */
+  releaseMovie: (id: number) =>
+    axiosClient.post(`/api/movies/${id}/release`) as Promise<ApiWrapper<void>>,
+
+  /** SUSPENDED → NOW_SHOWING */
+  reinstateMovie: (id: number) =>
+    axiosClient.post(`/api/movies/${id}/reinstate`) as Promise<ApiWrapper<void>>,
+
+  // TMDB APIs
+  tmdbSearch: (q: string) =>
+    axiosClient.get(`/api/movies/tmdb/search?q=${encodeURIComponent(q)}`) as Promise<ApiWrapper<TmdbSearchItem[]>>,
+
+  tmdbDetails: (tmdbId: number) =>
+    axiosClient.get(`/api/movies/tmdb/${tmdbId}/details`) as Promise<ApiWrapper<TmdbMovieDetails>>,
+
+  tmdbImport: (tmdbId: number) =>
+    axiosClient.post('/api/movies/tmdb/import', { tmdbId }) as Promise<ApiWrapper<MovieV2>>,
 
   // Cinema Cluster APIs
   getClusters: () =>
@@ -202,8 +617,22 @@ export const movieApi = {
   deleteCluster: (id: number) =>
     axiosClient.delete(`/api/cinema-clusters/${id}`) as Promise<ApiWrapper<void>>,
 
-  getRoomsByCluster: (clusterId: number) =>
-    axiosClient.get(`/api/cinema-rooms?clusterId=${clusterId}`) as Promise<ApiWrapper<RoomResponse[]>>,
+  /** DRAFT → PENDING_REVIEW */
+  submitCluster: (id: number) =>
+    axiosClient.post(`/api/cinema-clusters/${id}/submit`) as Promise<ApiWrapper<ClusterResponse>>,
+
+  /** PENDING_REVIEW → ACTIVE */
+  approveCluster: (id: number) =>
+    axiosClient.post(`/api/cinema-clusters/${id}/approve`) as Promise<ApiWrapper<ClusterResponse>>,
+
+  /** PENDING_REVIEW → DRAFT + rejectionNote */
+  rejectCluster: (id: number, note: string) =>
+    axiosClient.post(`/api/cinema-clusters/${id}/reject`, { note }) as Promise<ApiWrapper<ClusterResponse>>,
+
+  getRoomsByCluster: async (clusterId: number) => {
+    const response = await axiosClient.get(`/api/cinema-rooms?clusterId=${clusterId}`) as ApiWrapper<RoomApiResponse[]>;
+    return { ...response, result: (response.result ?? []).map(toLegacyRoom) } as ApiWrapper<RoomResponse[]>;
+  },
 };
 
 export function toDateStr(val: string | number[] | undefined): string {

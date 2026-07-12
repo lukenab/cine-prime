@@ -64,6 +64,10 @@ public class CinemaRoom {
     @OneToMany(mappedBy = "cinemaRoom", cascade = CascadeType.ALL, orphanRemoval = true)
     List<CinemaRoomMaintenance> maintenanceHistory;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cluster_id")
+    CinemaCluster cluster;
+
     @PrePersist
     void prePersist() {
         createdAt = LocalDateTime.now();

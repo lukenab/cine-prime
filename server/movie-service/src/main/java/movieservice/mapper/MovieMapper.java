@@ -1,5 +1,6 @@
 package movieservice.mapper;
 
+import movieservice.dto.request.CinemaClusterRequest;
 import movieservice.dto.request.CinemaRoomRequest;
 import movieservice.dto.request.CreateMovieRequest;
 import movieservice.dto.request.UpdateMovieRequest;
@@ -45,6 +46,7 @@ public interface MovieMapper {
     @Mapping(target = "formats", source = "formats")
     @Mapping(target = "translations", source = "translations")
     @Mapping(target = "cast", source = "cast")
+    @Mapping(target = "images", source = "images")
     MovieResponse toMovieResponse(Movie movie);
 
     List<MovieResponse> toMovieResponseList(List<Movie> movies);
@@ -55,9 +57,16 @@ public interface MovieMapper {
     List<GenreResponse> toGenreResponseList(List<Genre> genres);
 
     AgeRatingResponse toAgeRatingResponse(AgeRating ageRating);
+    List<AgeRatingResponse> toAgeRatingResponseList(List<AgeRating> ageRatings);
 
     ScreeningFormatResponse toScreeningFormatResponse(ScreeningFormat format);
     List<ScreeningFormatResponse> toScreeningFormatResponseList(List<ScreeningFormat> formats);
+
+    PersonResponse toPersonResponse(Person person);
+    List<PersonResponse> toPersonResponseList(List<Person> persons);
+
+    ProductionCompanyResponse toProductionCompanyResponse(ProductionCompany company);
+    List<ProductionCompanyResponse> toProductionCompanyResponseList(List<ProductionCompany> companies);
 
     // ── Cast / Translation ────────────────────────────────────
 
@@ -74,6 +83,22 @@ public interface MovieMapper {
 
     List<TranslationResponse> toTranslationResponseList(List<MovieTranslation> translations);
 
+    MovieImageResponse toMovieImageResponse(MovieImage image);
+    List<MovieImageResponse> toMovieImageResponseList(List<MovieImage> images);
+
+    // ── Cinema cluster ────────────────────────────────────────
+
+    @Mapping(target = "clusterId", ignore = true)
+    @Mapping(target = "rooms", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    CinemaCluster toCinemaCluster(CinemaClusterRequest request);
+
+    @Mapping(target = "status", expression = "java(cluster.getStatus() != null ? cluster.getStatus().name() : null)")
+    @Mapping(target = "totalRooms", ignore = true)
+    @Mapping(target = "totalSeats", ignore = true)
+    CinemaClusterResponse toCinemaClusterResponse(CinemaCluster cluster);
+
     // ── Cinema room ───────────────────────────────────────────
 
     @Mapping(target = "cinemaRoomId", ignore = true)
@@ -81,8 +106,11 @@ public interface MovieMapper {
     @Mapping(target = "seats", ignore = true)
     @Mapping(target = "showTimes", ignore = true)
     @Mapping(target = "maintenanceHistory", ignore = true)
+    @Mapping(target = "cluster", ignore = true)
     CinemaRoom toCinemaRoom(CinemaRoomRequest request);
 
+    @Mapping(target = "clusterId", expression = "java(cinemaRoom.getCluster() != null ? cinemaRoom.getCluster().getClusterId() : null)")
+    @Mapping(target = "clusterName", expression = "java(cinemaRoom.getCluster() != null ? cinemaRoom.getCluster().getClusterName() : null)")
     CinemaRoomResponse toCinemaRoomResponse(CinemaRoom cinemaRoom);
     List<CinemaRoomResponse> toCinemaRoomResponseList(List<CinemaRoom> cinemaRooms);
 

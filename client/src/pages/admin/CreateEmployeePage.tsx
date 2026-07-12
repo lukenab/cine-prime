@@ -1,16 +1,22 @@
 import { useState } from "react";
-import { ArrowLeft, Save, User, Camera, AlertCircle, X } from "lucide-react";
+import { ArrowLeft, Save, User, Camera, AlertCircle, X, CheckCircle2 } from "lucide-react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { authApi } from "../../api/authApi";
 import { employeeApi, type EmployeeDepartment, type EmployeePosition, type EmploymentType } from "../../api/employeeApi";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface EmployeeFormData {
-  // Account fields (for auth-service)
-  username: string;
+  // Account fields (for auth-service) — Issue #161/#162: username/password removed.
+  // The backend auto-generates the username and emails an activation link instead
+  // of an admin-set "temporary password".
   email: string;
-  password: string;
   // Profile fields (for user-service via Kafka)
+  // NOTE: these are collected in the UI but NOT currently sent anywhere — the
+  // account-creation event (UserRegisteredEvent) only ever carries accountId +
+  // email (see auth-service AccountService), so user-service creates a "bare"
+  // profile and these fields are discarded client-side. This predates #161/#162.
+  // TODO: wire these up to a profile-completion call (e.g. PUT /api/users/{id})
+  // once the team decides on that flow — tracked separately, not in scope here.
   fullName: string;
   phoneNumber: string;
   gender: string;
@@ -67,6 +73,18 @@ function FormField({
   );
 }
 
+// Issue #161/#162: local toast, matches the pattern already used in SettingsPage.tsx
+function Toast({ type, message, onClose }: { type: "success" | "error"; message: string; onClose: () => void }) {
+  return (
+    <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-xl"
+      style={{ background: type === "success" ? "#059669" : "#ef4444", color: "#fff", minWidth: "280px" }}>
+      {type === "success" ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+      <span style={{ fontSize: "14px", fontWeight: 500 }}>{message}</span>
+      <button onClick={onClose} className="ml-auto opacity-75 hover:opacity-100" style={{ fontSize: "18px", lineHeight: 1 }}>×</button>
+    </div>
+  );
+}
+
 const inputCls   = "px-3.5 py-2.5 text-sm rounded-xl border outline-none focus:ring-2 focus:ring-blue-500/50 transition-all";
 const inputStyle = { background: "transparent", color: "var(--text-main)", borderColor: "var(--border-color)" };
 
@@ -76,9 +94,7 @@ export default function CreateEmployeePage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
 
   const [formData, setFormData] = useState<EmployeeFormData>({
-    username:       "",
     email:          "",
-    password:       "",
     fullName:       "",
     phoneNumber:    "",
     gender:         "MALE",
@@ -97,6 +113,7 @@ export default function CreateEmployeePage() {
   const [apiError, setApiError]   = useState<string | null>(null);
   const [errorStep, setErrorStep] = useState<"account" | "employee" | null>(null);
   const [step, setStep]           = useState<"idle" | "account" | "employee">("idle");
+  const [toast, setToast]         = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const accentColor = isDarkMode ? "#3b82f6" : "#2563eb";
 
@@ -111,12 +128,8 @@ export default function CreateEmployeePage() {
   const validate = (): boolean => {
     const e: Partial<Record<keyof EmployeeFormData, string>> = {};
     if (!formData.fullName.trim())                              e.fullName       = "Full name is required";
-    if (!formData.username.trim())                              e.username       = "Username is required";
-    if (formData.username.length < 5)                          e.username       = "Username must be at least 5 characters";
     if (!formData.email.trim())                                 e.email          = "Email is required";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email))   e.email          = "Invalid email format";
-    if (!formData.password)                                     e.password       = "Password is required";
-    if (formData.password.length < 6)                          e.password       = "Password must be at least 6 characters";
     if (!/^0[35789][0-9]{8}$/.test(formData.phoneNumber))      e.phoneNumber    = "Invalid Vietnamese phone number";
     if (!/^[0-9]{12}$/.test(formData.identityCard))            e.identityCard   = "Identity card must be exactly 12 digits";
     if (!formData.dateOfBirth)                                  e.dateOfBirth    = "Date of birth is required";
@@ -140,23 +153,18 @@ export default function CreateEmployeePage() {
     setErrorStep(null);
 
     try {
-      // Step 1 — Create account (auth-service → Kafka → user-service creates User profile)
-      // Kafka sendAndWait (5s timeout) ensures profile exists before we proceed.
+      // Step 1 — Create account (auth-service → Kafka → user-service creates User profile).
+      // Issue #161/#162: only fullName/email/role are sent now — no username/password.
+      // The account is created PENDING and an activation-link email is sent to the
+      // employee so they can set their own password (see /activate-account).
       setStep("account");
-      const accountRes = await authApi.createAccount({
-        username:     formData.username,
-        password:     formData.password,
-        email:        formData.email,
-        fullName:     formData.fullName,
-        phoneNumber:  formData.phoneNumber,
-        dateOfBirth:  formData.dateOfBirth,
-        gender:       formData.gender,
-        address:      formData.address,
-        identityCard: formData.identityCard,
-        role:         "EMPLOYEE",
+      const accountRes: any = await authApi.createAccount({
+        fullName: formData.fullName,
+        email:    formData.email,
+        role:     "EMPLOYEE",
       });
 
-      const accountId: string = (accountRes as any)?.result?.accountId;
+      const accountId: string = accountRes?.data?.result?.accountId ?? accountRes?.result?.accountId;
       if (!accountId) throw new Error("Account created but accountId not returned.");
 
       // Step 2 — Create employee record (user profile exists via Kafka by now)
@@ -170,7 +178,12 @@ export default function CreateEmployeePage() {
         hireDate:       formData.hireDate,
       });
 
-      navigate("/admin/employees");
+      setToast({
+        type: "success",
+        message: `Employee account created. Activation email sent to ${formData.email}.`,
+      });
+
+      setTimeout(() => navigate("/admin/employees"), 1800);
     } catch (err: any) {
       setApiError(err.response?.data?.message || err.message || "An unexpected error occurred.");
       setErrorStep(step === "idle" ? null : step as "account" | "employee");
@@ -188,6 +201,8 @@ export default function CreateEmployeePage() {
 
   return (
     <div className="w-full pb-10" style={{ fontFamily: "Inter, sans-serif" }}>
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
+
       {/* Header */}
       <div className="flex justify-between items-start mb-6">
         <div>
@@ -226,6 +241,11 @@ export default function CreateEmployeePage() {
                 <Camera size={12} color="white" />
               </button>
             </div>
+          </div>
+
+          <div className="mb-5 p-3.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-sm" style={{ color: "var(--text-sub)" }}>
+            No password needed here — an activation email will be sent to the employee so
+            they can set their own password. Username is generated automatically.
           </div>
 
           {apiError && (
@@ -268,23 +288,10 @@ export default function CreateEmployeePage() {
                 className={`${inputCls} ${errors.fullName ? "border-red-400" : ""}`} style={inputStyle} />
             </FormField>
 
-            <FormField label="Username" required error={errors.username}>
-              <input name="username" type="text" placeholder="e.g. an.nguyen" minLength={5}
-                value={formData.username} onChange={handleChange}
-                className={`${inputCls} ${errors.username ? "border-red-400" : ""}`} style={inputStyle} />
-            </FormField>
-
             <FormField label="Email" required error={errors.email}>
               <input name="email" type="email" placeholder="an.nguyen@cineprime.vn"
                 value={formData.email} onChange={handleChange}
                 className={`${inputCls} ${errors.email ? "border-red-400" : ""}`} style={inputStyle} />
-            </FormField>
-
-            <FormField label="Temporary Password" required error={errors.password}>
-              <input name="password" type="password" placeholder="Min 6 characters"
-                minLength={6} autoComplete="new-password"
-                value={formData.password} onChange={handleChange}
-                className={`${inputCls} ${errors.password ? "border-red-400" : ""}`} style={inputStyle} />
             </FormField>
 
             <FormField label="Phone Number" required error={errors.phoneNumber}>
@@ -396,17 +403,15 @@ export default function CreateEmployeePage() {
           >
             {loading ? (
               <>
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span className="inline-block h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
                 {stepLabel}
               </>
             ) : (
-              <><Save size={16} /> Create Employee</>
+              "Create Employee"
             )}
           </button>
         </div>
       </form>
-
-      <style>{`.theme-dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); }`}</style>
     </div>
   );
 }

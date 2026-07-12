@@ -19,7 +19,7 @@ export default function HomePage() {
       setLoadingMovies(true);
       setMovieError("");
       try {
-        const res = await movieApi.getAllMovies();
+        const res = await movieApi.getPublicMovies();
         if (active) setMovies(res.result ?? []);
       } catch {
         if (active) setMovieError("Movies are temporarily unavailable.");

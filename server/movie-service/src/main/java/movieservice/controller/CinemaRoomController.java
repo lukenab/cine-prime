@@ -12,6 +12,7 @@ import movieservice.dto.response.SeatResponse;
 import movieservice.enums.CinemaRoomStatus;
 import movieservice.service.CinemaRoomService;
 import movieservice.service.SeatService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -26,13 +27,15 @@ public class CinemaRoomController {
     SeatService seatService;
 
     @GetMapping
-    public ApiResponse<List<CinemaRoomResponse>> getAllRooms() {
+    public ApiResponse<List<CinemaRoomResponse>> getAllRooms(
+            @RequestParam(required = false) Long clusterId) {
         return ApiResponse.<List<CinemaRoomResponse>>builder()
                 .code(200)
-                .result(cinemaRoomService.getAllRooms())
+                .result(cinemaRoomService.getAllRooms(clusterId))
                 .build();
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @PostMapping
     public ApiResponse<CinemaRoomResponse> createRoom(@Valid @RequestBody CinemaRoomRequest request) {
         return ApiResponse.<CinemaRoomResponse>builder()
@@ -54,6 +57,7 @@ public class CinemaRoomController {
     // ── Maintenance ───────────────────────────────────────────
 
     /** Báo sự cố → phòng tự động chuyển TEMPORARILY_UNAVAILABLE */
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @PostMapping("/{id}/maintenance")
     public ApiResponse<Void> reportMaintenance(
             @PathVariable Long id,
@@ -67,6 +71,7 @@ public class CinemaRoomController {
     }
 
     /** Resolve maintenance → phòng tự động trở về ACTIVE nếu không còn sự cố mở */
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @PostMapping("/maintenance/{maintenanceId}/resolve")
     public ApiResponse<Void> resolveMaintenance(
             @PathVariable Long maintenanceId,
@@ -80,6 +85,7 @@ public class CinemaRoomController {
     }
 
     /** Đặt thủ công trạng thái phòng (ACTIVE, CLOSED, MAINTENANCE...) */
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @PatchMapping("/{id}/status")
     public ApiResponse<CinemaRoomResponse> setStatus(
             @PathVariable Long id,

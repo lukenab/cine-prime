@@ -27,7 +27,14 @@ public enum AuthErrorCode implements BaseErrorCode {
     TOKEN_EXPIRED(1022, "Your session has expired. Please log in again.", HttpStatus.UNAUTHORIZED),
     TOKEN_INVALID(1023, "Invalid token. Please log in again.", HttpStatus.UNAUTHORIZED),
     TOKEN_REVOKED(1024, "This session has been logged out. Please log in again.", HttpStatus.UNAUTHORIZED),
-    REGISTRATION_NOT_INITIATED(1025, "Registration has not been initiated!", HttpStatus.BAD_REQUEST);
+    REGISTRATION_NOT_INITIATED(1025, "Registration has not been initiated!", HttpStatus.BAD_REQUEST),
+
+    // --- Account activation (Issue #161 — invite-link flow) ---
+    ACTIVATION_TOKEN_INVALID(1026, "Invalid activation link.", HttpStatus.BAD_REQUEST),
+    ACTIVATION_TOKEN_EXPIRED(1027, "Activation link has expired. Please ask your admin to resend it.", HttpStatus.BAD_REQUEST),
+    ACTIVATION_TOKEN_ALREADY_USED(1028, "This activation link has already been used.", HttpStatus.BAD_REQUEST),
+    ACCOUNT_PENDING_ACTIVATION(1029, "Your account has not been activated yet. Please check your email for the activation link.", HttpStatus.FORBIDDEN),
+    ACCOUNT_ALREADY_ACTIVE(1030, "This account has already been activated.", HttpStatus.BAD_REQUEST);
 
     int code;
     String message;

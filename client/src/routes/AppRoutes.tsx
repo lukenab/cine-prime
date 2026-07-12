@@ -7,6 +7,7 @@ import AdminLayout from "../layouts/AdminLayout";
 import LoginPage from "../pages/auth/LoginPage";
 import RegisterPage from "../pages/auth/RegisterPage";
 import CompleteProfilePage from "../pages/auth/CompleteProfilePage";
+import ActivateAccountPage from "../pages/auth/ActivateAccountPage";
 
 import HomePage from "../pages/customer/HomePage";
 import MoviesPage from "../pages/customer/MoviesPage";
@@ -33,6 +34,10 @@ import ManageEmployeePage from "../pages/admin/ManageEmployeePage";
 import CreateEmployeePage from "../pages/admin/CreateEmployeePage";
 import EmployeeDetailPage from "../pages/admin/EmployeeDetailPage";
 import EditEmployeePage from "../pages/admin/EditEmployeePage";
+import ManagePersonsPage from "../pages/admin/ManagePersonsPage";
+import ManageAgeRatingsPage from "../pages/admin/ManageAgeRatingsPage";
+import ManageFormatsPage from "../pages/admin/ManageFormatsPage";
+import ManageCompaniesPage from "../pages/admin/ManageCompaniesPage";
 import ManagePromotionPage from "../pages/admin/ManagePromotionPage";
 import CreatePromotionPage from "../pages/admin/CreatePromotionPage";
 import EditPromotionPage from "../pages/admin/EditPromotionPage";
@@ -50,6 +55,7 @@ export default function AppRoutes() {
       {/* Customer routes — open to browse; profile gate is inside SeatBookingPage */}
       <Route element={<CustomerLayout />}>
         <Route path="/" element={<RootRedirect />} />
+        <Route path="/home" element={<HomePage />} />
         <Route path="/movies" element={<MoviesPage />} />
         <Route path="/cinemas" element={<CinemasPage />} />
         <Route path="/events" element={<EventsPage />} />
@@ -63,6 +69,7 @@ export default function AppRoutes() {
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/activate-account" element={<ActivateAccountPage />} />
       </Route>
 
       {/* Profile setup — standalone page, no layout wrapper */}
@@ -73,7 +80,9 @@ export default function AppRoutes() {
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
 
+          {/* ADMIN + EMPLOYEE */}
           <Route path="movies"    element={<ManageMoviePage />} />
+          <Route path="clusters"  element={<ManageCinemaClusterPage />} />
           <Route path="showtimes" element={<ManageShowtimePage />} />
           <Route path="bookings"  element={<ManageBookingPage />} />
           <Route path="sell"      element={<TicketSalePage />} />
@@ -87,10 +96,13 @@ export default function AppRoutes() {
             <Route path="users/create"       element={<CreateUserPage />} />
             <Route path="users/edit/:id"     element={<EditUserPage />} />
             <Route path="users/:id"          element={<UserDetailPage />} />
-            <Route path="clusters"           element={<ManageCinemaClusterPage />} />
             <Route path="rooms"              element={<ManageCinemaRoomsPage />} />
             <Route path="rooms/:id"          element={<RoomDetailPage />} />
             <Route path="genres"             element={<ManageGenresPage />} />
+            <Route path="persons"            element={<ManagePersonsPage />} />
+            <Route path="age-ratings"        element={<ManageAgeRatingsPage />} />
+            <Route path="formats"            element={<ManageFormatsPage />} />
+            <Route path="companies"          element={<ManageCompaniesPage />} />
             <Route path="promotions"          element={<ManagePromotionPage />} />
             <Route path="promotions/create"   element={<CreatePromotionPage />} />
             <Route path="promotions/:id"      element={<PromotionDetailPage />} />

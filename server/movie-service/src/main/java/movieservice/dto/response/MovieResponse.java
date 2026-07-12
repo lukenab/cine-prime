@@ -23,6 +23,7 @@ public class MovieResponse {
 
     Integer durationMinutes;
     LocalDate releaseDate;
+    LocalDate endDate;
     String country;
     String status;
 
@@ -38,6 +39,7 @@ public class MovieResponse {
     List<ScreeningFormatResponse> formats;
     List<TranslationResponse> translations;
     List<CastResponse> cast;
+    List<MovieImageResponse> images;
     
     LocalDateTime createdAt;
     LocalDateTime updatedAt;

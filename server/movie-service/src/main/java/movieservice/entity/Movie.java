@@ -44,6 +44,9 @@ public class Movie {
     @Column(name = "release_date")
     LocalDate releaseDate;
 
+    @Column(name = "end_date")
+    LocalDate endDate;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "age_rating_id")
     AgeRating ageRating;
@@ -101,6 +104,11 @@ public class Movie {
 
     @OneToMany(mappedBy = "movie", cascade = CascadeType.ALL, orphanRemoval = true)
     List<MovieCast> cast;
+
+    @OneToMany(mappedBy = "movie", cascade = CascadeType.ALL, orphanRemoval = true,
+            fetch = FetchType.LAZY)
+    @OrderBy("displayOrder ASC NULLS LAST, imageId ASC")
+    List<MovieImage> images;
 
     @OneToMany(mappedBy = "movie", fetch = FetchType.LAZY)
     List<ShowTime> showTimes;

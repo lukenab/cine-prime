@@ -142,6 +142,7 @@ public class MovieService {
         return response;
     }
 
+    @Transactional
     public List<MovieResponse> findAllPublic() {
         // Public: only visible statuses
         List<Movie> movies = movieRepository.findByStatusIn(
@@ -149,17 +150,20 @@ public class MovieService {
         return movieMapper.toMovieResponseList(movies);
     }
 
+    @Transactional
     public List<MovieResponse> findAll() {
         // Admin: all movies regardless of status
         return movieMapper.toMovieResponseList(movieRepository.findAll());
     }
 
+    @Transactional
     public Page<MovieResponse> findPage(int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         return movieRepository.findAll(pageable).map(movieMapper::toMovieResponse);
     }
 
     /** GET /api/movies?status=NOW_SHOWING&genreId=1&date=2026-07-09 */
+    @Transactional
     public Page<MovieResponse> findPageWithFilters(
             int page, int size,
             MovieStatus status, Long genreId, LocalDate releaseDate) {

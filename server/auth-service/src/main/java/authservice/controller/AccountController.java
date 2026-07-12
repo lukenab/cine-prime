@@ -49,8 +49,20 @@ public class AccountController {
                 .build();
     }
 
+    /**
+     * Admin resends the activation email when the original link (24h TTL) expired
+     * before the employee used it. See Issue #161.
+     */
+    @PostMapping("/{accountId}/resend-activation")
+    ApiResponse<Void> resendActivation(@PathVariable String accountId){
+        accountService.resendActivation(accountId);
+        return ApiResponse.<Void>builder()
+                .message("Activation email resent.")
+                .build();
+    }
+
     @GetMapping("/my-info")
-    ApiResponse<AccountResponse> myInfo(){
+    ApiResponse<AccountResponse> myInfo() {
         return ApiResponse.<AccountResponse>builder()
                 .result(accountService.myInfo())
                 .build();

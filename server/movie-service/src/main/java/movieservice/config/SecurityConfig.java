@@ -23,11 +23,14 @@ public class SecurityConfig extends JwtResourceServerSecuritySupport {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/movies/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/movie-types/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/genres/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/cinema-rooms/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/seats/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/schedules/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/schedules/**").hasRole("ADMIN")
+                        // Cinema clusters — GET public (controller filters by role internally)
+                        // Audit log is further protected via @PreAuthorize on the method
+                        .requestMatchers(HttpMethod.GET, "/api/cinema-clusters/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/schedules").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/schedules/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/schedules/**").hasRole("ADMIN")
                         .anyRequest().authenticated());

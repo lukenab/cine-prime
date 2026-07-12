@@ -3,6 +3,7 @@ import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import {
   ArrowLeft, User, Phone, MapPin, CreditCard,
   Calendar, Shield, Clock, Copy, Check, Briefcase, Hash,
+  Send, Loader2, CheckCircle2, AlertCircle,
 } from "lucide-react";
 import { employeeApi, type EmployeeResponse } from "../../api/employeeApi";
 import { authApi } from "../../api/authApi";
@@ -12,6 +13,7 @@ interface AccountInfo {
   accountId: string;
   username: string;
   email: string;
+  status: string;
   createdAt: string;
   roles: { roleName: string }[];
 }
@@ -97,6 +99,18 @@ const POSITION_LABELS: Record<string, string> = {
   MANAGER: "Manager",
 };
 
+// Issue #162 Part C: local toast, matches the pattern used in SettingsPage.tsx / CreateUserPage.tsx
+function Toast({ type, message, onClose }: { type: "success" | "error"; message: string; onClose: () => void }) {
+  return (
+    <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-xl"
+      style={{ background: type === "success" ? "#059669" : "#ef4444", color: "#fff", minWidth: "280px" }}>
+      {type === "success" ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+      <span style={{ fontSize: "14px", fontWeight: 500 }}>{message}</span>
+      <button onClick={onClose} className="ml-auto opacity-75 hover:opacity-100" style={{ fontSize: "18px", lineHeight: 1 }}>×</button>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -107,6 +121,8 @@ export default function EmployeeDetailPage() {
   const [account, setAccount]   = useState<AccountInfo | null>(null);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
+  const [toast, setToast]       = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [resending, setResending] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -135,6 +151,21 @@ export default function EmployeeDetailPage() {
     fetchData();
   }, [id]);
 
+  // Issue #162 Part C: admin resends the activation email when the 24h link
+  // expired before the employee used it. Only relevant while account is PENDING.
+  const handleResendActivation = async () => {
+    if (!account?.accountId) return;
+    setResending(true);
+    try {
+      await authApi.resendActivation(account.accountId);
+      setToast({ type: "success", message: `Activation email resent to ${account.email}.` });
+    } catch (err: any) {
+      setToast({ type: "error", message: err?.response?.data?.message || "Failed to resend activation email." });
+    } finally {
+      setResending(false);
+    }
+  };
+
   const accentColor    = isDarkMode ? "#3b82f6" : "#2563eb";
   const initials       = employee?.fullName?.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) ?? "??";
   const avatarGradient = id ? gradientFromId(id) : AVATAR_GRADIENTS[0];
@@ -142,6 +173,8 @@ export default function EmployeeDetailPage() {
 
   return (
     <div>
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
+
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <button
@@ -214,6 +247,14 @@ export default function EmployeeDetailPage() {
                 {isActive ? "Active" : "Disabled"}
               </span>
 
+              {account?.status === "PENDING" && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium mb-4"
+                  style={{ background: "rgba(245,158,11,0.1)", color: "#d97706" }}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  Pending Activation
+                </span>
+              )}
+
               {account && (
                 <div className="w-full">
                   <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-sub)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "8px" }}>Role</p>
@@ -239,6 +280,17 @@ export default function EmployeeDetailPage() {
               >
                 Edit Employee
               </button>
+              {account?.status === "PENDING" && (
+                <button
+                  onClick={handleResendActivation}
+                  disabled={resending}
+                  className="w-full py-2.5 rounded-xl border text-sm font-medium transition-colors hover:opacity-80 flex items-center justify-center gap-2 disabled:opacity-60"
+                  style={{ color: "#d97706", borderColor: "rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.05)" }}
+                >
+                  {resending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                  {resending ? "Sending..." : "Resend Activation Email"}
+                </button>
+              )}
               <button
                 onClick={() => navigate("/admin/employees")}
                 className="w-full py-2.5 rounded-xl border text-sm font-medium hover:opacity-80 transition-all"
@@ -284,7 +336,7 @@ export default function EmployeeDetailPage() {
               <p style={{ fontSize: "12px", color: "var(--text-sub)", marginBottom: "16px" }}>Profile data from User Service</p>
               <InfoRow icon={<Phone size={15} />}      label="Phone Number"   value={employee.phoneNumber} />
               <InfoRow icon={<Calendar size={15} />}   label="Date of Birth"  value={employee.dateOfBirth} />
-              <InfoRow icon={<User size={15} />}       label="Gender"         value={employee.gender} />
+              <InfoRow icon={<User size={15} />}       label="Gender" value={employee.gender} />
               <InfoRow icon={<CreditCard size={15} />} label="Identity Card"  value={employee.identityCard} />
               <InfoRow icon={<MapPin size={15} />}     label="Address"        value={employee.address} />
             </div>

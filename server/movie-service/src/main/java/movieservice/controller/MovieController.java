@@ -64,7 +64,7 @@ public class MovieController {
                 .build();
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
     @GetMapping("/all")
     public ApiResponse<List<MovieResponse>> getAll() {
         return ApiResponse.<List<MovieResponse>>builder()
