@@ -28,8 +28,8 @@ public class CinemaClusterRequest {
     String address;
 
     @Pattern(
-        regexp = "^(0[35789][0-9]{8}|02[0-9]{9})$",
-        message = "Invalid Vietnam phone number. Landlines (02x): 11 digits. Mobiles (03x/05x/07x/08x/09x): 10 digits."
+        regexp = "^1(900|800)[0-9]{4,6}$",
+        message = "Invalid hotline number. Must start with 1900 or 1800, followed by 4-6 digits."
     )
     String phoneNumber;
 

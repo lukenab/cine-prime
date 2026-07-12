@@ -1,17 +1,23 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MapPin, Building2, Armchair, Phone, ArrowRight, Search } from "lucide-react";
-import type { ClusterResponse } from "../../api/movieApi";
-import { mockClusters } from "../../data/mockClusters";
-
-const clusters = mockClusters.filter((c) => c.status === "ACTIVE");
+import { movieApi, type ClusterResponse } from "../../api/movieApi";
 
 export default function CinemasPage() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [activeProvince, setActiveProvince] = useState("All");
+  const [clusters, setClusters] = useState<ClusterResponse[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const provinces = useMemo(() => ["All", ...Array.from(new Set(clusters.map((c) => c.province)))], []);
+  useEffect(() => {
+    movieApi.getClusters()
+      .then((res) => setClusters((res.result ?? []).filter((c) => c.status === "ACTIVE")))
+      .catch(() => setClusters([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const provinces = useMemo(() => ["All", ...Array.from(new Set(clusters.map((c) => c.province)))], [clusters]);
 
   // Same localStorage keys the search bar's location picker uses, so the
   // chosen cinema flows through to Movies and pre-selects it on Showtime page.
@@ -28,7 +34,7 @@ export default function CinemasPage() {
       const matchesQuery = !q || c.clusterName.toLowerCase().includes(q) || c.address.toLowerCase().includes(q);
       return matchesProvince && matchesQuery;
     });
-  }, [query, activeProvince]);
+  }, [clusters, query, activeProvince]);
 
   return (
     <div className="min-h-screen pt-16" style={{ backgroundColor: "#050505" }}>
@@ -82,7 +88,9 @@ export default function CinemasPage() {
 
       {/* Grid */}
       <div className="mx-auto max-w-7xl px-6 py-10">
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="py-24 text-center text-white/40">Loading cinemas…</div>
+        ) : filtered.length === 0 ? (
           <div className="py-24 text-center text-white/40">No cinemas found.</div>
         ) : (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">

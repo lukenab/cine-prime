@@ -4,16 +4,6 @@ import { movieApi, type ClusterResponse } from "../../api/movieApi";
 
 const GENRES = ["All", "Action", "Drama", "Comedy", "Horror", "Sci-Fi", "Romance", "Thriller", "Animation"];
 
-// ── Mock clusters (fallback khi backend chưa có) ──────────────────────────────
-const MOCK_CLUSTERS: ClusterResponse[] = [
-  { clusterId: 1, clusterName: "CinePrime Quận 1",     province: "TP. Hồ Chí Minh", address: "123 Nguyễn Huệ, Quận 1",        status: "ACTIVE" },
-  { clusterId: 2, clusterName: "CinePrime Thủ Đức",    province: "TP. Hồ Chí Minh", address: "456 Võ Văn Ngân, TP. Thủ Đức", status: "ACTIVE" },
-  { clusterId: 3, clusterName: "CinePrime Hoàn Kiếm",  province: "Hà Nội",           address: "78 Hàng Bài, Hoàn Kiếm",       status: "ACTIVE" },
-  { clusterId: 4, clusterName: "CinePrime Cầu Giấy",   province: "Hà Nội",           address: "22 Xuân Thủy, Cầu Giấy",      status: "ACTIVE" },
-  { clusterId: 5, clusterName: "CinePrime Hải Châu",   province: "Đà Nẵng",          address: "30 Trần Phú, Hải Châu",        status: "ACTIVE" },
-  { clusterId: 6, clusterName: "CinePrime Ninh Kiều",  province: "Cần Thơ",          address: "15 Hai Bà Trưng, Ninh Kiều",  status: "ACTIVE" },
-];
-
 // ── Location Dropdown ─────────────────────────────────────────────────────────
 type LocationDropdownProps = {
   clusters: ClusterResponse[];
@@ -167,7 +157,7 @@ export function SearchBar() {
   useEffect(() => {
     movieApi.getClusters()
       .then((res) => setClusters((res.result ?? []).filter((c) => c.status === "ACTIVE")))
-      .catch(() => setClusters(MOCK_CLUSTERS));
+      .catch(() => setClusters([]));
   }, []);
 
   const handleLocationSelect = (province: string, cluster: ClusterResponse | null) => {
