@@ -9,6 +9,6 @@ import java.util.List;
 
 public interface CinemaRoomRepository extends JpaRepository<CinemaRoom, Long> {
     CinemaRoom findByCinemaRoomId(Long cinemaId);
-    boolean existsByCinemaRoomName(String cinemaRoomName);
+    boolean existsByCluster_ClusterIdAndCinemaRoomName(Long clusterId, String cinemaRoomName);
     List<CinemaRoom> findByCluster_ClusterId(Long clusterId);
 }

@@ -1005,7 +1005,7 @@ export default function ManageCinemaClusterPage() {
       {deleteTarget && (
         <DeleteModal
           cluster={deleteTarget}
-          onConfirm={handleDelete}
+         onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}
           submitting={deleting}
         />
@@ -1036,3 +1036,4 @@ export default function ManageCinemaClusterPage() {
     </>
   );
 }
+

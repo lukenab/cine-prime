@@ -34,13 +34,7 @@ const navItems: NavItem[] = [
       { icon: UserSquare2, label: "Persons",     path: "/admin/persons",     roles: ["ROLE_ADMIN"] },
     ],
   },
-  {
-    icon: Building2, label: "Cinemas", id: "cinemas", path: "/admin/clusters", group: "catalog",
-    children: [
-      { icon: MapPin,    label: "Clusters",     path: "/admin/clusters", roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"] },
-      { icon: Building2, label: "Cinema Rooms", path: "/admin/rooms",    roles: ["ROLE_ADMIN"] },
-    ],
-  },
+  { icon: Building2, label: "Cinemas", id: "cinemas", path: "/admin/clusters", group: "catalog", roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"] },
   { icon: Calendar,    label: "Showtimes",    id: "showtimes",  path: "/admin/showtimes",  group: "ops" },
   { icon: Ticket,      label: "Bookings",     id: "bookings",   path: "/admin/bookings",   group: "ops" },
   { icon: ShoppingCart,label: "Sell Tickets", id: "sell",       path: "/admin/sell",       group: "ops", roles: ["ROLE_EMPLOYEE"] },

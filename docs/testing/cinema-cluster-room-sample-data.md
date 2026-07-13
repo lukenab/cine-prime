@@ -78,3 +78,89 @@ Sources:
 - [Lotte Cinema - Vincom Biên Hòa (Foody)](https://www.foody.vn/dong-nai/lotte-cinema-vincom-bien-hoa)
 - [Lotte Vũng Tàu (MoMo)](https://www.momo.vn/cinema/rap/lotte-cinema/lotte-vung-tau-177)
 - [CGV Vincom Hải Phòng (MoMo)](https://www.momo.vn/cinema/rap/cgv/cgv-vincom-hai-phong-7)
+
+---
+
+## 4. Test cases — Validation / Workflow / Permission
+
+Bộ case dưới đây bám sát code thật (`CinemaClusterRequest`, `CinemaClusterController`, `CinemaRoomRequest`, `CinemaRoomController`, `SeatService`), không phải checklist chung chung. Dùng kèm dữ liệu mẫu ở mục 1-2 khi cần input hợp lệ.
+
+### 4.1 Cinema Cluster — Validation (`POST /api/cinema-clusters`)
+
+| # | Input sai | Kỳ vọng |
+|---|---|---|
+| 1 | `clusterName` rỗng hoặc 1 ký tự | 400 — "Cluster name is required" / "must be between 2 and 100" |
+| 2 | `province` không nằm trong danh sách cho phép (`ProvinceValidator.java`) | 400 |
+| 3 | `address` < 10 ký tự | 400 — "Address must be at least 10 characters" |
+| 4 | `phoneNumber` không đúng dạng hotline `1900xxxx`/`1800xxxx` — thử số di động thường `0901234567` | 400 |
+| 5 | `latitude` ngoài [-90,90] hoặc `longitude` ngoài [-180,180] | 400 |
+
+Lưu ý: **không có check trùng `clusterName`** trong code hiện tại — 2 cluster cùng tên vẫn tạo được.
+
+### 4.2 Cinema Cluster — Happy path & role khởi tạo status
+
+| # | Actor | Kỳ vọng |
+|---|---|---|
+| 6 | Login EMPLOYEE, tạo cluster hợp lệ | Status = `DRAFT` |
+| 7 | Login ADMIN, tạo cluster hợp lệ | Status = `ACTIVE` ngay (tự approve, bỏ qua review) |
+
+### 4.3 Cinema Cluster — Workflow (`/submit`, `/approve`, `/reject`)
+
+| # | Case | Kỳ vọng |
+|---|---|---|
+| 8 | EMPLOYEE bấm Submit trên cluster `DRAFT` | → `PENDING_REVIEW` |
+| 9 | Submit lại 1 cluster đang `PENDING_REVIEW`/`ACTIVE` | 400 `CLUSTER_INVALID_TRANSITION` |
+| 10 | ADMIN Approve cluster `PENDING_REVIEW` | → `ACTIVE` |
+| 11 | ADMIN Reject cluster `PENDING_REVIEW` kèm note | → `DRAFT`, `rejectionNote` được lưu |
+| 12 | EMPLOYEE gọi thẳng `/approve` hoặc `/reject` | 403 |
+| 13 | Approve/Reject cluster không phải `PENDING_REVIEW` (VD đang `DRAFT`) | 400 `CLUSTER_INVALID_TRANSITION` |
+| 14 | EMPLOYEE sửa lại cluster đang bị reject (`DRAFT` + có rejectionNote) rồi save | `rejectionNote` tự xóa |
+
+### 4.4 Cinema Cluster — Quyền edit / toggle status / delete
+
+| # | Case | Kỳ vọng |
+|---|---|---|
+| 15 | EMPLOYEE sửa cluster đang `PENDING_REVIEW` hoặc `ACTIVE` | 400 `CLUSTER_INVALID_TRANSITION` (chỉ sửa được khi `DRAFT`) |
+| 16 | ADMIN đổi status `ACTIVE↔INACTIVE` qua PUT | OK |
+| 17 | ADMIN đổi status trực tiếp thành `DRAFT`/`PENDING_REVIEW` qua PUT | 400 (2 status này chỉ đi qua workflow endpoint) |
+| 18 | EMPLOYEE gửi `status` bất kỳ trong PUT | 400 |
+| 19 | ADMIN xóa cluster đang có room bên trong | 409 `CLUSTER_HAS_ROOMS` |
+| 20 | ADMIN xóa cluster rỗng (0 room) | 200 |
+| 21 | EMPLOYEE gọi DELETE | 403 |
+
+### 4.5 Cinema Room — Validation (`POST /api/cinema-rooms`)
+
+| # | Input sai | Kỳ vọng |
+|---|---|---|
+| 22 | `cinemaRoomName` rỗng / 1 ký tự | 400 |
+| 23 | `totalSeatCapacity` < 10 | 400 (`@Min(10)`) |
+| 24 | `defaultPrice` = 0 hoặc âm | 400 |
+| 25 | `clusterId` trỏ tới cluster không tồn tại | 404 `CLUSTER_NOT_FOUND` |
+| 26 | `totalSeatCapacity` vượt `maxSeats` theo `roomType`: STANDARD > 100, LARGE > 200, IMAX > 300 | 409 `SEAT_QUANTITY_EXCEEDS_LIMIT` |
+
+### 4.6 Cinema Room — Uniqueness theo cluster (fix #144, migration V7)
+
+| # | Case | Kỳ vọng |
+|---|---|---|
+| 27 | Tạo "Room 1" ở cluster A, rồi "Room 1" ở **cluster B khác** | ✅ Thành công cả 2 — chính là pattern dùng ở Bảng 2 (mọi cluster đều có "Room 1"/"Room 2"), trước khi fix #144 bước này sẽ bị 409 ngay từ cluster thứ 2 |
+| 28 | Tạo "Room 1" ở cluster A, rồi "Room 1" ở **cùng cluster A** | 409 `CINEMA_ROOM_NAME_EXISTED` |
+
+### 4.7 Cinema Room — Sinh ghế tự động theo zone (issue #166)
+
+Verify bằng `GET /api/seats/room/{roomId}` sau khi tạo (theo `SeatService.generateSeatsForRoom`):
+
+| # | Input | Kỳ vọng |
+|---|---|---|
+| 29 | STANDARD, `totalSeatCapacity=50` | 5 hàng (A-E): A,B,C = Standard (10/hàng); D = VIP (10); E = Couple 5 bản ghi (`colSpan=2`) → tổng 45 bản ghi Seat dù capacity=50 |
+| 30 | STANDARD, `totalSeatCapacity=10` (nhỏ nhất) | 1 hàng, `totalRows=1 < 3` → không có vùng Couple, toàn bộ Standard |
+| 31 | STANDARD, `totalSeatCapacity=21` | 3 hàng: A=Standard(10), B=VIP(10), C định là Couple nhưng dư 1 ghế < colSpan(2) → tự hạ xuống Standard (C1), tổng đúng 21 bản ghi |
+| 32 | IMAX, bất kỳ capacity nào | Không bao giờ có hàng Couple (`coupleRowCount=0` với IMAX) |
+| 33 | Giá ghế | VIP = `defaultPrice × 1.25`, Couple/Sweetbox = `defaultPrice × 1.8` |
+| 34 | Ghế `SWEETBOX` | Không bao giờ tự sinh — chỉ gán thủ công qua `PUT /api/seats/{id}` (EditSeatModal) |
+
+### 4.8 Cinema Room — Quyền
+
+| # | Case | Kỳ vọng |
+|---|---|---|
+| 35 | EMPLOYEE tạo room | ✅ Cho phép — room không có workflow duyệt, tạo xong `ACTIVE` luôn |
+| 36 | `GET /api/cinema-rooms` (cả 2 role) | Public, không cần auth |

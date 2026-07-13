@@ -10,6 +10,7 @@ import movieservice.dto.request.SeatRequest;
 import movieservice.dto.response.SeatResponse;
 import movieservice.entity.CinemaRoom;
 import movieservice.entity.Seat;
+import movieservice.enums.RoomType;
 import movieservice.enums.SeatStatus;
 import movieservice.enums.SeatType;
 import movieservice.exception.MovieErrorCode;
@@ -30,36 +31,62 @@ public class SeatService {
     SeatRepository seatRepository;
     MovieMapper movieMapper;
 
-    /**
-     * Tự động sinh ghế cho phòng mới tạo.
-     * Mỗi ghế có rowLabel (A, B, C...) và colNumber (1, 2, 3...).
-     * seatCode = rowLabel + colNumber, e.g. "A1", "B12".
-     */
     @Transactional
     public void generateSeatsForRoom(CinemaRoom room, BigDecimal defaultPrice) {
         int total = room.getTotalSeatCapacity();
-        int seatsPerRow = room.getRoomType().getSeatsPerRow();
-        List<Seat> seats = new ArrayList<>(total);
+        RoomType roomType = room.getRoomType();
+        int seatsPerRow = roomType.getSeatsPerRow();
+        int totalRows = (int) Math.ceil((double) total / seatsPerRow);
 
-        for (int i = 0; i < total; i++) {
-            String rowLabel = String.valueOf((char) ('A' + (i / seatsPerRow)));
-            int colNumber = (i % seatsPerRow) + 1;
+        // Phong qua nho (< 3 hang) thi bo han vung Couple de tranh chiem gan het phong.
+        int coupleRows = totalRows >= 3 ? Math.min(roomType.getCoupleRowCount(), 1) : 0;
+        int vipRows = (int) Math.round((totalRows - coupleRows) * roomType.getVipRowRatio());
+        int standardRows = totalRows - coupleRows - vipRows;
 
-            Seat seat = Seat.builder()
-                    .seatCode(rowLabel + colNumber)
-                    .rowLabel(rowLabel)
-                    .colNumber(colNumber)
-                    .seatType(SeatType.STANDARD)
-                    .status(SeatStatus.ACTIVE)
-                    .price(defaultPrice)
-                    .cinemaRoom(room)
-                    .build();
+        List<Seat> seats = new ArrayList<>();
+        int seatsAssigned = 0; // so "cho ngoi" (dau nguoi) da dung, de dung dung o `total`
 
-            seats.add(seat);
+        for (int rowIdx = 0; rowIdx < totalRows && seatsAssigned < total; rowIdx++) {
+            String rowLabel = String.valueOf((char) ('A' + rowIdx));
+            SeatType type = rowIdx < standardRows
+                    ? SeatType.STANDARD
+                    : rowIdx < standardRows + vipRows
+                        ? SeatType.VIP
+                        : SeatType.COUPLE;
+
+            int seatsRemaining = total - seatsAssigned;
+            int physicalSeatsInRow = Math.min(seatsPerRow, seatsRemaining);
+
+            // Hang Couple nhung khong du it nhat 1 cap ghe (vd hang cuoi bi cat ngan do
+            // totalSeatCapacity khong chia het cho seatsPerRow) thi ha xuong Standard
+            // thay vi bo trang hang.
+            if (type.getColSpan() > 1 && physicalSeatsInRow < type.getColSpan()) {
+                type = SeatType.STANDARD;
+            }
+
+            int colSpan = type.getColSpan();
+            int unitsInRow = physicalSeatsInRow / colSpan;
+            BigDecimal price = defaultPrice.multiply(BigDecimal.valueOf(type.getPriceMultiplier()));
+
+            for (int col = 1; col <= unitsInRow; col++) {
+                Seat seat = Seat.builder()
+                        .seatCode(rowLabel + col)
+                        .rowLabel(rowLabel)
+                        .colNumber(col)
+                        .seatType(type)
+                        .status(SeatStatus.ACTIVE)
+                        .price(price)
+                        .cinemaRoom(room)
+                        .build();
+                seats.add(seat);
+            }
+
+            seatsAssigned += physicalSeatsInRow;
         }
 
         seatRepository.saveAll(seats);
-        log.info("Generated {} seats for room '{}'", total, room.getCinemaRoomName());
+        log.info("Generated {} seats ({} standard rows, {} VIP rows, {} couple rows) for room '{}'",
+                seats.size(), standardRows, vipRows, coupleRows, room.getCinemaRoomName());
     }
 
     public List<SeatResponse> getSeatsByRoom(Long roomId) {
@@ -82,9 +109,6 @@ public class SeatService {
         return movieMapper.toSeatResponse(seatRepository.save(seat));
     }
 
-    /**
-     * Đặt ghế thành MAINTENANCE (e.g. ghế bị hỏng).
-     */
     @Transactional
     public void setSeatStatus(long seatId, SeatStatus newStatus) {
         Seat seat = seatRepository.findById(seatId)

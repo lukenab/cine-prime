@@ -5,7 +5,7 @@ import { movieApi, type SeatResponse, type RoomResponse, type SeatTypeValue, ROO
 
 // ── Seat type config ─────────────────────────────────────────────────────────
 
-const SEAT_TYPES = ["STANDARD", "VIP", "COUPLE"] as const;
+const SEAT_TYPES = ["STANDARD", "VIP", "COUPLE", "SWEETBOX"] as const;
 
 const seatTypeStyle: Record<string, { bg: string; border: string; text: string; badge: string }> = {
   STANDARD: {
@@ -25,6 +25,12 @@ const seatTypeStyle: Record<string, { bg: string; border: string; text: string; 
     border: "rgba(168,85,247,0.35)",
     text: "#9333ea",
     badge: "bg-purple-100 text-purple-700",
+  },
+  SWEETBOX: {
+    bg: "rgba(236,72,153,0.12)",
+    border: "rgba(236,72,153,0.35)",
+    text: "#db2777",
+    badge: "bg-pink-100 text-pink-700",
   },
 };
 
@@ -176,6 +182,10 @@ export default function RoomDetailPage() {
     seats[0]?.cinemaRoomName ??
     `Room #${id}`;
 
+  const backTarget = passedRoom?.clusterId
+    ? `/admin/clusters/${passedRoom.clusterId}`
+    : "/admin/clusters";
+
   const loadSeats = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -234,7 +244,7 @@ export default function RoomDetailPage() {
       {/* Back header */}
       <div className="flex items-center gap-4 mb-7">
         <button
-          onClick={() => navigate("/admin/rooms")}
+          onClick={() => navigate(backTarget)}
           className="flex items-center gap-2 px-3 py-2 rounded-xl border transition-all hover:opacity-80"
           style={{ fontSize: "13px", color: "var(--text-sub)", borderColor: "var(--border-color)", background: "var(--bg-card)" }}
         >
@@ -365,7 +375,7 @@ export default function RoomDetailPage() {
                       {/* Seats — no wrap, one line per row */}
                       <div style={{ display: "flex", gap: "6px" }}>
                         {seatsByRow[row].map((seat) => {
-                          const available = seat.seatStatus === 1;
+                          const available = seat.status === "ACTIVE";
                           const s = available
                             ? seatTypeStyle[seat.seatType] ?? seatTypeStyle.STANDARD
                             : unavailableStyle;
