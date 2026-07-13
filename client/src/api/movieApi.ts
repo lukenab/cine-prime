@@ -608,6 +608,9 @@ export const movieApi = {
   getClusters: () =>
     axiosClient.get('/api/cinema-clusters') as Promise<ApiWrapper<ClusterResponse[]>>,
 
+  getClusterById: (id: number) =>
+    axiosClient.get(`/api/cinema-clusters/${id}`) as Promise<ApiWrapper<ClusterResponse>>,
+
   createCluster: (payload: CreateClusterPayload) =>
     axiosClient.post('/api/cinema-clusters', payload) as Promise<ApiWrapper<ClusterResponse>>,
 

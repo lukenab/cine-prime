@@ -24,6 +24,7 @@ import ManageMoviePage from "../pages/admin/ManageMoviePage";
 import ManageCinemaRoomsPage from "../pages/admin/ManageCinemaRoomsPage";
 import ManageCinemaClusterPage from "../pages/admin/ManageCinemaClusterPage";
 import RoomDetailPage from "../pages/admin/RoomDetailPage";
+import ClusterDetailPage from "../pages/admin/ClusterDetailPage";
 import ManageGenresPage from "../pages/admin/ManageGenresPage";
 import CreateUserPage from "../pages/admin/CreateUserPage";
 import EditUserPage from "../pages/admin/EditUserPage";
@@ -83,6 +84,7 @@ export default function AppRoutes() {
           {/* ADMIN + EMPLOYEE */}
           <Route path="movies"    element={<ManageMoviePage />} />
           <Route path="clusters"  element={<ManageCinemaClusterPage />} />
+          <Route path="clusters/:id" element={<ClusterDetailPage />} />
           <Route path="showtimes" element={<ManageShowtimePage />} />
           <Route path="bookings"  element={<ManageBookingPage />} />
           <Route path="sell"      element={<TicketSalePage />} />
