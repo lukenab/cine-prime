@@ -1,21 +1,18 @@
 import { useState, useEffect } from "react";
 import { Building2, X, Check } from "lucide-react";
-import { type CreateRoomPayload, type RoomType, ROOM_TYPE_CONFIG, type ClusterResponse } from "../api/movieApi";
+import { type CreateRoomPayload, type RoomType, ROOM_TYPE_CONFIG } from "../api/movieApi";
 
 // ── Add Room Modal ────────────────────────────────────────────────────────────
-// Shared by ManageCinemaRoomsPage (global "all rooms" view, cluster picked from
-// a dropdown) and ClusterDetailPage (nested view — pass `fixedClusterId` to
-// skip the picker entirely since the cluster is already known from context).
+// Used from ClusterDetailPage — room creation always happens in the context of
+// a specific cluster (see docs/issues/mr-165-nest-cinema-room-under-cluster.md),
+// so `clusterId` is always known ahead of time and never picked from a dropdown.
 
 export type AddRoomModalProps = {
   open: boolean;
   onClose: () => void;
   onSave: (data: CreateRoomPayload) => void;
   submitting: boolean;
-  /** Rooms page (flat view): full list, user picks one via dropdown. */
-  clusters?: ClusterResponse[];
-  /** Cluster detail page (nested view): cluster already known — hides the picker. */
-  fixedClusterId?: number;
+  clusterId: number;
 };
 
 const ROOM_TYPES = Object.keys(ROOM_TYPE_CONFIG) as RoomType[];
@@ -26,26 +23,18 @@ const roomTypeBorderActive: Record<RoomType, string> = {
   IMAX:     "#8b5cf6",
 };
 
-export function AddCinemaRoomModal({ open, onClose, onSave, submitting, clusters = [], fixedClusterId }: AddRoomModalProps) {
-  const initialClusterId = fixedClusterId ?? clusters[0]?.clusterId ?? 0;
-
+export function AddCinemaRoomModal({ open, onClose, onSave, submitting, clusterId }: AddRoomModalProps) {
   const [form, setForm] = useState<CreateRoomPayload>({
-    cinemaRoomName: "", roomType: "STANDARD", seatQuantity: 50, defaultPrice: 90000, clusterId: initialClusterId,
+    cinemaRoomName: "", roomType: "STANDARD", seatQuantity: 50, defaultPrice: 90000, clusterId,
   });
 
   useEffect(() => {
     if (open) {
-      setForm({
-        cinemaRoomName: "", roomType: "STANDARD", seatQuantity: 50, defaultPrice: 90000,
-        clusterId: fixedClusterId ?? clusters[0]?.clusterId ?? 0,
-      });
+      setForm({ cinemaRoomName: "", roomType: "STANDARD", seatQuantity: 50, defaultPrice: 90000, clusterId });
     }
-  }, [open, clusters, fixedClusterId]);
+  }, [open, clusterId]);
 
   if (!open) return null;
-
-  const showPicker = fixedClusterId == null;
-  const noClusters = showPicker && clusters.length === 0;
 
   const cfg = ROOM_TYPE_CONFIG[form.roomType];
   const seatsPerRow = cfg.seatsPerRow;
@@ -83,35 +72,9 @@ export function AddCinemaRoomModal({ open, onClose, onSave, submitting, clusters
 
         {/* Form */}
         <form
-          onSubmit={(e) => { e.preventDefault(); if (!overLimit && form.clusterId) onSave(form); }}
+          onSubmit={(e) => { e.preventDefault(); if (!overLimit) onSave(form); }}
           className="px-6 py-5 space-y-4"
         >
-          {showPicker && (
-            <div>
-              <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
-                Cinema Cluster <span className="text-rose-500">*</span>
-              </label>
-              {noClusters ? (
-                <p style={{ fontSize: "12px", color: "#ef4444" }}>
-                  No cinema clusters found — create a cluster first before adding rooms.
-                </p>
-              ) : (
-                <select
-                  required
-                  value={form.clusterId || ""}
-                  onChange={(e) => setForm({ ...form, clusterId: parseInt(e.target.value) || 0 })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-blue-400 transition-colors"
-                  style={inputStyle}
-                >
-                  <option value="" disabled>Select a cluster…</option>
-                  {clusters.map((c) => (
-                    <option key={c.clusterId} value={c.clusterId}>{c.clusterName}</option>
-                  ))}
-                </select>
-              )}
-            </div>
-          )}
-
           <div>
             <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
               Room Name <span className="text-rose-500">*</span>
@@ -216,7 +179,7 @@ export function AddCinemaRoomModal({ open, onClose, onSave, submitting, clusters
               Cancel
             </button>
             <button
-              type="submit" disabled={submitting || !form.clusterId || noClusters}
+              type="submit" disabled={submitting}
               className="flex-1 px-4 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-60"
               style={{ fontSize: "14px", fontWeight: 500 }}
             >

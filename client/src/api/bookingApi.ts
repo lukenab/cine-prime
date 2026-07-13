@@ -4,7 +4,8 @@ export interface Seat {
   seatId: number;
   row: string;
   number: number;
-  type: "STANDARD" | "VIP";
+  type: "STANDARD" | "VIP" | "COUPLE" | "SWEETBOX";
+  colSpan?: number; // so cot vat ly ghe chiem trong hang (Couple/Sweetbox = 2)
   status: "AVAILABLE" | "LOCKED" | "BOOKED";
   price: number;
 }

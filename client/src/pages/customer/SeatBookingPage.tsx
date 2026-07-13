@@ -56,13 +56,22 @@ function CountdownTimer({ lockedUntil }: { lockedUntil: string }) {
 }
 
 
+// Accent nhom theo loai ghe cao cap: VIP giu mau xanh brand cu; Couple/Sweetbox
+// (ghe doi) dung chung 1 mau hong de khach phan biet duoc voi VIP va Standard.
+function seatAccent(type: string): "vip" | "couple" | null {
+  if (type === "VIP") return "vip";
+  if (type === "COUPLE" || type === "SWEETBOX") return "couple";
+  return null;
+}
+
 function SeatBtn({
   seat, selected, conflict, onToggle,
 }: {
   seat: Seat; selected: boolean; conflict: boolean; onToggle: (id: number) => void;
 }) {
   const available = seat.status === "AVAILABLE";
-  const isVip = seat.type === "VIP";
+  const accent = seatAccent(seat.type);
+  const isCouple = accent === "couple";
 
   // Colour + interaction per state. Shape (seat silhouette) is shared below.
   const cls = (() => {
@@ -70,7 +79,8 @@ function SeatBtn({
     if (seat.status === "LOCKED") return "bg-[#320d0d] border-[#7a2626] text-[#ff7a7a] cursor-not-allowed";
     if (conflict)                 return "bg-[#3d1515] border-[#e84545] text-[#ff9a9a] animate-pulse cursor-pointer";
     if (selected)                 return "bg-gradient-to-b from-[#93c5fd] to-[#2563eb] border-[#60a5fa] text-black shadow-[0_4px_14px_rgba(96,165,250,0.45)] -translate-y-0.5 cursor-pointer";
-    if (isVip)                    return "bg-[#60a5fa]/[0.08] border-[#60a5fa]/40 text-[#60a5fa] hover:border-[#60a5fa] hover:bg-[#60a5fa]/20 hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(96,165,250,0.25)] cursor-pointer";
+    if (accent === "vip")         return "bg-[#60a5fa]/[0.08] border-[#60a5fa]/40 text-[#60a5fa] hover:border-[#60a5fa] hover:bg-[#60a5fa]/20 hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(96,165,250,0.25)] cursor-pointer";
+    if (accent === "couple")      return "bg-[#f472b6]/[0.08] border-[#f472b6]/40 text-[#f472b6] hover:border-[#f472b6] hover:bg-[#f472b6]/20 hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(244,114,182,0.25)] cursor-pointer";
     return "bg-white/[0.05] border-white/15 text-white/45 hover:border-[#60a5fa]/70 hover:bg-[#60a5fa]/10 hover:text-[#60a5fa] hover:-translate-y-0.5 cursor-pointer";
   })();
 
@@ -80,7 +90,7 @@ function SeatBtn({
       disabled={!available && !conflict}
       onClick={() => available && onToggle(seat.seatId)}
       title={`${seat.row}${seat.number} · ${seat.type} · ${seat.status}`}
-      className={`relative w-9 h-9 rounded-t-lg rounded-b-[3px] border border-b-[3px] text-[11px] font-semibold flex items-center justify-center select-none transition-all duration-150 will-change-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#60a5fa]/60 ${cls}`}
+      className={`relative ${isCouple ? "w-[4.75rem]" : "w-9"} h-9 rounded-t-lg rounded-b-[3px] border border-b-[3px] text-[11px] font-semibold flex items-center justify-center select-none transition-all duration-150 will-change-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#60a5fa]/60 ${cls}`}
       style={{ fontFamily: "'Space Mono', monospace" }}
     >
       {seat.number}
@@ -235,7 +245,7 @@ export default function SeatBookingPage() {
   const total = pickedSeats.reduce((sum, s) => sum + s.price, 0);
   const rows = Array.from(new Set(seats.map((s) => s.row))).sort();
   const byRow = (r: string) => seats.filter((s) => s.row === r).sort((a, b) => a.number - b.number);
-  const isVipRow = (r: string) => seats.find((s) => s.row === r)?.type === "VIP";
+  const rowAccent = (r: string) => seatAccent(seats.find((s) => s.row === r)?.type ?? "STANDARD");
   const maxCols = rows.reduce((m, r) => Math.max(m, byRow(r).length), 0);
   const colNumbers = splitRow(Array.from({ length: maxCols }, (_, i) => i + 1));
   const formattedDate = new Date(showtimeDetails.dateTime).toLocaleDateString("en-US", {
@@ -432,7 +442,7 @@ export default function SeatBookingPage() {
             )}
 
             {rows.map((row, idx) => {
-              const vip = isVipRow(row);
+              const accent = rowAccent(row);
               const { left, middle, right } = splitRow(byRow(row));
 
               return (
@@ -440,7 +450,7 @@ export default function SeatBookingPage() {
                   {idx > 0 && <div className="h-3" />}
                   <div className="flex items-center gap-2 w-max">
                     {/* Row label */}
-                    <span className={`w-5 text-center text-[10px] font-bold shrink-0 ${vip ? "text-[#60a5fa]" : "text-white/45"}`}
+                    <span className={`w-5 text-center text-[10px] font-bold shrink-0 ${accent === "vip" ? "text-[#60a5fa]" : accent === "couple" ? "text-[#f472b6]" : "text-white/45"}`}
                       style={{ fontFamily: "'Space Mono', monospace" }}>
                       {row}
                     </span>
@@ -476,12 +486,18 @@ export default function SeatBookingPage() {
                       </>
                     )}
 
-                    {/* VIP badge */}
-                    <span className="w-10 shrink-0">
-                      {vip && (
+                    {/* Premium row badge */}
+                    <span className="w-14 shrink-0">
+                      {accent === "vip" && (
                         <span className="text-[8px] font-semibold text-[#60a5fa]/70 uppercase tracking-widest"
                           style={{ fontFamily: "'Space Mono', monospace" }}>
                           VIP
+                        </span>
+                      )}
+                      {accent === "couple" && (
+                        <span className="text-[8px] font-semibold text-[#f472b6]/70 uppercase tracking-widest"
+                          style={{ fontFamily: "'Space Mono', monospace" }}>
+                          Couple
                         </span>
                       )}
                     </span>
@@ -496,6 +512,7 @@ export default function SeatBookingPage() {
             {[
               { swatch: "bg-white/[0.05] border-white/15", label: "Available" },
               { swatch: "bg-[#60a5fa]/[0.08] border-[#60a5fa]/40", label: "VIP" },
+              { swatch: "bg-[#f472b6]/[0.08] border-[#f472b6]/40", label: "Couple" },
               { swatch: "bg-gradient-to-b from-[#93c5fd] to-[#2563eb] border-[#60a5fa]", label: "Selected" },
               { swatch: "bg-[#320d0d] border-[#7a2626]", label: "Locked" },
               { swatch: "bg-[#141620] border-[#20222e]", label: "Booked" },
@@ -554,6 +571,8 @@ export default function SeatBookingPage() {
                         <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wide ${
                           seat.type === "VIP"
                             ? "bg-[#60a5fa]/15 text-[#60a5fa]"
+                            : seat.type === "COUPLE" || seat.type === "SWEETBOX"
+                            ? "bg-[#f472b6]/15 text-[#f472b6]"
                             : "bg-white/10 text-white/70"
                         }`}>
                           {seat.type}
@@ -574,7 +593,8 @@ export default function SeatBookingPage() {
                 <div className="flex flex-wrap gap-1.5">
                   {(() => {
                     const vip = pickedSeats.filter((s) => s.type === "VIP").length;
-                    const std = pickedSeats.length - vip;
+                    const couple = pickedSeats.filter((s) => s.type === "COUPLE" || s.type === "SWEETBOX").length;
+                    const std = pickedSeats.length - vip - couple;
                     return (
                       <>
                         {std > 0 && (
@@ -585,6 +605,11 @@ export default function SeatBookingPage() {
                         {vip > 0 && (
                           <span className="rounded-full bg-[#60a5fa]/12 px-2.5 py-0.5 text-[11px] text-[#60a5fa]">
                             {vip} VIP
+                          </span>
+                        )}
+                        {couple > 0 && (
+                          <span className="rounded-full bg-[#f472b6]/12 px-2.5 py-0.5 text-[11px] text-[#f472b6]">
+                            {couple} Couple
                           </span>
                         )}
                       </>

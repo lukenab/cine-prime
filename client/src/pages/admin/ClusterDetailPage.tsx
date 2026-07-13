@@ -447,7 +447,7 @@ export default function ClusterDetailPage() {
         onClose={() => setModalOpen(false)}
         onSave={handleCreateRoom}
         submitting={submitting}
-        fixedClusterId={cluster.clusterId}
+        clusterId={cluster.clusterId}
       />
 
       {rejecting && (

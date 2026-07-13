@@ -151,13 +151,14 @@ export type SeatResponse = {
   seatId: number;
   seatCode: string;
   seatType: string;
-  seatStatus: number;
+  colSpan?: number; // so cot vat ly ghe chiem trong hang (Couple/Sweetbox = 2)
+  status: "ACTIVE" | "INACTIVE" | "MAINTENANCE";
   price: number;
   cinemaRoomId: number;
   cinemaRoomName: string;
 };
 
-export type SeatTypeValue = "STANDARD" | "VIP" | "COUPLE";
+export type SeatTypeValue = "STANDARD" | "VIP" | "COUPLE" | "SWEETBOX";
 
 export type UpdateSeatPayload = {
   seatType: SeatTypeValue;
