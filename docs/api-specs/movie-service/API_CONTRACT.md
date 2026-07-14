@@ -149,12 +149,16 @@
 |--------|----------|-------|------|
 | `GET` | `/api/cinema-clusters` | Lấy toàn bộ cụm rạp | Public |
 | `GET` | `/api/cinema-clusters/{id}` | Lấy cụm rạp theo ID | Public |
-| `POST` | `/api/cinema-clusters` | Tạo cụm rạp mới (status = DRAFT) | ADMIN |
-| `PUT` | `/api/cinema-clusters/{id}` | Cập nhật thông tin cụm rạp | ADMIN |
+| `POST` | `/api/cinema-clusters` | Tạo cụm rạp mới; ADMIN tạo `ACTIVE`, EMPLOYEE tạo `DRAFT`; lưu `createdBy` từ `X-User-Name` | ADMIN / EMPLOYEE |
+| `PUT` | `/api/cinema-clusters/{id}` | Cập nhật thông tin cụm rạp; lưu `updatedBy` từ `X-User-Name` | ADMIN / EMPLOYEE |
 | `DELETE` | `/api/cinema-clusters/{id}` | Xoá cụm rạp | ADMIN |
-| `POST` | `/api/cinema-clusters/{id}/submit` | DRAFT → PENDING_REVIEW | ADMIN |
+| `POST` | `/api/cinema-clusters/{id}/submit` | DRAFT → PENDING_REVIEW | ADMIN / EMPLOYEE |
 | `POST` | `/api/cinema-clusters/{id}/approve` | PENDING_REVIEW → ACTIVE | ADMIN |
 | `POST` | `/api/cinema-clusters/{id}/reject` | PENDING_REVIEW → DRAFT + rejectionNote | ADMIN |
+
+**Audit header (POST / PUT):** `X-User-Name` là optional; nếu không truyền, service dùng giá trị `unknown`. `POST` set `createdBy`; `PUT` set `updatedBy` và giữ nguyên `createdBy`.
+
+**CinemaCluster response:** có thêm `createdBy` và `updatedBy` (có thể `null` với record cũ hoặc trước lần cập nhật đầu tiên).
 
 ---
 
