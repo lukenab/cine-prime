@@ -222,7 +222,7 @@
 | `ShowTimeStatus` | `SCHEDULED`, `ON_SALE`, `CANCELLED`, `COMPLETED`, `SUSPENDED` |
 | `ClusterStatus` | `DRAFT`, `PENDING_REVIEW`, `ACTIVE`, `INACTIVE` |
 | `CinemaRoomStatus` | `ACTIVE`, `TEMPORARILY_UNAVAILABLE`, `CLOSED` |
-| `SeatType` | `STANDARD`, `VIP`, `COUPLE`, `SWEETBOX` |
+| `SeatType` | `STANDARD`, `VIP`, `COUPLE`, `ACCESSIBLE` |
 | `SeatStatus` | `ACTIVE`, `INACTIVE` |
 | `ShowtimeSeatStatus` | `AVAILABLE`, `RESERVED`, `SOLD`, `CANCELLED` |
 | `RoomType` | `STANDARD`, `LARGE`, `IMAX` |

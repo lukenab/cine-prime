@@ -69,7 +69,27 @@ public enum MovieErrorCode implements BaseErrorCode {
     CLUSTER_NOT_FOUND(2023, "Cinema cluster not found.", HttpStatus.NOT_FOUND),
     CLUSTER_HAS_ROOMS(2024, "Cannot delete cluster that still has cinema rooms.", HttpStatus.CONFLICT),
     INVALID_CLUSTER_STATUS(2025, "Invalid status. Accepted values: DRAFT, PENDING_REVIEW, ACTIVE, INACTIVE", HttpStatus.BAD_REQUEST),
-    CLUSTER_INVALID_TRANSITION(2026, "Invalid status transition. Check the cluster's current status and use the correct workflow endpoint.", HttpStatus.BAD_REQUEST);
+    CLUSTER_INVALID_TRANSITION(2026, "Invalid status transition. Check the cluster's current status and use the correct workflow endpoint.", HttpStatus.BAD_REQUEST),
+    CLUSTER_NAME_EXISTED(2027, "Cluster name already exists!!!", HttpStatus.CONFLICT),
+
+    CINEMA_ROOM_HAS_SHOWTIMES(2028, "Cannot delete cinema room that still has showtimes.", HttpStatus.CONFLICT),
+    CLUSTER_NOT_ACTIVE(2029, "Cannot create a room in a cluster that is not ACTIVE.", HttpStatus.BAD_REQUEST),
+
+    SEAT_ROW_LIMIT_EXCEEDED(2030,
+            "Seat quantity for this room type produces too many rows to lay out safely.",
+            HttpStatus.BAD_REQUEST),
+
+    SEAT_QUANTITY_TOO_SMALL(2031,
+            "numberOfRows x seatsPerRow is below the minimum room capacity (10).",
+            HttpStatus.BAD_REQUEST),
+
+    SEAT_ROW_ALLOCATION_INVALID(2032,
+            "standardRowCount + vipRowCount + coupleRowCount must equal numberOfRows, with at least one Standard or VIP row.",
+            HttpStatus.BAD_REQUEST),
+
+    COUPLE_ROW_REQUIRES_EVEN_SEATS(2033,
+            "seatsPerRow must be even when the room contains Couple rows.",
+            HttpStatus.BAD_REQUEST);
 
     int code;
     String message;

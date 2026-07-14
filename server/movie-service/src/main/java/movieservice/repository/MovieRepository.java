@@ -44,6 +44,10 @@ public interface MovieRepository extends JpaRepository<Movie, Long> {
 
     boolean existsByImdbId(String imdbId);
 
+    /** Dung boi TmdbService de danh dau alreadyImported trong browse/search list (bulk, tranh N+1) */
+    @Query("SELECT m.tmdbId FROM Movie m WHERE m.tmdbId IN :tmdbIds")
+    List<Integer> findExistingTmdbIds(@Param("tmdbIds") List<Integer> tmdbIds);
+
     // ── Status transitions (soft lifecycle) ───────────────────
     @Transactional
     @Modifying

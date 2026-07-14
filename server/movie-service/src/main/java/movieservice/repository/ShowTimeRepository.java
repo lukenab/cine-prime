@@ -46,6 +46,8 @@ public interface ShowTimeRepository extends JpaRepository<ShowTime, Long> {
                         @Param("endTime") LocalTime endTime,
                         @Param("excludeId") Long excludeId);
 
+        boolean existsByCinemaRoomCinemaRoomId(Long roomId);
+
         List<ShowTime> findByMovieMovieId(Long movieId);
 
         List<ShowTime> findByMovieMovieIdAndShowDate(Long movieId, LocalDate showDate);

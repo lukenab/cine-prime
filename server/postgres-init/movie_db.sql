@@ -311,6 +311,8 @@ COMMENT ON COLUMN movie_cast.billing_order IS '1 = top billing (diễn viên ch�
 --   • thêm: audit fields
 --   • seat_quantity đổi tên → total_seat_capacity (rõ hơn), chỉ là capacity lý thuyết
 --     (số ghế thực tế active lấy từ COUNT(seat) ở service layer)
+--   • thêm: number_of_rows, seats_per_row — admin chọn khi tạo phòng, total_seat_capacity
+--     do backend tự tính = number_of_rows * seats_per_row (không nhận trực tiếp từ client)
 CREATE TABLE IF NOT EXISTS cinema_room (
     cinema_room_id    BIGSERIAL    PRIMARY KEY,
     cinema_room_name  VARCHAR(100) NOT NULL,
@@ -322,7 +324,17 @@ CREATE TABLE IF NOT EXISTS cinema_room (
                       CONSTRAINT chk_room_type
                           CHECK (room_type IN ('STANDARD','LARGE','IMAX','4DX','SCREENX')),
 
-    total_seat_capacity INTEGER    NOT NULL DEFAULT 0,  -- số ghế theo thiết kế (capacity)
+    total_seat_capacity INTEGER    NOT NULL DEFAULT 0,  -- = number_of_rows * seats_per_row, backend tự tính
+
+    -- Bố cục do admin chọn lúc tạo phòng (RoomType chỉ cung cấp giá trị mặc định gợi ý +
+    -- giới hạn maxSeats, không ép cứng seats_per_row theo loại phòng nữa)
+    number_of_rows      INTEGER    NOT NULL DEFAULT 1,
+    seats_per_row        INTEGER    NOT NULL DEFAULT 1,
+
+    -- Seat zones are configured per room. The sum must match number_of_rows.
+    standard_row_count   INTEGER    NOT NULL DEFAULT 1,
+    vip_row_count        INTEGER    NOT NULL DEFAULT 0,
+    couple_row_count     INTEGER    NOT NULL DEFAULT 0,
 
     -- Trạng thái phòng
     -- ACTIVE                 : hoạt động bình thường
@@ -338,7 +350,16 @@ CREATE TABLE IF NOT EXISTS cinema_room (
     created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     created_by        VARCHAR(100),
-    updated_by        VARCHAR(100)
+    updated_by        VARCHAR(100),
+
+    CONSTRAINT chk_room_row_allocation_non_negative
+        CHECK (standard_row_count >= 0 AND vip_row_count >= 0 AND couple_row_count >= 0),
+    CONSTRAINT chk_room_row_allocation_total
+        CHECK (standard_row_count + vip_row_count + couple_row_count = number_of_rows),
+    CONSTRAINT chk_room_has_single_seat_row
+        CHECK (standard_row_count + vip_row_count > 0),
+    CONSTRAINT chk_couple_rows_even_width
+        CHECK (couple_row_count = 0 OR MOD(seats_per_row, 2) = 0)
 );
 
 CREATE TRIGGER trg_cinema_room_updated_at
@@ -396,7 +417,7 @@ CREATE TABLE IF NOT EXISTS seat (
     -- Loại ghế
     seat_type       VARCHAR(20)   NOT NULL DEFAULT 'STANDARD'
                     CONSTRAINT chk_seat_type
-                        CHECK (seat_type IN ('STANDARD','VIP','COUPLE','SWEETBOX')),
+                        CHECK (seat_type IN ('STANDARD','VIP','COUPLE','ACCESSIBLE')),
 
     -- Trạng thái ghế (master status — độc lập với showtime)
     -- ACTIVE      : ghế hoạt động bình thường

@@ -273,7 +273,9 @@ movieservice/
 | cinema_room_id | BIGSERIAL | PK |
 | cinema_room_name | VARCHAR(100) | NOT NULL, UNIQUE per cluster (uq_room_name_per_cluster) |
 | room_type | VARCHAR(20) | NOT NULL — Enum RoomType: STANDARD / LARGE / IMAX |
-| total_seat_capacity | INTEGER | NOT NULL |
+| total_seat_capacity | INTEGER | NOT NULL — = number_of_rows × seats_per_row, tính ở server (V13), không nhận trực tiếp từ client |
+| number_of_rows | INTEGER | NOT NULL (V13) — admin chọn lúc tạo phòng |
+| seats_per_row | INTEGER | NOT NULL (V13) — admin chọn lúc tạo phòng, RoomType chỉ gợi ý mặc định |
 | status | VARCHAR(30) | NOT NULL, default ACTIVE — Enum CinemaRoomStatus |
 | maintenance_note | TEXT | nullable |
 | created_by | VARCHAR(100) | nullable |
@@ -442,7 +444,7 @@ movieservice/
 | `ClusterStatus` | DRAFT, PENDING_REVIEW, ACTIVE, INACTIVE | CinemaCluster.status |
 | `ClusterAction` | CREATE, SUBMIT, APPROVE, REJECT, UPDATE, DEACTIVATE, REACTIVATE | ClusterAuditLog.action |
 | `RoomType` | STANDARD(max=100, perRow=10), LARGE(max=200, perRow=10), IMAX(max=300, perRow=15) | CinemaRoom.roomType |
-| `SeatType` | STANDARD, VIP, COUPLE, SWEETBOX | Seat.seatType / ShowtimeSeat.seatType |
+| `SeatType` | STANDARD, VIP, COUPLE, ACCESSIBLE | Seat.seatType / ShowtimeSeat.seatType |
 | `SeatStatus` | ACTIVE, INACTIVE, MAINTENANCE | Seat.status |
 | `MaintenanceSeverity` | LOW, MEDIUM, HIGH, CRITICAL | CinemaRoomMaintenance.severity |
 

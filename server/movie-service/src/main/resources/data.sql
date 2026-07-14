@@ -311,12 +311,17 @@ INSERT INTO movie_cast (movie_id, person_id, role_type, character_name, billing_
 -- -----------------------------------------------------------------------------
 -- 9. CINEMA ROOM  (4 phòng để test showtime)
 -- -----------------------------------------------------------------------------
-INSERT INTO cinema_room (cinema_room_id, cinema_room_name, room_type, total_seat_capacity, status)
+INSERT INTO cinema_room (
+    cinema_room_id, cinema_room_name, room_type, total_seat_capacity,
+    number_of_rows, seats_per_row,
+    standard_row_count, vip_row_count, couple_row_count,
+    status
+)
 VALUES
-    (1, 'Phòng 1 - IMAX',     'IMAX',     120, 'ACTIVE'),
-    (2, 'Phòng 2 - 3D',       'LARGE',     80, 'ACTIVE'),
-    (3, 'Phòng 3 - Standard', 'STANDARD', 100, 'ACTIVE'),
-    (4, 'Phòng 4 - Standard', 'STANDARD', 100, 'ACTIVE')
+    (1, 'Phòng 1 - IMAX',     'IMAX',     120,  8, 15, 6, 2, 0, 'ACTIVE'),
+    (2, 'Phòng 2 - 3D',       'LARGE',     80,  8, 10, 5, 2, 1, 'ACTIVE'),
+    (3, 'Phòng 3 - Standard', 'STANDARD', 100, 10, 10, 6, 3, 1, 'ACTIVE'),
+    (4, 'Phòng 4 - Standard', 'STANDARD', 100, 10, 10, 6, 3, 1, 'ACTIVE')
 ON CONFLICT (cinema_room_id) DO NOTHING;
 
 SELECT setval(pg_get_serial_sequence('cinema_room', 'cinema_room_id'), 4, true);

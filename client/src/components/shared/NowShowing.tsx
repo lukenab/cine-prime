@@ -33,7 +33,7 @@ function toCardMovie(movie: MovieApiResponse, index: number): Movie {
 export function NowShowing({ movies, loading = false, error = "" }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [selectedMovie, setSelectedMovie] = useState<MovieApiResponse | null>(null);
-  const visibleMovies = movies.filter((movie) => movie.status !== false);
+  const visibleMovies = movies.filter((movie) => movie.movieStatus === "NOW_SHOWING");
   const cardMovies = visibleMovies.map(toCardMovie);
 
   const scroll = (dir: "left" | "right") => {

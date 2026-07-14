@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import {
   ArrowLeft, MapPin, Phone, Building2, Armchair, RefreshCw, AlertCircle,
-  Plus, Search, ChevronRight, CheckCircle, XCircle, Clock, SendHorizonal, Edit2, Trash2,
+  Plus, Search, ChevronRight, CheckCircle, CheckCircle2, XCircle, Clock, SendHorizonal, Edit2, Trash2,
 } from "lucide-react";
 import {
   movieApi,
@@ -22,6 +22,30 @@ const STATUS_CONFIG: Record<ClusterStatus, { label: string; icon: React.ElementT
   ACTIVE:         { label: "Active",         icon: CheckCircle, color: "#10b981", bg: "rgba(16,185,129,0.10)"  },
   INACTIVE:       { label: "Inactive",       icon: XCircle,     color: "#ef4444", bg: "rgba(239,68,68,0.10)"   },
 };
+
+// Nhan hang kieu Excel (khop rowLabel() ben backend): 0->A, 1->B, ..., 25->Z, 26->AA...
+function excelRowLabel(index: number): string {
+  let n = index;
+  let label = "";
+  do {
+    label = String.fromCharCode(65 + (n % 26)) + label;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return label;
+}
+
+// ── Toast (matches the pattern used in SettingsPage.tsx / CreateEmployeePage.tsx) ──
+
+function Toast({ type, message, onClose }: { type: "success" | "error"; message: string; onClose: () => void }) {
+  return (
+    <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-xl"
+      style={{ background: type === "success" ? "#059669" : "#ef4444", color: "#fff", minWidth: "280px" }}>
+      {type === "success" ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+      <span style={{ fontSize: "14px", fontWeight: 500 }}>{message}</span>
+      <button onClick={onClose} className="ml-auto opacity-75 hover:opacity-100" style={{ fontSize: "18px", lineHeight: 1 }}>×</button>
+    </div>
+  );
+}
 
 // ── Small reject-reason modal ─────────────────────────────────────────────────
 
@@ -84,6 +108,13 @@ export default function ClusterDetailPage() {
   const [workflowBusy, setWorkflowBusy] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deletingRoomId, setDeletingRoomId] = useState<number | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  const showToast = (type: "success" | "error", message: string) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3500);
+  };
 
   const load = useCallback(async () => {
     if (!clusterId) return;
@@ -110,14 +141,32 @@ export default function ClusterDetailPage() {
       const res = await movieApi.createRoom(data);
       setRooms((prev) => [...prev, res.result]);
       setModalOpen(false);
+      showToast("success", `Room "${res.result.cinemaRoomName}" created.`);
       // Room counts on the cluster (totalRooms/totalSeats) are computed server-side —
       // refresh so the stat cards below reflect the room we just added.
       const clusterRes = await movieApi.getClusterById(clusterId);
       setCluster(clusterRes.result);
     } catch (err: any) {
-      alert(`Error: ${err?.response?.data?.message ?? "Create failed."}`);
+      showToast("error", err?.response?.data?.message ?? "Create failed.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDeleteRoom = async (room: RoomResponse, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm(`Delete room "${room.cinemaRoomName}"? This cannot be undone.`)) return;
+    setDeletingRoomId(room.cinemaRoomId);
+    try {
+      await movieApi.deleteRoom(room.cinemaRoomId);
+      setRooms((prev) => prev.filter((r) => r.cinemaRoomId !== room.cinemaRoomId));
+      showToast("success", `Room "${room.cinemaRoomName}" deleted.`);
+      const clusterRes = await movieApi.getClusterById(clusterId);
+      setCluster(clusterRes.result);
+    } catch (err: any) {
+      showToast("error", err?.response?.data?.message ?? "Delete failed — room may already have showtimes.");
+    } finally {
+      setDeletingRoomId(null);
     }
   };
 
@@ -127,7 +176,7 @@ export default function ClusterDetailPage() {
       const res = await fn();
       setCluster(res.result);
     } catch (err: any) {
-      alert(`Error: ${err?.response?.data?.message ?? "Action failed."}`);
+      showToast("error", err?.response?.data?.message ?? "Action failed.");
     } finally {
       setWorkflowBusy(false);
     }
@@ -141,7 +190,7 @@ export default function ClusterDetailPage() {
       await movieApi.deleteCluster(cluster.clusterId);
       navigate("/admin/clusters");
     } catch (err: any) {
-      alert(`Error: ${err?.response?.data?.message ?? "Delete failed — cluster may still have rooms."}`);
+      showToast("error", err?.response?.data?.message ?? "Delete failed — cluster may still have rooms.");
     } finally {
       setDeleting(false);
     }
@@ -189,6 +238,8 @@ export default function ClusterDetailPage() {
 
   return (
     <>
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
+
       {/* Back header */}
       <div className="flex items-center gap-4 mb-6 flex-wrap">
         <button
@@ -334,7 +385,7 @@ export default function ClusterDetailPage() {
           <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
           {loading ? "Loading…" : "Refresh"}
         </button>
-        {can.edit && (
+        {can.edit && cluster.status === "ACTIVE" && (
           <button
             onClick={() => setModalOpen(true)}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all shadow-sm"
@@ -342,6 +393,11 @@ export default function ClusterDetailPage() {
           >
             <Plus size={16} /> Add Room
           </button>
+        )}
+        {can.edit && cluster.status !== "ACTIVE" && (
+          <span style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+            Cluster must be ACTIVE before rooms can be added.
+          </span>
         )}
       </div>
 
@@ -373,9 +429,7 @@ export default function ClusterDetailPage() {
               </tr>
             ) : (
               filteredRooms.map((room, idx) => {
-                const numRows = Math.ceil((room.seatQuantity ?? 0) / 10);
-                const lastRowSeats = (room.seatQuantity ?? 0) % 10 || 10;
-                const lastRow = String.fromCharCode(64 + numRows);
+                const lastRow = excelRowLabel((room.numberOfRows ?? 1) - 1);
                 return (
                   <tr
                     key={room.cinemaRoomId}
@@ -419,11 +473,24 @@ export default function ClusterDetailPage() {
                     </td>
                     <td className="px-5 py-3.5">
                       <span style={{ fontSize: "13px", color: "var(--text-sub)" }}>
-                        Rows A–{lastRow} · Last row {lastRowSeats} seats
+                        Rows A–{lastRow} · {room.seatsPerRow} seats/row
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <ChevronRight size={15} style={{ color: "var(--text-sub)" }} />
+                      <div className="flex items-center gap-3 justify-end">
+                        {can.edit && (
+                          <button
+                            disabled={deletingRoomId === room.cinemaRoomId}
+                            onClick={(e) => handleDeleteRoom(room, e)}
+                            className="p-1.5 rounded-lg hover:opacity-80 disabled:opacity-50"
+                            style={{ color: "#ef4444" }}
+                            title="Delete room"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                        <ChevronRight size={15} style={{ color: "var(--text-sub)" }} />
+                      </div>
                     </td>
                   </tr>
                 );
@@ -448,6 +515,7 @@ export default function ClusterDetailPage() {
         onSave={handleCreateRoom}
         submitting={submitting}
         clusterId={cluster.clusterId}
+        existingRoomNames={rooms.map((r) => r.cinemaRoomName)}
       />
 
       {rejecting && (

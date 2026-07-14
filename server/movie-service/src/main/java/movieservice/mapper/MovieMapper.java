@@ -6,11 +6,12 @@ import movieservice.dto.request.CreateMovieRequest;
 import movieservice.dto.request.UpdateMovieRequest;
 import movieservice.dto.response.*;
 import movieservice.entity.*;
+import movieservice.util.SeatLayoutUtil;
 import org.mapstruct.*;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE, imports = SeatLayoutUtil.class)
 public interface MovieMapper {
 
     // ── Movie ─────────────────────────────────────────────────
@@ -121,6 +122,11 @@ public interface MovieMapper {
     @Mapping(source = "movie.movieId", target = "movieId")
     @Mapping(source = "movie.originalTitle", target = "movieName")
     @Mapping(target = "status", expression = "java(showTime.getStatus() != null ? showTime.getStatus().name() : null)")
+    @Mapping(target = "clusterId", expression = "java(showTime.getCinemaRoom() != null && showTime.getCinemaRoom().getCluster() != null ? showTime.getCinemaRoom().getCluster().getClusterId() : null)")
+    @Mapping(target = "clusterName", expression = "java(showTime.getCinemaRoom() != null && showTime.getCinemaRoom().getCluster() != null ? showTime.getCinemaRoom().getCluster().getClusterName() : null)")
+    @Mapping(target = "availableSeats", expression = "java(showTime.getTotalSeats() != null && showTime.getSoldSeats() != null ? showTime.getTotalSeats() - showTime.getSoldSeats() : showTime.getTotalSeats())")
+    // price khong map o day — SeatRepository can duoc goi tu service (xem ShowTimeService.enrichPrice),
+    // MapStruct expression khong the inject repository ma khong dung @Context/default method.
     ShowTimeResponse toShowTimeResponse(ShowTime showTime);
 
     List<ShowTimeResponse> toShowTimeResponseList(List<ShowTime> showTimes);
@@ -131,6 +137,7 @@ public interface MovieMapper {
     @Mapping(target = "cinemaRoomName", source = "cinemaRoom.cinemaRoomName")
     @Mapping(target = "seatType", expression = "java(seat.getSeatType() != null ? seat.getSeatType().name() : null)")
     @Mapping(target = "colSpan", expression = "java(seat.getSeatType() != null ? seat.getSeatType().getColSpan() : 1)")
+    @Mapping(target = "aisleAfter", expression = "java(seat.getCinemaRoom() != null ? SeatLayoutUtil.hasAisleAfter(seat.getColNumber(), seat.getSeatType().getColSpan(), seat.getCinemaRoom().getSeatsPerRow()) : null)")
     @Mapping(target = "status", expression = "java(seat.getStatus() != null ? seat.getStatus().name() : null)")
     SeatResponse toSeatResponse(Seat seat);
 
