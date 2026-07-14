@@ -49,6 +49,7 @@ public enum MovieErrorCode implements BaseErrorCode {
     ACTIVE_SHOWTIMES_EXIST(2011, "Cannot delete movie because it still has upcoming showtimes.", HttpStatus.CONFLICT),
 
     SEAT_NOT_FOUND(2012, "Seat not found.", HttpStatus.NOT_FOUND),
+    INVALID_SEAT_STATUS(4001, "Invalid seat status", HttpStatus.BAD_REQUEST),
 
     SEAT_QUANTITY_EXCEEDS_LIMIT(2013,
             "Seat quantity exceeds the maximum allowed for this room type.",
