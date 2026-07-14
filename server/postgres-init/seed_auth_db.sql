@@ -76,28 +76,6 @@ INSERT INTO role_permissions (role_name, permission_name) VALUES
 ('MEMBER', 'SCORE_VIEW')
 ON CONFLICT DO NOTHING;
 
--- ================================
--- DEMO ACCOUNTS
--- password: 123456 (BCrypt strength 10)
--- ================================
-INSERT INTO account (account_id, username, email, password_hash, status) VALUES
-(gen_random_uuid(), 'admin',    'admin@cineprime.com',    '$2a$10$slYQmyNdgTY18LjhChyOEOYEsEFPxBgUG1BNT/BqOKm0gsxbycv/G', 1),
-(gen_random_uuid(), 'employee', 'employee@cineprime.com', '$2a$10$slYQmyNdgTY18LjhChyOEOYEsEFPxBgUG1BNT/BqOKm0gsxbycv/G', 1),
-(gen_random_uuid(), 'member',   'member@cineprime.com',   '$2a$10$slYQmyNdgTY18LjhChyOEOYEsEFPxBgUG1BNT/BqOKm0gsxbycv/G', 1)
-ON CONFLICT (username) DO NOTHING;
-
--- ================================
--- ACCOUNT → ROLE MAPPING
--- ================================
-INSERT INTO account_role (account_id, role_name)
-SELECT account_id, 'ADMIN'    FROM account WHERE username = 'admin'
-ON CONFLICT DO NOTHING;
-
-INSERT INTO account_role (account_id, role_name)
-SELECT account_id, 'EMPLOYEE' FROM account WHERE username = 'employee'
-ON CONFLICT DO NOTHING;
-
-INSERT INTO account_role (account_id, role_name)
-SELECT account_id, 'MEMBER'   FROM account WHERE username = 'member'
-ON CONFLICT DO NOTHING;
+-- Demo accounts (employee/member with hardcoded password) removed — auth-service's
+-- ApplicationInitConfig now only bootstraps the ADMIN account, from app.admin.* config.
 

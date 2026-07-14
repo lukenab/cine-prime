@@ -1,9 +1,12 @@
 package movieservice.service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -26,6 +29,7 @@ import movieservice.entity.Movie;
 import movieservice.entity.Seat;
 import movieservice.entity.ShowTime;
 import movieservice.entity.ShowtimeSeat;
+import movieservice.enums.SeatStatus;
 import movieservice.enums.SeatType;
 import movieservice.enums.ShowTimeStatus;
 import movieservice.enums.ShowtimeSeatStatus;
@@ -33,6 +37,7 @@ import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.MovieRepository;
+import movieservice.util.SeatLayoutUtil;
 import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeSeatRepository;
 import movieservice.repository.SeatRepository;
@@ -131,12 +136,20 @@ public class ShowTimeService {
             }
         }
 
+        int colSpan = seat.getSeatType() != null ? seat.getSeatType().getColSpan() : 1;
+        Boolean aisleAfter = null;
+        if (seat.getSeat() != null && seat.getSeat().getCinemaRoom() != null) {
+            int seatsPerRow = seat.getSeat().getCinemaRoom().getSeatsPerRow();
+            aisleAfter = SeatLayoutUtil.hasAisleAfter(number, colSpan, seatsPerRow);
+        }
+
         return ShowtimeSeatDto.builder()
                 .seatId(seat.getShowtimeSeatId())
                 .row(row)
                 .number(number)
                 .type(seat.getSeatType() != null ? seat.getSeatType().name() : null)
-                .colSpan(seat.getSeatType() != null ? seat.getSeatType().getColSpan() : 1)
+                .colSpan(colSpan)
+                .aisleAfter(aisleAfter)
                 .status(status)
                 .price(seat.getPrice())
                 .build();
@@ -217,13 +230,17 @@ public class ShowTimeService {
     // ── Read API ──────────────────────────────────────────────────────────────
 
     public List<ShowTimeResponse> getAll() {
-        return movieMapper.toShowTimeResponseList(showTimeRepository.findAll());
+        List<ShowTimeResponse> responses = movieMapper.toShowTimeResponseList(showTimeRepository.findAll());
+        enrichPrices(responses);
+        return responses;
     }
 
     public ShowTimeResponse getById(Long id) {
         ShowTime showTime = showTimeRepository.findById(id)
                 .orElseThrow(() -> new AppException(MovieErrorCode.SHOWTIME_NOT_FOUND));
-        return movieMapper.toShowTimeResponse(showTime);
+        ShowTimeResponse response = movieMapper.toShowTimeResponse(showTime);
+        enrichPrices(List.of(response));
+        return response;
     }
 
     public List<ShowTimeResponse> getByMovieId(Long movieId, LocalDate date) {
@@ -233,7 +250,21 @@ public class ShowTimeService {
         List<ShowTime> results = (date != null)
                 ? showTimeRepository.findByMovieMovieIdAndShowDate(movieId, date)
                 : showTimeRepository.findByMovieMovieId(movieId);
-        return movieMapper.toShowTimeResponseList(results);
+        List<ShowTimeResponse> responses = movieMapper.toShowTimeResponseList(results);
+        enrichPrices(responses);
+        return responses;
+    }
+
+    /** Ghi gia thap nhat cua tung phong vao moi response — gom theo cinemaRoomId de chi
+     *  query gia 1 lan cho moi phong dung, tranh N+1 khi nhieu suat chieu chung 1 phong. */
+    private void enrichPrices(List<ShowTimeResponse> responses) {
+        Map<Long, BigDecimal> priceByRoom = new HashMap<>();
+        for (ShowTimeResponse r : responses) {
+            if (r.getCinemaRoomId() == null) continue;
+            BigDecimal price = priceByRoom.computeIfAbsent(r.getCinemaRoomId(),
+                    roomId -> seatRepository.findMinPriceByCinemaRoomIdAndStatus(roomId, SeatStatus.ACTIVE));
+            r.setPrice(price);
+        }
     }
 
     // ── Write API ─────────────────────────────────────────────────────────────
@@ -353,7 +384,6 @@ public class ShowTimeService {
         r.setStartTime(s.getStartTime());
         r.setEndTime(s.getEndTime());
         r.setStatus(s.getStatus() != null ? s.getStatus().name() : null);
-        r.setUpdatedAt(s.getUpdatedAt());
         if (s.getMovie() != null) {
             r.setMovieId(s.getMovie().getMovieId());
             r.setMovieName(s.getMovie().getOriginalTitle());
@@ -361,7 +391,16 @@ public class ShowTimeService {
         if (s.getCinemaRoom() != null) {
             r.setCinemaRoomId(s.getCinemaRoom().getCinemaRoomId());
             r.setCinemaRoomName(s.getCinemaRoom().getCinemaRoomName());
+            if (s.getCinemaRoom().getCluster() != null) {
+                r.setClusterId(s.getCinemaRoom().getCluster().getClusterId());
+                r.setClusterName(s.getCinemaRoom().getCluster().getClusterName());
+            }
         }
+        r.setTotalSeats(s.getTotalSeats());
+        r.setAvailableSeats(s.getTotalSeats() != null && s.getSoldSeats() != null
+                ? s.getTotalSeats() - s.getSoldSeats() : s.getTotalSeats());
+        r.setUpdatedAt(s.getUpdatedAt());
+        enrichPrices(List.of(r));
         return r;
     }
 }

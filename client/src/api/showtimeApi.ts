@@ -11,10 +11,15 @@ export interface ShowtimeResponse {
   movieName: string;
   cinemaRoomId: number;
   cinemaRoomName: string;
+  clusterId?: number;
+  clusterName?: string;
   showDate: string;      // "YYYY-MM-DD"
   startTime: string;     // "HH:mm:ss"
   endTime: string;       // "HH:mm:ss"  — calculated by backend from movie duration
   status: ShowtimeStatus;
+  totalSeats?: number;
+  availableSeats?: number;
+  price?: number;        // lowest active seat price in the room — "from X" display
   updatedAt?: string;
 }
 

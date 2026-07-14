@@ -116,21 +116,89 @@ public class TmdbService {
         try {
             TmdbSearchResponse response = restTemplate.getForObject(uri, TmdbSearchResponse.class);
             if (response == null || response.getResults() == null) return List.of();
-            return response.getResults().stream()
-                    .map(item -> TmdbSearchResultItem.builder()
-                            .tmdbId(item.getId())
-                            .title(item.getTitle())
-                            .originalTitle(item.getOriginalTitle())
-                            .releaseDate(item.getReleaseDate())
-                            .posterUrl(buildPosterUrl(item.getPosterPath()))
-                            .overview(item.getOverview())
-                            .build())
-                    .collect(Collectors.toList());
+            return mapToResultItems(response.getResults());
         } catch (RestClientException e) {
             log.error("TMDB search failed [{}]: {}", e.getClass().getSimpleName(), e.getMessage());
             if (e.getCause() != null) log.error("  Caused by [{}]: {}", e.getCause().getClass().getSimpleName(), e.getCause().getMessage());
             throw new AppException(MovieErrorCode.TMDB_API_ERROR);
         }
+    }
+
+    /**
+     * Danh sach phim dang chieu rap theo khu vuc (Now Playing) - dung cho man hinh
+     * "Browse & Import": admin chon truc tiep tu list thay vi phai go ten tim kiem.
+     * Day la cach cac app quan ly catalog dua tren TMDB (vd Radarr/Sonarr-style browse UI)
+     * thuong lam - dung lam nguon "curated list" mac dinh, con search() la phuong an du phong
+     * cho phim khong nam trong now_playing (phim cu, phim indie, phim dac biet).
+     * Luu y: TMDB now_playing la du lieu cong dong/toan cau, khong phai feed phat hanh chinh
+     * thuc noi bo rap - phu hop lam MVP nhung khong nen dung thay the du lieu tu nha phat hanh
+     * cho mot he thong san xuat that.
+     */
+    public List<TmdbSearchResultItem> getNowPlaying(String region, int page) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(TMDB_BASE + "/movie/now_playing")
+                .queryParam("api_key", apiKey)
+                .queryParam("region", (region == null || region.isBlank()) ? "VN" : region)
+                .queryParam("page", page > 0 ? page : 1)
+                .queryParam("language", "vi")
+                .build().encode().toUri();
+        try {
+            TmdbSearchResponse response = restTemplate.getForObject(uri, TmdbSearchResponse.class);
+            if (response == null || response.getResults() == null) return List.of();
+            return mapToResultItems(response.getResults());
+        } catch (RestClientException e) {
+            log.error("TMDB now_playing failed [{}]: {}", e.getClass().getSimpleName(), e.getMessage());
+            if (e.getCause() != null) log.error("  Caused by [{}]: {}", e.getCause().getClass().getSimpleName(), e.getCause().getMessage());
+            throw new AppException(MovieErrorCode.TMDB_API_ERROR);
+        }
+    }
+
+    /**
+     * Danh sach phim sap ra mat (Upcoming) theo khu vuc - tab thu 2 cua man hinh "Browse & Import",
+     * dung cho phim co release date trong tuong lai (khong nam trong cua so now_playing).
+     * Cung pattern voi getNowPlaying(), chi khac path va nhan dinh nghia cua TMDB.
+     */
+    public List<TmdbSearchResultItem> getUpcoming(String region, int page) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(TMDB_BASE + "/movie/upcoming")
+                .queryParam("api_key", apiKey)
+                .queryParam("region", (region == null || region.isBlank()) ? "VN" : region)
+                .queryParam("page", page > 0 ? page : 1)
+                .queryParam("language", "vi")
+                .build().encode().toUri();
+        try {
+            TmdbSearchResponse response = restTemplate.getForObject(uri, TmdbSearchResponse.class);
+            if (response == null || response.getResults() == null) return List.of();
+            return mapToResultItems(response.getResults());
+        } catch (RestClientException e) {
+            log.error("TMDB upcoming failed [{}]: {}", e.getClass().getSimpleName(), e.getMessage());
+            if (e.getCause() != null) log.error("  Caused by [{}]: {}", e.getCause().getClass().getSimpleName(), e.getCause().getMessage());
+            throw new AppException(MovieErrorCode.TMDB_API_ERROR);
+        }
+    }
+
+    /**
+     * Map TMDB movie items -> DTO cho FE, kem co "alreadyImported" tinh bang 1 truy van bulk
+     * (tranh N+1 goi existsByTmdbId tung item mot).
+     */
+    private List<TmdbSearchResultItem> mapToResultItems(List<TmdbSearchResponse.MovieItem> items) {
+        if (items.isEmpty()) return List.of();
+        List<Integer> tmdbIds = items.stream()
+                .map(TmdbSearchResponse.MovieItem::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+        Set<Integer> existingIds = tmdbIds.isEmpty()
+                ? Set.of()
+                : new HashSet<>(movieRepository.findExistingTmdbIds(tmdbIds));
+        return items.stream()
+                .map(item -> TmdbSearchResultItem.builder()
+                        .tmdbId(item.getId())
+                        .title(item.getTitle())
+                        .originalTitle(item.getOriginalTitle())
+                        .releaseDate(item.getReleaseDate())
+                        .posterUrl(buildPosterUrl(item.getPosterPath()))
+                        .overview(item.getOverview())
+                        .alreadyImported(item.getId() != null && existingIds.contains(item.getId()))
+                        .build())
+                .collect(Collectors.toList());
     }
 
     @Transactional

@@ -251,13 +251,13 @@ npm run dev
 
 Open http://localhost:3000.
 
-**Demo accounts** (seeded automatically on first startup via `auth-service/src/main/resources/data.sql`):
+**Admin account** (seeded automatically on first startup by `ApplicationInitConfig`, from `ADMIN_USERNAME`/`ADMIN_PASSWORD`/`ADMIN_EMAIL` env vars — defaults below):
 
 | Username | Password | Role |
 |---|---|---|
-| `admin` | `123456` | ADMIN |
-| `employee` | `123456` | EMPLOYEE |
-| `member` | `123456` | MEMBER |
+| `admin` | `admin` | ADMIN |
+
+Change the default password before deploying anywhere reachable. There are no seeded EMPLOYEE/MEMBER accounts — create them through the app (Admin → Employees / sign-up).
 
 > **Note:** The React app serves both the customer homepage (`/`) and the admin dashboard (`/admin`). Logged-in admin/employee users are automatically redirected to `/admin` when visiting `/`. Admin routes are protected by role.
 

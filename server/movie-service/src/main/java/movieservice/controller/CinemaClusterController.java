@@ -31,6 +31,10 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class CinemaClusterController {
 
+    // Toàn chuỗi dùng chung 1 hotline tổng đài — khớp thực tế CGV/Lotte/Galaxy/BHD
+    // (không cấu hình riêng theo từng cụm rạp), nên không cho nhập qua request nữa.
+    private static final String DEFAULT_HOTLINE = "19001000";
+
     CinemaClusterRepository clusterRepository;
     ClusterAuditLogRepository auditLogRepository;
     MovieMapper movieMapper;
@@ -98,11 +102,16 @@ public class CinemaClusterController {
             @Valid @RequestBody CinemaClusterRequest req,
             Authentication authentication) {
 
+        String clusterName = req.getClusterName().trim();
+        if (clusterRepository.existsByClusterNameIgnoreCase(clusterName)) {
+            throw new AppException(MovieErrorCode.CLUSTER_NAME_EXISTED);
+        }
+
         CinemaCluster cluster = movieMapper.toCinemaCluster(req);
-        cluster.setClusterName(req.getClusterName().trim());
+        cluster.setClusterName(clusterName);
         cluster.setProvince(req.getProvince().trim());
         cluster.setAddress(req.getAddress().trim());
-        if (req.getPhoneNumber() != null) cluster.setPhoneNumber(req.getPhoneNumber().trim());
+        cluster.setPhoneNumber(DEFAULT_HOTLINE);
         // EMPLOYEE submissions go through DRAFT → PENDING_REVIEW → ACTIVE.
         // ADMIN already holds approval authority, so their own creations skip the review queue.
         ClusterStatus initialStatus = isAdminRole(authentication) ? ClusterStatus.ACTIVE : ClusterStatus.DRAFT;
@@ -160,10 +169,14 @@ public class CinemaClusterController {
             cluster.setStatus(newStatus);
         }
 
-        cluster.setClusterName(req.getClusterName().trim());
+        String newName = req.getClusterName().trim();
+        if (clusterRepository.existsByClusterNameIgnoreCaseAndClusterIdNot(newName, id)) {
+            throw new AppException(MovieErrorCode.CLUSTER_NAME_EXISTED);
+        }
+
+        cluster.setClusterName(newName);
         cluster.setProvince(req.getProvince().trim());
         cluster.setAddress(req.getAddress().trim());
-        cluster.setPhoneNumber(req.getPhoneNumber());
         if (req.getLatitude() != null) cluster.setLatitude(req.getLatitude());
         if (req.getLongitude() != null) cluster.setLongitude(req.getLongitude());
         // Xóa rejection note khi employee cập nhật lại data
@@ -298,7 +311,7 @@ public class CinemaClusterController {
     private CinemaClusterResponse toResponseWithStats(CinemaCluster cluster) {
         CinemaClusterResponse res = movieMapper.toCinemaClusterResponse(cluster);
         res.setTotalRooms(clusterRepository.countRoomsByClusterId(cluster.getClusterId()));
-        res.setTotalSeats(clusterRepository.sumSeatsByClusterId(cluster.getClusterId()));
+        res.setTotalSeats(clusterRepository.countSeatsByClusterId(cluster.getClusterId()));
         return res;
     }
 
@@ -333,7 +346,7 @@ public class CinemaClusterController {
         if (authentication == null || !authentication.isAuthenticated()) return false;
         return authentication.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN")
-                        || a.getAuthority().equals("ROLE_EMPLOYEE"));
+             || a.getAuthority().equals("ROLE_EMPLOYEE"));
     }
 
     /** Kiểm tra đúng role ADMIN (không bao gồm EMPLOYEE) */

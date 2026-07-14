@@ -1,6 +1,6 @@
 import {
   X, Film, Upload, Loader2, Search, GripVertical, Trash2,
-  AlertCircle, Check, Tag, Globe, Users, Images,
+  AlertCircle, Check, Tag, Globe, Users, Images, Clock,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import {
@@ -17,6 +17,10 @@ import {
   type MovieImageResponse,
   type MovieImageRequest,
 } from "../api/movieApi";
+import {
+  MOVIE_CONTENT_STATUS_META,
+  toMovieContentStatus,
+} from "../utils/movieContentStatus";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Local types
@@ -142,16 +146,6 @@ const LANG_OPTIONS = [
   { code: "th", label: "ภาษาไทย (Thai)" },
 ];
 
-const STATUS_COLOR: Record<string, string> = {
-  DRAFT: "#6b7280",
-  PENDING_REVIEW: "#f59e0b",
-  COMING_SOON: "#3b82f6",
-  NOW_SHOWING: "#10b981",
-  SUSPENDED: "#ef4444",
-  ENDED: "#9ca3af",
-  REJECTED: "#dc2626",
-};
-
 const TABS = [
   { id: 0, label: "Info",      Icon: Film },
   { id: 1, label: "Genres",    Icon: Tag },
@@ -179,6 +173,7 @@ export function MovieModal({
   const [form, setForm] = useState<FormState>(emptyForm);
   const [loadingMovie, setLoadingMovie] = useState(false);
   const [currentStatus, setCurrentStatus] = useState<string | null>(null);
+  const currentContentStatus = currentStatus ? toMovieContentStatus(currentStatus) : null;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -189,9 +184,16 @@ export function MovieModal({
 
   // ── TMDB overlay ───────────────────────────────────────────
   const [showTmdb, setShowTmdb] = useState(false);
+  const [tmdbTab, setTmdbTab] = useState<"now_playing" | "upcoming" | "search">("now_playing");
   const [tmdbQ, setTmdbQ] = useState("");
   const [tmdbResults, setTmdbResults] = useState<TmdbSearchItem[]>([]);
   const [tmdbLoading, setTmdbLoading] = useState(false);
+  const [nowPlaying, setNowPlaying] = useState<TmdbSearchItem[]>([]);
+  const [nowPlayingLoading, setNowPlayingLoading] = useState(false);
+  const [nowPlayingLoaded, setNowPlayingLoaded] = useState(false);
+  const [upcoming, setUpcoming] = useState<TmdbSearchItem[]>([]);
+  const [upcomingLoading, setUpcomingLoading] = useState(false);
+  const [upcomingLoaded, setUpcomingLoaded] = useState(false);
   const tmdbTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Company combobox ───────────────────────────────────────
@@ -285,6 +287,26 @@ export function MovieModal({
         .finally(() => setTmdbLoading(false));
     }, 400);
   }, [tmdbQ]);
+
+  // ── TMDB now playing (fetch once, khi overlay mo o tab "Dang chieu") ──
+  useEffect(() => {
+    if (!showTmdb || tmdbTab !== "now_playing" || nowPlayingLoaded) return;
+    setNowPlayingLoading(true);
+    movieApi.tmdbNowPlaying("VN", 1)
+      .then((r) => setNowPlaying(r.result ?? []))
+      .catch(() => {})
+      .finally(() => { setNowPlayingLoading(false); setNowPlayingLoaded(true); });
+  }, [showTmdb, tmdbTab, nowPlayingLoaded]);
+
+  // ── TMDB upcoming (fetch once, khi overlay mo o tab "Sap ra mat") ──
+  useEffect(() => {
+    if (!showTmdb || tmdbTab !== "upcoming" || upcomingLoaded) return;
+    setUpcomingLoading(true);
+    movieApi.tmdbUpcoming("VN", 1)
+      .then((r) => setUpcoming(r.result ?? []))
+      .catch(() => {})
+      .finally(() => { setUpcomingLoading(false); setUpcomingLoaded(true); });
+  }, [showTmdb, tmdbTab, upcomingLoaded]);
 
   // ── Company debounce ───────────────────────────────────────
   useEffect(() => {
@@ -615,12 +637,12 @@ export function MovieModal({
             <h2 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-main)" }}>
               {editMovieId ? "Edit Movie" : "Add New Movie"}
             </h2>
-            {currentStatus && (
+            {currentContentStatus && (
               <span
                 className="px-2 py-0.5 rounded-full text-xs font-medium text-white"
-                style={{ background: STATUS_COLOR[currentStatus] ?? "#6b7280" }}
+                style={{ background: MOVIE_CONTENT_STATUS_META[currentContentStatus].text }}
               >
-                {currentStatus.replace(/_/g, " ")}
+                {MOVIE_CONTENT_STATUS_META[currentContentStatus].label}
               </span>
             )}
           </div>
@@ -1411,7 +1433,7 @@ export function MovieModal({
           >
             {/* TMDB header */}
             <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: "var(--border-color)" }}>
-              <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-main)" }}>Tìm kiếm TMDB</h3>
+              <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-main)" }}>Nhập phim từ TMDB</h3>
               <button
                 type="button"
                 onClick={() => setShowTmdb(false)}
@@ -1422,43 +1444,107 @@ export function MovieModal({
               </button>
             </div>
 
-            {/* TMDB search input */}
-            <div className="px-5 py-3 border-b" style={{ borderColor: "var(--border-color)" }}>
-              <div className="relative">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-sub)" }} />
-                <input
-                  autoFocus
-                  type="text"
-                  placeholder="Movie title…"
-                  value={tmdbQ}
-                  onChange={(e) => setTmdbQ(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 rounded-xl border outline-none focus:border-blue-400"
-                  style={{ ...IS, fontSize: "14px" }}
-                />
-                {tmdbLoading && (
-                  <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-blue-500" />
-                )}
-              </div>
+            {/* TMDB tabs */}
+            <div className="flex items-center gap-1.5 px-5 pt-3">
+              <button
+                type="button"
+                onClick={() => setTmdbTab("now_playing")}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                style={{
+                  background: tmdbTab === "now_playing" ? "#eff6ff" : "transparent",
+                  color: tmdbTab === "now_playing" ? "#2563eb" : "var(--text-sub)",
+                }}
+              >
+                <Film size={12} /> Đang chiếu (VN)
+              </button>
+              <button
+                type="button"
+                onClick={() => setTmdbTab("upcoming")}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                style={{
+                  background: tmdbTab === "upcoming" ? "#eff6ff" : "transparent",
+                  color: tmdbTab === "upcoming" ? "#2563eb" : "var(--text-sub)",
+                }}
+              >
+                <Clock size={12} /> Sắp ra mắt
+              </button>
+              <button
+                type="button"
+                onClick={() => setTmdbTab("search")}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                style={{
+                  background: tmdbTab === "search" ? "#eff6ff" : "transparent",
+                  color: tmdbTab === "search" ? "#2563eb" : "var(--text-sub)",
+                }}
+              >
+                <Search size={12} /> Tìm kiếm
+              </button>
             </div>
 
-            {/* TMDB results */}
+            {/* TMDB search input (chi hien o tab Tim kiem) */}
+            {tmdbTab === "search" && (
+              <div className="px-5 py-3 border-b" style={{ borderColor: "var(--border-color)" }}>
+                <div className="relative">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-sub)" }} />
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="Tên phim…"
+                    value={tmdbQ}
+                    onChange={(e) => setTmdbQ(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2.5 rounded-xl border outline-none focus:border-blue-400"
+                    style={{ ...IS, fontSize: "14px" }}
+                  />
+                  {tmdbLoading && (
+                    <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-blue-500" />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Ghi chu nguon du lieu (chi hien o tab Dang chieu / Sap ra mat) */}
+            {(tmdbTab === "now_playing" || tmdbTab === "upcoming") && (
+              <div className="px-5 py-2.5 border-b flex items-center justify-between" style={{ borderColor: "var(--border-color)" }}>
+                <p style={{ fontSize: "11px", color: "var(--text-sub)" }}>
+                  {tmdbTab === "now_playing"
+                    ? "Phim đang chiếu rạp tại VN — nguồn: TMDB Now Playing."
+                    : "Phim sắp ra mắt tại VN — nguồn: TMDB Upcoming."}
+                </p>
+                {(nowPlayingLoading || upcomingLoading) && <Loader2 size={13} className="animate-spin text-blue-500 flex-shrink-0" />}
+              </div>
+            )}
+
+            {/* TMDB results (dung chung cho ca 3 tab) */}
             <div className="overflow-y-auto flex-1 py-2">
-              {!tmdbQ && (
+              {tmdbTab === "search" && !tmdbQ && (
                 <p className="text-center py-8" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
-                  Type a movie title to search.
+                  Gõ tên phim để tìm kiếm.
                 </p>
               )}
-              {tmdbQ && !tmdbLoading && tmdbResults.length === 0 && (
+              {tmdbTab === "search" && tmdbQ && !tmdbLoading && tmdbResults.length === 0 && (
                 <p className="text-center py-8" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
-                  No results found.
+                  Không tìm thấy kết quả.
                 </p>
               )}
-              {tmdbResults.map((item) => (
+              {tmdbTab === "now_playing" && !nowPlayingLoading && nowPlaying.length === 0 && (
+                <p className="text-center py-8" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+                  Không lấy được danh sách phim đang chiếu.
+                </p>
+              )}
+              {tmdbTab === "upcoming" && !upcomingLoading && upcoming.length === 0 && (
+                <p className="text-center py-8" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+                  Không lấy được danh sách phim sắp ra mắt.
+                </p>
+              )}
+              {(tmdbTab === "search" ? tmdbResults : tmdbTab === "now_playing" ? nowPlaying : upcoming).map((item) => (
                 <button
                   key={item.tmdbId}
                   type="button"
-                  onClick={() => applyTmdb(item)}
-                  className="w-full flex items-start gap-3 px-5 py-3 hover:bg-blue-50 transition-colors text-left"
+                  disabled={item.alreadyImported}
+                  onClick={() => { if (!item.alreadyImported) applyTmdb(item); }}
+                  className={`w-full flex items-start gap-3 px-5 py-3 transition-colors text-left ${
+                    item.alreadyImported ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-50"
+                  }`}
                 >
                   {item.posterUrl ? (
                     <img src={item.posterUrl} alt={item.title} className="w-10 h-14 rounded object-cover flex-shrink-0" />
@@ -1466,7 +1552,17 @@ export function MovieModal({
                     <div className="w-10 h-14 rounded bg-gray-200 flex-shrink-0" />
                   )}
                   <div className="flex-1 min-w-0">
-                    <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-main)" }}>{item.title}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-main)" }}>{item.title}</p>
+                      {item.alreadyImported && (
+                        <span
+                          className="px-1.5 py-0.5 rounded-full flex-shrink-0"
+                          style={{ fontSize: "9px", fontWeight: 600, background: "#f3f4f6", color: "#6b7280" }}
+                        >
+                          Đã nhập
+                        </span>
+                      )}
+                    </div>
                     {item.originalTitle && item.originalTitle !== item.title && (
                       <p style={{ fontSize: "11px", color: "var(--text-sub)" }}>{item.originalTitle}</p>
                     )}

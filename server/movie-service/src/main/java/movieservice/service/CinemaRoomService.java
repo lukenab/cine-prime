@@ -13,11 +13,13 @@ import movieservice.entity.CinemaCluster;
 import movieservice.entity.CinemaRoom;
 import movieservice.entity.CinemaRoomMaintenance;
 import movieservice.enums.CinemaRoomStatus;
+import movieservice.enums.ClusterStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.CinemaRoomMaintenanceRepository;
 import movieservice.repository.CinemaRoomRepository;
+import movieservice.repository.ShowTimeRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -29,9 +31,14 @@ import java.util.List;
 @Slf4j
 public class CinemaRoomService {
 
+    // Duoi truoc day tung ap len totalSeatCapacity truc tiep (@Min(10) tren field request);
+    // gio capacity la gia tri tinh (numberOfRows * seatsPerRow) nen kiem tra sau khi tinh.
+    private static final int MIN_SEAT_CAPACITY = 10;
+
     CinemaRoomRepository cinemaRoomRepository;
     CinemaRoomMaintenanceRepository maintenanceRepository;
     CinemaClusterRepository cinemaClusterRepository;
+    ShowTimeRepository showTimeRepository;
     MovieMapper movieMapper;
     AuditLogService auditLogService;
     SeatService seatService;
@@ -41,17 +48,43 @@ public class CinemaRoomService {
         CinemaCluster cluster = cinemaClusterRepository.findById(request.getClusterId())
                 .orElseThrow(() -> new AppException(MovieErrorCode.CLUSTER_NOT_FOUND));
 
+        if (cluster.getStatus() != ClusterStatus.ACTIVE) {
+            throw new AppException(MovieErrorCode.CLUSTER_NOT_ACTIVE);
+        }
+
         if (cinemaRoomRepository.existsByCluster_ClusterIdAndCinemaRoomName(
                 request.getClusterId(), request.getCinemaRoomName())) {
             throw new AppException(MovieErrorCode.CINEMA_ROOM_NAME_EXISTED);
         }
 
+        if (request.getNumberOfRows() > SeatService.MAX_ROWS) {
+            throw new AppException(MovieErrorCode.SEAT_ROW_LIMIT_EXCEEDED);
+        }
+
+        // totalSeatCapacity la gia tri tinh, khong nhan tu client — RoomType chi con dung
+        // de gioi han maxSeats (va cung cap gia tri mac dinh goi y o frontend).
+        int estimatedSeats = request.getNumberOfRows() * request.getSeatsPerRow();
         int maxSeats = request.getRoomType().getMaxSeats();
-        if (request.getTotalSeatCapacity() > maxSeats) {
+        if (estimatedSeats > maxSeats) {
             throw new AppException(MovieErrorCode.SEAT_QUANTITY_EXCEEDS_LIMIT);
+        }
+        if (estimatedSeats < MIN_SEAT_CAPACITY) {
+            throw new AppException(MovieErrorCode.SEAT_QUANTITY_TOO_SMALL);
+        }
+
+        int allocatedRows = request.getStandardRowCount()
+                + request.getVipRowCount()
+                + request.getCoupleRowCount();
+        boolean hasAccessibleHostRow = request.getStandardRowCount() + request.getVipRowCount() > 0;
+        if (allocatedRows != request.getNumberOfRows() || !hasAccessibleHostRow) {
+            throw new AppException(MovieErrorCode.SEAT_ROW_ALLOCATION_INVALID);
+        }
+        if (request.getCoupleRowCount() > 0 && request.getSeatsPerRow() % 2 != 0) {
+            throw new AppException(MovieErrorCode.COUPLE_ROW_REQUIRES_EVEN_SEATS);
         }
 
         CinemaRoom room = movieMapper.toCinemaRoom(request);
+        room.setTotalSeatCapacity(estimatedSeats);
         room.setCluster(cluster);
         room.setStatus(CinemaRoomStatus.ACTIVE);
         room = cinemaRoomRepository.save(room);
@@ -63,6 +96,25 @@ public class CinemaRoomService {
                 "Created cinema room: " + room.getCinemaRoomName());
 
         return movieMapper.toCinemaRoomResponse(room);
+    }
+
+    // Chỉ cho xóa cứng room chưa từng gắn showtime nào — có showtime rồi (kể cả đã qua/đã hủy)
+    // thì bắt buộc dùng setRoomStatus(CLOSED) để giữ nguyên vẹn lịch sử vé/doanh thu.
+    @Transactional
+    public void deleteCinemaRoom(Long roomId) {
+        if (!cinemaRoomRepository.existsById(roomId)) {
+            throw new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND);
+        }
+
+        if (showTimeRepository.existsByCinemaRoomCinemaRoomId(roomId)) {
+            throw new AppException(MovieErrorCode.CINEMA_ROOM_HAS_SHOWTIMES);
+        }
+
+        seatService.deleteSeatsByRoom(roomId);
+        cinemaRoomRepository.deleteById(roomId);
+
+        auditLogService.logAction("SYSTEM", "Admin",
+                "cinema_room:" + roomId, "Deleted cinema room");
     }
 
     public CinemaRoom findByCinemaRoom(Long cinemaId) {

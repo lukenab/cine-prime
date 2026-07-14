@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  X, Play, Plus, Check, ThumbsUp, Volume2, VolumeX, Ticket, Star, ChevronRight,
+  X, Play, Plus, Check, ThumbsUp, Volume2, VolumeX, Ticket, Star, ChevronRight, CalendarClock,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { MovieApiResponse } from "../../api/movieApi";
@@ -32,6 +32,13 @@ function formatDuration(min?: number) {
   const h = Math.floor(min / 60);
   const m = min % 60;
   return h > 0 ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m`;
+}
+
+function formatReleaseDate(dateStr?: string): string {
+  if (!dateStr) return "TBA";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "TBA";
+  return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
 export function MoviePreviewModal({ movie, onClose }: Props) {
@@ -92,11 +99,13 @@ export function MoviePreviewModal({ movie, onClose }: Props) {
 
   const title = movie.movieNameEnglish || movie.movieNameVn || "Untitled Movie";
   const year = releaseYear(movie);
+  const isComingSoon = movie.movieStatus === "COMING_SOON";
   const embedSrc = vid
     ? `https://www.youtube.com/embed/${vid}?autoplay=1&mute=1&loop=1&playlist=${vid}&controls=0&modestbranding=1&rel=0&playsinline=1&enablejsapi=1`
     : null;
 
   const handleBook = () => {
+    if (isComingSoon) return;
     onClose();
     navigate(`/showtime/${movie.movieId}`);
   };
@@ -164,12 +173,18 @@ export function MoviePreviewModal({ movie, onClose }: Props) {
               {title}
             </h2>
             <div className="flex items-center gap-2.5">
-              <button
-                onClick={handleBook}
-                className="flex items-center gap-2 rounded-md bg-white px-6 py-2 text-sm font-bold text-black transition-colors hover:bg-white/85 cursor-pointer"
-              >
-                <Play size={18} fill="#000" /> Book
-              </button>
+              {isComingSoon ? (
+                <span className="flex items-center gap-2 rounded-md bg-white/15 px-6 py-2 text-sm font-bold text-white/70 backdrop-blur-sm">
+                  <CalendarClock size={18} /> Coming {formatReleaseDate(movie.releaseDate)}
+                </span>
+              ) : (
+                <button
+                  onClick={handleBook}
+                  className="flex items-center gap-2 rounded-md bg-white px-6 py-2 text-sm font-bold text-black transition-colors hover:bg-white/85 cursor-pointer"
+                >
+                  <Play size={18} fill="#000" /> Book
+                </button>
+              )}
               <button
                 onClick={() => setAdded((v) => !v)}
                 aria-label="Add to list"
@@ -241,16 +256,23 @@ export function MoviePreviewModal({ movie, onClose }: Props) {
 
           {/* Full-width CTA */}
           <div className="sm:col-span-2">
-            <button
-              onClick={handleBook}
-              className="group relative mt-1 flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-full bg-gradient-to-r from-[#FFD700] via-[#FFC400] to-[#FFA500] py-3.5 text-[15px] font-bold uppercase tracking-wide text-black shadow-[0_8px_28px_rgba(255,175,0,0.35)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_34px_rgba(255,175,0,0.55)] cursor-pointer"
-            >
-              {/* Shine sweep on hover */}
-              <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/45 to-transparent transition-transform duration-700 ease-out group-hover:translate-x-full" />
-              <Ticket size={18} />
-              Book Tickets
-              <ChevronRight size={18} className="transition-transform duration-300 group-hover:translate-x-1" />
-            </button>
+            {isComingSoon ? (
+              <div className="mt-1 flex w-full items-center justify-center gap-2.5 rounded-full border border-white/15 bg-white/[0.04] py-3.5 text-[15px] font-bold uppercase tracking-wide text-white/50">
+                <CalendarClock size={18} />
+                Tickets on sale {formatReleaseDate(movie.releaseDate)}
+              </div>
+            ) : (
+              <button
+                onClick={handleBook}
+                className="group relative mt-1 flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-full bg-gradient-to-r from-[#FFD700] via-[#FFC400] to-[#FFA500] py-3.5 text-[15px] font-bold uppercase tracking-wide text-black shadow-[0_8px_28px_rgba(255,175,0,0.35)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_34px_rgba(255,175,0,0.55)] cursor-pointer"
+              >
+                {/* Shine sweep on hover */}
+                <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/45 to-transparent transition-transform duration-700 ease-out group-hover:translate-x-full" />
+                <Ticket size={18} />
+                Book Tickets
+                <ChevronRight size={18} className="transition-transform duration-300 group-hover:translate-x-1" />
+              </button>
+            )}
           </div>
         </div>
       </div>

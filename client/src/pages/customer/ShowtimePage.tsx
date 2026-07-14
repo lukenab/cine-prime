@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { format, addDays, isSameDay } from "date-fns";
 import { useNavigate, useParams } from "react-router-dom";
-import { movieApi, MovieApiResponse, ShowTimeResponse } from "../../api/movieApi";
+import { movieApi, MovieApiResponse, type ClusterResponse } from "../../api/movieApi";
+import { showtimeApi, type ShowtimeResponse } from "../../api/showtimeApi";
 import { mockMovies } from "../../data/mockMovies";
 import { MovieDetailCarousel } from "../../components/shared/MovieDetailCarousel";
 import { TrailerModal } from "../../components/shared/TrailerModal";
@@ -51,98 +52,27 @@ function seatsLabel(available: number, total: number) {
   return { label: `${available}/${total}`, color: "#34d399" };
 }
 
+// Matches movieservice.enums.ShowTimeStatus. SCHEDULED is the default (and, in
+// practice, only) status the backend ever assigns on create — there is no admin
+// action or job that transitions a showtime to ON_SALE, and the booking APIs
+// (lock/seat endpoints) don't gate on status at all — so SCHEDULED is treated as
+// bookable here, same as ON_SALE, rather than as a "not open yet" state.
 function statusMeta(status: string) {
   switch (status) {
-    case "FINISHED":
+    case "COMPLETED":
       return { label: "Ended", Icon: CheckCheck, color: "#a1a1aa", bg: "rgba(113,113,122,0.15)" };
     case "CANCELLED":
       return { label: "Cancelled", Icon: Ban, color: "#f87171", bg: "rgba(248,113,113,0.12)" };
-    case "ONGOING":
-      return { label: "Now Playing", Icon: Clock, color: "#FFA500", bg: "rgba(255,165,0,0.14)" };
+    case "SUSPENDED":
+      return { label: "Unavailable", Icon: Ban, color: "#f87171", bg: "rgba(248,113,113,0.12)" };
+    case "ON_SALE":
+      return { label: "On Sale", Icon: Clock, color: "#34d399", bg: "rgba(52,211,153,0.12)" };
     default:
       return { label: "Scheduled", Icon: Clock, color: "#FFD700", bg: "rgba(255,215,0,0.12)" };
   }
 }
 
-const isDisabled = (s: string) => s === "FINISHED" || s === "CANCELLED";
-
-// Deterministic per-cinema offset so each cluster gets a stable, distinct
-// schedule instead of two hardcoded name checks.
-function cinemaSeed(cinemaName: string): number {
-  let h = 0;
-  for (let i = 0; i < cinemaName.length; i++) h = (h * 31 + cinemaName.charCodeAt(i)) % 1000;
-  return h;
-}
-
-function getMockShowtimesForDateAndCinema(
-  movieId: number,
-  date: Date,
-  cinemaName: string
-): (ShowTimeResponse & { showDateTimeISO: string })[] {
-  if (date.getDay() === 3) {
-    return []; // Empty state demo for Wednesday
-  }
-
-  const seed = cinemaSeed(cinemaName);
-  const rooms = ["IMAX", "A", "B", "C"];
-  const showtimesByRoom: Record<string, string[]> = seed % 2 === 0 ? {
-    "IMAX": ["10:00", "14:30", "19:00"],
-    "A": ["09:15", "13:45", "18:30"],
-    "B": ["11:30", "16:15", "20:45"],
-    "C": ["12:00", "17:00", "21:30"]
-  } : {
-    "IMAX": ["11:00", "15:30", "20:00"],
-    "A": ["10:15", "14:45", "19:30"],
-    "B": ["12:30", "17:15", "21:45"],
-    "C": ["13:00", "18:00", "22:30"]
-  };
-
-  const results: (ShowTimeResponse & { showDateTimeISO: string })[] = [];
-  let idCounter = movieId * 1000 + seed;
-
-  const dateStr = format(date, "yyyy-MM-dd");
-
-  rooms.forEach((roomName) => {
-    const times = showtimesByRoom[roomName] || [];
-    times.forEach((timeStr) => {
-      const showTimeId = idCounter++;
-      const [h, m] = timeStr.split(":");
-      
-      const startMinutes = parseInt(h) * 60 + parseInt(m);
-      const endMinutes = startMinutes + 138;
-      const endH = Math.floor(endMinutes / 60) % 24;
-      const endM = endMinutes % 60;
-      const endTimeStr = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}:00`;
-
-      const isoDateTime = `${dateStr}T${timeStr}:00`;
-
-      let status = "SCHEDULED";
-      if (showTimeId % 11 === 0) status = "FINISHED";
-      else if (showTimeId % 17 === 0) status = "CANCELLED";
-      else if (showTimeId % 5 === 0) status = "ONGOING";
-
-      let available = 80 - (showTimeId % 30);
-      if (showTimeId % 4 === 0) available = 0; // trigger sold out
-      
-      results.push({
-        showTimeId,
-        showDate: dateStr,
-        startTime: `${timeStr}:00`,
-        endTime: endTimeStr,
-        cinemaRoomId: showTimeId,
-        cinemaRoomName: roomName,
-        updateAt: new Date().toISOString(),
-        status,
-        price: roomName === "IMAX" ? 130000 : 90000,
-        availableSeats: available,
-        totalSeats: roomName === "IMAX" ? 150 : 100,
-        showDateTimeISO: isoDateTime
-      });
-    });
-  });
-
-  return results;
-}
+const isDisabled = (s: string) => s === "COMPLETED" || s === "CANCELLED" || s === "SUSPENDED";
 
 function SkeletonCard() {
   return (
@@ -167,8 +97,8 @@ function SkeletonCard() {
 
 // ─── Enriched showtime card ─────────────────────────────────────────────────
 interface ShowtimeCardProps {
-  show: ShowTimeResponse & { showDateTimeISO?: string };
-  onSelect: (show: ShowTimeResponse & { showDateTimeISO?: string }) => void;
+  show: ShowtimeResponse;
+  onSelect: (show: ShowtimeResponse) => void;
 }
 
 function ShowtimeCard({ show, onSelect }: ShowtimeCardProps) {
@@ -220,44 +150,33 @@ function ShowtimeCard({ show, onSelect }: ShowtimeCardProps) {
 
 // ─── Cinema → room accordion ────────────────────────────────────────────────
 interface CinemaGroupProps {
-  showtimes: (ShowTimeResponse & { showDateTimeISO?: string })[];
-  onSelect: (show: ShowTimeResponse & { showDateTimeISO?: string }) => void;
+  showtimes: ShowtimeResponse[];
+  onSelect: (show: ShowtimeResponse) => void;
 }
 
 function CinemaGroup({ showtimes, onSelect }: CinemaGroupProps) {
-  const [open, setOpen] = useState<Set<string>>(new Set(["IMAX"]));
+  // Tracks collapsed rooms rather than expanded ones so every room starts open —
+  // real room names (e.g. "Room 1", "IMAX Test Room") vary per cluster, so there's
+  // no fixed name to default-expand the way the old mock's hardcoded "IMAX" did.
+  const [closed, setClosed] = useState<Set<string>>(new Set());
 
   const byRoom = useMemo(() => {
-    const map = new Map<string, (ShowTimeResponse & { showDateTimeISO?: string })[]>();
+    const map = new Map<string, ShowtimeResponse[]>();
     showtimes.forEach((s) => {
-      let roomName = s.cinemaRoomName;
-      if (!roomName) {
-         const rm = s.showTimeId % 4;
-         if (rm === 0) roomName = "IMAX";
-         else if (rm === 1) roomName = "A";
-         else if (rm === 2) roomName = "B";
-         else roomName = "C";
-      }
+      const roomName = s.cinemaRoomName;
       if (!map.has(roomName)) map.set(roomName, []);
       map.get(roomName)!.push(s);
     });
-    
-    const order = ["IMAX", "A", "B", "C"];
+
     return Array.from(map.entries())
-      .sort((a, b) => {
-        let indexA = order.indexOf(a[0]);
-        let indexB = order.indexOf(b[0]);
-        if (indexA === -1) indexA = 999;
-        if (indexB === -1) indexB = 999;
-        return indexA - indexB;
-      })
+      .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([room, list]) => {
-         return [room, list.sort((x, y) => String(x.startTime).localeCompare(String(y.startTime)))] as const;
+        return [room, list.sort((x, y) => String(x.startTime).localeCompare(String(y.startTime)))] as const;
       });
   }, [showtimes]);
 
   const toggle = (room: string) =>
-    setOpen((prev) => {
+    setClosed((prev) => {
       const n = new Set(prev);
       n.has(room) ? n.delete(room) : n.add(room);
       return n;
@@ -266,7 +185,7 @@ function CinemaGroup({ showtimes, onSelect }: CinemaGroupProps) {
   return (
     <div className="rounded-xl border border-white/10 overflow-hidden divide-y divide-white/10 bg-white/[0.02]">
       {byRoom.map(([room, list]) => {
-        const expanded = open.has(room);
+        const expanded = !closed.has(room);
         return (
           <div key={room}>
             <button
@@ -274,7 +193,7 @@ function CinemaGroup({ showtimes, onSelect }: CinemaGroupProps) {
               className="w-full flex items-center justify-between p-4 hover:bg-white/[0.04] transition-colors cursor-pointer"
             >
               <span className="flex items-center gap-2">
-                <span className="font-semibold tracking-wide" style={{ color: expanded ? "#FFD700" : "#e5e5ea" }}>ROOM {room}</span>
+                <span className="font-semibold tracking-wide" style={{ color: expanded ? "#FFD700" : "#e5e5ea" }}>{room}</span>
                 <span className="text-xs text-white/40">({list.length} shows)</span>
               </span>
               {expanded ? <ChevronUp size={16} className="text-[#FFD700]" /> : <ChevronDown size={16} className="text-white/40" />}
@@ -304,8 +223,12 @@ export default function ShowtimePage() {
   const today = new Date();
   const dates = Array.from({ length: 7 }, (_, i) => addDays(today, i));
   const [selectedDate, setSelectedDate] = useState<Date>(today);
-  const [CINEMAS, setCinemas] = useState<string[]>([]);
-  // Default to the cinema chosen via "View showtimes" or the search location picker.
+  const [clusters, setClusters] = useState<ClusterResponse[]>([]);
+  // Same two localStorage keys CinemasPage.tsx / SearchBar.tsx's location picker use,
+  // so a cinema chosen there carries over here instead of defaulting to nothing/first.
+  const [selectedProvince, setSelectedProvince] = useState<string>(
+    () => localStorage.getItem("cp_province") ?? ""
+  );
   const [selectedCinema, setSelectedCinema] = useState<string>(() => {
     try {
       const saved = localStorage.getItem("cp_cluster");
@@ -323,12 +246,32 @@ export default function ShowtimePage() {
   useEffect(() => {
     movieApi.getClusters()
       .then((res) => {
-        const names = (res.result ?? []).filter((c) => c.status === "ACTIVE").map((c) => c.clusterName);
-        setCinemas(names);
-        setSelectedCinema((prev) => (names.includes(prev) ? prev : names[0] ?? ""));
+        const active = (res.result ?? []).filter((c) => c.status === "ACTIVE");
+        setClusters(active);
+
+        // Saved cinema might predate cp_province (older localStorage value) — derive
+        // its province from the cluster data itself rather than requiring both keys.
+        setSelectedProvince((prevProvince) => {
+          const savedCluster = active.find((c) => c.clusterName === selectedCinema);
+          if (savedCluster) return savedCluster.province;
+          const provinces = Array.from(new Set(active.map((c) => c.province)));
+          return provinces.includes(prevProvince) ? prevProvince : provinces[0] ?? "";
+        });
       })
-      .catch(() => setCinemas([]));
+      .catch(() => setClusters([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const provinces = useMemo(() => Array.from(new Set(clusters.map((c) => c.province))), [clusters]);
+  const cinemasInProvince = useMemo(
+    () => clusters.filter((c) => c.province === selectedProvince).map((c) => c.clusterName),
+    [clusters, selectedProvince]
+  );
+
+  // Keep selectedCinema valid whenever the province (or the cinema list itself) changes.
+  useEffect(() => {
+    setSelectedCinema((prev) => (cinemasInProvince.includes(prev) ? prev : cinemasInProvince[0] ?? ""));
+  }, [cinemasInProvince]);
 
   useEffect(() => {
     setLoading(true);
@@ -360,15 +303,33 @@ export default function ShowtimePage() {
       .finally(() => setLoading(false));
   }, [movieId]);
 
-  const filteredShowtimes = useMemo(() => {
-    if (!movie) return [];
-    return getMockShowtimesForDateAndCinema(movie.movieId, selectedDate, selectedCinema);
-  }, [movie, selectedDate, selectedCinema]);
+  const [showtimes, setShowtimes] = useState<ShowtimeResponse[]>([]);
+  const [showtimesLoading, setShowtimesLoading] = useState(false);
+
+  // Real showtimes for this movie on the selected date — fetched per date (backend
+  // supports a date filter) rather than all-at-once, then narrowed to the selected
+  // cinema client-side since the read endpoint doesn't take a cluster filter.
+  useEffect(() => {
+    if (!movie) return;
+    let active = true;
+    setShowtimesLoading(true);
+    showtimeApi
+      .getByMovie(movie.movieId, format(selectedDate, "yyyy-MM-dd"))
+      .then((res) => { if (active) setShowtimes(res.result ?? []); })
+      .catch(() => { if (active) setShowtimes([]); })
+      .finally(() => { if (active) setShowtimesLoading(false); });
+    return () => { active = false; };
+  }, [movie, selectedDate]);
+
+  const filteredShowtimes = useMemo(
+    () => showtimes.filter((s) => !selectedCinema || s.clusterName === selectedCinema),
+    [showtimes, selectedCinema]
+  );
 
   const hasShowtimes = filteredShowtimes.length > 0;
 
-  function handleSelectShowtime(show: ShowTimeResponse & { showDateTimeISO?: string }) {
-    if ((show.availableSeats || 0) === 0) {
+  function handleSelectShowtime(show: ShowtimeResponse) {
+    if ((show.availableSeats ?? 0) === 0) {
       setShowSoldOutModal(true);
       return;
     }
@@ -378,7 +339,7 @@ export default function ShowtimePage() {
           movieTitle: movie?.movieNameEnglish || movie?.movieNameVn || "Movie Booking",
           cinemaName: selectedCinema,
           hall: show.cinemaRoomName,
-          dateTime: show.showDateTimeISO,
+          dateTime: `${show.showDate}T${show.startTime}`,
           duration: movie?.duration || 120,
         }
       }
@@ -553,9 +514,30 @@ export default function ShowtimePage() {
 
       {/* ── Content ── */}
       <div className="max-w-5xl mx-auto px-6 py-8">
-        {/* Cinema selector */}
+        {/* Province tabs — same pattern as CinemasPage.tsx, so the cinema list below
+            isn't a flat wall of 15+ buttons across every city at once. */}
+        {provinces.length > 1 && (
+          <div className="flex gap-2.5 overflow-x-auto pb-1 mb-4" style={{ scrollbarWidth: "none" }}>
+            {provinces.map((p) => (
+              <button
+                key={p}
+                onClick={() => setSelectedProvince(p)}
+                className="whitespace-nowrap rounded-full px-4 py-1.5 text-[13px] transition-all duration-200 hover:scale-105 cursor-pointer"
+                style={
+                  selectedProvince === p
+                    ? { background: "linear-gradient(135deg, #FFD700, #FFA500)", color: "#050505", fontWeight: 700 }
+                    : { border: "1px solid rgba(255,255,255,0.12)", backgroundColor: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.55)" }
+                }
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Cinema selector — only cinemas in the selected province */}
         <div className="flex flex-wrap gap-3 mb-6">
-          {CINEMAS.map((c) => {
+          {cinemasInProvince.map((c) => {
             const active = c === selectedCinema;
             return (
               <button
@@ -573,7 +555,13 @@ export default function ShowtimePage() {
           })}
         </div>
 
-        {!hasShowtimes ? (
+        {showtimesLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+        ) : !hasShowtimes ? (
           <div className="flex flex-col items-center justify-center py-24 text-center">
             <div className="w-16 h-16 rounded-full bg-white/[0.06] border border-white/10 flex items-center justify-center mb-5">
               <AlertTriangle size={24} className="text-[#FFD700]/70" />
