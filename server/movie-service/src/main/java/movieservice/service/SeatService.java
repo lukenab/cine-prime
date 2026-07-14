@@ -173,11 +173,19 @@ public class SeatService {
      * Dat ghe thanh MAINTENANCE (vd ghe bi hong).
      */
     @Transactional
-    public void setSeatStatus(long seatId, SeatStatus newStatus) {
+    public SeatResponse setSeatStatus(long seatId, String newStatusStr) {
         Seat seat = seatRepository.findById(seatId)
                 .orElseThrow(() -> new AppException(MovieErrorCode.SEAT_NOT_FOUND));
+
+        SeatStatus newStatus;
+        try {
+            newStatus = SeatStatus.valueOf(newStatusStr.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new AppException(MovieErrorCode.INVALID_SEAT_STATUS);
+        }
+
         seat.setStatus(newStatus);
-        seatRepository.save(seat);
+        return movieMapper.toSeatResponse(seatRepository.save(seat));
     }
 
     /**
