@@ -15,7 +15,11 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "cinema_room")
+@Table(name = "cinema_room",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uq_room_name_per_cluster",
+                columnNames = {"cluster_id", "cinema_room_name"}
+        ))
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class CinemaRoom {
 
@@ -24,7 +28,7 @@ public class CinemaRoom {
     @Column(name = "cinema_room_id")
     Long cinemaRoomId;
 
-    @Column(name = "cinema_room_name", nullable = false, unique = true, length = 100)
+    @Column(name = "cinema_room_name", nullable = false, length = 100)
     String cinemaRoomName;
 
     @Enumerated(EnumType.STRING)

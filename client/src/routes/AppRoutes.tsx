@@ -21,9 +21,9 @@ import ProfilePage from "../pages/customer/ProfilePage";
 import AdminDashboard from "../pages/admin/AdminDashboardPage";
 import ManageUserPage from "../pages/admin/ManageUserPage";
 import ManageMoviePage from "../pages/admin/ManageMoviePage";
-import ManageCinemaRoomsPage from "../pages/admin/ManageCinemaRoomsPage";
 import ManageCinemaClusterPage from "../pages/admin/ManageCinemaClusterPage";
 import RoomDetailPage from "../pages/admin/RoomDetailPage";
+import ClusterDetailPage from "../pages/admin/ClusterDetailPage";
 import ManageGenresPage from "../pages/admin/ManageGenresPage";
 import CreateUserPage from "../pages/admin/CreateUserPage";
 import EditUserPage from "../pages/admin/EditUserPage";
@@ -83,6 +83,8 @@ export default function AppRoutes() {
           {/* ADMIN + EMPLOYEE */}
           <Route path="movies"    element={<ManageMoviePage />} />
           <Route path="clusters"  element={<ManageCinemaClusterPage />} />
+          <Route path="clusters/:id" element={<ClusterDetailPage />} />
+          <Route path="rooms/:id"    element={<RoomDetailPage />} />
           <Route path="showtimes" element={<ManageShowtimePage />} />
           <Route path="bookings"  element={<ManageBookingPage />} />
           <Route path="sell"      element={<TicketSalePage />} />
@@ -96,8 +98,6 @@ export default function AppRoutes() {
             <Route path="users/create"       element={<CreateUserPage />} />
             <Route path="users/edit/:id"     element={<EditUserPage />} />
             <Route path="users/:id"          element={<UserDetailPage />} />
-            <Route path="rooms"              element={<ManageCinemaRoomsPage />} />
-            <Route path="rooms/:id"          element={<RoomDetailPage />} />
             <Route path="genres"             element={<ManageGenresPage />} />
             <Route path="persons"            element={<ManagePersonsPage />} />
             <Route path="age-ratings"        element={<ManageAgeRatingsPage />} />

@@ -271,7 +271,7 @@ movieservice/
 | Column | Type | Constraint |
 |--------|------|-----------|
 | cinema_room_id | BIGSERIAL | PK |
-| cinema_room_name | VARCHAR(100) | NOT NULL, UNIQUE (global — gap #144) |
+| cinema_room_name | VARCHAR(100) | NOT NULL, UNIQUE per cluster (uq_room_name_per_cluster) |
 | room_type | VARCHAR(20) | NOT NULL — Enum RoomType: STANDARD / LARGE / IMAX |
 | total_seat_capacity | INTEGER | NOT NULL |
 | status | VARCHAR(30) | NOT NULL, default ACTIVE — Enum CinemaRoomStatus |
@@ -288,7 +288,7 @@ movieservice/
 - `@OneToMany(LAZY)` → `ShowTime`
 - `@OneToMany(cascade=ALL, orphanRemoval=true)` → `CinemaRoomMaintenance`
 
-**Gap #144:** `cinema_room_name` UNIQUE global — không phân biệt theo cluster. Phòng "Phòng 1" của cluster khác nhau không thể trùng tên.
+**Gap #144 (resolved, V7):** `cinema_room_name` giờ UNIQUE theo `(cluster_id, cinema_room_name)` thay vì global.
 
 ---
 
@@ -1056,7 +1056,7 @@ Cron: "0 5 0 * * *"  →  chạy lúc 00:05 mỗi đêm
 | #141 | Chore/Backend | `MovieActionLog` thiếu `actionType` enum | Sprint 3 |
 | #142 | Chore/Backend | `MovieCast.roleType` là String — nên là enum | Sprint 3 |
 | #143 | Bug/Backend | `updateMovie()` delete-all + re-insert translations/cast (mất `created_at`) | Sprint 3 |
-| #144 | Bug/Backend | `CinemaRoom.cinema_room_name` UNIQUE global thay vì scope theo cluster | Sprint 3 |
+| ~~#144~~ | Bug/Backend | ~~`CinemaRoom.cinema_room_name` UNIQUE global thay vì scope theo cluster~~ — resolved (V7) | Sprint 3 |
 | #145 | Bug/Backend | `lockSeats()` không dùng pessimistic lock → race condition | Sprint 3 |
 | #149 | Feature/Backend | Thêm `?q=` keyword search cho `GET /api/movies` | Sprint 3 |
 | #150 | Chore/Backend | Thêm field `tagline` vào Movie và MovieTranslation | Sprint 3 |

@@ -38,7 +38,11 @@ public class CinemaRoomService {
 
     @Transactional
     public CinemaRoomResponse createCinemaRoom(CinemaRoomRequest request) {
-        if (cinemaRoomRepository.existsByCinemaRoomName(request.getCinemaRoomName())) {
+        CinemaCluster cluster = cinemaClusterRepository.findById(request.getClusterId())
+                .orElseThrow(() -> new AppException(MovieErrorCode.CLUSTER_NOT_FOUND));
+
+        if (cinemaRoomRepository.existsByCluster_ClusterIdAndCinemaRoomName(
+                request.getClusterId(), request.getCinemaRoomName())) {
             throw new AppException(MovieErrorCode.CINEMA_ROOM_NAME_EXISTED);
         }
 
@@ -46,9 +50,6 @@ public class CinemaRoomService {
         if (request.getTotalSeatCapacity() > maxSeats) {
             throw new AppException(MovieErrorCode.SEAT_QUANTITY_EXCEEDS_LIMIT);
         }
-
-        CinemaCluster cluster = cinemaClusterRepository.findById(request.getClusterId())
-                .orElseThrow(() -> new AppException(MovieErrorCode.CLUSTER_NOT_FOUND));
 
         CinemaRoom room = movieMapper.toCinemaRoom(request);
         room.setCluster(cluster);

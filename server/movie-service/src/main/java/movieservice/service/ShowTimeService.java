@@ -143,6 +143,7 @@ public class ShowTimeService {
                 .row(row)
                 .number(number)
                 .type(seat.getSeatType() != null ? seat.getSeatType().name() : null)
+                .colSpan(seat.getSeatType() != null ? seat.getSeatType().getColSpan() : 1)
                 .status(status)
                 .price(seat.getPrice())
                 .build();

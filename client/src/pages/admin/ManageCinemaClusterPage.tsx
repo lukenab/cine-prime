@@ -4,7 +4,7 @@ import {
   Armchair, X, Edit2, Trash2, Phone, CheckCircle, XCircle,
   Clock, SendHorizonal,
 } from "lucide-react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useNavigate, useLocation } from "react-router-dom";
 import {
   movieApi,
   type ClusterResponse,
@@ -621,6 +621,8 @@ function DeleteModal({
 export default function ManageCinemaClusterPage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
   const { can, isAdmin } = useRole();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const [clusters, setClusters] = useState<ClusterResponse[]>([]);
   const [loading, setLoading] = useState(false);
@@ -654,6 +656,20 @@ export default function ManageCinemaClusterPage() {
   }, []);
 
   useEffect(() => { loadClusters(); }, [loadClusters]);
+
+  // Deep-link from ClusterDetailPage's "Edit" button: open the edit modal for
+  // a specific cluster once its data has loaded, then clear the nav state so
+  // refreshing/going back doesn't reopen it.
+  useEffect(() => {
+    const editClusterId = (location.state as any)?.editClusterId;
+    if (!editClusterId || clusters.length === 0) return;
+    const target = clusters.find((c) => c.clusterId === editClusterId);
+    if (target) {
+      openEdit(target);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clusters, location.state]);
 
   // ── CRUD handlers ─────────────────────────────────────────────────────────
 
@@ -877,7 +893,8 @@ export default function ManageCinemaClusterPage() {
                   <tr
                     key={cluster.clusterId}
                     className="cluster-row border-b transition-colors"
-                    style={{ borderColor: "var(--border-color)" }}
+                    style={{ borderColor: "var(--border-color)", cursor: "pointer" }}
+                    onClick={() => navigate(`/admin/clusters/${cluster.clusterId}`)}
                   >
                     <td className="px-5 py-4">
                       <span style={{ fontSize: "13px", color: "var(--text-sub)" }}>{idx + 1}</span>
@@ -947,7 +964,7 @@ export default function ManageCinemaClusterPage() {
                         </div>
                       )}
                     </td>
-                    <td className="px-5 py-4">
+                    <td className="px-5 py-4" onClick={(e) => e.stopPropagation()}>
                       <ClusterActions
                         cluster={cluster}
                         onEdit={() => openEdit(cluster)}
@@ -988,7 +1005,7 @@ export default function ManageCinemaClusterPage() {
       {deleteTarget && (
         <DeleteModal
           cluster={deleteTarget}
-          onConfirm={handleDelete}
+         onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}
           submitting={deleting}
         />
@@ -1019,3 +1036,4 @@ export default function ManageCinemaClusterPage() {
     </>
   );
 }
+

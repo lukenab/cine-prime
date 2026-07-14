@@ -151,13 +151,14 @@ export type SeatResponse = {
   seatId: number;
   seatCode: string;
   seatType: string;
-  seatStatus: number;
+  colSpan?: number; // so cot vat ly ghe chiem trong hang (Couple/Sweetbox = 2)
+  status: "ACTIVE" | "INACTIVE" | "MAINTENANCE";
   price: number;
   cinemaRoomId: number;
   cinemaRoomName: string;
 };
 
-export type SeatTypeValue = "STANDARD" | "VIP" | "COUPLE";
+export type SeatTypeValue = "STANDARD" | "VIP" | "COUPLE" | "SWEETBOX";
 
 export type UpdateSeatPayload = {
   seatType: SeatTypeValue;
@@ -607,6 +608,9 @@ export const movieApi = {
   // Cinema Cluster APIs
   getClusters: () =>
     axiosClient.get('/api/cinema-clusters') as Promise<ApiWrapper<ClusterResponse[]>>,
+
+  getClusterById: (id: number) =>
+    axiosClient.get(`/api/cinema-clusters/${id}`) as Promise<ApiWrapper<ClusterResponse>>,
 
   createCluster: (payload: CreateClusterPayload) =>
     axiosClient.post('/api/cinema-clusters', payload) as Promise<ApiWrapper<ClusterResponse>>,

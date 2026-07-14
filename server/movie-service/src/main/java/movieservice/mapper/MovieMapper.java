@@ -130,6 +130,7 @@ public interface MovieMapper {
     @Mapping(target = "cinemaRoomId", source = "cinemaRoom.cinemaRoomId")
     @Mapping(target = "cinemaRoomName", source = "cinemaRoom.cinemaRoomName")
     @Mapping(target = "seatType", expression = "java(seat.getSeatType() != null ? seat.getSeatType().name() : null)")
+    @Mapping(target = "colSpan", expression = "java(seat.getSeatType() != null ? seat.getSeatType().getColSpan() : 1)")
     @Mapping(target = "status", expression = "java(seat.getStatus() != null ? seat.getStatus().name() : null)")
     SeatResponse toSeatResponse(Seat seat);
 

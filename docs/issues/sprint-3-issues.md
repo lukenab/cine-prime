@@ -650,17 +650,17 @@ Legend: [ ] = STANDARD   [V] = VIP   [M] = MAINTENANCE
 
 ## Estimate
 
-- [ ] **S (< 2h)** / M (2–4h) / L (4–8h) / XL (> 1 day)
+- [x] **S (< 2h)** / M (2–4h) / L (4–8h) / XL (> 1 day)
 
 ---
 
 ## Acceptance Criteria (Definition of Done)
 
-- [ ] Xóa `unique = true` trên column `cinema_room_name` trong `CinemaRoom.java`
-- [ ] Thêm `@Table(uniqueConstraints = @UniqueConstraint(columnNames = {"cluster_id", "cinema_room_name"}))` vào entity
-- [ ] DB migration: `ALTER TABLE cinema_room DROP CONSTRAINT IF EXISTS <unique_constraint_name>; ALTER TABLE cinema_room ADD CONSTRAINT uq_room_name_per_cluster UNIQUE (cluster_id, cinema_room_name);`
-- [ ] Hai phòng tên "Phòng IMAX 1" ở hai cluster khác nhau có thể tạo thành công
-- [ ] Hai phòng trùng tên trong cùng cluster vẫn bị reject với lỗi rõ ràng
+- [x] Xóa `unique = true` trên column `cinema_room_name` trong `CinemaRoom.java`
+- [x] Thêm `@Table(uniqueConstraints = @UniqueConstraint(columnNames = {"cluster_id", "cinema_room_name"}))` vào entity
+- [x] DB migration: không có unique constraint global nào tồn tại trong `movie_db.sql` thực tế để `DROP` (chỉ là annotation JPA vô hiệu do `ddl-auto: none`) — thêm thẳng constraint mới qua `docs/database/movie-service/V7__scope_room_name_unique_to_cluster.sql`: `ALTER TABLE cinema_room ADD CONSTRAINT uq_room_name_per_cluster UNIQUE (cluster_id, cinema_room_name);`
+- [x] Hai phòng tên "Phòng IMAX 1" ở hai cluster khác nhau có thể tạo thành công (service giờ check `existsByCluster_ClusterIdAndCinemaRoomName`)
+- [x] Hai phòng trùng tên trong cùng cluster vẫn bị reject với lỗi rõ ràng (`CINEMA_ROOM_NAME_EXISTED`, HTTP 409)
 
 ---
 
