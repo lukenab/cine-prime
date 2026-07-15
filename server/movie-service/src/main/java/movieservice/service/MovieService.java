@@ -27,7 +27,11 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -174,13 +178,26 @@ public class MovieService {
 
     // ── Update ────────────────────────────────────────────────
 
+    /**
+     * Partial-update contract (issue #143):
+     *  - Field khong xuat hien / null trong request -> KHONG doi (mapper dung
+     *    NullValuePropertyMappingStrategy.IGNORE cho scalar; FK/collection tu kiem tra != null o day).
+     *  - Collection = [] (khac null) -> xoa toan bo phan tu hien co.
+     *  - Collection non-empty -> reconcile theo business key, KHONG xoa-sach-lam-lai (tranh doi
+     *    castId/mat du lieu neu that bai giua chung, xem MovieCast.uk_movie_id_person_id_role_type).
+     * Validate (duplicate key trong request, ID tham chieu ton tai) luon chay TRUOC khi xoa/ghi
+     * bat ky ban ghi cast/translation nao trong cung 1 loi goi - neu that bai, @Transactional
+     * rollback toan bo (scalar lan relationship) vi AppException la RuntimeException.
+     */
     @Transactional
     public MovieResponse updateMovie(Long id, UpdateMovieRequest request) {
         Movie movie = movieRepository.findById(id)
                 .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
 
+        // 1) Scalar fields - null-safe qua @BeanMapping(IGNORE) tren mapper.
         movieMapper.updateMovieFromRequest(request, movie);
 
+        // 2) FK don le - null nghia la khong doi (giu nguyen quan he hien tai).
         if (request.getAgeRatingId() != null) {
             movie.setAgeRating(ageRatingRepository.findById(request.getAgeRatingId())
                     .orElseThrow(() -> new AppException(MovieErrorCode.AGE_RATING_NOT_FOUND)));
@@ -189,30 +206,164 @@ public class MovieService {
             movie.setCompany(productionCompanyRepository.findById(request.getCompanyId())
                     .orElseThrow(() -> new AppException(MovieErrorCode.COMPANY_NOT_FOUND)));
         }
+
+        // 3) Genres / formats - distinct() truoc khi so sanh size, tranh false-NOT_FOUND khi
+        // request lo gui trung ID (vi du [1,1,2] truoc day se bi tu choi oan vi repository chi
+        // tra ve 2 ban ghi phan biet trong khi request co 3 phan tu).
         if (request.getGenreIds() != null) {
-            List<Genre> genres = genreRepository.findAllByGenreIdIn(request.getGenreIds());
-            if (genres.size() != request.getGenreIds().size()) {
+            List<Long> distinctGenreIds = request.getGenreIds().stream().distinct().collect(Collectors.toList());
+            List<Genre> genres = genreRepository.findAllByGenreIdIn(distinctGenreIds);
+            if (genres.size() != distinctGenreIds.size()) {
                 throw new AppException(MovieErrorCode.GENRE_NOT_FOUND);
             }
             movie.setGenres(genres);
         }
         if (request.getFormatIds() != null) {
-            List<ScreeningFormat> formats = screeningFormatRepository.findAllByFormatIdIn(request.getFormatIds());
-            if (formats.size() != request.getFormatIds().size()) {
+            List<Integer> distinctFormatIds = request.getFormatIds().stream().distinct().collect(Collectors.toList());
+            List<ScreeningFormat> formats = screeningFormatRepository.findAllByFormatIdIn(distinctFormatIds);
+            if (formats.size() != distinctFormatIds.size()) {
                 throw new AppException(MovieErrorCode.FORMAT_NOT_FOUND);
             }
             movie.setFormats(formats);
         }
+
+        // 4) Translations / cast - reconcile thay vi delete-all-then-insert.
         if (request.getTranslations() != null) {
-            movieTranslationRepository.deleteById_MovieId(id);
-            saveTranslations(movie, request.getTranslations());
+            reconcileTranslations(movie, request.getTranslations());
         }
         if (request.getCast() != null) {
-            movieCastRepository.deleteByMovie_MovieId(id);
-            saveCast(movie, request.getCast());
+            reconcileCast(movie, request.getCast());
         }
 
         return movieMapper.toMovieResponse(movieRepository.save(movie));
+    }
+
+    /**
+     * Reconcile translations theo composite key (movieId, languageCode) - xem AC section 5
+     * cua issue #143. Update tai cho neu key da ton tai (giu nguyen createdAt), insert moi neu
+     * chua co, chi xoa nhung language khong con xuat hien trong request (neu request khong rong).
+     */
+    private void reconcileTranslations(Movie movie, List<TranslationRequest> requests) {
+        List<MovieTranslation> existing = movieTranslationRepository.findById_MovieId(movie.getMovieId());
+
+        if (requests.isEmpty()) {
+            if (!existing.isEmpty()) movieTranslationRepository.deleteAll(existing);
+            movie.setTranslations(new ArrayList<>());
+            return;
+        }
+
+        // Validate truoc: normalize languageCode va tu choi trung lap NGAY, truoc khi dong tay
+        // vao bat ky ban ghi hien co nao.
+        Map<String, TranslationRequest> byLang = new LinkedHashMap<>();
+        for (TranslationRequest tr : requests) {
+            String lang = tr.getLanguageCode().toLowerCase();
+            if (byLang.containsKey(lang)) {
+                throw new AppException(MovieErrorCode.DUPLICATE_TRANSLATION_LANGUAGE);
+            }
+            byLang.put(lang, tr);
+        }
+
+        Map<String, MovieTranslation> existingByLang = existing.stream()
+                .collect(Collectors.toMap(
+                        t -> t.getId().getLanguageCode().toLowerCase(),
+                        Function.identity()));
+
+        List<MovieTranslation> result = new ArrayList<>();
+        for (Map.Entry<String, TranslationRequest> entry : byLang.entrySet()) {
+            String lang = entry.getKey();
+            TranslationRequest tr = entry.getValue();
+            MovieTranslation translation = existingByLang.get(lang);
+            if (translation != null) {
+                // Update tai cho - giu nguyen composite key va createdAt.
+                translation.setTitle(tr.getTitle());
+                translation.setSynopsis(tr.getSynopsis());
+            } else {
+                translation = new MovieTranslation();
+                translation.setId(new MovieTranslationId(movie.getMovieId(), lang));
+                translation.setMovie(movie);
+                translation.setTitle(tr.getTitle());
+                translation.setSynopsis(tr.getSynopsis());
+            }
+            result.add(movieTranslationRepository.save(translation));
+        }
+
+        List<MovieTranslation> toRemove = existing.stream()
+                .filter(t -> !byLang.containsKey(t.getId().getLanguageCode().toLowerCase()))
+                .collect(Collectors.toList());
+        if (!toRemove.isEmpty()) movieTranslationRepository.deleteAll(toRemove);
+
+        movie.setTranslations(result);
+    }
+
+    /** Business key cho cast reconciliation - xem AC section 6 cua issue #143. */
+    private record CastKey(Long personId, String roleType) {}
+
+    /**
+     * Reconcile cast theo business key (movieId, personId, roleType) - update tai cho (chi
+     * characterName/billingOrder, castId giu nguyen) neu key da ton tai, insert moi neu chua co,
+     * chi xoa nhung cast khong con trong request (neu request khong rong). Validate TAT CA
+     * personId ton tai TRUOC khi xoa/ghi bat ky ban ghi nao (khong de tinh trang xoa xong moi
+     * phat hien personId sai).
+     */
+    private void reconcileCast(Movie movie, List<CastRequest> requests) {
+        List<MovieCast> existing = movieCastRepository.findByMovie_MovieId(movie.getMovieId());
+
+        if (requests.isEmpty()) {
+            if (!existing.isEmpty()) movieCastRepository.deleteAll(existing);
+            movie.setCast(new ArrayList<>());
+            return;
+        }
+
+        // Validate truoc: normalize roleType (uppercase) va tu choi trung business key.
+        Map<CastKey, CastRequest> byKey = new LinkedHashMap<>();
+        for (CastRequest cr : requests) {
+            CastKey key = new CastKey(cr.getPersonId(), cr.getRoleType().toUpperCase());
+            if (byKey.containsKey(key)) {
+                throw new AppException(MovieErrorCode.DUPLICATE_CAST_ENTRY);
+            }
+            byKey.put(key, cr);
+        }
+
+        // Validate tat ca personId ton tai TRUOC khi dong vao existing (delete/insert).
+        Set<Long> personIds = byKey.keySet().stream().map(CastKey::personId).collect(Collectors.toSet());
+        Map<Long, Person> personsById = personRepository.findAllById(personIds).stream()
+                .collect(Collectors.toMap(Person::getPersonId, Function.identity()));
+        if (personsById.size() != personIds.size()) {
+            throw new AppException(MovieErrorCode.PERSON_NOT_FOUND);
+        }
+
+        Map<CastKey, MovieCast> existingByKey = existing.stream()
+                .collect(Collectors.toMap(
+                        c -> new CastKey(c.getPerson().getPersonId(), c.getRoleType().toUpperCase()),
+                        Function.identity()));
+
+        List<MovieCast> result = new ArrayList<>();
+        for (Map.Entry<CastKey, CastRequest> entry : byKey.entrySet()) {
+            CastKey key = entry.getKey();
+            CastRequest cr = entry.getValue();
+            MovieCast cast = existingByKey.get(key);
+            if (cast != null) {
+                // Update tai cho - chi mutable field, castId giu nguyen.
+                cast.setCharacterName(cr.getCharacterName());
+                cast.setBillingOrder(cr.getBillingOrder());
+            } else {
+                cast = MovieCast.builder()
+                        .movie(movie)
+                        .person(personsById.get(key.personId()))
+                        .roleType(key.roleType())
+                        .characterName(cr.getCharacterName())
+                        .billingOrder(cr.getBillingOrder())
+                        .build();
+            }
+            result.add(movieCastRepository.save(cast));
+        }
+
+        List<MovieCast> toRemove = existing.stream()
+                .filter(c -> !byKey.containsKey(new CastKey(c.getPerson().getPersonId(), c.getRoleType().toUpperCase())))
+                .collect(Collectors.toList());
+        if (!toRemove.isEmpty()) movieCastRepository.deleteAll(toRemove);
+
+        movie.setCast(result);
     }
 
     // ── Status transitions ────────────────────────────────────
