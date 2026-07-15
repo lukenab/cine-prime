@@ -663,9 +663,9 @@ movieservice/
 
 | Method | Path | Auth | Service call |
 |--------|------|------|-------------|
-| GET | `/api/movies/tmdb/search?q=` | ADMIN | `search()` |
-| GET | `/api/movies/tmdb/{tmdbId}/details` | ADMIN | `getDetails()` |
-| POST | `/api/movies/tmdb/import` | ADMIN | `importMovie()` |
+| GET | `/api/movies/tmdb/search?q=` | ADMIN, EMPLOYEE | `search()` |
+| GET | `/api/movies/tmdb/{tmdbId}/details` | ADMIN, EMPLOYEE | `getDetails()` |
+| POST | `/api/movies/tmdb/import` | ADMIN, EMPLOYEE | `importMovie()` |
 
 ---
 

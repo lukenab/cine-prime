@@ -22,7 +22,7 @@ public class TmdbController {
     private final TmdbService tmdbService;
 
     /** Tìm phim trên TMDB theo từ khoá */
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @GetMapping("/search")
     public ApiResponse<List<TmdbSearchResultItem>> search(@RequestParam String q) {
         return ApiResponse.<List<TmdbSearchResultItem>>builder()
@@ -32,7 +32,7 @@ public class TmdbController {
     }
 
     /** Danh sach phim dang chieu rap (Now Playing) theo khu vuc - dung cho man hinh "Browse & Import" */
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @GetMapping("/now-playing")
     public ApiResponse<List<TmdbSearchResultItem>> nowPlaying(
             @RequestParam(defaultValue = "VN") String region,
@@ -44,7 +44,7 @@ public class TmdbController {
     }
 
     /** Danh sach phim sap ra mat (Upcoming) theo khu vuc - tab thu 2 cua man hinh "Browse & Import" */
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @GetMapping("/upcoming")
     public ApiResponse<List<TmdbSearchResultItem>> upcoming(
             @RequestParam(defaultValue = "VN") String region,
@@ -55,7 +55,7 @@ public class TmdbController {
                 .build();
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @GetMapping("/{tmdbId}/details")
     public ApiResponse<TmdbMovieDetailsResponse> getDetails(@PathVariable Integer tmdbId) {
         return ApiResponse.<TmdbMovieDetailsResponse>builder()
@@ -65,7 +65,7 @@ public class TmdbController {
     }
 
     /** Import phim từ TMDB vào DB với status=DRAFT */
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @PostMapping("/import")
     public ApiResponse<TmdbImportResponse> importMovie(@Valid @RequestBody TmdbImportRequest request) {
         return ApiResponse.<TmdbImportResponse>builder()

@@ -117,14 +117,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const logout = () => {
-        authApi.logout().catch(() => {});
+        const token = localStorage.getItem("accessToken");
+        authApi.logout(token).catch(() => {});
 
         localStorage.removeItem("accessToken");
         localStorage.removeItem("role");
         localStorage.removeItem("jwt_token");
         setUser(null);
         setNeedsProfileSetup(false);
-        window.location.href = "/login";
     };
 
     return (

@@ -55,12 +55,12 @@ export function Header({ activePage, isDarkMode = true, onToggleTheme }: HeaderP
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-    const { user, logout } = useAuth();
+  const { user, logout } = useAuth();
 
-const handleLogout = () => {
-    logout();               
-    setIsProfileOpen(false); 
-    navigate("/login");     
+  const handleLogout = () => {
+    logout();
+    setIsProfileOpen(false);
+    navigate("/login", { replace: true });
   };
 
   return (

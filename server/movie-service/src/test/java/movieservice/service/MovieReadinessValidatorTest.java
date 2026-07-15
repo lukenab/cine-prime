@@ -148,6 +148,18 @@ class MovieReadinessValidatorTest {
     }
 
     @Test
+    void approvalGateAcceptsTranslatedSynopsisWhenCanonicalSynopsisIsMissing() {
+        Movie movie = completeMovie();
+        movie.setSynopsis(null);
+        movie.setTranslations(List.of(MovieTranslation.builder()
+                .title("Am Anh")
+                .synopsis("A localized synopsis.")
+                .build()));
+
+        assertDoesNotThrow(() -> validator(false).requireReadyForApproval(movie));
+    }
+
+    @Test
     void approvalGateBlocksOnMissingAgeRatingPosterSynopsisAndTranslation() {
         Movie movie = completeMovie();
         movie.setAgeRating(null);

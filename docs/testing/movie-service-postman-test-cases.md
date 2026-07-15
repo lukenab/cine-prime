@@ -1095,7 +1095,9 @@ Import body:
 | TMDB-04 | Import same ID twice | 409, code 2021 |
 | TMDB-05 | Missing tmdbId | 400 |
 | TMDB-06 | Invalid/unreachable TMDB | 502, code 2022 |
-| TMDB-07 | Call as EMPLOYEE/public | 403/401 |
+| TMDB-07 | Browse/details/import as EMPLOYEE | 200 |
+| TMDB-08 | Call as public/unauthenticated user | 401 |
+| TMDB-09 | Sync genres as EMPLOYEE | 403 |
 
 These cases require outbound network access and a valid TMDB API key.
 

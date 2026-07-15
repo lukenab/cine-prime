@@ -333,7 +333,7 @@ Trung tâm toàn bộ business logic của phim. Mọi rule nghiệp vụ về p
 
 **Purpose**
 
-Cung cấp 3 endpoint phục vụ quy trình import phim 2 bước từ The Movie Database (TMDB). Toàn bộ endpoint yêu cầu quyền `ADMIN`.
+Cung cấp các endpoint phục vụ quy trình browse và import phim từ The Movie Database (TMDB). Quyền `ADMIN` hoặc `EMPLOYEE` được phép browse/search/details/import; đồng bộ taxonomy genre vẫn chỉ dành cho `ADMIN`.
 
 **Responsibility**
 

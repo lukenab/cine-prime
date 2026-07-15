@@ -15,6 +15,35 @@ type Props = {
 
 const MIN_NOTE_LENGTH = 10;
 
+const READINESS_FIELD_LABELS: Record<string, string> = {
+  ageRating: "age rating",
+  poster: "poster",
+  synopsis: "synopsis",
+  translations: "localized title",
+  genres: "genre",
+  formats: "screening format",
+  originalTitle: "original title",
+  originalLanguage: "original language",
+  durationMinutes: "duration",
+  releaseDate: "release date",
+};
+
+function approvalErrorMessage(err: any) {
+  const response = err?.response?.data;
+  const violations = response?.result?.violations;
+  if (!Array.isArray(violations) || violations.length === 0) {
+    return response?.message ?? "Approve failed.";
+  }
+
+  const fields = [...new Set(
+    violations.map((violation: { field?: string }) =>
+      READINESS_FIELD_LABELS[violation.field ?? ""] ?? violation.field
+    ).filter(Boolean)
+  )];
+
+  return `${response?.message ?? "Movie is not ready for approval."} Check: ${fields.join(", ")}.`;
+}
+
 const FL: React.CSSProperties = {
   fontSize: "10.5px", fontWeight: 600, letterSpacing: "0.07em",
   textTransform: "uppercase", color: "var(--text-sub)", marginBottom: "4px",
@@ -57,7 +86,7 @@ export function PendingReviewModal({ open, movie, loading, onClose, onApprove, o
       setNote("");
       onClose();
     } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? "Approve failed.");
+      toast.error(approvalErrorMessage(err));
     } finally {
       setSubmitting(null);
     }

@@ -76,7 +76,8 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
   }, [user?.role]);
 
   const handleLogout = () => {
-    void logout();
+    logout();
+    navigate("/login", { replace: true });
   };
 
   return (

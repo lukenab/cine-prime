@@ -112,10 +112,13 @@ public class MovieReadinessValidator {
         if (isBlank(movie.getPosterUrl())) {
             violations.add(violation("poster", "PRIMARY_IMAGE_REQUIRED"));
         }
-        if (isBlank(movie.getSynopsis())) {
+        List<MovieTranslation> translations = movie.getTranslations();
+        boolean hasSynopsis = !isBlank(movie.getSynopsis())
+                || (translations != null && translations.stream()
+                .anyMatch(t -> !isBlank(t.getSynopsis())));
+        if (!hasSynopsis) {
             violations.add(violation("synopsis", "REQUIRED_FOR_APPROVAL"));
         }
-        List<MovieTranslation> translations = movie.getTranslations();
         boolean hasLocalizedTitle = translations != null && translations.stream()
                 .anyMatch(t -> t.getTitle() != null && !t.getTitle().isBlank());
         if (!hasLocalizedTitle) {
