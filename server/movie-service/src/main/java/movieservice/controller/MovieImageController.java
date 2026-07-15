@@ -9,6 +9,7 @@ import movieservice.dto.request.MovieImageRequest;
 import movieservice.dto.response.MovieImageResponse;
 import movieservice.entity.Movie;
 import movieservice.entity.MovieImage;
+import movieservice.enums.MovieImageType;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.MovieImageRepository;
 import movieservice.repository.MovieRepository;
@@ -50,7 +51,7 @@ public class MovieImageController {
         MovieImage image = MovieImage.builder()
                 .movie(movie)
                 .imageUrl(request.getImageUrl())
-                .imageType(request.getImageType() != null ? request.getImageType() : "STILL")
+                .imageType(request.getImageType() != null ? request.getImageType() : MovieImageType.STILL)
                 .displayOrder(request.getDisplayOrder())
                 .caption(request.getCaption())
                 .build();

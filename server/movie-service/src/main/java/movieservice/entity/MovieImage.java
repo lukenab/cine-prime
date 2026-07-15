@@ -5,6 +5,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDateTime;
+import movieservice.enums.MovieImageType;
 
 @Entity
 @Table(name = "movie_image")
@@ -28,9 +29,10 @@ public class MovieImage {
     @Column(name = "image_url", nullable = false, length = 500)
     String imageUrl;
 
-    // POSTER | BACKDROP | STILL | PROMOTIONAL
+    // POSTER | BACKDROP | STILL | PROMOTIONAL | LOGO
+    @Enumerated(EnumType.STRING)
     @Column(name = "image_type", nullable = false, length = 30)
-    String imageType;
+    MovieImageType imageType;
 
     @Column(name = "display_order")
     Integer displayOrder;

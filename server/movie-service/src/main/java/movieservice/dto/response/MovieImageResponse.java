@@ -2,6 +2,7 @@ package movieservice.dto.response;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import movieservice.enums.MovieImageType;
 
 @Data
 @NoArgsConstructor
@@ -11,7 +12,7 @@ import lombok.experimental.FieldDefaults;
 public class MovieImageResponse {
     Long imageId;
     String imageUrl;
-    String imageType;
+    MovieImageType imageType;
     Integer displayOrder;
     String caption;
 }
