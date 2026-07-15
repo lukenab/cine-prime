@@ -57,12 +57,12 @@ axiosClient.interceptors.response.use(
     const originalRequest = error.config;
     const url: string = originalRequest?.url ?? "";
 
-    // Never try to refresh on public auth endpoints
-    const isPublicAuthCall = ["auth/login", "auth/register", "auth/resend", "auth/refresh", "auth/check"].some(
+    // Auth lifecycle endpoints must never enter the refresh flow.
+    const shouldSkipRefresh = ["auth/login", "auth/register", "auth/resend", "auth/refresh", "auth/check", "auth/logout"].some(
       (s) => url.includes(s)
     );
 
-    if (error?.response?.status === 401 && !isPublicAuthCall && !originalRequest._retry) {
+    if (error?.response?.status === 401 && !shouldSkipRefresh && !originalRequest._retry) {
       originalRequest._retry = true;
 
       const currentToken = localStorage.getItem("accessToken");

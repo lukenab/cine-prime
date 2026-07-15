@@ -116,9 +116,10 @@ export const authApi = {
         return axiosClient.put(`/api/accounts/${accountId}`, payload);
     },
 
-    logout: () => {
-
-        return axiosClient.post('/api/auth/logout');
+    logout: (token?: string | null) => {
+        return axiosClient.post('/api/auth/logout', undefined, token ? {
+            headers: { Authorization: `Bearer ${token}` },
+        } : undefined);
     },
 
     refresh: (token: string) => {

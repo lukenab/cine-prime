@@ -92,6 +92,7 @@ const emptyForm: FormState = {
 function movieToForm(mv: MovieV2): FormState {
   const vi = mv.translations?.find((t) => t.languageCode === "vi");
   const en = mv.translations?.find((t) => t.languageCode === "en");
+  const originalIsVietnamese = mv.originalLanguage?.toLowerCase() === "vi";
   return {
     originalTitle: mv.originalTitle ?? "",
     originalLanguage: mv.originalLanguage ?? "en",
@@ -110,9 +111,9 @@ function movieToForm(mv: MovieV2): FormState {
     tmdbId: mv.tmdbId,
     imdbId: mv.imdbId,
     vi_title: vi?.title ?? "",
-    vi_synopsis: vi?.synopsis ?? "",
+    vi_synopsis: vi?.synopsis ?? (originalIsVietnamese ? mv.synopsis : "") ?? "",
     en_title: en?.title ?? "",
-    en_synopsis: en?.synopsis ?? "",
+    en_synopsis: en?.synopsis ?? (!originalIsVietnamese ? mv.synopsis : "") ?? "",
     cast:
       mv.cast?.map((c, i) => ({
         _key: `${c.personId}-${i}`,
@@ -392,6 +393,10 @@ export function MovieModal({
     if (form.en_title.trim())
       translations.push({ languageCode: "en", title: form.en_title.trim(), synopsis: form.en_synopsis.trim() || undefined });
 
+    const canonicalSynopsis = form.originalLanguage.toLowerCase() === "vi"
+      ? form.vi_synopsis.trim() || form.en_synopsis.trim()
+      : form.en_synopsis.trim() || form.vi_synopsis.trim();
+
     return {
       originalTitle: form.originalTitle.trim(),
       originalLanguage: form.originalLanguage,
@@ -406,6 +411,7 @@ export function MovieModal({
       posterUrl: form.posterUrl.trim() || undefined,
       thumbnailUrl: form.thumbnailUrl.trim() || undefined,
       trailerUrl: form.trailerUrl.trim() || undefined,
+      synopsis: canonicalSynopsis || undefined,
       tmdbId: form.tmdbId,
       imdbId: form.imdbId,
       translations: translations.length ? translations : undefined,
@@ -517,6 +523,10 @@ export function MovieModal({
       const details = response.result;
       const vietnamese = details.translations?.find((translation) => translation.languageCode === "vi");
       const english = details.translations?.find((translation) => translation.languageCode === "en");
+      const resolvedGenreIds = details.genres
+        ? details.genres.flatMap((genre) => genre.localGenreId != null ? [genre.localGenreId] : [])
+        : (details.genreIds ?? []);
+      const unresolvedGenres = details.genres?.filter((genre) => genre.localGenreId == null) ?? [];
 
       // Issue #188: preview khong con tra san companyId/cast[].personId da-tao-truoc nua
       // (backend fix ngan preview tu upsert Company/Person). Company dau tien duoc "khop thu"
@@ -544,7 +554,7 @@ export function MovieModal({
         thumbnailUrl: details.posterUrl || item.posterUrl || p.thumbnailUrl,
         tmdbId: details.tmdbId,
         imdbId: details.imdbId,
-        genreIds: details.genreIds?.length ? details.genreIds : p.genreIds,
+        genreIds: resolvedGenreIds.length ? resolvedGenreIds : p.genreIds,
         ageRatingId: details.ageRatingId ?? p.ageRatingId,
         vi_title: vietnamese?.title ?? p.vi_title,
         vi_synopsis: vietnamese?.synopsis ?? p.vi_synopsis,
@@ -563,6 +573,11 @@ export function MovieModal({
           characterName: member.characterName ?? "",
         })),
       }));
+      if (unresolvedGenres.length > 0) {
+        setError(
+          `TMDB genres not mapped locally: ${unresolvedGenres.map((genre) => genre.name).join(", ")}. Please select a local genre manually.`
+        );
+      }
       setShowTmdb(false);
       setTmdbQ("");
       setTmdbResults([]);

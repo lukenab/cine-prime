@@ -64,6 +64,7 @@ export function Navbar() {
   const handleLogout = () => {
     logout();
     setDropdownOpen(false);
+    navigate("/login", { replace: true });
   };
 
   const handleSearch = (e: React.FormEvent) => {

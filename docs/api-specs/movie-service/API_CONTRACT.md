@@ -212,9 +212,9 @@
 
 | Method | Endpoint | Mô tả | Auth |
 |--------|----------|-------|------|
-| `GET` | `/api/movies/tmdb/search?q=` | Tìm phim trên TMDB theo từ khoá | ADMIN |
-| `GET` | `/api/movies/tmdb/{tmdbId}/details` | Lấy chi tiết phim từ TMDB | ADMIN |
-| `POST` | `/api/movies/tmdb/import` | Import phim từ TMDB vào DB với status=DRAFT | ADMIN |
+| `GET` | `/api/movies/tmdb/search?q=` | Tìm phim trên TMDB theo từ khoá | ADMIN, EMPLOYEE |
+| `GET` | `/api/movies/tmdb/{tmdbId}/details` | Lấy chi tiết phim từ TMDB | ADMIN, EMPLOYEE |
+| `POST` | `/api/movies/tmdb/import` | Import phim từ TMDB vào DB với status=DRAFT | ADMIN, EMPLOYEE |
 
 ---
 

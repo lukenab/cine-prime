@@ -344,6 +344,13 @@ export type TmdbCastPreview = {
   localPersonId?: number;
 };
 
+export type TmdbGenrePreview = {
+  tmdbGenreId: number;
+  name: string;
+  localGenreId?: number | null;
+  mappingStatus: "MAPPED" | "PENDING_REVIEW" | "UNMAPPED";
+};
+
 export type TmdbMovieDetails = {
   tmdbId: number;
   imdbId?: string;
@@ -357,8 +364,11 @@ export type TmdbMovieDetails = {
   companies?: TmdbCompanyPreview[];
   translations: TranslationResponse[];
   cast: TmdbCastPreview[];
+  genres?: TmdbGenrePreview[];
+  /** Backward-compatible fallback for the legacy preview contract. */
   genreIds?: number[];
   ageRatingId?: number;
+  warnings?: string[];
 };
 
 export type TranslationRequest = {
