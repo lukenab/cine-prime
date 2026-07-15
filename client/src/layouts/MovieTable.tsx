@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   Eye, Pencil, Trash2, ChevronLeft, ChevronRight, Clapperboard, Clock,
-  SendHorizonal, CheckCircle, XCircle, RotateCcw, AlertCircle,
+  SendHorizonal, ClipboardCheck, RotateCcw, AlertCircle,
 } from "lucide-react";
 import type { MovieApiResponse } from "../api/movieApi";
 import { formatDisplayDate } from "../api/movieApi";
@@ -17,8 +17,8 @@ type Props = {
   onEdit: (movie: MovieApiResponse) => void;
   onDelete: (id: number) => void;
   onSubmit: (id: number) => void;
-  onApprove: (id: number) => void;
-  onReject: (id: number, note: string) => void;
+  /** Opens the dedicated PendingReviewModal (approve/reject with rejection note) - see #139. */
+  onReviewClick: (movie: MovieApiResponse) => void;
   onRework: (id: number) => void;
   searchQuery: string;
   genreFilter: string;
@@ -65,47 +65,6 @@ function ConfirmModal({
   );
 }
 
-/* ── Text-input modal (Reject / Suspend) ────────────────────────────────── */
-function InputModal({
-  title, label, placeholder, confirmLabel, confirmColor, onConfirm, onCancel, icon: Icon, required = true,
-}: {
-  title: string; label: string; placeholder: string; confirmLabel: string;
-  confirmColor: string; onConfirm: (value: string) => void; onCancel: () => void;
-  icon: React.ElementType; required?: boolean;
-}) {
-  const [value, setValue] = useState("");
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.4)" }} onClick={onCancel}>
-      <div className="rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }} onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-center w-12 h-12 rounded-full mx-auto mb-4" style={{ background: `${confirmColor}18` }}>
-          <Icon size={22} style={{ color: confirmColor }} />
-        </div>
-        <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-main)", textAlign: "center", marginBottom: "16px" }}>{title}</h3>
-        <div className="mb-4">
-          <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-sub)", display: "block", marginBottom: "6px" }}>{label}</label>
-          <textarea
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder={placeholder}
-            rows={3}
-            autoFocus
-            className="w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 resize-none"
-            style={{ fontSize: "13px", background: "var(--bg-main)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
-          />
-        </div>
-        <div className="flex gap-3">
-          <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl border text-sm font-medium hover:opacity-80" style={{ color: "var(--text-main)", borderColor: "var(--border-color)", background: "transparent" }}>
-            Cancel
-          </button>
-          <button onClick={() => value.trim() || !required ? onConfirm(value.trim()) : null} disabled={required && !value.trim()} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: confirmColor }}>
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ── Icon action button ─────────────────────────────────────────────────── */
 function ActionBtn({ icon: Icon, title, onClick, color = "var(--text-sub)" }: {
   icon: React.ElementType; title: string; onClick: () => void; color?: string;
@@ -119,13 +78,13 @@ function ActionBtn({ icon: Icon, title, onClick, color = "var(--text-sub)" }: {
 
 /* ── Status-based action buttons ────────────────────────────────────────── */
 function MovieActions({
-  movie, onView, onEdit, onDelete, onSubmit, onApprove,
-  onRejectClick, onRework,
+  movie, onView, onEdit, onDelete, onSubmit,
+  onReviewClick, onRework,
 }: {
   movie: MovieApiResponse;
   onView: () => void; onEdit: () => void; onDelete: () => void;
-  onSubmit: () => void; onApprove: () => void;
-  onRejectClick: () => void; onRework: () => void;
+  onSubmit: () => void;
+  onReviewClick: () => void; onRework: () => void;
 }) {
   const { can } = useRole();
   const status = toMovieContentStatus(movie.movieStatus);
@@ -142,8 +101,8 @@ function MovieActions({
       </>}
 
       {status === "PENDING_REVIEW" && <>
-        {can.approve        && <ActionBtn icon={CheckCircle} title="Approve content"  onClick={onApprove}    color="#059669" />}
-        {can.requestChanges && <ActionBtn icon={XCircle}     title="Request changes" onClick={onRejectClick} color="#dc2626" />}
+        {(can.approve || can.requestChanges) &&
+          <ActionBtn icon={ClipboardCheck} title="Review submission" onClick={onReviewClick} color="#2563eb" />}
         {/* Employee sees only View while waiting for admin review */}
       </>}
 
@@ -162,12 +121,11 @@ function MovieActions({
 
 /* ══════════════════════════════════════════════════════════════════════════ */
 export function MovieTable({
-  movies, onView, onEdit, onDelete, onSubmit, onApprove, onReject,
+  movies, onView, onEdit, onDelete, onSubmit, onReviewClick,
   onRework, searchQuery, genreFilter, statusFilter,
 }: Props) {
   const [page, setPage] = useState(1);
   const [deleteTarget,  setDeleteTarget]  = useState<MovieApiResponse | null>(null);
-  const [rejectTarget,  setRejectTarget]  = useState<MovieApiResponse | null>(null);
 
   const filtered = movies.filter((m) => {
     const q = searchQuery.toLowerCase();
@@ -197,20 +155,6 @@ export function MovieTable({
           confirmColor="#ef4444"
           onConfirm={() => { onDelete(deleteTarget.movieId); setDeleteTarget(null); }}
           onCancel={() => setDeleteTarget(null)}
-        />
-      )}
-
-      {/* ── Request changes modal (legacy backend route: reject) ── */}
-      {rejectTarget && (
-        <InputModal
-          icon={XCircle}
-          title="Request Changes"
-          label="Review note (required)"
-          placeholder="Explain what must be updated before approval…"
-          confirmLabel="Request Changes"
-          confirmColor="#dc2626"
-          onConfirm={(note) => { onReject(rejectTarget.movieId, note); setRejectTarget(null); }}
-          onCancel={() => setRejectTarget(null)}
         />
       )}
 
@@ -337,8 +281,7 @@ export function MovieTable({
                           onEdit={() => onEdit(movie)}
                           onDelete={() => setDeleteTarget(movie)}
                           onSubmit={() => onSubmit(movie.movieId)}
-                          onApprove={() => onApprove(movie.movieId)}
-                          onRejectClick={() => setRejectTarget(movie)}
+                          onReviewClick={() => onReviewClick(movie)}
                           onRework={() => onRework(movie.movieId)}
                         />
                       </td>
