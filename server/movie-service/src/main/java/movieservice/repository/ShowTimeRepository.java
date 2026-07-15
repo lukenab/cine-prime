@@ -14,6 +14,7 @@ public interface ShowTimeRepository extends JpaRepository<ShowTime, Long> {
 
         @Query("SELECT COUNT(s) > 0 FROM ShowTime s WHERE s.cinemaRoom.cinemaRoomId = :roomId " +
                         "AND s.showDate = :showDate " +
+                        "AND s.status <> movieservice.enums.ShowTimeStatus.CANCELLED " +
                         "AND :startTime < s.endTime AND :endTime > s.startTime")
         boolean existsByCinemaRoomAndOverlappingTime(
                         @Param("roomId") Long roomId,
@@ -37,6 +38,7 @@ public interface ShowTimeRepository extends JpaRepository<ShowTime, Long> {
 
         @Query("SELECT COUNT(s) > 0 FROM ShowTime s WHERE s.cinemaRoom.cinemaRoomId = :roomId " +
                         "AND s.showDate = :showDate " +
+                        "AND s.status <> movieservice.enums.ShowTimeStatus.CANCELLED " +
                         "AND :startTime < s.endTime AND :endTime > s.startTime " +
                         "AND s.showTimeId <> :excludeId")
         boolean existsByCinemaRoomAndOverlappingTimeExcluding(
@@ -51,4 +53,15 @@ public interface ShowTimeRepository extends JpaRepository<ShowTime, Long> {
         List<ShowTime> findByMovieMovieId(Long movieId);
 
         List<ShowTime> findByMovieMovieIdAndShowDate(Long movieId, LocalDate showDate);
+
+        /** One query for bulk preview/create; cancelled showtimes do not block a room. */
+        @Query("SELECT s FROM ShowTime s " +
+                        "WHERE s.cinemaRoom.cinemaRoomId IN :roomIds " +
+                        "AND s.showDate BETWEEN :fromDate AND :toDate " +
+                        "AND s.status <> movieservice.enums.ShowTimeStatus.CANCELLED " +
+                        "ORDER BY s.cinemaRoom.cinemaRoomId, s.showDate, s.startTime")
+        List<ShowTime> findActiveByRoomsAndDateRange(
+                        @Param("roomIds") List<Long> roomIds,
+                        @Param("fromDate") LocalDate fromDate,
+                        @Param("toDate") LocalDate toDate);
 }
