@@ -1,0 +1,13 @@
+# Use this workspace to collaborate
+workspace:
+  id: f9422a6a-ee7a-4eac-8fbf-3e8606ec2ddf
+
+localResources:
+  collections:
+    - ../docs/testing/CinePrime-Issue162.postman_collection.json
+    - ../docs/testing/CinePrime-Movie-Creation.postman_collection.json
+  specs:
+    - ../docs/api-specs/auth-service/auth-service.yaml
+    - ../docs/api-specs/booking-service/booking-service.yaml
+    - ../docs/api-specs/movie-service/movie-service.yaml
+    - ../docs/api-specs/user-service/user-service.yaml
