@@ -98,6 +98,10 @@ public enum MovieErrorCode implements BaseErrorCode {
 
     DUPLICATE_CAST_ENTRY(2035,
             "Duplicate (personId, roleType) combination found in cast request.",
+            HttpStatus.BAD_REQUEST),
+
+    BULK_SHOWTIME_REQUEST_TOO_LARGE(2037,
+            "Bulk showtime request exceeds the allowed date range or candidate limit.",
             HttpStatus.BAD_REQUEST);
 
     int code;

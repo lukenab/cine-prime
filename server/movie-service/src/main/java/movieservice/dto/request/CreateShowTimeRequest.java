@@ -1,5 +1,7 @@
 package movieservice.dto.request;
 
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
 import lombok.AccessLevel;
 import lombok.Data;
@@ -32,5 +34,8 @@ public class CreateShowTimeRequest {
     String subtitleCode;
 
     /** Optional — overrides default seat price when provided. */
+    @DecimalMin(value = "0.01", message = "Base price must be greater than 0")
+    @Digits(integer = 8, fraction = 2,
+            message = "Base price must have at most 8 integer digits and 2 decimal places")
     BigDecimal basePrice;
 }
