@@ -12,4 +12,6 @@ public class GenreResponse {
     Long genreId;
     String genreCode;
     String genreName;
+    Integer tmdbGenreId;
+    String status;
 }

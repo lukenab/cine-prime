@@ -5,6 +5,8 @@ import movieservice.dto.request.CastRequest;
 import movieservice.dto.request.TranslationRequest;
 import movieservice.dto.request.UpdateMovieRequest;
 import movieservice.entity.*;
+import movieservice.enums.GenreStatus;
+import movieservice.enums.MovieStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.*;
@@ -331,5 +333,32 @@ class MovieServiceTest {
         // (rollback-on-unchecked-exception) phat huy dung tac dung nhu thiet ke.
         verify(movieRepository, never()).save(any(Movie.class));
         verify(movieMapper, never()).toMovieResponse(any());
+    }
+
+    // ── TMDB-FIX-03: submit-for-review blocked by a still-PENDING_REVIEW genre ──
+
+    @Test
+    void submitForReviewThrowsWhenMovieHasPendingReviewGenre() {
+        Genre pending = Genre.builder().genreId(50L).genreName("New Genre").genreCode("TMDB_878")
+                .status(GenreStatus.PENDING_REVIEW).build();
+        movie.setStatus(MovieStatus.DRAFT);
+        movie.setGenres(List.of(pending));
+
+        AppException ex = assertThrows(AppException.class, () -> movieService.submitForReview(1L, "admin"));
+
+        assertEquals(MovieErrorCode.GENRE_PENDING_REVIEW, ex.getErrorCode());
+        verify(movieRepository, never()).updateStatus(any(), any(), any());
+    }
+
+    @Test
+    void submitForReviewSucceedsWhenAllAttachedGenresAreActive() {
+        Genre active = Genre.builder().genreId(9L).genreName("Sci-Fi").genreCode("sci-fi")
+                .status(GenreStatus.ACTIVE).build();
+        movie.setStatus(MovieStatus.DRAFT);
+        movie.setGenres(List.of(active));
+
+        movieService.submitForReview(1L, "admin");
+
+        verify(movieRepository).updateStatus(1L, MovieStatus.PENDING_REVIEW, "admin");
     }
 }

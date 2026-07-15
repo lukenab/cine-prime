@@ -3,22 +3,34 @@ package movieservice.service;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.exception.AppException;
+import movieservice.dto.request.TmdbImportRequest;
 import movieservice.dto.response.TmdbCastPreview;
 import movieservice.dto.response.TmdbCompanyPreview;
+import movieservice.dto.response.TmdbGenrePreview;
+import movieservice.dto.response.TmdbGenreSyncResponse;
 import movieservice.dto.response.TmdbImportResponse;
 import movieservice.dto.response.TmdbMovieDetailsResponse;
 import movieservice.dto.response.TmdbSearchResultItem;
 import movieservice.dto.response.TranslationResponse;
+import movieservice.dto.tmdb.TmdbCastDraft;
+import movieservice.dto.tmdb.TmdbCompanyDraft;
 import movieservice.dto.tmdb.TmdbCreditsResponse;
+import movieservice.dto.tmdb.TmdbGenreDraft;
+import movieservice.dto.tmdb.TmdbGenreListResponse;
 import movieservice.dto.tmdb.TmdbMovieDetail;
+import movieservice.dto.tmdb.TmdbMovieDraft;
 import movieservice.dto.tmdb.TmdbReleaseDatesResponse;
 import movieservice.dto.tmdb.TmdbSearchResponse;
 import movieservice.dto.tmdb.TmdbTranslationsResponse;
+import movieservice.dto.tmdb.TranslationDraft;
 import movieservice.entity.*;
+import movieservice.enums.GenreStatus;
 import movieservice.enums.MovieStatus;
 import movieservice.exception.MovieErrorCode;
+import movieservice.mapper.TmdbDraftMapper;
 import movieservice.repository.*;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
@@ -30,6 +42,13 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * TMDB-FIX-02: getDetails() (preview) and importMovie() (the real import command) both fetch via
+ * fetchAll() and map via TmdbDraftMapper.toDraft() - the same pure, repository-free draft - so
+ * they cannot silently diverge on runtime, cast, translations or genre extraction. Everything
+ * downstream of the draft (matching companies/persons/genres/age-rating against the database) is
+ * local resolution and lives here, not in the mapper.
+ */
 @Service
 @Slf4j
 public class TmdbService {
@@ -39,15 +58,12 @@ public class TmdbService {
     private final MovieCastRepository movieCastRepository;
     private final PersonRepository personRepository;
     private final ProductionCompanyRepository productionCompanyRepository;
-    private final ScreeningFormatRepository screeningFormatRepository;
     private final GenreRepository genreRepository;
     private final AgeRatingRepository ageRatingRepository;
     private final String apiKey;
     private final RestTemplate restTemplate;
 
     private static final String TMDB_BASE = "https://api.themoviedb.org/3";
-    private static final String POSTER_BASE = "https://image.tmdb.org/t/p/w500";
-    private static final int MAX_CAST = 15;
 
     /**
      * Maps US MPAA certification → local VN rating code.
@@ -61,7 +77,8 @@ public class TmdbService {
             "NC-17", "T18"
     );
 
-    // TMDB genre ID → genre_code in local DB (stable slug, language-independent)
+    // TMDB genre ID → genre_code in local DB. Legacy/migration fallback only - genreRepository
+    // .findByTmdbGenreId() (Genre.tmdbGenreId, TMDB-FIX-03) is now the primary, stable match.
     private static final Map<Integer, String> TMDB_GENRE_CODES = Map.ofEntries(
             Map.entry(28,    "action"),
             Map.entry(12,    "adventure"),
@@ -90,7 +107,6 @@ public class TmdbService {
             MovieCastRepository movieCastRepository,
             PersonRepository personRepository,
             ProductionCompanyRepository productionCompanyRepository,
-            ScreeningFormatRepository screeningFormatRepository,
             GenreRepository genreRepository,
             AgeRatingRepository ageRatingRepository,
             @Value("${tmdb.api-key}") String apiKey) {
@@ -99,7 +115,6 @@ public class TmdbService {
         this.movieCastRepository = movieCastRepository;
         this.personRepository = personRepository;
         this.productionCompanyRepository = productionCompanyRepository;
-        this.screeningFormatRepository = screeningFormatRepository;
         this.genreRepository = genreRepository;
         this.ageRatingRepository = ageRatingRepository;
         this.apiKey = apiKey;
@@ -195,133 +210,143 @@ public class TmdbService {
                         .title(item.getTitle())
                         .originalTitle(item.getOriginalTitle())
                         .releaseDate(item.getReleaseDate())
-                        .posterUrl(buildPosterUrl(item.getPosterPath()))
+                        .posterUrl(item.getPosterPath() != null ? TmdbDraftMapper.POSTER_BASE + item.getPosterPath() : null)
                         .overview(item.getOverview())
                         .alreadyImported(item.getId() != null && existingIds.contains(item.getId()))
                         .build())
                 .collect(Collectors.toList());
     }
 
+    // ── Preview (read-only) ──────────────────────────────────────
+
     /**
      * Issue #188: preview thuan doc, KHONG duoc mo write transaction va KHONG duoc goi save()
-     * len bat ky repository nao - GET phai la safe/idempotent request dung nghia HTTP semantics.
-     * Truoc day method nay @Transactional va goi upsertCompany()/upsertPerson(), nghia la chi
-     * can admin mo modal xem preview la da phat sinh row moi trong production_company/person.
-     * Gio day company/cast chi duoc "tim thu" (read-only, khong tao moi) qua previewCompany()/
-     * previewCastMember() - localCompanyId/localPersonId tra ve null neu chua tung import truoc do.
-     * Viec tao that su (upsertCompany/upsertPerson) van con nguyen o importMovie(), chi chay
-     * khi admin da xac nhan command import/create.
+     * len bat ky repository nao. TMDB-FIX-02: dung chung fetchAll()+TmdbDraftMapper.toDraft() voi
+     * importMovie() nen khong the lech nhau ve runtime/cast/translations/genre. TMDB-FIX-03:
+     * genre unmapped van duoc tra ve (khong bi bo khoi preview), kem mappingStatus ro rang.
      */
     public TmdbMovieDetailsResponse getDetails(Integer tmdbId) {
-        TmdbMovieDetail detail = fetchMovieDetail(tmdbId);
-        TmdbCreditsResponse credits = fetchCredits(tmdbId);
-        TmdbTranslationsResponse translations = fetchTranslations(tmdbId);
+        TmdbFetchBundle bundle = fetchAll(tmdbId);
+        TmdbMovieDraft draft = TmdbDraftMapper.toDraft(bundle.detail(), bundle.credits(), bundle.translations());
 
-        List<TmdbCompanyPreview> companies = new ArrayList<>();
-        if (detail.getProductionCompanies() != null) {
-            for (TmdbMovieDetail.TmdbCompany company : detail.getProductionCompanies()) {
-                if (company.getName() != null && !company.getName().isBlank()) {
-                    companies.add(previewCompany(company));
-                }
-            }
-        }
+        List<TmdbCompanyPreview> companies = draft.getCompanies().stream()
+                .map(this::previewCompany)
+                .collect(Collectors.toList());
 
-        String country = detail.getProductionCountries() == null
-                ? null
-                : detail.getProductionCountries().stream()
-                        .map(TmdbMovieDetail.TmdbCountry::getName)
-                        .filter(Objects::nonNull)
-                        .filter(name -> !name.isBlank())
-                        .collect(Collectors.joining(", "));
+        List<TmdbCastPreview> cast = draft.getCast().stream()
+                .map(this::previewCastMember)
+                .collect(Collectors.toList());
 
-        List<Genre> matchedGenres = resolveGenres(detail.getGenres());
-        TmdbReleaseDatesResponse releaseDates = fetchReleaseDates(tmdbId);
-        AgeRating resolvedRating = resolveAgeRating(releaseDates);
+        List<GenreMatch> genreMatches = resolveGenreMatches(draft.getGenres());
+        List<TmdbGenrePreview> genrePreviews = genreMatches.stream()
+                .map(this::toGenrePreview)
+                .collect(Collectors.toList());
+
+        AgeRating resolvedRating = resolveAgeRating(bundle.releaseDates());
+
+        List<String> warnings = new ArrayList<>(draft.getWarnings());
+        genreMatches.stream()
+                .filter(m -> m.mappingStatus() == GenreMappingStatus.UNMAPPED)
+                .forEach(m -> warnings.add("GENRE_UNMAPPED:" + m.tmdbGenreId()));
 
         return TmdbMovieDetailsResponse.builder()
                 .tmdbId(tmdbId)
-                .imdbId(detail.getImdbId())
-                .originalTitle(detail.getOriginalTitle())
-                .originalLanguage(detail.getOriginalLanguage())
-                .durationMinutes(detail.getRuntime())
-                .releaseDate(detail.getReleaseDate())
-                .country(country)
-                .posterUrl(buildPosterUrl(detail.getPosterPath()))
-                .overview(detail.getOverview())
+                .imdbId(draft.getImdbId())
+                .originalTitle(draft.getOriginalTitle())
+                .originalLanguage(draft.getOriginalLanguage())
+                .durationMinutes(draft.getRuntimeMinutes())
+                .releaseDate(draft.getReleaseDate())
+                .country(draft.getCountry())
+                .posterUrl(draft.getPosterUrl())
+                .overview(draft.getOverview())
                 .companies(companies)
-                .translations(buildTranslationPreview(detail, translations))
-                .cast(buildCastPreview(credits))
-                .genreIds(matchedGenres.stream().map(Genre::getGenreId).collect(Collectors.toList()))
+                .translations(toTranslationResponses(draft.getTranslations()))
+                .cast(cast)
+                .genres(genrePreviews)
                 .ageRatingId(resolvedRating != null ? resolvedRating.getRatingId() : null)
+                .warnings(warnings)
                 .build();
     }
 
     // ── Import ────────────────────────────────────────────────
 
     @Transactional
-    public TmdbImportResponse importMovie(Integer tmdbId) {
-        // 1. Duplicate check
+    public TmdbImportResponse importMovie(TmdbImportRequest request) {
+        Integer tmdbId = request.getTmdbId();
+
+        // 1. Duplicate check by tmdbId (cheap, before any HTTP call)
         if (movieRepository.existsByTmdbId(tmdbId)) {
             throw new AppException(MovieErrorCode.TMDB_MOVIE_ALREADY_EXISTS);
         }
 
-        // 2. Fetch from TMDB
-        TmdbMovieDetail detail = fetchMovieDetail(tmdbId);
-        TmdbCreditsResponse credits = fetchCredits(tmdbId);
-        TmdbTranslationsResponse translationsResp = fetchTranslations(tmdbId);
+        // 2. Fetch + map - same pipeline as preview, cannot diverge
+        TmdbFetchBundle bundle = fetchAll(tmdbId);
+        TmdbMovieDraft draft = TmdbDraftMapper.toDraft(bundle.detail(), bundle.credits(), bundle.translations());
 
-        // 3. Upsert production companies
-        List<ProductionCompany> companies = new ArrayList<>();
-        if (detail.getProductionCompanies() != null) {
-            for (TmdbMovieDetail.TmdbCompany c : detail.getProductionCompanies()) {
-                if (c.getName() != null && !c.getName().isBlank()) {
-                    companies.add(upsertCompany(c));
-                }
+        // 2b. Duplicate check by imdbId (only known after fetch)
+        if (draft.getImdbId() != null && movieRepository.existsByImdbId(draft.getImdbId())) {
+            throw new AppException(MovieErrorCode.TMDB_MOVIE_ALREADY_EXISTS);
+        }
+
+        // 3. Runtime - never silently default to a placeholder (TMDB-FIX-02)
+        Integer runtimeMinutes = draft.getRuntimeMinutes();
+        if (runtimeMinutes == null) {
+            runtimeMinutes = request.getConfirmedRuntimeMinutes();
+            if (runtimeMinutes == null || runtimeMinutes <= 0) {
+                throw new AppException(MovieErrorCode.MISSING_RUNTIME);
             }
         }
 
-        // 4. Default 2D format
-        List<ScreeningFormat> formats = new ArrayList<>();
-        screeningFormatRepository.findByFormatCode("2D").ifPresent(formats::add);
+        // 4. Genres - never silently dropped, never auto-created ACTIVE (TMDB-FIX-03)
+        List<String> warnings = new ArrayList<>(draft.getWarnings());
+        List<Genre> resolvedGenres = resolveGenresForImport(
+                resolveGenreMatches(draft.getGenres()), request, warnings);
 
-        // 4b. Resolve TMDB genres to local genres
-        List<Genre> resolvedGenres = resolveGenres(detail.getGenres());
+        // 5. Companies (upsert - unchanged pre-existing limitation: Movie keeps only 1 company, see Update #151)
+        List<ProductionCompany> companies = new ArrayList<>();
+        for (TmdbCompanyDraft c : draft.getCompanies()) {
+            companies.add(upsertCompany(c));
+        }
 
-        // 4c. Resolve age rating from release dates
-        TmdbReleaseDatesResponse releaseDates = fetchReleaseDates(tmdbId);
-        AgeRating resolvedRating = resolveAgeRating(releaseDates);
+        // 6. Age rating - admin confirmation overrides auto-resolution
+        AgeRating resolvedRating;
+        if (request.getConfirmedAgeRatingId() != null) {
+            resolvedRating = ageRatingRepository.findById(request.getConfirmedAgeRatingId())
+                    .orElseThrow(() -> new AppException(MovieErrorCode.AGE_RATING_NOT_FOUND));
+        } else {
+            resolvedRating = resolveAgeRating(bundle.releaseDates());
+        }
 
-        // 5. Build & save movie
+        // 7. Screening format - never inferred from movie master; belongs to release-version/showtime
+        warnings.add("SCREENING_FORMAT_NOT_SET");
+
+        // 8. Build & save movie - DRAFT only, never auto-published
         Movie movie = Movie.builder()
                 .tmdbId(tmdbId)
-                .imdbId(detail.getImdbId())
-                .originalTitle(detail.getOriginalTitle())
-                .originalLanguage(detail.getOriginalLanguage() != null ? detail.getOriginalLanguage() : "en")
-                .durationMinutes(detail.getRuntime() != null && detail.getRuntime() > 0
-                        ? detail.getRuntime() : 90)
-                .releaseDate(parseDate(detail.getReleaseDate()))
-                .country(detail.getProductionCountries() == null
-                        ? null
-                        : detail.getProductionCountries().stream()
-                                .map(TmdbMovieDetail.TmdbCountry::getName)
-                                .filter(Objects::nonNull)
-                                .filter(name -> !name.isBlank())
-                                .collect(Collectors.joining(", ")))
-                .posterUrl(buildPosterUrl(detail.getPosterPath()))
-                .synopsis(detail.getOverview())
+                .imdbId(draft.getImdbId())
+                .originalTitle(draft.getOriginalTitle())
+                .originalLanguage(draft.getOriginalLanguage())
+                .durationMinutes(runtimeMinutes)
+                .releaseDate(parseDate(draft.getReleaseDate()))
+                .country(draft.getCountry())
+                .posterUrl(draft.getPosterUrl())
+                .synopsis(draft.getOverview())
                 .status(MovieStatus.DRAFT)
                 .company(companies.isEmpty() ? null : companies.get(0))
-                .formats(formats)
-                .genres(new ArrayList<>(resolvedGenres))
+                .formats(new ArrayList<>())
+                .genres(resolvedGenres)
                 .ageRating(resolvedRating)
                 .build();
-        movie = movieRepository.save(movie);
+        try {
+            movie = movieRepository.save(movie);
+        } catch (DataIntegrityViolationException e) {
+            // Closes the race window between the existsBy*() pre-checks above and this insert.
+            throw new AppException(MovieErrorCode.TMDB_MOVIE_ALREADY_EXISTS);
+        }
 
-        // 6. Translations
-        saveTranslations(movie, detail, translationsResp);
-
-        // 7. Cast (directors + top 15 actors)
-        int castCount = saveCast(movie, credits);
+        // 9. Translations + cast, fed from the same draft used for preview
+        saveTranslations(movie, draft.getTranslations());
+        int castCount = saveCast(movie, draft.getCast());
 
         return TmdbImportResponse.builder()
                 .movieId(movie.getMovieId())
@@ -330,10 +355,64 @@ public class TmdbService {
                 .status("DRAFT")
                 .importedCastCount(castCount)
                 .importedCompanyCount(companies.size())
+                .warnings(warnings)
                 .build();
     }
 
+    // ── Genre taxonomy sync (read-only report) ────────────────
+
+    /**
+     * TMDB-FIX-03: compares TMDB's full genre taxonomy against local Genre.tmdbGenreId mappings.
+     * Purely a report - never writes - so it's safe/idempotent regardless of concurrent imports.
+     */
+    public TmdbGenreSyncResponse syncGenres() {
+        URI uri = UriComponentsBuilder.fromHttpUrl(TMDB_BASE + "/genre/movie/list")
+                .queryParam("api_key", apiKey)
+                .queryParam("language", "en")
+                .build().toUri();
+        TmdbGenreListResponse response;
+        try {
+            response = restTemplate.getForObject(uri, TmdbGenreListResponse.class);
+        } catch (RestClientException e) {
+            log.error("TMDB genre list fetch failed: {}", e.getMessage());
+            throw new AppException(MovieErrorCode.TMDB_API_ERROR);
+        }
+        List<TmdbGenreListResponse.TmdbGenreEntry> entries =
+                response != null && response.getGenres() != null ? response.getGenres() : List.of();
+
+        int mapped = 0;
+        List<TmdbGenreSyncResponse.UnmappedGenre> unmapped = new ArrayList<>();
+        for (TmdbGenreListResponse.TmdbGenreEntry entry : entries) {
+            if (entry.getId() != null && genreRepository.findByTmdbGenreId(entry.getId()).isPresent()) {
+                mapped++;
+            } else {
+                unmapped.add(TmdbGenreSyncResponse.UnmappedGenre.builder()
+                        .tmdbGenreId(entry.getId())
+                        .name(entry.getName())
+                        .status("PENDING_REVIEW")
+                        .build());
+            }
+        }
+        return TmdbGenreSyncResponse.builder().mapped(mapped).unmapped(unmapped).build();
+    }
+
     // ── TMDB API calls ────────────────────────────────────────
+
+    private record TmdbFetchBundle(
+            TmdbMovieDetail detail,
+            TmdbCreditsResponse credits,
+            TmdbTranslationsResponse translations,
+            TmdbReleaseDatesResponse releaseDates) {
+    }
+
+    /** Groups the 4 HTTP calls behind getDetails()/importMovie() so both call the exact same fetch step. */
+    private TmdbFetchBundle fetchAll(Integer tmdbId) {
+        return new TmdbFetchBundle(
+                fetchMovieDetail(tmdbId),
+                fetchCredits(tmdbId),
+                fetchTranslations(tmdbId),
+                fetchReleaseDates(tmdbId));
+    }
 
     private TmdbMovieDetail fetchMovieDetail(Integer tmdbId) {
         URI uri = UriComponentsBuilder.fromHttpUrl(TMDB_BASE + "/movie/" + tmdbId)
@@ -376,47 +455,57 @@ public class TmdbService {
         }
     }
 
-    // ── Upsert helpers ────────────────────────────────────────
+    private TmdbReleaseDatesResponse fetchReleaseDates(Integer tmdbId) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(TMDB_BASE + "/movie/" + tmdbId + "/release_dates")
+                .queryParam("api_key", apiKey)
+                .build().toUri();
+        try {
+            TmdbReleaseDatesResponse r = restTemplate.getForObject(uri, TmdbReleaseDatesResponse.class);
+            return r != null ? r : new TmdbReleaseDatesResponse();
+        } catch (RestClientException e) {
+            log.warn("TMDB fetchReleaseDates failed for tmdbId={}: {}", tmdbId, e.getMessage());
+            return new TmdbReleaseDatesResponse();
+        }
+    }
 
-    private ProductionCompany upsertCompany(TmdbMovieDetail.TmdbCompany tmdbCompany) {
-        return productionCompanyRepository.findByName(tmdbCompany.getName())
+    // ── Company / person resolution ───────────────────────────
+
+    /** Real upsert - only ever called from importMovie(), never from preview. */
+    private ProductionCompany upsertCompany(TmdbCompanyDraft company) {
+        return productionCompanyRepository.findByName(company.getName())
                 .orElseGet(() -> {
                     ProductionCompany c = new ProductionCompany();
-                    c.setName(tmdbCompany.getName());
-                    c.setCountry(tmdbCompany.getOriginCountry());
-                    if (tmdbCompany.getLogoPath() != null) {
-                        c.setLogoUrl(POSTER_BASE + tmdbCompany.getLogoPath());
+                    c.setName(company.getName());
+                    c.setCountry(company.getCountry());
+                    if (company.getLogoUrl() != null) {
+                        c.setLogoUrl(company.getLogoUrl());
                     }
                     c.setCreatedAt(LocalDateTime.now());
                     return productionCompanyRepository.save(c);
                 });
     }
 
-    /**
-     * Issue #188: preview-only, read-only - KHONG duoc goi productionCompanyRepository.save().
-     * Chi tim company da ton tai theo ten (cung logic match voi upsertCompany() dung de import),
-     * neu chua co thi localCompanyId = null. Viec tao company that su van chi xay ra trong
-     * upsertCompany() (duoc goi tu importMovie()), khong doi.
-     */
-    private TmdbCompanyPreview previewCompany(TmdbMovieDetail.TmdbCompany tmdbCompany) {
-        ProductionCompany existing = productionCompanyRepository.findByName(tmdbCompany.getName()).orElse(null);
+    /** Issue #188: preview-only, read-only - KHONG duoc goi productionCompanyRepository.save(). */
+    private TmdbCompanyPreview previewCompany(TmdbCompanyDraft company) {
+        ProductionCompany existing = productionCompanyRepository.findByName(company.getName()).orElse(null);
         return TmdbCompanyPreview.builder()
-                .tmdbId(tmdbCompany.getId())
-                .name(tmdbCompany.getName())
-                .country(tmdbCompany.getOriginCountry())
-                .logoUrl(tmdbCompany.getLogoPath() != null ? POSTER_BASE + tmdbCompany.getLogoPath() : null)
+                .tmdbId(company.getTmdbId())
+                .name(company.getName())
+                .country(company.getCountry())
+                .logoUrl(company.getLogoUrl())
                 .localCompanyId(existing != null ? existing.getCompanyId() : null)
                 .build();
     }
 
-    private Person upsertPerson(Integer tmdbPersonId, String name, String profilePath) {
+    /** Real upsert - only ever called from importMovie(), never from preview. */
+    private Person upsertPerson(Integer tmdbPersonId, String name, String photoUrl) {
         return personRepository.findByTmdbId(tmdbPersonId)
                 .orElseGet(() -> {
                     Person p = new Person();
                     p.setTmdbId(tmdbPersonId);
                     p.setFullName(name);
-                    if (profilePath != null) {
-                        p.setPhotoUrl(POSTER_BASE + profilePath);
+                    if (photoUrl != null) {
+                        p.setPhotoUrl(photoUrl);
                     }
                     p.setCreatedAt(LocalDateTime.now());
                     p.setUpdatedAt(LocalDateTime.now());
@@ -424,115 +513,37 @@ public class TmdbService {
                 });
     }
 
-    private void saveTranslations(Movie movie, TmdbMovieDetail detail,
-            TmdbTranslationsResponse translationsResp) {
-
-        Map<String, TmdbTranslationsResponse.TranslationData> transMap = new HashMap<>();
-        if (translationsResp.getTranslations() != null) {
-            for (TmdbTranslationsResponse.Translation t : translationsResp.getTranslations()) {
-                if (("vi".equals(t.getIso6391()) || "en".equals(t.getIso6391()))
-                        && t.getData() != null
-                        && t.getData().getTitle() != null
-                        && !t.getData().getTitle().isBlank()) {
-                    transMap.put(t.getIso6391(), t.getData());
-                }
-            }
-        }
-
-        // English: fallback to originalTitle if TMDB has no en translation
-        String enTitle = transMap.containsKey("en")
-                ? transMap.get("en").getTitle()
-                : detail.getOriginalTitle();
-        String enOverview = transMap.containsKey("en")
-                ? transMap.get("en").getOverview()
-                : detail.getOverview();
-        saveOneTranslation(movie, "en", enTitle, enOverview);
-
-        // Vietnamese: only if TMDB has it
-        if (transMap.containsKey("vi")) {
-            TmdbTranslationsResponse.TranslationData vi = transMap.get("vi");
-            saveOneTranslation(movie, "vi", vi.getTitle(), vi.getOverview());
-        }
-    }
-
-    private List<TranslationResponse> buildTranslationPreview(
-            TmdbMovieDetail detail,
-            TmdbTranslationsResponse translationsResponse) {
-        Map<String, TmdbTranslationsResponse.TranslationData> translationMap = new HashMap<>();
-        if (translationsResponse.getTranslations() != null) {
-            translationsResponse.getTranslations().stream()
-                    .filter(item -> "vi".equals(item.getIso6391()) || "en".equals(item.getIso6391()))
-                    .filter(item -> item.getData() != null)
-                    .forEach(item -> translationMap.put(item.getIso6391(), item.getData()));
-        }
-
-        List<TranslationResponse> result = new ArrayList<>();
-        TmdbTranslationsResponse.TranslationData english = translationMap.get("en");
-        result.add(TranslationResponse.builder()
-                .languageCode("en")
-                .title(english != null && english.getTitle() != null
-                        ? english.getTitle() : detail.getOriginalTitle())
-                .synopsis(english != null && english.getOverview() != null
-                        ? english.getOverview() : detail.getOverview())
-                .build());
-
-        TmdbTranslationsResponse.TranslationData vietnamese = translationMap.get("vi");
-        if (vietnamese != null && vietnamese.getTitle() != null
-                && !vietnamese.getTitle().isBlank()) {
-            result.add(TranslationResponse.builder()
-                    .languageCode("vi")
-                    .title(vietnamese.getTitle())
-                    .synopsis(vietnamese.getOverview())
-                    .build());
-        }
-        return result;
-    }
-
     /**
-     * Issue #188: preview-only - KHONG goi upsertPerson() (se save() Person moi vao DB ngay
-     * khi admin chi xem preview). Chi tra du lieu tu TMDB kem localPersonId neu person do da
-     * tung duoc import truoc day (tim theo tmdbId, read-only qua personRepository.findByTmdbId).
-     * Neu chua co thi localPersonId = null - viec tao Person that su chi xay ra trong saveCast()
-     * (duoc goi tu importMovie()), khong doi.
+     * Issue #188: preview-only - KHONG goi upsertPerson(). Chi tra du lieu tu TMDB kem localPersonId
+     * neu person do da tung duoc import truoc day (tim theo tmdbId, read-only).
      */
-    private List<TmdbCastPreview> buildCastPreview(TmdbCreditsResponse credits) {
-        List<TmdbCastPreview> result = new ArrayList<>();
-        if (credits.getCrew() != null) {
-            credits.getCrew().stream()
-                    .filter(item -> "Director".equals(item.getJob()) && item.getId() != null)
-                    .forEach(item -> result.add(previewCastMember(
-                            item.getId(), item.getName(), item.getProfilePath(),
-                            "DIRECTOR", null, null)));
-        }
-        if (credits.getCast() != null) {
-            List<TmdbCreditsResponse.CastMember> actors = credits.getCast().stream()
-                    .filter(item -> item.getId() != null)
-                    .sorted(Comparator.comparingInt(
-                            item -> item.getOrder() != null ? item.getOrder() : 999))
-                    .limit(MAX_CAST)
-                    .toList();
-            for (int index = 0; index < actors.size(); index++) {
-                TmdbCreditsResponse.CastMember item = actors.get(index);
-                result.add(previewCastMember(
-                        item.getId(), item.getName(), item.getProfilePath(),
-                        "ACTOR", item.getCharacter(), index + 1));
-            }
-        }
-        return result;
-    }
-
-    private TmdbCastPreview previewCastMember(Integer tmdbPersonId, String name, String profilePath,
-            String roleType, String characterName, Integer billingOrder) {
-        Person existing = personRepository.findByTmdbId(tmdbPersonId).orElse(null);
+    private TmdbCastPreview previewCastMember(TmdbCastDraft cast) {
+        Person existing = personRepository.findByTmdbId(cast.getTmdbPersonId()).orElse(null);
         return TmdbCastPreview.builder()
-                .tmdbId(tmdbPersonId)
-                .fullName(existing != null ? existing.getFullName() : name)
-                .photoUrl(existing != null ? existing.getPhotoUrl() : buildPosterUrl(profilePath))
-                .roleType(roleType)
-                .characterName(characterName)
-                .billingOrder(billingOrder)
+                .tmdbId(cast.getTmdbPersonId())
+                .fullName(existing != null ? existing.getFullName() : cast.getName())
+                .photoUrl(existing != null ? existing.getPhotoUrl() : cast.getPhotoUrl())
+                .roleType(cast.getRoleType())
+                .characterName(cast.getCharacterName())
+                .billingOrder(cast.getBillingOrder())
                 .localPersonId(existing != null ? existing.getPersonId() : null)
                 .build();
+    }
+
+    private List<TranslationResponse> toTranslationResponses(List<TranslationDraft> drafts) {
+        return drafts.stream()
+                .map(t -> TranslationResponse.builder()
+                        .languageCode(t.getLanguageCode())
+                        .title(t.getTitle())
+                        .synopsis(t.getSynopsis())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    private void saveTranslations(Movie movie, List<TranslationDraft> translations) {
+        for (TranslationDraft t : translations) {
+            saveOneTranslation(movie, t.getLanguageCode(), t.getTitle(), t.getSynopsis());
+        }
     }
 
     private void saveOneTranslation(Movie movie, String langCode, String title, String synopsis) {
@@ -545,35 +556,13 @@ public class TmdbService {
         movieTranslationRepository.save(t);
     }
 
-    private int saveCast(Movie movie, TmdbCreditsResponse credits) {
+    private int saveCast(Movie movie, List<TmdbCastDraft> castDrafts) {
         int count = 0;
-
-        // Directors from crew
-        if (credits.getCrew() != null) {
-            for (TmdbCreditsResponse.CrewMember c : credits.getCrew()) {
-                if ("Director".equals(c.getJob()) && c.getId() != null) {
-                    Person person = upsertPerson(c.getId(), c.getName(), c.getProfilePath());
-                    saveCastEntry(movie, person, "DIRECTOR", null, null);
-                    count++;
-                }
-            }
+        for (TmdbCastDraft c : castDrafts) {
+            Person person = upsertPerson(c.getTmdbPersonId(), c.getName(), c.getPhotoUrl());
+            saveCastEntry(movie, person, c.getRoleType(), c.getCharacterName(), c.getBillingOrder());
+            count++;
         }
-
-        // Top actors
-        if (credits.getCast() != null) {
-            List<TmdbCreditsResponse.CastMember> top = credits.getCast().stream()
-                    .filter(c -> c.getId() != null)
-                    .sorted(Comparator.comparingInt(c -> (c.getOrder() != null ? c.getOrder() : 999)))
-                    .limit(MAX_CAST)
-                    .collect(Collectors.toList());
-            for (int i = 0; i < top.size(); i++) {
-                TmdbCreditsResponse.CastMember c = top.get(i);
-                Person person = upsertPerson(c.getId(), c.getName(), c.getProfilePath());
-                saveCastEntry(movie, person, "ACTOR", c.getCharacter(), i + 1);
-                count++;
-            }
-        }
-
         return count;
     }
 
@@ -590,19 +579,6 @@ public class TmdbService {
     }
 
     // ── Age rating resolution ─────────────────────────────────
-
-    private TmdbReleaseDatesResponse fetchReleaseDates(Integer tmdbId) {
-        URI uri = UriComponentsBuilder.fromHttpUrl(TMDB_BASE + "/movie/" + tmdbId + "/release_dates")
-                .queryParam("api_key", apiKey)
-                .build().toUri();
-        try {
-            TmdbReleaseDatesResponse r = restTemplate.getForObject(uri, TmdbReleaseDatesResponse.class);
-            return r != null ? r : new TmdbReleaseDatesResponse();
-        } catch (RestClientException e) {
-            log.warn("TMDB fetchReleaseDates failed for tmdbId={}: {}", tmdbId, e.getMessage());
-            return new TmdbReleaseDatesResponse();
-        }
-    }
 
     /**
      * Resolves local AgeRating from TMDB release dates.
@@ -643,44 +619,132 @@ public class TmdbService {
         return null;
     }
 
-    // ── Genre resolution ──────────────────────────────────────
+    // ── Genre resolution (shared by preview + import, TMDB-FIX-03) ────────
+
+    private enum GenreMappingStatus { MAPPED, PENDING_REVIEW, UNMAPPED }
+
+    private record GenreMatch(Integer tmdbGenreId, String name, Genre genre, GenreMappingStatus mappingStatus) {
+    }
 
     /**
-     * Matches a list of TMDB genre objects to local Genre entities.
-     * Strategy: (1) TMDB ID → genre_code lookup (language-independent),
-     *           (2) fallback: case-insensitive name match.
+     * Matches TMDB genre drafts to local Genre entities, in priority order:
+     *  (1) Genre.tmdbGenreId - stable, primary (TMDB-FIX-03).
+     *  (2) legacy TMDB_GENRE_CODES → genre_code - migration/fallback only.
+     *  (3) case-insensitive name match - fallback for custom/future genres.
+     * Unmatched genres are returned as UNMAPPED, never dropped from the result.
      */
-    private List<Genre> resolveGenres(List<TmdbMovieDetail.TmdbGenre> tmdbGenres) {
-        if (tmdbGenres == null || tmdbGenres.isEmpty()) return List.of();
-        // Build name lookup as fallback
+    private List<GenreMatch> resolveGenreMatches(List<TmdbGenreDraft> draftGenres) {
+        if (draftGenres == null || draftGenres.isEmpty()) return List.of();
+
         List<Genre> allLocal = genreRepository.findAll();
         Map<String, Genre> byNameLower = allLocal.stream()
                 .collect(Collectors.toMap(
                         g -> g.getGenreName().toLowerCase().trim(),
                         g -> g,
                         (a, b) -> a));
-        List<Genre> result = new ArrayList<>();
-        for (TmdbMovieDetail.TmdbGenre tg : tmdbGenres) {
-            Genre found = null;
-            // 1. Match by genre_code (stable, language-independent)
-            String code = TMDB_GENRE_CODES.get(tg.getId());
-            if (code != null) {
-                found = genreRepository.findByGenreCode(code).orElse(null);
+
+        List<GenreMatch> result = new ArrayList<>();
+        for (TmdbGenreDraft tg : draftGenres) {
+            Genre found = genreRepository.findByTmdbGenreId(tg.getTmdbGenreId()).orElse(null);
+            if (found == null) {
+                String code = TMDB_GENRE_CODES.get(tg.getTmdbGenreId());
+                if (code != null) {
+                    found = genreRepository.findByGenreCode(code).orElse(null);
+                }
             }
-            // 2. Fallback: case-insensitive name match (handles custom/future genres)
             if (found == null && tg.getName() != null) {
                 found = byNameLower.get(tg.getName().toLowerCase().trim());
             }
-            if (found != null && !result.contains(found)) result.add(found);
+
+            GenreMappingStatus status;
+            if (found == null) {
+                status = GenreMappingStatus.UNMAPPED;
+            } else if (found.getStatus() == GenreStatus.PENDING_REVIEW) {
+                status = GenreMappingStatus.PENDING_REVIEW;
+            } else {
+                status = GenreMappingStatus.MAPPED;
+            }
+            result.add(new GenreMatch(tg.getTmdbGenreId(), tg.getName(), found, status));
         }
         return result;
     }
 
-    // ── Utilities ─────────────────────────────────────────────
-
-    private String buildPosterUrl(String posterPath) {
-        return posterPath != null ? POSTER_BASE + posterPath : null;
+    private TmdbGenrePreview toGenrePreview(GenreMatch match) {
+        return TmdbGenrePreview.builder()
+                .tmdbGenreId(match.tmdbGenreId())
+                .name(match.name())
+                .localGenreId(match.genre() != null ? match.genre().getGenreId() : null)
+                .mappingStatus(match.mappingStatus().name())
+                .build();
     }
+
+    /**
+     * TMDB-FIX-03: resolves the final genre list for import. Already-matched genres attach
+     * directly; unmatched ones are resolved only via an explicit admin decision on the request
+     * (map to existing / create PENDING_REVIEW / ignore with reason) - anything left unresolved
+     * blocks the import instead of being silently dropped or silently created as ACTIVE.
+     */
+    private List<Genre> resolveGenresForImport(
+            List<GenreMatch> matches, TmdbImportRequest request, List<String> warnings) {
+
+        Map<Integer, Long> selected = request.getSelectedGenreMappings() != null
+                ? request.getSelectedGenreMappings() : Map.of();
+        List<Integer> createPending = request.getCreatePendingGenres() != null
+                ? request.getCreatePendingGenres() : List.of();
+        Map<Integer, String> ignored = request.getIgnoredGenres() != null
+                ? request.getIgnoredGenres() : Map.of();
+
+        List<Genre> resolved = new ArrayList<>();
+        List<Integer> unresolved = new ArrayList<>();
+
+        for (GenreMatch match : matches) {
+            if (match.genre() != null) {
+                resolved.add(match.genre());
+                continue;
+            }
+            Integer tmdbGenreId = match.tmdbGenreId();
+            if (selected.containsKey(tmdbGenreId)) {
+                Genre genre = genreRepository.findById(selected.get(tmdbGenreId))
+                        .orElseThrow(() -> new AppException(MovieErrorCode.GENRE_NOT_FOUND));
+                resolved.add(genre);
+            } else if (createPending.contains(tmdbGenreId)) {
+                resolved.add(createPendingReviewGenre(tmdbGenreId, match.name()));
+            } else if (ignored.containsKey(tmdbGenreId)) {
+                warnings.add("GENRE_IGNORED:" + tmdbGenreId + ":" + ignored.get(tmdbGenreId));
+            } else {
+                unresolved.add(tmdbGenreId);
+            }
+        }
+
+        if (!unresolved.isEmpty()) {
+            log.warn("importMovie(): unresolved TMDB genre mapping(s) {} - blocking import", unresolved);
+            throw new AppException(MovieErrorCode.UNRESOLVED_GENRE_MAPPING);
+        }
+        return resolved;
+    }
+
+    /** Creates a new PENDING_REVIEW genre for a TMDB genre with no local match yet. */
+    private Genre createPendingReviewGenre(Integer tmdbGenreId, String name) {
+        Optional<Genre> existing = genreRepository.findByTmdbGenreId(tmdbGenreId);
+        if (existing.isPresent()) return existing.get();
+
+        Genre genre = Genre.builder()
+                .genreName(name != null && !name.isBlank() ? name : ("TMDB Genre " + tmdbGenreId))
+                .genreCode("TMDB_" + tmdbGenreId)
+                .tmdbGenreId(tmdbGenreId)
+                .status(GenreStatus.PENDING_REVIEW)
+                .createdAt(LocalDateTime.now())
+                .build();
+        try {
+            return genreRepository.save(genre);
+        } catch (DataIntegrityViolationException e) {
+            // Concurrent import created the same TMDB genre first - reuse it instead of failing.
+            return genreRepository.findByTmdbGenreId(tmdbGenreId)
+                    .orElseThrow(() -> new AppException(MovieErrorCode.UNRESOLVED_GENRE_MAPPING));
+        }
+    }
+
+    // ── Utilities ─────────────────────────────────────────────
 
     private LocalDate parseDate(String dateStr) {
         if (dateStr == null || dateStr.isBlank()) return null;

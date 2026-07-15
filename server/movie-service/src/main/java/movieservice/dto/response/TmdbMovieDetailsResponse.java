@@ -20,6 +20,7 @@ public class TmdbMovieDetailsResponse {
     List<TmdbCompanyPreview> companies;
     List<TranslationResponse> translations;
     List<TmdbCastPreview> cast;
-    List<Long> genreIds;
+    List<TmdbGenrePreview> genres;
     Integer ageRatingId;
+    List<String> warnings;
 }
