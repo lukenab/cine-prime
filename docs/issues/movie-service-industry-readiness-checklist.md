@@ -455,6 +455,70 @@ Hiện `GET /showtimes/{id}/seats` có thể lazy-create `showtime_seat`, tức 
 
 ---
 
+## 4.1 Mapping với GitLab issues hiện có
+
+> Mapping theo Sprint 3 board được đối chiếu ngày 2026-07-14. `Direct` nghĩa issue cũ xử lý đúng trọng tâm; `Partial` nghĩa chỉ cover một phần và không nên đóng checklist item chỉ dựa vào issue đó.
+
+### Đã có issue trực tiếp hoặc gần trực tiếp
+
+| Checklist ID | GitLab issue hiện có | Board status | Mức khớp | Ghi chú |
+|---|---|---|---|---|
+| `MOV-01` | `#143` Fix `updateMovie()` | Ongoing | Direct | Cần xác nhận fix null-overwrite và collection replace semantics bằng test. |
+| `MOV-04` | `#122` Movie lifecycle management API; `#139` pending-review panel | Backend completed; Frontend ongoing | Partial | Đã có state transitions/UI review, nhưng chưa tách APPROVED khỏi public lifecycle và chưa chốt self-approval policy. |
+| `MOV-05` | `#131`, `#132`, `#133` end-date DB/backend/frontend; `#134` release-date scheduler | End-date completed; release scheduler ongoing | Direct | Auto-end có code; auto-release vẫn cần hoàn thành và test boundary/timezone/audit. |
+| `MOV-06` | `#141` actionType cho MovieActionLog; `#146` createdBy/updatedBy cho CinemaCluster; `#130` cluster workflow/audit | `#141/#146` ongoing; `#130` completed | Partial | Chưa chuẩn hóa actor thật, before/after, correlation ID và scheduler actor trên toàn module. |
+| `MOV-07` | `#151` Movie.company ManyToMany | Unstarted | Partial | Chỉ cover multiple companies; duplicate identity/external-ID merge vẫn chưa có issue riêng. |
+| `TMDB-02` | `#123` TMDB search/import; `#125` Create/Edit Movie UI với TMDB search | Completed | Partial | Search/enrichment đã có; provenance, safe re-sync và local override policy chưa có. |
+| `CLU-01` | `#130` Cinema Cluster approval workflow and audit log | Completed | Partial | Workflow đã có; cần xác nhận policy Admin self-approve và maker-checker bằng acceptance test. |
+| `ROOM-01` | `#120` CinemaRoom/Seat DB v2; `#162` link room với cluster; `#164` seat generation by room zone | Foundation completed; `#164` ongoing | Direct/Partial | `#164` là issue gần nhất với seat-zone mới; migration V14/runtime upgrade vẫn cần kiểm tra riêng. |
+| `ROOM-02` | `#163` nest room management under cluster; `#164` seat generation by room zone | `#163` completed; `#164` ongoing | Partial | Chưa cover layout editor, activation và layout versioning. |
+| `SEAT-01` | `#164` seat generation by room zone | Ongoing | Partial | Chưa cover Couple/Sofa capacity, seat group và atomic group purchase. |
+| `INV-02` | `#145` Add pessimistic locking to `ShowtimeSeat.lockSeats()` | Unstarted | Direct | Phải bổ sung validate seat thuộc showtime và rollback toàn selection, không chỉ thêm annotation lock. |
+| `ST-02` | `#135` Seat pricing per showtime | Review/QA | Partial | Pricing có issue; `formatId` và việc `basePrice` hiện bị ignore chưa được cover đầy đủ. |
+| `ST-03` | `#101` bulk showtime generation with conflict preview; `#121` ShowTime/ShowtimeSeat DB v2 | `#101` Review/QA; `#121` completed | Partial | Chưa cover cleanup buffer, overnight/business datetime và concurrent conflict semantics. |
+| `API-02` | `#95` standardize gateway error responses; `#126` update API contract; `#137` fix showtimeApi | `#95/#126` ongoing; `#137` completed | Partial | Cần đồng bộ HTTP/error contract ở movie-service, không chỉ gateway/docs/frontend. |
+
+### Issue cũ liên quan nhưng không thay thế checklist item
+
+| GitLab issue | Liên quan tới | Vì sao chưa đủ |
+|---|---|---|
+| `#140` Customer — Movie listing | `MOV-02` | Có UI listing nhưng chưa chứng minh direct-ID và generic GET không lộ phim nội bộ. |
+| `#136` Expose seat status management endpoint | `ROOM-04`, `SEAT-02` | Có thao tác status nhưng chưa có accessibility/companion rule hoặc operational propagation. |
+| `#144` Fix cinemaRoomName unique constraint | Baseline room integrity | Rule đã resolved; không cover layout/capacity/inventory. |
+| `#118`, `#119`, `#124` DB/Movie entity/CreateMovieRequest v2 | Movie foundation | Là refactor nền, không thay thế readiness, public visibility, lifecycle/audit tests. |
+| `#86`, `#87`, `#88`, `#127`, `#128`, `#129` Cinema Cluster DB/API/UI/validation/geocoding | Cluster foundation | Không cover room-list error handling hoặc showtime operational eligibility. |
+| `#142`, `#150`, `#152`, `#153` enum/tagline/image/person fields | Metadata quality | Là cải tiến dữ liệu riêng, không phải P0 lifecycle/inventory rules. |
+| `#149` Movie keyword search | Catalog UX | Không thay thế public/internal visibility authorization. |
+| `#96` API Gateway PATCH/CORS | API infrastructure | Không thay thế security matrix và resource authorization trong `API-01`. |
+
+### Chưa thấy issue tương ứng trên board — nên tạo mới
+
+- [ ] `SEC-01` — Externalize/rotate source-controlled secrets.
+- [ ] `DB-01` — Flyway/Liquibase runtime migrations và upgrade test.
+- [ ] `MOV-02` — Backend public visibility leak/direct-ID authorization.
+- [ ] `MOV-03` — Movie readiness validation trước submit/approve/release.
+- [ ] `MOV-07b` — Movie duplicate identity theo TMDB/title-year-language.
+- [ ] `MOV-08` — Vietnam classification/license metadata và C-rating gate.
+- [ ] `TMDB-01` — Browse Now Playing/Upcoming Vietnam không cần nhập keyword.
+- [ ] `CLU-02` — Cluster Detail không nuốt room API error thành empty state.
+- [ ] `ROOM-03` — Configurable capacity guardrails, bỏ mô tả 100/200/300 như chuẩn ngành.
+- [ ] `ROOM-04` — Block scheduling theo room maintenance/closed và xử lý affected showtimes.
+- [ ] `SEAT-01b` — Couple/Sofa capacity hoặc seat-group + all-or-nothing purchase.
+- [ ] `SEAT-02` — Accessible/wheelchair/companion layout and selection rules.
+- [ ] `ST-01` — Showtime eligibility gate theo movie/cluster/room status và release window.
+- [ ] `ST-02b` — Persist/enforce showtime `formatId` và fix ignored `basePrice`.
+- [ ] `ST-03b` — Trailer/cleaning buffer, business datetime và overlap semantics.
+- [ ] `ST-04` — Showtime ON_SALE/SUSPEND/CANCEL/COMPLETE lifecycle.
+- [ ] `INV-01` — Materialize showtime-seat khi tạo showtime; GET read-only.
+- [ ] `INV-03` — Hold owner/token/idempotency.
+- [ ] `INV-04` — Persisted expired-lock release scheduler.
+- [ ] `INV-05` — Capacity/sold/available reconciliation, đặc biệt với Couple.
+- [ ] `API-01` — Public/internal endpoint security matrix.
+- [ ] `TEST-01` — Full regression/concurrency test suite.
+- [ ] `OPS-01` — Scheduler/inventory observability và reconciliation metrics.
+
+---
+
 ## 5. Thứ tự thực hiện đề xuất
 
 ### Phase A — Làm hệ thống chạy đúng và không mất dữ liệu
