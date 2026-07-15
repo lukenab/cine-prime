@@ -16,6 +16,7 @@ import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.ClusterAuditLogRepository;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
@@ -29,7 +30,9 @@ public class CinemaClusterService {
     ClusterAuditLogRepository clusterAuditLogRepository;
     MovieMapper movieMapper;
 
-    public CinemaClusterResponse createCluster(CinemaClusterRequest req, String createdBy, Authentication authentication) {
+    @Transactional
+    public CinemaClusterResponse createCluster(CinemaClusterRequest req, Authentication authentication) {
+        String actor = getActor(authentication);
         String clusterName = req.getClusterName().trim();
         if (cinemaClusterRepository.existsByClusterNameIgnoreCase(clusterName)) {
             throw new AppException(MovieErrorCode.CLUSTER_NAME_EXISTED);
@@ -43,20 +46,22 @@ public class CinemaClusterService {
 
         ClusterStatus iniStatus = isAdminRole(authentication) ? ClusterStatus.ACTIVE : ClusterStatus.DRAFT;
         cluster.setStatus(iniStatus);
-        cluster.setCreatedBy(createdBy);
+        cluster.setCreatedBy(actor);
 
         CinemaCluster saved = cinemaClusterRepository.save(cluster);
 
-        logAction(saved.getClusterId(), ClusterAction.CREATE, createdBy,
+        logAction(saved.getClusterId(), ClusterAction.CREATE, actor,
                 null, iniStatus, null);
         return toResponseWithStats(saved);
     }
 
+    @Transactional
     public CinemaClusterResponse updateCluster(
             Long id,
             CinemaClusterRequest req,
-            String updatedBy,
             Authentication authentication) {
+
+        String actor = getActor(authentication);
 
         CinemaCluster cluster = cinemaClusterRepository.findById(id)
                 .orElseThrow(() -> new AppException(MovieErrorCode.CLUSTER_NOT_FOUND));
@@ -116,11 +121,11 @@ public class CinemaClusterService {
             cluster.setRejectionNote(null);
         }
 
-        cluster.setUpdatedBy(updatedBy);
+        cluster.setUpdatedBy(actor);
 
         CinemaCluster saved = cinemaClusterRepository.save(cluster);
 
-        logAction(saved.getClusterId(), action, updatedBy,
+        logAction(saved.getClusterId(), action, actor,
                 oldStatus, saved.getStatus(), null);
 
         return toResponseWithStats(saved);
@@ -140,6 +145,14 @@ public class CinemaClusterService {
 
         return authentication.getAuthorities().stream()
                 .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN"));
+    }
+
+    private String getActor(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return "UNKNOWN";
+        }
+
+        return authentication.getName();
     }
 
     private void logAction(

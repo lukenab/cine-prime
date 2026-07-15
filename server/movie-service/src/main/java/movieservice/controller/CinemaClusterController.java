@@ -98,11 +98,10 @@ public class CinemaClusterController {
     @PostMapping
     public ApiResponse<CinemaClusterResponse> create(
             @Valid @RequestBody CinemaClusterRequest req,
-            @RequestHeader(value = "X-User-Name", defaultValue = "unknown") String createdBy,
             Authentication authentication) {
         return ApiResponse.<CinemaClusterResponse>builder()
                 .code(201)
-                .result(cinemaClusterService.createCluster(req, createdBy, authentication))
+                .result(cinemaClusterService.createCluster(req, authentication))
                 .build();
     }
 
@@ -113,11 +112,10 @@ public class CinemaClusterController {
     public ApiResponse<CinemaClusterResponse> update(
             @PathVariable Long id,
             @Valid @RequestBody CinemaClusterRequest req,
-            @RequestHeader(value = "X-User-Name", defaultValue = "unknown") String updatedBy,
             Authentication authentication) {
         return ApiResponse.<CinemaClusterResponse>builder()
                 .code(200)
-                .result(cinemaClusterService.updateCluster(id, req, updatedBy, authentication))
+                .result(cinemaClusterService.updateCluster(id, req, authentication))
                 .build();
     }
 

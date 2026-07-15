@@ -476,17 +476,8 @@ paths:
       tags:
         - Cinema Cluster Controller
       summary: Create a cinema cluster
-      description: ADMIN creates an ACTIVE cluster; EMPLOYEE creates a DRAFT cluster. The X-User-Name header is saved as createdBy.
+      description: ADMIN creates an ACTIVE cluster; EMPLOYEE creates a DRAFT cluster. The authenticated JWT principal is saved as createdBy.
       operationId: createCinemaCluster
-      parameters:
-        - name: X-User-Name
-          in: header
-          required: false
-          description: Username recorded in createdBy. Defaults to unknown when omitted.
-          schema:
-            type: string
-            maxLength: 100
-            default: unknown
       requestBody:
         required: true
         content:
@@ -512,7 +503,7 @@ paths:
       tags:
         - Cinema Cluster Controller
       summary: Update a cinema cluster
-      description: Updates cluster data and saves the X-User-Name header as updatedBy while preserving createdBy.
+      description: Updates cluster data and saves the authenticated JWT principal as updatedBy while preserving createdBy.
       operationId: updateCinemaCluster
       parameters:
         - name: id
@@ -521,14 +512,6 @@ paths:
           schema:
             type: integer
             format: int64
-        - name: X-User-Name
-          in: header
-          required: false
-          description: Username recorded in updatedBy. Defaults to unknown when omitted.
-          schema:
-            type: string
-            maxLength: 100
-            default: unknown
       requestBody:
         required: true
         content:
@@ -731,10 +714,6 @@ components:
           minLength: 10
           maxLength: 255
           example: "123 Nguyễn Huệ, Quận 1"
-        phoneNumber:
-          type: string
-          pattern: "^1(900|800)[0-9]{4,6}$"
-          example: "19001234"
         latitude:
           type: number
           format: double
