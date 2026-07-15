@@ -17,10 +17,9 @@ public class TmdbMovieDetailsResponse {
     String country;
     String posterUrl;
     String overview;
-    Long companyId;
-    String companyName;
+    List<TmdbCompanyPreview> companies;
     List<TranslationResponse> translations;
-    List<CastResponse> cast;
+    List<TmdbCastPreview> cast;
     List<Long> genreIds;
     Integer ageRatingId;
 }

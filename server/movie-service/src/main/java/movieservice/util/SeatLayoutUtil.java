@@ -1,11 +1,6 @@
 package movieservice.util;
 
-/**
- * Bố trí lối đi (aisle) trong sơ đồ ghế — 3 khối/hàng (trái–giữa–phải), khối giữa
- * chiếm phần còn lại sau khi trừ 2 khối biên. Khớp thực tế CGV/Lotte cho phòng
- * 10-15 ghế/hàng. Thuần tính toán, không lưu DB — cùng cách colSpan được suy ra
- * từ SeatType thay vì thêm cột mới.
- */
+
 public final class SeatLayoutUtil {
 
     private static final float SIDE_BLOCK_RATIO = 0.25f;

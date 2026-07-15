@@ -319,6 +319,31 @@ export type TmdbSearchItem = {
   alreadyImported?: boolean;
 };
 
+/**
+ * Issue #188 - external preview DTO cho production company trong TMDB details preview.
+ * localCompanyId null/undefined nghia la company nay CHUA tung duoc import vao DB - KHONG
+ * phai loi. Preview (GET /tmdb/{id}/details) chi "khop thu" read-only, khong duoc tao moi;
+ * viec tao that su (neu can) chi xay ra luc admin bam Save (xem MovieModal.resolveCompanyId()).
+ */
+export type TmdbCompanyPreview = {
+  tmdbId: number;
+  name: string;
+  country?: string;
+  logoUrl?: string;
+  localCompanyId?: number;
+};
+
+/** Issue #188 - external preview DTO cho cast, cung nguyen tac voi TmdbCompanyPreview o tren. */
+export type TmdbCastPreview = {
+  tmdbId: number;
+  fullName: string;
+  photoUrl?: string;
+  roleType: string;
+  characterName?: string;
+  billingOrder?: number;
+  localPersonId?: number;
+};
+
 export type TmdbMovieDetails = {
   tmdbId: number;
   imdbId?: string;
@@ -329,10 +354,9 @@ export type TmdbMovieDetails = {
   country?: string;
   posterUrl?: string;
   overview?: string;
-  companyId?: number;
-  companyName?: string;
+  companies?: TmdbCompanyPreview[];
   translations: TranslationResponse[];
-  cast: CastResponse[];
+  cast: TmdbCastPreview[];
   genreIds?: number[];
   ageRatingId?: number;
 };

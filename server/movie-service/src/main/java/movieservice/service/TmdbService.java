@@ -3,7 +3,8 @@ package movieservice.service;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.exception.AppException;
-import movieservice.dto.response.CastResponse;
+import movieservice.dto.response.TmdbCastPreview;
+import movieservice.dto.response.TmdbCompanyPreview;
 import movieservice.dto.response.TmdbImportResponse;
 import movieservice.dto.response.TmdbMovieDetailsResponse;
 import movieservice.dto.response.TmdbSearchResultItem;
@@ -201,19 +202,26 @@ public class TmdbService {
                 .collect(Collectors.toList());
     }
 
-    @Transactional
+    /**
+     * Issue #188: preview thuan doc, KHONG duoc mo write transaction va KHONG duoc goi save()
+     * len bat ky repository nao - GET phai la safe/idempotent request dung nghia HTTP semantics.
+     * Truoc day method nay @Transactional va goi upsertCompany()/upsertPerson(), nghia la chi
+     * can admin mo modal xem preview la da phat sinh row moi trong production_company/person.
+     * Gio day company/cast chi duoc "tim thu" (read-only, khong tao moi) qua previewCompany()/
+     * previewCastMember() - localCompanyId/localPersonId tra ve null neu chua tung import truoc do.
+     * Viec tao that su (upsertCompany/upsertPerson) van con nguyen o importMovie(), chi chay
+     * khi admin da xac nhan command import/create.
+     */
     public TmdbMovieDetailsResponse getDetails(Integer tmdbId) {
         TmdbMovieDetail detail = fetchMovieDetail(tmdbId);
         TmdbCreditsResponse credits = fetchCredits(tmdbId);
         TmdbTranslationsResponse translations = fetchTranslations(tmdbId);
-        ProductionCompany primaryCompany = null;
+
+        List<TmdbCompanyPreview> companies = new ArrayList<>();
         if (detail.getProductionCompanies() != null) {
             for (TmdbMovieDetail.TmdbCompany company : detail.getProductionCompanies()) {
                 if (company.getName() != null && !company.getName().isBlank()) {
-                    ProductionCompany saved = upsertCompany(company);
-                    if (primaryCompany == null) {
-                        primaryCompany = saved;
-                    }
+                    companies.add(previewCompany(company));
                 }
             }
         }
@@ -240,8 +248,7 @@ public class TmdbService {
                 .country(country)
                 .posterUrl(buildPosterUrl(detail.getPosterPath()))
                 .overview(detail.getOverview())
-                .companyId(primaryCompany != null ? primaryCompany.getCompanyId() : null)
-                .companyName(primaryCompany != null ? primaryCompany.getName() : null)
+                .companies(companies)
                 .translations(buildTranslationPreview(detail, translations))
                 .cast(buildCastPreview(credits))
                 .genreIds(matchedGenres.stream().map(Genre::getGenreId).collect(Collectors.toList()))
@@ -385,6 +392,23 @@ public class TmdbService {
                 });
     }
 
+    /**
+     * Issue #188: preview-only, read-only - KHONG duoc goi productionCompanyRepository.save().
+     * Chi tim company da ton tai theo ten (cung logic match voi upsertCompany() dung de import),
+     * neu chua co thi localCompanyId = null. Viec tao company that su van chi xay ra trong
+     * upsertCompany() (duoc goi tu importMovie()), khong doi.
+     */
+    private TmdbCompanyPreview previewCompany(TmdbMovieDetail.TmdbCompany tmdbCompany) {
+        ProductionCompany existing = productionCompanyRepository.findByName(tmdbCompany.getName()).orElse(null);
+        return TmdbCompanyPreview.builder()
+                .tmdbId(tmdbCompany.getId())
+                .name(tmdbCompany.getName())
+                .country(tmdbCompany.getOriginCountry())
+                .logoUrl(tmdbCompany.getLogoPath() != null ? POSTER_BASE + tmdbCompany.getLogoPath() : null)
+                .localCompanyId(existing != null ? existing.getCompanyId() : null)
+                .build();
+    }
+
     private Person upsertPerson(Integer tmdbPersonId, String name, String profilePath) {
         return personRepository.findByTmdbId(tmdbPersonId)
                 .orElseGet(() -> {
@@ -464,21 +488,21 @@ public class TmdbService {
         return result;
     }
 
-    private List<CastResponse> buildCastPreview(TmdbCreditsResponse credits) {
-        List<CastResponse> result = new ArrayList<>();
+    /**
+     * Issue #188: preview-only - KHONG goi upsertPerson() (se save() Person moi vao DB ngay
+     * khi admin chi xem preview). Chi tra du lieu tu TMDB kem localPersonId neu person do da
+     * tung duoc import truoc day (tim theo tmdbId, read-only qua personRepository.findByTmdbId).
+     * Neu chua co thi localPersonId = null - viec tao Person that su chi xay ra trong saveCast()
+     * (duoc goi tu importMovie()), khong doi.
+     */
+    private List<TmdbCastPreview> buildCastPreview(TmdbCreditsResponse credits) {
+        List<TmdbCastPreview> result = new ArrayList<>();
         if (credits.getCrew() != null) {
             credits.getCrew().stream()
                     .filter(item -> "Director".equals(item.getJob()) && item.getId() != null)
-                    .forEach(item -> {
-                        Person person = upsertPerson(
-                                item.getId(), item.getName(), item.getProfilePath());
-                        result.add(CastResponse.builder()
-                                .personId(person.getPersonId())
-                                .fullName(person.getFullName())
-                                .photoUrl(person.getPhotoUrl())
-                                .roleType("DIRECTOR")
-                                .build());
-                    });
+                    .forEach(item -> result.add(previewCastMember(
+                            item.getId(), item.getName(), item.getProfilePath(),
+                            "DIRECTOR", null, null)));
         }
         if (credits.getCast() != null) {
             List<TmdbCreditsResponse.CastMember> actors = credits.getCast().stream()
@@ -489,19 +513,26 @@ public class TmdbService {
                     .toList();
             for (int index = 0; index < actors.size(); index++) {
                 TmdbCreditsResponse.CastMember item = actors.get(index);
-                Person person = upsertPerson(
-                        item.getId(), item.getName(), item.getProfilePath());
-                result.add(CastResponse.builder()
-                        .personId(person.getPersonId())
-                        .fullName(person.getFullName())
-                        .photoUrl(person.getPhotoUrl())
-                        .roleType("ACTOR")
-                        .characterName(item.getCharacter())
-                        .billingOrder(index + 1)
-                        .build());
+                result.add(previewCastMember(
+                        item.getId(), item.getName(), item.getProfilePath(),
+                        "ACTOR", item.getCharacter(), index + 1));
             }
         }
         return result;
+    }
+
+    private TmdbCastPreview previewCastMember(Integer tmdbPersonId, String name, String profilePath,
+            String roleType, String characterName, Integer billingOrder) {
+        Person existing = personRepository.findByTmdbId(tmdbPersonId).orElse(null);
+        return TmdbCastPreview.builder()
+                .tmdbId(tmdbPersonId)
+                .fullName(existing != null ? existing.getFullName() : name)
+                .photoUrl(existing != null ? existing.getPhotoUrl() : buildPosterUrl(profilePath))
+                .roleType(roleType)
+                .characterName(characterName)
+                .billingOrder(billingOrder)
+                .localPersonId(existing != null ? existing.getPersonId() : null)
+                .build();
     }
 
     private void saveOneTranslation(Movie movie, String langCode, String title, String synopsis) {
