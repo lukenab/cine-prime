@@ -505,8 +505,8 @@ ALTER TABLE show_time ADD CONSTRAINT no_overlapping_showtimes
         cinema_room_id WITH =,
         (daterange(show_date, show_date, '[]')) WITH &&,
         (tsrange(
-            show_date + start_time,
-            show_date + end_time
+            (show_date::TEXT || ' ' || start_time::TEXT)::TIMESTAMP,
+            (show_date::TEXT || ' ' || end_time::TEXT)::TIMESTAMP
         )) WITH &&
     )
     WHERE (status NOT IN ('CANCELLED'));
@@ -640,7 +640,7 @@ ON CONFLICT (genre_code) DO NOTHING;
 
 -- =============================================================================
 -- CINEMA CLUSTER SCHEMA
--- Mirrors migrations V3–V7 so a fresh movie_db has the current cluster schema.
+-- Mirrors migrations V3–V9 and V15 so a fresh movie_db has the current cluster schema.
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS cinema_cluster (
@@ -692,14 +692,21 @@ CREATE INDEX IF NOT EXISTS idx_cluster_audit_log_timestamp
 INSERT INTO cinema_cluster
         (cluster_id, cluster_name, province, address, phone_number, status, latitude, longitude)
 VALUES
-    (1, 'CinePrime Quận 1',    'TP. Hồ Chí Minh', '123 Nguyễn Huệ, Quận 1',       '19002001', 'ACTIVE',   10.7769660, 106.7009650),
-    (2, 'CinePrime Thủ Đức',   'TP. Hồ Chí Minh', '456 Võ Văn Ngân, TP. Thủ Đức', '19002002', 'ACTIVE',   10.8500000, 106.7716670),
-    (3, 'CinePrime Hoàn Kiếm', 'Hà Nội',          '78 Hàng Bài, Hoàn Kiếm',       '19002003', 'ACTIVE',   21.0285110, 105.8341600),
-    (4, 'CinePrime Cầu Giấy',  'Hà Nội',          '22 Xuân Thủy, Cầu Giấy',        '19002004', 'ACTIVE',   21.0363890, 105.7822220),
-    (5, 'CinePrime Hải Châu',  'Đà Nẵng',         '30 Trần Phú, Hải Châu',         '19002005', 'ACTIVE',   16.0680000, 108.2120000),
-    (6, 'CinePrime Ninh Kiều', 'Cần Thơ',         '15 Hai Bà Trưng, Ninh Kiều',    '19002006', 'INACTIVE', 10.0333330, 105.7833330)
+    (1, 'CinePrime Quận 1',    'TP. Hồ Chí Minh', '123 Nguyễn Huệ, Quận 1',       '19001000', 'ACTIVE',   10.7769660, 106.7009650),
+    (2, 'CinePrime Thủ Đức',   'TP. Hồ Chí Minh', '456 Võ Văn Ngân, TP. Thủ Đức', '19001000', 'ACTIVE',   10.8500000, 106.7716670),
+    (3, 'CinePrime Hoàn Kiếm', 'Hà Nội',          '78 Hàng Bài, Hoàn Kiếm',       '19001000', 'ACTIVE',   21.0285110, 105.8341600),
+    (4, 'CinePrime Cầu Giấy',  'Hà Nội',          '22 Xuân Thủy, Cầu Giấy',        '19001000', 'ACTIVE',   21.0363890, 105.7822220),
+    (5, 'CinePrime Hải Châu',  'Đà Nẵng',         '30 Trần Phú, Hải Châu',         '19001000', 'ACTIVE',   16.0680000, 108.2120000),
+    (6, 'CinePrime Ninh Kiều', 'Cần Thơ',         '15 Hai Bà Trưng, Ninh Kiều',    '19001000', 'INACTIVE', 10.0333330, 105.7833330)
 ON CONFLICT (cluster_id) DO NOTHING;
 
 SELECT setval(pg_get_serial_sequence('cinema_cluster', 'cluster_id'), 6, true);
 
 UPDATE cinema_room SET cluster_id = 1 WHERE cluster_id IS NULL;
+
+ALTER TABLE cinema_room
+    ADD CONSTRAINT uq_room_name_per_cluster
+    UNIQUE (cluster_id, cinema_room_name);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_cluster_name_ci
+    ON cinema_cluster (LOWER(cluster_name));
