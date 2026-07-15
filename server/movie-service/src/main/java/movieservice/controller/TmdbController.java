@@ -30,6 +30,30 @@ public class TmdbController {
                 .build();
     }
 
+    /** Danh sach phim dang chieu rap (Now Playing) theo khu vuc - dung cho man hinh "Browse & Import" */
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/now-playing")
+    public ApiResponse<List<TmdbSearchResultItem>> nowPlaying(
+            @RequestParam(defaultValue = "VN") String region,
+            @RequestParam(defaultValue = "1") int page) {
+        return ApiResponse.<List<TmdbSearchResultItem>>builder()
+                .code(200)
+                .result(tmdbService.getNowPlaying(region, page))
+                .build();
+    }
+
+    /** Danh sach phim sap ra mat (Upcoming) theo khu vuc - tab thu 2 cua man hinh "Browse & Import" */
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/upcoming")
+    public ApiResponse<List<TmdbSearchResultItem>> upcoming(
+            @RequestParam(defaultValue = "VN") String region,
+            @RequestParam(defaultValue = "1") int page) {
+        return ApiResponse.<List<TmdbSearchResultItem>>builder()
+                .code(200)
+                .result(tmdbService.getUpcoming(region, page))
+                .build();
+    }
+
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/{tmdbId}/details")
     public ApiResponse<TmdbMovieDetailsResponse> getDetails(@PathVariable Integer tmdbId) {

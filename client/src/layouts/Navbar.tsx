@@ -5,9 +5,15 @@ import { useAuth } from "../context/AuthContext";
 import { userApi } from "../api/userApi";
 
 const ACCENT = "#3b82f6";
-const navItems = [
+const navItems: { label: string; to: string; children?: { label: string; to: string }[] }[] = [
   { label: "Home", to: "/home" },
-  { label: "Movies", to: "/movies" },
+  {
+    label: "Movies", to: "/movies",
+    children: [
+      { label: "Now Showing", to: "/movies#now-showing" },
+      { label: "Coming Soon", to: "/movies#coming-soon" },
+    ],
+  },
   { label: "Cinemas", to: "/cinemas" },
   { label: "Events", to: "/events" },
   { label: "Offers", to: "/offers" },
@@ -112,18 +118,49 @@ export function Navbar() {
         </Link>
 
         <div className="hidden md:flex items-center gap-8">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                `${isActive ? "text-white" : "text-white/70"} hover:text-white transition-colors duration-200`
-              }
-              style={{ fontSize: "0.875rem", letterSpacing: "0.05em" }}
-            >
-              {item.label}
-            </NavLink>
-          ))}
+          {navItems.map((item) =>
+            item.children ? (
+              <div key={item.to} className="relative group">
+                <NavLink
+                  to={item.to}
+                  className={({ isActive }) =>
+                    `flex items-center gap-1 ${isActive ? "text-white" : "text-white/70"} hover:text-white transition-colors duration-200`
+                  }
+                  style={{ fontSize: "0.875rem", letterSpacing: "0.05em" }}
+                >
+                  {item.label}
+                  <ChevronDown size={13} className="transition-transform duration-200 group-hover:rotate-180" />
+                </NavLink>
+                {/* pt-3 bridges the gap to the panel below so the hover state survives moving the
+                    mouse from the link down into the dropdown, instead of closing mid-transit. */}
+                <div className="absolute left-0 top-full pt-3 opacity-0 invisible -translate-y-1 transition-all duration-150 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0">
+                  <div style={{ background: "#0f1117", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,0.6)", padding: 6, minWidth: 170 }}>
+                    {item.children.map((child) => (
+                      <Link
+                        key={child.to}
+                        to={child.to}
+                        className="block rounded-lg px-3 py-2.5 text-white/70 hover:text-white hover:bg-white/[0.06] transition-colors"
+                        style={{ fontSize: "0.85rem" }}
+                      >
+                        {child.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) =>
+                  `${isActive ? "text-white" : "text-white/70"} hover:text-white transition-colors duration-200`
+                }
+                style={{ fontSize: "0.875rem", letterSpacing: "0.05em" }}
+              >
+                {item.label}
+              </NavLink>
+            )
+          )}
         </div>
 
         <div className="hidden md:flex items-center gap-4">
@@ -289,16 +326,31 @@ export function Navbar() {
           </form>
 
           {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              onClick={() => setMenuOpen(false)}
-              className={({ isActive }) =>
-                `${isActive ? "text-white" : "text-white/70"} hover:text-white text-sm py-1`
-              }
-            >
-              {item.label}
-            </NavLink>
+            <div key={item.to}>
+              <NavLink
+                to={item.to}
+                onClick={() => setMenuOpen(false)}
+                className={({ isActive }) =>
+                  `${isActive ? "text-white" : "text-white/70"} hover:text-white text-sm py-1`
+                }
+              >
+                {item.label}
+              </NavLink>
+              {item.children && (
+                <div className="flex flex-col gap-1 pl-4 mt-1 border-l border-white/10">
+                  {item.children.map((child) => (
+                    <Link
+                      key={child.to}
+                      to={child.to}
+                      onClick={() => setMenuOpen(false)}
+                      className="text-white/50 hover:text-white text-sm py-1"
+                    >
+                      {child.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
 
           {isStaff && (

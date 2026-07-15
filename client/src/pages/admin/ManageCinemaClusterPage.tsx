@@ -316,7 +316,6 @@ const emptyForm: CreateClusterPayload = {
   clusterName: "",
   province: "",
   address: "",
-  phoneNumber: "",
   latitude: undefined,
   longitude: undefined,
 };
@@ -334,7 +333,6 @@ function ClusterModal({ open, mode, initial, onClose, onSave, submitting, isAdmi
               clusterName: initial.clusterName,
               province: initial.province,
               address: initial.address,
-              phoneNumber: initial.phoneNumber ?? "",
               latitude: initial.latitude,
               longitude: initial.longitude,
               status: initial.status,
@@ -364,9 +362,8 @@ function ClusterModal({ open, mode, initial, onClose, onSave, submitting, isAdmi
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaveError(null);
-    const normalizedPhone = form.phoneNumber?.replace(/[\s\-().]/g, "") || undefined;
     try {
-      await onSave({ ...form, phoneNumber: normalizedPhone }, initial?.clusterId);
+      await onSave(form, initial?.clusterId);
     } catch (err: any) {
       setSaveError(err?.response?.data?.message ?? "Save failed. Please try again.");
     }
@@ -431,39 +428,22 @@ function ClusterModal({ open, mode, initial, onClose, onSave, submitting, isAdmi
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
-                Province / City <span className="text-rose-500">*</span>
-              </label>
-              <select
-                required
-                value={form.province}
-                onChange={(e) => setForm({ ...form, province: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-blue-400 transition-colors"
-                style={inputStyle}
-              >
-                <option value="">Select province…</option>
-                {PROVINCES.map((p) => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
-                Hotline
-              </label>
-              <input
-                type="tel" placeholder="1900 xxxx"
-                pattern="1(900|800)[0-9]{4,6}"
-                title="Hotline must start with 1900 or 1800, followed by 4-6 digits."
-                value={form.phoneNumber ?? ""}
-                onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-blue-400 transition-colors"
-                style={inputStyle}
-              />
-            </div>
+          <div>
+            <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+              Province / City <span className="text-rose-500">*</span>
+            </label>
+            <select
+              required
+              value={form.province}
+              onChange={(e) => setForm({ ...form, province: e.target.value })}
+              className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-blue-400 transition-colors"
+              style={inputStyle}
+            >
+              <option value="">Select province…</option>
+              {PROVINCES.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
           </div>
 
           {/* Address — Nominatim autocomplete */}

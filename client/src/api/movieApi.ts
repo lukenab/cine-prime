@@ -54,6 +54,11 @@ export type RoomResponse = {
   cinemaRoomName: string;
   roomType: RoomType;
   seatQuantity: number;
+  numberOfRows: number;
+  seatsPerRow: number;
+  standardRowCount: number;
+  vipRowCount: number;
+  coupleRowCount: number;
   clusterId: number;
   clusterName?: string;
 };
@@ -66,6 +71,11 @@ export type RoomApiResponse = {
   cinemaRoomName: string;
   roomType: RoomType;
   totalSeatCapacity: number;
+  numberOfRows: number;
+  seatsPerRow: number;
+  standardRowCount: number;
+  vipRowCount: number;
+  coupleRowCount: number;
   status?: string;
   maintenanceNote?: string;
   clusterId: number;
@@ -112,7 +122,11 @@ export type UpdateMoviePayload = {
 export type CreateRoomPayload = {
   cinemaRoomName: string;
   roomType: RoomType;
-  seatQuantity: number;
+  numberOfRows: number;
+  seatsPerRow: number;
+  standardRowCount: number;
+  vipRowCount: number;
+  coupleRowCount: number;
   defaultPrice: number;
   clusterId: number;
 };
@@ -139,7 +153,6 @@ export type CreateClusterPayload = {
   clusterName: string;
   province: string;
   address: string;
-  phoneNumber?: string;
   latitude?: number;
   longitude?: number;
   status?: ClusterStatus;
@@ -151,14 +164,15 @@ export type SeatResponse = {
   seatId: number;
   seatCode: string;
   seatType: string;
-  colSpan?: number; // so cot vat ly ghe chiem trong hang (Couple/Sweetbox = 2)
+  colSpan?: number; // so cot vat ly ghe chiem trong hang (Couple = 2)
+  aisleAfter?: boolean; // co loi di ngay sau ghe nay khong (render gap trong so do ghe)
   status: "ACTIVE" | "INACTIVE" | "MAINTENANCE";
   price: number;
   cinemaRoomId: number;
   cinemaRoomName: string;
 };
 
-export type SeatTypeValue = "STANDARD" | "VIP" | "COUPLE" | "SWEETBOX";
+export type SeatTypeValue = "STANDARD" | "VIP" | "COUPLE" | "ACCESSIBLE";
 
 export type UpdateSeatPayload = {
   seatType: SeatTypeValue;
@@ -184,6 +198,10 @@ type ApiWrapper<T> = { code: number; message?: string; result: T };
 export type MovieStatus =
   | 'DRAFT'
   | 'PENDING_REVIEW'
+  | 'APPROVED'
+  | 'CHANGES_REQUESTED'
+  | 'ARCHIVED'
+  // Legacy exhibition states kept only for backward-compatible API parsing.
   | 'COMING_SOON'
   | 'NOW_SHOWING'
   | 'SUSPENDED'
@@ -297,6 +315,8 @@ export type TmdbSearchItem = {
   releaseDate?: string;
   posterUrl?: string;
   overview?: string;
+  /** true neu phim nay da co trong DB (theo tmdbId) - dung de disable/badge o browse list */
+  alreadyImported?: boolean;
 };
 
 export type TmdbMovieDetails = {
@@ -418,6 +438,11 @@ const toLegacyRoom = (room: RoomApiResponse): RoomResponse => ({
   cinemaRoomName: room.cinemaRoomName,
   roomType: room.roomType,
   seatQuantity: room.totalSeatCapacity,
+  numberOfRows: room.numberOfRows,
+  seatsPerRow: room.seatsPerRow,
+  standardRowCount: room.standardRowCount,
+  vipRowCount: room.vipRowCount,
+  coupleRowCount: room.coupleRowCount,
   clusterId: room.clusterId,
   clusterName: room.clusterName,
 });
@@ -470,13 +495,20 @@ export const movieApi = {
     const wirePayload = {
       cinemaRoomName: payload.cinemaRoomName,
       roomType: payload.roomType,
-      totalSeatCapacity: payload.seatQuantity,
+      numberOfRows: payload.numberOfRows,
+      seatsPerRow: payload.seatsPerRow,
+      standardRowCount: payload.standardRowCount,
+      vipRowCount: payload.vipRowCount,
+      coupleRowCount: payload.coupleRowCount,
       defaultPrice: payload.defaultPrice,
       clusterId: payload.clusterId,
     };
     const response = await axiosClient.post('/api/cinema-rooms', wirePayload) as ApiWrapper<RoomApiResponse>;
     return { ...response, result: toLegacyRoom(response.result) } as ApiWrapper<RoomResponse>;
   },
+
+  deleteRoom: (roomId: number) =>
+    axiosClient.delete(`/api/cinema-rooms/${roomId}`) as Promise<ApiWrapper<void>>,
 
   getSeatsByRoom: (roomId: number) =>
     axiosClient.get(`/api/seats/room/${roomId}`) as Promise<ApiWrapper<SeatResponse[]>>,
@@ -567,37 +599,29 @@ export const movieApi = {
   submitForReview: (id: number) =>
     axiosClient.post(`/api/movies/${id}/submit`) as Promise<ApiWrapper<void>>,
 
-  /** PENDING_REVIEW → COMING_SOON */
+  /** PENDING_REVIEW → approved (legacy backend currently returns COMING_SOON) */
   approveMovie: (id: number) =>
     axiosClient.post(`/api/movies/${id}/approve`) as Promise<ApiWrapper<void>>,
 
-  /** PENDING_REVIEW → REJECTED */
-  rejectMovie: (id: number, note: string) =>
+  /** Request content changes (legacy backend currently returns REJECTED) */
+  requestMovieChanges: (id: number, note: string) =>
     axiosClient.post(`/api/movies/${id}/reject`, { note }) as Promise<ApiWrapper<void>>,
 
-  /** NOW_SHOWING / COMING_SOON → SUSPENDED */
-  suspendMovie: (id: number, reason: string) =>
-    axiosClient.post(`/api/movies/${id}/suspend`, { reason }) as Promise<ApiWrapper<void>>,
-
-  /** COMING_SOON / NOW_SHOWING / SUSPENDED → ENDED */
-  endMovie: (id: number) =>
-    axiosClient.post(`/api/movies/${id}/end`) as Promise<ApiWrapper<void>>,
-
-  /** REJECTED → DRAFT */
-  reworkMovie: (id: number) =>
+  /** Start a new draft revision (legacy backend route is /rework) */
+  startMovieRevision: (id: number) =>
     axiosClient.post(`/api/movies/${id}/rework`) as Promise<ApiWrapper<void>>,
-
-  /** COMING_SOON → NOW_SHOWING */
-  releaseMovie: (id: number) =>
-    axiosClient.post(`/api/movies/${id}/release`) as Promise<ApiWrapper<void>>,
-
-  /** SUSPENDED → NOW_SHOWING */
-  reinstateMovie: (id: number) =>
-    axiosClient.post(`/api/movies/${id}/reinstate`) as Promise<ApiWrapper<void>>,
 
   // TMDB APIs
   tmdbSearch: (q: string) =>
     axiosClient.get(`/api/movies/tmdb/search?q=${encodeURIComponent(q)}`) as Promise<ApiWrapper<TmdbSearchItem[]>>,
+
+  /** Danh sach phim dang chieu rap (Now Playing) theo khu vuc - man hinh Browse & Import */
+  tmdbNowPlaying: (region = 'VN', page = 1) =>
+    axiosClient.get(`/api/movies/tmdb/now-playing?region=${region}&page=${page}`) as Promise<ApiWrapper<TmdbSearchItem[]>>,
+
+  /** Danh sach phim sap ra mat (Upcoming) theo khu vuc - tab thu 2 cua man hinh Browse & Import */
+  tmdbUpcoming: (region = 'VN', page = 1) =>
+    axiosClient.get(`/api/movies/tmdb/upcoming?region=${region}&page=${page}`) as Promise<ApiWrapper<TmdbSearchItem[]>>,
 
   tmdbDetails: (tmdbId: number) =>
     axiosClient.get(`/api/movies/tmdb/${tmdbId}/details`) as Promise<ApiWrapper<TmdbMovieDetails>>,
@@ -652,11 +676,5 @@ export function formatDisplayDate(val: string | number[] | undefined): string {
   const iso = toDateStr(val);
   if (!iso) return '—';
   const d = new Date(iso + 'T00:00:00');
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-export function todayPlusDays(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + n);
-  return d.toISOString().split('T')[0];
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }

@@ -12,4 +12,6 @@ public class TmdbSearchResultItem {
     String releaseDate;
     String posterUrl;
     String overview;
+    /** true neu phim nay da ton tai trong DB (theo tmdbId) - dung de disable/badge o UI browse list */
+    boolean alreadyImported;
 }

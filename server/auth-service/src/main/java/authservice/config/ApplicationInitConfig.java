@@ -128,7 +128,6 @@ public class ApplicationInitConfig {
             seedPermissions();
             seedRoles();
             seedAdminAccount();
-            seedDemoAccounts();
         };
     }
 
@@ -204,45 +203,5 @@ public class ApplicationInitConfig {
 
         accountRepository.save(admin);
         log.warn("[Seed] Admin account created — username: '{}'. Change the default password before going to production!", adminUsername);
-    }
-
-    // ── Step 4: Seed demo accounts (dev/test only) ────────────────────────────
-    // Password for all demo accounts: 123456
-    private void seedDemoAccounts() {
-        String demoPassword = passwordEncoder.encode("123456");
-
-        List<String[]> demoAccounts = List.of(
-                // { username, email, roleName }
-                new String[]{"employee", "employee@cineprime.com", "EMPLOYEE"},
-                new String[]{"member",   "member@cineprime.com",   "MEMBER"}
-        );
-
-        for (String[] demo : demoAccounts) {
-            String username = demo[0];
-            String email    = demo[1];
-            String roleName = demo[2];
-
-            if (accountRepository.findByUsername(username).isPresent()) {
-                log.debug("[Seed] Demo account '{}' already exists, skipping.", username);
-                continue;
-            }
-
-            Role role = roleRepository.findById(roleName).orElse(null);
-            if (role == null) {
-                log.warn("[Seed] Role '{}' not found, skipping demo account '{}'.", roleName, username);
-                continue;
-            }
-
-            Account account = Account.builder()
-                    .username(username)
-                    .email(email)
-                    .passwordHash(demoPassword)
-                    .roles(Set.of(role))
-                    .status(AccountStatus.ACTIVE)
-                    .build();
-
-            accountRepository.save(account);
-            log.info("[Seed] Demo account created — username: '{}', role: '{}'", username, roleName);
-        }
     }
 }

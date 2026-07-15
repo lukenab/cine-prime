@@ -4,8 +4,9 @@ export interface Seat {
   seatId: number;
   row: string;
   number: number;
-  type: "STANDARD" | "VIP" | "COUPLE" | "SWEETBOX";
-  colSpan?: number; // so cot vat ly ghe chiem trong hang (Couple/Sweetbox = 2)
+  type: "STANDARD" | "VIP" | "COUPLE" | "ACCESSIBLE";
+  colSpan?: number; // so cot vat ly ghe chiem trong hang (Couple = 2)
+  aisleAfter?: boolean; // co loi di ngay sau ghe nay khong (render gap trong so do ghe)
   status: "AVAILABLE" | "LOCKED" | "BOOKED";
   price: number;
 }
@@ -127,12 +128,12 @@ export const bookingApi = {
 
             resolve({
               bookingId: "MOCK-BOOKING-" + Math.floor(Math.random() * 10000),
-              lockedUntil: new Date(Date.now() + 10 * 60000).toISOString()
+              lockedUntil: new Date(Date.now() + 10 * 60000).toISOString(),
             });
           }, 800);
         });
       }
       throw error;
     }
-  }
+  },
 };

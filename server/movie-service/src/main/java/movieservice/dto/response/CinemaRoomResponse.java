@@ -15,6 +15,11 @@ public class CinemaRoomResponse {
     String cinemaRoomName;
     RoomType roomType;
     Integer totalSeatCapacity;
+    Integer numberOfRows;
+    Integer seatsPerRow;
+    Integer standardRowCount;
+    Integer vipRowCount;
+    Integer coupleRowCount;
     CinemaRoomStatus status;
     String maintenanceNote;
     Long clusterId;

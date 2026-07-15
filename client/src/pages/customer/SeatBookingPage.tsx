@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { Fragment, useState, useEffect, useRef, useCallback } from "react";
 import {
   AlertTriangle, CheckCircle2, Clock, Film,
   Loader2, X, ChevronRight, RotateCcw, Ticket, Armchair,
@@ -11,14 +11,6 @@ import CompleteProfilePage from "../auth/CompleteProfilePage";
 // Format a number as Vietnamese đồng, e.g. 70000 → "70.000 ₫"
 const formatVND = (v: number) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(v);
-
-// Split a row into left / middle / right blocks so seats AND the column-number
-// header share the exact same aisle layout.
-function splitRow<T>(arr: T[]): { left: T[]; middle: T[]; right: T[] } {
-  if (arr.length === 10) return { left: arr.slice(0, 2), middle: arr.slice(2, 8), right: arr.slice(8, 10) };
-  if (arr.length >= 8) return { left: arr.slice(0, 2), middle: arr.slice(2, arr.length - 2), right: arr.slice(arr.length - 2) };
-  return { left: [], middle: arr, right: [] };
-}
 
 // ─── CountdownTimer ─────────────────────────────────────────────────────────
 
@@ -56,11 +48,13 @@ function CountdownTimer({ lockedUntil }: { lockedUntil: string }) {
 }
 
 
-// Accent nhom theo loai ghe cao cap: VIP giu mau xanh brand cu; Couple/Sweetbox
-// (ghe doi) dung chung 1 mau hong de khach phan biet duoc voi VIP va Standard.
-function seatAccent(type: string): "vip" | "couple" | null {
+// Accent nhom theo loai ghe cao cap: VIP giu mau xanh brand cu; Couple dung mau tim;
+// Accessible dung mau teal. Ca 3 mau khop voi seatTypeStyle trong RoomDetailPage.tsx
+// (trang admin) de dong bo 2 trang.
+function seatAccent(type: string): "vip" | "couple" | "accessible" | null {
   if (type === "VIP") return "vip";
-  if (type === "COUPLE" || type === "SWEETBOX") return "couple";
+  if (type === "COUPLE") return "couple";
+  if (type === "ACCESSIBLE") return "accessible";
   return null;
 }
 
@@ -71,7 +65,7 @@ function SeatBtn({
 }) {
   const available = seat.status === "AVAILABLE";
   const accent = seatAccent(seat.type);
-  const isCouple = accent === "couple";
+  const isDoubleSeat = accent === "couple";
 
   // Colour + interaction per state. Shape (seat silhouette) is shared below.
   const cls = (() => {
@@ -80,7 +74,8 @@ function SeatBtn({
     if (conflict)                 return "bg-[#3d1515] border-[#e84545] text-[#ff9a9a] animate-pulse cursor-pointer";
     if (selected)                 return "bg-gradient-to-b from-[#93c5fd] to-[#2563eb] border-[#60a5fa] text-black shadow-[0_4px_14px_rgba(96,165,250,0.45)] -translate-y-0.5 cursor-pointer";
     if (accent === "vip")         return "bg-[#60a5fa]/[0.08] border-[#60a5fa]/40 text-[#60a5fa] hover:border-[#60a5fa] hover:bg-[#60a5fa]/20 hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(96,165,250,0.25)] cursor-pointer";
-    if (accent === "couple")      return "bg-[#f472b6]/[0.08] border-[#f472b6]/40 text-[#f472b6] hover:border-[#f472b6] hover:bg-[#f472b6]/20 hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(244,114,182,0.25)] cursor-pointer";
+    if (accent === "couple")      return "bg-[#c084fc]/[0.08] border-[#c084fc]/40 text-[#c084fc] hover:border-[#c084fc] hover:bg-[#c084fc]/20 hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(192,132,252,0.25)] cursor-pointer";
+    if (accent === "accessible")  return "bg-[#2dd4bf]/[0.08] border-[#2dd4bf]/40 text-[#2dd4bf] hover:border-[#2dd4bf] hover:bg-[#2dd4bf]/20 hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(45,212,191,0.25)] cursor-pointer";
     return "bg-white/[0.05] border-white/15 text-white/45 hover:border-[#60a5fa]/70 hover:bg-[#60a5fa]/10 hover:text-[#60a5fa] hover:-translate-y-0.5 cursor-pointer";
   })();
 
@@ -90,7 +85,7 @@ function SeatBtn({
       disabled={!available && !conflict}
       onClick={() => available && onToggle(seat.seatId)}
       title={`${seat.row}${seat.number} · ${seat.type} · ${seat.status}`}
-      className={`relative ${isCouple ? "w-[4.75rem]" : "w-9"} h-9 rounded-t-lg rounded-b-[3px] border border-b-[3px] text-[11px] font-semibold flex items-center justify-center select-none transition-all duration-150 will-change-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#60a5fa]/60 ${cls}`}
+      className={`relative ${isDoubleSeat ? "w-[4.75rem]" : "w-9"} h-9 rounded-t-lg rounded-b-[3px] border border-b-[3px] text-[11px] font-semibold flex items-center justify-center select-none transition-all duration-150 will-change-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#60a5fa]/60 ${cls}`}
       style={{ fontFamily: "'Space Mono', monospace" }}
     >
       {seat.number}
@@ -246,8 +241,12 @@ export default function SeatBookingPage() {
   const rows = Array.from(new Set(seats.map((s) => s.row))).sort();
   const byRow = (r: string) => seats.filter((s) => s.row === r).sort((a, b) => a.number - b.number);
   const rowAccent = (r: string) => seatAccent(seats.find((s) => s.row === r)?.type ?? "STANDARD");
-  const maxCols = rows.reduce((m, r) => Math.max(m, byRow(r).length), 0);
-  const colNumbers = splitRow(Array.from({ length: maxCols }, (_, i) => i + 1));
+  // Hang lam moc de ve header so cot — chon hang dai nhat (hang cuoi co the bi cat ngan
+  // nen it ghe hon, khong dai dien dung cho vi tri loi di).
+  const headerRowSeats = rows.reduce<Seat[]>((widest, r) => {
+    const row = byRow(r);
+    return row.length > widest.length ? row : widest;
+  }, []);
   const formattedDate = new Date(showtimeDetails.dateTime).toLocaleDateString("en-US", {
     weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
   });
@@ -408,83 +407,40 @@ export default function SeatBookingPage() {
           <div className="flex flex-col items-center overflow-x-auto pb-2">
             {rows.length === 0 && <p className="text-white/50 text-sm mt-8">No seats available.</p>}
 
-            {/* Column numbers */}
+            {/* Column numbers — loi di khop dung voi vi tri seat.aisleAfter cua hang moc */}
             {rows.length > 0 && (
-              <div className="flex items-center gap-2 w-max mb-2.5">
+              <div className="flex items-center gap-1.5 w-max mb-2.5">
                 <span className="w-5 shrink-0" />
-                {colNumbers.left.length > 0 && (
-                  <>
-                    <div className="flex gap-1.5">
-                      {colNumbers.left.map((n) => (
-                        <span key={n} className="w-9 text-center text-[9px] text-white/30" style={{ fontFamily: "'Space Mono', monospace" }}>{n}</span>
-                      ))}
-                    </div>
-                    <div className="w-5" />
-                  </>
-                )}
-                <div className="flex gap-1.5">
-                  {colNumbers.middle.map((n) => (
-                    <span key={n} className="w-9 text-center text-[9px] text-white/30" style={{ fontFamily: "'Space Mono', monospace" }}>{n}</span>
-                  ))}
-                </div>
-                {colNumbers.right.length > 0 && (
-                  <>
-                    <div className="w-5" />
-                    <div className="flex gap-1.5">
-                      {colNumbers.right.map((n) => (
-                        <span key={n} className="w-9 text-center text-[9px] text-white/30" style={{ fontFamily: "'Space Mono', monospace" }}>{n}</span>
-                      ))}
-                    </div>
-                  </>
-                )}
+                {headerRowSeats.map((seat) => (
+                  <Fragment key={seat.seatId}>
+                    <span className="w-9 text-center text-[9px] text-white/30" style={{ fontFamily: "'Space Mono', monospace" }}>{seat.number}</span>
+                    {seat.aisleAfter && <span className="w-5 shrink-0" />}
+                  </Fragment>
+                ))}
                 <span className="w-10 shrink-0" />
               </div>
             )}
 
             {rows.map((row, idx) => {
               const accent = rowAccent(row);
-              const { left, middle, right } = splitRow(byRow(row));
 
               return (
                 <div key={row}>
                   {idx > 0 && <div className="h-3" />}
-                  <div className="flex items-center gap-2 w-max">
+                  <div className="flex items-center gap-1.5 w-max">
                     {/* Row label */}
-                    <span className={`w-5 text-center text-[10px] font-bold shrink-0 ${accent === "vip" ? "text-[#60a5fa]" : accent === "couple" ? "text-[#f472b6]" : "text-white/45"}`}
+                    <span className={`w-5 text-center text-[10px] font-bold shrink-0 ${accent === "vip" ? "text-[#60a5fa]" : accent === "couple" ? "text-[#c084fc]" : "text-white/45"}`}
                       style={{ fontFamily: "'Space Mono', monospace" }}>
                       {row}
                     </span>
 
-                    {/* Left block */}
-                    {left.length > 0 && (
-                      <>
-                        <div className="flex gap-1.5">
-                          {left.map((seat) => (
-                            <SeatBtn key={seat.seatId} seat={seat} selected={selected.has(seat.seatId)} conflict={conflicts.has(seat.seatId)} onToggle={toggleSeat} />
-                          ))}
-                        </div>
-                        <div className="w-5" />
-                      </>
-                    )}
-
-                    {/* Middle block */}
-                    <div className="flex gap-1.5">
-                      {middle.map((seat) => (
-                        <SeatBtn key={seat.seatId} seat={seat} selected={selected.has(seat.seatId)} conflict={conflicts.has(seat.seatId)} onToggle={toggleSeat} />
-                      ))}
-                    </div>
-
-                    {/* Right block */}
-                    {right.length > 0 && (
-                      <>
-                        <div className="w-5" />
-                        <div className="flex gap-1.5">
-                          {right.map((seat) => (
-                            <SeatBtn key={seat.seatId} seat={seat} selected={selected.has(seat.seatId)} conflict={conflicts.has(seat.seatId)} onToggle={toggleSeat} />
-                          ))}
-                        </div>
-                      </>
-                    )}
+                    {/* Seats — loi di render nhu 1 khoang trong rong sau ghe co aisleAfter */}
+                    {byRow(row).map((seat) => (
+                      <Fragment key={seat.seatId}>
+                        <SeatBtn seat={seat} selected={selected.has(seat.seatId)} conflict={conflicts.has(seat.seatId)} onToggle={toggleSeat} />
+                        {seat.aisleAfter && <span className="w-5 shrink-0" />}
+                      </Fragment>
+                    ))}
 
                     {/* Premium row badge */}
                     <span className="w-14 shrink-0">
@@ -495,7 +451,7 @@ export default function SeatBookingPage() {
                         </span>
                       )}
                       {accent === "couple" && (
-                        <span className="text-[8px] font-semibold text-[#f472b6]/70 uppercase tracking-widest"
+                        <span className="text-[8px] font-semibold text-[#c084fc]/70 uppercase tracking-widest"
                           style={{ fontFamily: "'Space Mono', monospace" }}>
                           Couple
                         </span>
@@ -512,7 +468,8 @@ export default function SeatBookingPage() {
             {[
               { swatch: "bg-white/[0.05] border-white/15", label: "Available" },
               { swatch: "bg-[#60a5fa]/[0.08] border-[#60a5fa]/40", label: "VIP" },
-              { swatch: "bg-[#f472b6]/[0.08] border-[#f472b6]/40", label: "Couple" },
+              { swatch: "bg-[#c084fc]/[0.08] border-[#c084fc]/40", label: "Couple" },
+              { swatch: "bg-[#2dd4bf]/[0.08] border-[#2dd4bf]/40", label: "Accessible" },
               { swatch: "bg-gradient-to-b from-[#93c5fd] to-[#2563eb] border-[#60a5fa]", label: "Selected" },
               { swatch: "bg-[#320d0d] border-[#7a2626]", label: "Locked" },
               { swatch: "bg-[#141620] border-[#20222e]", label: "Booked" },
@@ -571,8 +528,10 @@ export default function SeatBookingPage() {
                         <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wide ${
                           seat.type === "VIP"
                             ? "bg-[#60a5fa]/15 text-[#60a5fa]"
-                            : seat.type === "COUPLE" || seat.type === "SWEETBOX"
-                            ? "bg-[#f472b6]/15 text-[#f472b6]"
+                            : seat.type === "COUPLE"
+                            ? "bg-[#c084fc]/15 text-[#c084fc]"
+                            : seat.type === "ACCESSIBLE"
+                            ? "bg-[#2dd4bf]/15 text-[#2dd4bf]"
                             : "bg-white/10 text-white/70"
                         }`}>
                           {seat.type}
@@ -593,8 +552,9 @@ export default function SeatBookingPage() {
                 <div className="flex flex-wrap gap-1.5">
                   {(() => {
                     const vip = pickedSeats.filter((s) => s.type === "VIP").length;
-                    const couple = pickedSeats.filter((s) => s.type === "COUPLE" || s.type === "SWEETBOX").length;
-                    const std = pickedSeats.length - vip - couple;
+                    const couple = pickedSeats.filter((s) => s.type === "COUPLE").length;
+                    const accessible = pickedSeats.filter((s) => s.type === "ACCESSIBLE").length;
+                    const std = pickedSeats.length - vip - couple - accessible;
                     return (
                       <>
                         {std > 0 && (
@@ -608,8 +568,13 @@ export default function SeatBookingPage() {
                           </span>
                         )}
                         {couple > 0 && (
-                          <span className="rounded-full bg-[#f472b6]/12 px-2.5 py-0.5 text-[11px] text-[#f472b6]">
+                          <span className="rounded-full bg-[#c084fc]/12 px-2.5 py-0.5 text-[11px] text-[#c084fc]">
                             {couple} Couple
+                          </span>
+                        )}
+                        {accessible > 0 && (
+                          <span className="rounded-full bg-[#2dd4bf]/12 px-2.5 py-0.5 text-[11px] text-[#2dd4bf]">
+                            {accessible} Accessible
                           </span>
                         )}
                       </>

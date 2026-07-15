@@ -17,9 +17,13 @@ public interface CinemaClusterRepository extends JpaRepository<CinemaCluster, Lo
     List<CinemaCluster> findByClusterNameContainingIgnoreCaseOrProvinceContainingIgnoreCase(
             String name, String province);
 
+    boolean existsByClusterNameIgnoreCase(String clusterName);
+
+    boolean existsByClusterNameIgnoreCaseAndClusterIdNot(String clusterName, Long clusterId);
+
     @Query("SELECT COUNT(r) FROM CinemaRoom r WHERE r.cluster.clusterId = :clusterId")
     int countRoomsByClusterId(@Param("clusterId") Long clusterId);
 
     @Query("SELECT COALESCE(SUM(r.totalSeatCapacity), 0) FROM CinemaRoom r WHERE r.cluster.clusterId = :clusterId")
-    int sumSeatsByClusterId(@Param("clusterId") Long clusterId);
+    int countSeatsByClusterId(@Param("clusterId") Long clusterId);
 }

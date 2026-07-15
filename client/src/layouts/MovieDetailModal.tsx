@@ -4,22 +4,16 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import type { MovieV2 } from "../api/movieApi";
+import {
+  MOVIE_CONTENT_STATUS_META,
+  toMovieContentStatus,
+} from "../utils/movieContentStatus";
 
 type Props = {
   open: boolean;
   movie: MovieV2 | null;
   loading?: boolean;
   onClose: () => void;
-};
-
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  DRAFT:          { label: "Draft",          color: "#6b7280", bg: "rgba(107,114,128,0.1)" },
-  PENDING_REVIEW: { label: "Pending Review", color: "#f59e0b", bg: "rgba(245,158,11,0.1)"  },
-  COMING_SOON:    { label: "Coming Soon",    color: "#3b82f6", bg: "rgba(59,130,246,0.1)"  },
-  NOW_SHOWING:    { label: "Now Showing",    color: "#10b981", bg: "rgba(16,185,129,0.1)"  },
-  SUSPENDED:      { label: "Suspended",      color: "#ef4444", bg: "rgba(239,68,68,0.1)"   },
-  ENDED:          { label: "Ended",          color: "#9ca3af", bg: "rgba(156,163,175,0.1)" },
-  REJECTED:       { label: "Rejected",       color: "#dc2626", bg: "rgba(220,38,38,0.1)"   },
 };
 
 const LANG_NAME: Record<string, string> = {
@@ -64,7 +58,8 @@ export function MovieDetailModal({ open, movie, loading, onClose }: Props) {
   const en = movie.translations?.find(t => t.languageCode === "en");
   const directors = movie.cast?.filter(c => c.roleType === "DIRECTOR") ?? [];
   const actors    = movie.cast?.filter(c => c.roleType === "ACTOR")    ?? [];
-  const status    = STATUS_CONFIG[movie.status] ?? STATUS_CONFIG.DRAFT;
+  const contentStatus = toMovieContentStatus(movie.status);
+  const status = MOVIE_CONTENT_STATUS_META[contentStatus];
   const fmtDur    = (m: number) => { const h = Math.floor(m / 60); const min = m % 60; return h > 0 ? `${h}h ${min}m` : `${min}m`; };
   const images    = movie.images ?? [];
   const mainPoster = images.find(i => i.imageType === "POSTER")?.imageUrl ?? movie.posterUrl;
@@ -93,7 +88,7 @@ export function MovieDetailModal({ open, movie, loading, onClose }: Props) {
                 <span style={{ fontSize: "11px", color: "var(--text-sub)" }}>·</span>
                 <span
                   className="px-2 py-0.5 rounded-md text-xs font-medium"
-                  style={{ color: status.color, background: status.bg }}
+                  style={{ color: status.text, background: status.bg }}
                 >
                   {status.label}
                 </span>

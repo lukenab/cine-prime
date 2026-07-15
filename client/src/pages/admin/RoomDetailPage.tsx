@@ -5,7 +5,7 @@ import { movieApi, type SeatResponse, type RoomResponse, type SeatTypeValue, ROO
 
 // ── Seat type config ─────────────────────────────────────────────────────────
 
-const SEAT_TYPES = ["STANDARD", "VIP", "COUPLE", "SWEETBOX"] as const;
+const SEAT_TYPES = ["STANDARD", "VIP", "COUPLE", "ACCESSIBLE"] as const;
 
 const seatTypeStyle: Record<string, { bg: string; border: string; text: string; badge: string }> = {
   STANDARD: {
@@ -26,11 +26,11 @@ const seatTypeStyle: Record<string, { bg: string; border: string; text: string; 
     text: "#9333ea",
     badge: "bg-purple-100 text-purple-700",
   },
-  SWEETBOX: {
-    bg: "rgba(236,72,153,0.12)",
-    border: "rgba(236,72,153,0.35)",
-    text: "#db2777",
-    badge: "bg-pink-100 text-pink-700",
+  ACCESSIBLE: {
+    bg: "rgba(20,184,166,0.12)",
+    border: "rgba(20,184,166,0.4)",
+    text: "#0d9488",
+    badge: "bg-teal-100 text-teal-700",
   },
 };
 
@@ -372,46 +372,54 @@ export default function RoomDetailPage() {
                         {row}
                       </span>
 
-                      {/* Seats — no wrap, one line per row */}
-                      <div style={{ display: "flex", gap: "6px" }}>
+                      {/* Seats — no wrap, one line per row. flex:1 + justifyContent:center lam
+                          hang ngan (VD Couple) tu can giua trong khoang trong giua 2 nhan hang,
+                          thay vi dinh sat ben trai gay lech khoang trong ve 1 phia. */}
+                      <div style={{ display: "flex", gap: "6px", flex: "1 1 auto", justifyContent: "center" }}>
                         {seatsByRow[row].map((seat) => {
                           const available = seat.status === "ACTIVE";
                           const s = available
                             ? seatTypeStyle[seat.seatType] ?? seatTypeStyle.STANDARD
                             : unavailableStyle;
+                          // Ghe Couple chiem 2 cot vat ly (colSpan=2) — render rong gap doi
+                          // thay vi 1 o vuong nho nhu ghe don, dung the hien dung ban chat ghe doi.
+                          const isDoubleSeat = (seat.colSpan ?? 1) > 1;
 
                           return (
-                            <button
-                              key={seat.seatId}
-                              onClick={() => available && setEditingSeat(seat)}
-                              title={`${seat.seatCode} · ${seat.seatType} · ${formatPrice(seat.price)}`}
-                              style={{
-                                width: "36px",
-                                height: "32px",
-                                borderRadius: "6px",
-                                border: `1.5px solid ${s.border}`,
-                                background: s.bg,
-                                color: s.text,
-                                fontSize: "10px",
-                                fontWeight: 700,
-                                cursor: available ? "pointer" : "default",
-                                transition: "transform 0.12s ease, box-shadow 0.12s ease",
-                                letterSpacing: "0.02em",
-                                flexShrink: 0,
-                              }}
-                              onMouseEnter={(e) => {
-                                if (available) {
-                                  e.currentTarget.style.transform = "translateY(-2px)";
-                                  e.currentTarget.style.boxShadow = `0 4px 10px ${s.border}`;
-                                }
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.transform = "";
-                                e.currentTarget.style.boxShadow = "";
-                              }}
-                            >
-                              {seat.seatCode.slice(1)}
-                            </button>
+                            <div key={seat.seatId} style={{ display: "flex", gap: "6px" }}>
+                              <button
+                                onClick={() => available && setEditingSeat(seat)}
+                                title={`${seat.seatCode} · ${seat.seatType} · ${formatPrice(seat.price)}`}
+                                style={{
+                                  width: isDoubleSeat ? "78px" : "36px",
+                                  height: "32px",
+                                  borderRadius: "6px",
+                                  border: `1.5px solid ${s.border}`,
+                                  background: s.bg,
+                                  color: s.text,
+                                  fontSize: "10px",
+                                  fontWeight: 700,
+                                  cursor: available ? "pointer" : "default",
+                                  transition: "transform 0.12s ease, box-shadow 0.12s ease",
+                                  letterSpacing: "0.02em",
+                                  flexShrink: 0,
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (available) {
+                                    e.currentTarget.style.transform = "translateY(-2px)";
+                                    e.currentTarget.style.boxShadow = `0 4px 10px ${s.border}`;
+                                  }
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.transform = "";
+                                  e.currentTarget.style.boxShadow = "";
+                                }}
+                              >
+                                {seat.seatCode.slice(1)}
+                              </button>
+                              {/* Loi di — chia hang thanh khoi trai/giua/phai, khop bo tri thuc te rap phim */}
+                              {seat.aisleAfter && <div style={{ width: "18px", flexShrink: 0 }} />}
+                            </div>
                           );
                         })}
                       </div>

@@ -27,12 +27,6 @@ public class CinemaClusterRequest {
     @Size(min = 10, max = 255, message = "Address must be at least 10 characters")
     String address;
 
-    @Pattern(
-        regexp = "^1(900|800)[0-9]{4,6}$",
-        message = "Invalid hotline number. Must start with 1900 or 1800, followed by 4-6 digits."
-    )
-    String phoneNumber;
-
     @DecimalMin(value = "-90.0", message = "Latitude must be between -90 and 90")
     @DecimalMax(value = "90.0",  message = "Latitude must be between -90 and 90")
     BigDecimal latitude;

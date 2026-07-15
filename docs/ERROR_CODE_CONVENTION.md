@@ -65,6 +65,20 @@ Mỗi phạm vi giữ một dải riêng để **không đụng nhau** và nhìn
 
 > ⚠️ Lỗi global nên nằm gọn trong `1000–1009`. Hiện `GlobalErrorCode.INVALID_AGE(2001)` đang lấn dải `2xxx` của service nghiệp vụ — **nợ kỹ thuật cần dọn**.
 
+### API Gateway infrastructure errors
+
+Gateway chỉ tạo các mã dưới đây khi request thất bại tại tầng routing/network trước khi nhận được response từ downstream. Nếu downstream đã trả `ApiResponse` thì gateway giữ nguyên HTTP status và response body.
+
+| Code | Enum | HTTP | Message |
+|------|------|------|---------|
+| `5003` | `SERVICE_UNAVAILABLE` | `503` | Service temporarily unavailable |
+| `5004` | `GATEWAY_TIMEOUT` | `504` | Downstream service timed out |
+| `5005` | `ROUTE_NOT_FOUND` | `404` | Gateway route not found |
+| `5006` | `INTERNAL_GATEWAY_ERROR` | `500` | Gateway could not process the request |
+| `5007` | `GATEWAY_REQUEST_REJECTED` | Gateway-generated `4xx` | Gateway request rejected |
+
+Các response lỗi do gateway tạo luôn dùng JSON envelope `{ code, message, result }` và không trả exception message hoặc stack trace cho client.
+
 ---
 
 ## 4. Quy tắc đánh số trong một service

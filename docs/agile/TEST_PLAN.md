@@ -54,7 +54,7 @@ the top quality gap — this plan is the response.
 | T-BOOK-6 | PENDING booking past lock TTL | Auto-cancelled (once expiry job exists — FR-BOOK-6) |
 
 ## 5. Test Data
-- Demo accounts seeded via `auth-service/.../data.sql`: `admin` / `employee` / `member` (password `123456`).
+- Only `admin`/`admin` is seeded automatically (`ApplicationInitConfig`, via `ADMIN_USERNAME`/`ADMIN_PASSWORD`). EMPLOYEE/MEMBER test accounts must be created through the app.
 - Dev dataset for movie-service seeded (retro issue #85).
 - Concurrency tests must run against Testcontainers, **not** the shared dev DB.
 

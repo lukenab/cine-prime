@@ -17,6 +17,7 @@ public class SeatResponse {
     Integer colNumber;
     String seatType;
     Integer colSpan;
+    Boolean aisleAfter;
     String status;
     BigDecimal price;
     Long cinemaRoomId;

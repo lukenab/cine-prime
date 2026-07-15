@@ -25,19 +25,16 @@ export function useRole() {
      */
     can: {
       // ADMIN or EMPLOYEE
-      submit  : isEmployee,              // DRAFT → PENDING_REVIEW (admin dùng approve thẳng)
-      rework  : isAdmin || isEmployee,   // REJECTED → DRAFT
+      submit  : isAdmin || isEmployee,
+      startRevision: isAdmin || isEmployee, // CHANGES_REQUESTED → DRAFT
       edit    : isAdmin || isEmployee,
       view    : isAdmin || isEmployee,
-      archive : isAdmin || isEmployee,   // → ENDED via DELETE endpoint
+      archive : isAdmin,
 
       // ADMIN only
-      approve  : isAdmin,  // PENDING_REVIEW → COMING_SOON
-      reject   : isAdmin,  // PENDING_REVIEW → REJECTED
-      release  : isAdmin,  // COMING_SOON → NOW_SHOWING
-      suspend  : isAdmin,  // NOW_SHOWING / COMING_SOON → SUSPENDED
-      end      : isAdmin,  // → ENDED
-      reinstate: isAdmin,  // SUSPENDED → NOW_SHOWING
+      approve       : isAdmin,
+      requestChanges: isAdmin,
+      reject        : isAdmin, // Cinema Cluster still uses reject terminology.
     },
   };
 }

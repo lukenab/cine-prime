@@ -31,7 +31,23 @@ public class ShowTimeResponse {
 
     String cinemaRoomName;
 
+    // Cho phep customer loc suat chieu theo cum rap (ShowtimePage.tsx) — trươc day
+    // response khong co field nao de biet suat chieu thuoc cum rap nao.
+    Long clusterId;
+
+    String clusterName;
+
     String status;
+
+    // = CinemaRoom.totalSeatCapacity tai thoi diem tao suat (snapshot, khong doi theo
+    // sua doi phong sau nay) va availableSeats = totalSeats - soldSeats.
+    Integer totalSeats;
+
+    Integer availableSeats;
+
+    // Gia ve thap nhat cua phong (MIN(seat.price) trong cac ghe ACTIVE) — dung de hien
+    // thi "tu X d" o danh sach suat chieu; gia chi tiet tung ghe van lay o trang dat ve.
+    BigDecimal price;
 
     LocalDateTime updatedAt;
 }

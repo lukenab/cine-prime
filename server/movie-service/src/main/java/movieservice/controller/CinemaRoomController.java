@@ -44,6 +44,17 @@ public class CinemaRoomController {
                 .build();
     }
 
+    /** Chỉ xóa được room chưa từng gắn showtime — nếu có rồi thì dùng {@code /status} để đóng (CLOSED). */
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @DeleteMapping("/{id}")
+    public ApiResponse<Void> deleteRoom(@PathVariable Long id) {
+        cinemaRoomService.deleteCinemaRoom(id);
+        return ApiResponse.<Void>builder()
+                .code(200)
+                .message("Deleted")
+                .build();
+    }
+
     // ── Seats ─────────────────────────────────────────────────
 
     @GetMapping("/{id}/seats")
@@ -87,7 +98,7 @@ public class CinemaRoomController {
     /** Đặt thủ công trạng thái phòng (ACTIVE, CLOSED, MAINTENANCE...) */
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @PatchMapping("/{id}/status")
-    public ApiResponse<CinemaRoomResponse> setStatus(
+    public ApiResponse<CinemaRoomResponse> setRoomStatus(
             @PathVariable Long id,
             @RequestParam CinemaRoomStatus status,
             @RequestHeader(value = "X-User-Name", defaultValue = "unknown") String updatedBy) {

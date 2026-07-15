@@ -17,6 +17,11 @@ import {
   type UpdateMovieRequest,
   type MovieV2,
 } from "../../api/movieApi";
+import {
+  MOVIE_CONTENT_STATUS_META,
+  toMovieContentStatus,
+  type MovieContentStatus,
+} from "../../utils/movieContentStatus";
 
 export default function ManageMoviePage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
@@ -108,12 +113,10 @@ export default function ManageMoviePage() {
 
   const handleSubmit    = (id: number) => makeWorkflowHandler(() => movieApi.submitForReview(id),   "Submit")();
   const handleApprove   = (id: number) => makeWorkflowHandler(() => movieApi.approveMovie(id),      "Approve")();
-  const handleReject    = (id: number, note: string)   => makeWorkflowHandler(() => movieApi.rejectMovie(id, note),   "Reject")();
-  const handleSuspend   = (id: number, reason: string) => makeWorkflowHandler(() => movieApi.suspendMovie(id, reason),"Suspend")();
-  const handleEnd       = (id: number) => makeWorkflowHandler(() => movieApi.endMovie(id),          "End")();
-  const handleRework    = (id: number) => makeWorkflowHandler(() => movieApi.reworkMovie(id),       "Rework")();
-  const handleRelease   = (id: number) => makeWorkflowHandler(() => movieApi.releaseMovie(id),      "Release")();
-  const handleReinstate = (id: number) => makeWorkflowHandler(() => movieApi.reinstateMovie(id),    "Reinstate")();
+  const handleReject = (id: number, note: string) =>
+    makeWorkflowHandler(() => movieApi.requestMovieChanges(id, note), "Request changes")();
+  const handleRework = (id: number) =>
+    makeWorkflowHandler(() => movieApi.startMovieRevision(id), "Start revision")();
 
   const handleCreate = async (data: CreateMovieRequest): Promise<MovieV2> => {
     const res = await movieApi.createMovieV2(data);
@@ -136,7 +139,7 @@ export default function ManageMoviePage() {
           Movie Management
         </h1>
         <p style={{ color: "var(--text-sub)", fontSize: "13px", transition: "color 0.2s ease" }}>
-          Manage movie catalog, showtimes, and details
+          Manage movie catalog content and its approval workflow
         </p>
       </div>
 
@@ -218,19 +221,27 @@ export default function ManageMoviePage() {
       {/* Status tabs */}
       {(() => {
         const counts: Record<string, number> = {};
-        movies.forEach(m => { counts[m.movieStatus] = (counts[m.movieStatus] ?? 0) + 1; });
+        movies.forEach(m => {
+          const contentStatus = toMovieContentStatus(m.movieStatus);
+          counts[contentStatus] = (counts[contentStatus] ?? 0) + 1;
+        });
         const pendingCount = counts["PENDING_REVIEW"] ?? 0;
 
+        const contentStatuses: MovieContentStatus[] = [
+          "DRAFT",
+          "PENDING_REVIEW",
+          "APPROVED",
+          "CHANGES_REQUESTED",
+          "ARCHIVED",
+        ];
         const tabs = [
-          { value: "",               label: "All",           color: "var(--text-sub)" },
-          { value: "DRAFT",          label: "Draft",         color: "#6b7280" },
-          { value: "PENDING_REVIEW", label: "Pending Review",color: "#d97706" },
-          { value: "COMING_SOON",    label: "Coming Soon",   color: "#2563eb" },
-          { value: "NOW_SHOWING",    label: "Now Showing",   color: "#059669" },
-          { value: "SUSPENDED",      label: "Suspended",     color: "#ea580c" },
-          { value: "ENDED",          label: "Ended",         color: "#6b7280" },
-          { value: "REJECTED",       label: "Rejected",      color: "#dc2626" },
-        ] as const;
+          { value: "", label: "All", color: "var(--text-sub)" },
+          ...contentStatuses.map((value) => ({
+            value,
+            label: MOVIE_CONTENT_STATUS_META[value].label,
+            color: MOVIE_CONTENT_STATUS_META[value].text,
+          })),
+        ];
 
         return (
           <div className="flex items-center gap-1 mb-5 overflow-x-auto" style={{ borderBottom: "1px solid var(--border-color)", paddingBottom: "0" }}>
@@ -300,11 +311,7 @@ export default function ManageMoviePage() {
           onSubmit={handleSubmit}
           onApprove={handleApprove}
           onReject={handleReject}
-          onSuspend={handleSuspend}
-          onEnd={handleEnd}
           onRework={handleRework}
-          onRelease={handleRelease}
-          onReinstate={handleReinstate}
           searchQuery={searchQuery}
           genreFilter={genreFilter}
           statusFilter={statusFilter}

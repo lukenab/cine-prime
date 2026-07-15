@@ -35,9 +35,29 @@ public class CinemaRoom {
     @Column(name = "room_type", nullable = false, length = 20)
     RoomType roomType;
 
-    // Đổi tên từ seat_quantity → total_seat_capacity cho rõ nghĩa hơn
+    // totalSeatCapacity = numberOfRows * seatsPerRow, tinh o server (CinemaRoomService),
+    // khong nhan truc tiep tu client — xem numberOfRows/seatsPerRow ben duoi.
     @Column(name = "total_seat_capacity", nullable = false)
     Integer totalSeatCapacity;
+
+    // So hang va so ghe/hang do admin chon khi tao phong (RoomType chi cung cap gia tri
+    // mac dinh goi y + gioi han maxSeats, khong con ep cung seatsPerRow theo loai phong nua).
+    @Column(name = "number_of_rows", nullable = false)
+    Integer numberOfRows;
+
+    @Column(name = "seats_per_row", nullable = false)
+    Integer seatsPerRow;
+
+    // Seat-zone allocation is persisted so the generated seat map can be audited or
+    // regenerated without falling back to RoomType-specific assumptions.
+    @Column(name = "standard_row_count", nullable = false)
+    Integer standardRowCount;
+
+    @Column(name = "vip_row_count", nullable = false)
+    Integer vipRowCount;
+
+    @Column(name = "couple_row_count", nullable = false)
+    Integer coupleRowCount;
 
     // Boolean status → CinemaRoomStatus enum
     @Enumerated(EnumType.STRING)

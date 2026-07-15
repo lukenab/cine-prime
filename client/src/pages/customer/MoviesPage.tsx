@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { Search, Film, RefreshCw, Ticket, Star, Clock } from "lucide-react";
+import { useLocation, useSearchParams } from "react-router-dom";
+import { Search, Film, RefreshCw, Ticket, Star, Clock, Calendar } from "lucide-react";
 import { movieApi, type MovieApiResponse } from "../../api/movieApi";
 import { mockMovies } from "../../data/mockMovies";
 import { enrichMovie } from "../../utils/enrichMovie";
@@ -19,7 +19,16 @@ function ratingOf(movie: MovieApiResponse): string {
   return (7.6 + ((movie.movieId * 37) % 20) / 10).toFixed(1);
 }
 
+function formatReleaseDate(dateStr?: string): string {
+  if (!dateStr) return "Coming Soon";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "Coming Soon";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 function PosterCard({ movie, onOpen }: { movie: MovieApiResponse; onOpen: () => void }) {
+  const isComingSoon = movie.movieStatus === "COMING_SOON";
+
   return (
     <div
       onClick={onOpen}
@@ -37,12 +46,23 @@ function PosterCard({ movie, onOpen }: { movie: MovieApiResponse; onOpen: () => 
           style={{ background: "linear-gradient(to top, rgba(5,5,5,0.95) 0%, rgba(5,5,5,0.15) 55%, transparent 100%)" }}
         />
 
+        {/* Top-right badge: real (fake, deterministic) rating for now-showing films — doesn't make
+            sense for an unreleased film, so coming-soon films show the release date here instead. */}
         <div
           className="absolute right-2.5 top-2.5 flex items-center gap-1 rounded-lg px-2 py-1"
           style={{ backgroundColor: "rgba(5,5,5,0.75)", backdropFilter: "blur(8px)" }}
         >
-          <Star size={10} fill="#FFD700" style={{ color: "#FFD700" }} />
-          <span style={{ color: "#FFD700", fontSize: "0.7rem", fontWeight: 700 }}>{ratingOf(movie)}</span>
+          {isComingSoon ? (
+            <>
+              <Calendar size={10} style={{ color: "#FFD700" }} />
+              <span style={{ color: "#FFD700", fontSize: "0.65rem", fontWeight: 700 }}>{formatReleaseDate(movie.releaseDate)}</span>
+            </>
+          ) : (
+            <>
+              <Star size={10} fill="#FFD700" style={{ color: "#FFD700" }} />
+              <span style={{ color: "#FFD700", fontSize: "0.7rem", fontWeight: 700 }}>{ratingOf(movie)}</span>
+            </>
+          )}
         </div>
 
         <div className="absolute inset-x-0 bottom-0 p-4">
@@ -70,8 +90,32 @@ function PosterCard({ movie, onOpen }: { movie: MovieApiResponse; onOpen: () => 
   );
 }
 
+function MovieSection({
+  id, title, movies, onOpen,
+}: {
+  id: string; title: string; movies: MovieApiResponse[]; onOpen: (movie: MovieApiResponse) => void;
+}) {
+  if (movies.length === 0) return null;
+
+  return (
+    // scroll-mt-24 keeps the section clear of the fixed navbar (h-16) when the navbar
+    // dropdown links here via #now-showing / #coming-soon.
+    <div id={id} className="mb-12 last:mb-0 scroll-mt-24">
+      <h2 className="mb-5 text-xl font-extrabold text-white sm:text-2xl">
+        {title} <span className="text-white/40 font-semibold">({movies.length})</span>
+      </h2>
+      <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        {movies.map((movie) => (
+          <PosterCard key={movie.movieId} movie={movie} onOpen={() => onOpen(movie)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function MoviesPage() {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const [movies, setMovies] = useState<MovieApiResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState(searchParams.get("search") ?? "");
@@ -98,6 +142,16 @@ export default function MoviesPage() {
     };
   }, []);
 
+  // Navbar "Movies" dropdown links here as /movies#now-showing / #coming-soon — scroll to the
+  // matching section once it's actually in the DOM (sections don't exist until data has loaded).
+  // Re-runs on hash change too, so clicking the dropdown while already on this page still scrolls.
+  useEffect(() => {
+    if (loading) return;
+    const hash = location.hash.replace("#", "");
+    if (!hash) return;
+    document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [loading, location.hash]);
+
   const withPosters = useMemo(
     () => movies.filter((m) => m.status !== false && (m.largeImage || m.smallImage)),
     [movies]
@@ -115,6 +169,13 @@ export default function MoviesPage() {
       return matchesQuery && matchesGenre;
     });
   }, [withPosters, query, activeGenre]);
+
+  // getPublicMovies() already only returns NOW_SHOWING/COMING_SOON (see MovieService.findAllPublic
+  // on the backend) — ENDED/DRAFT/PENDING_REVIEW/etc. never reach this page, so no extra filtering
+  // is needed here beyond splitting the two visible statuses into their own sections. mockMovies
+  // (offline/error fallback) predates movieStatus and has no such field — treat it as now-showing.
+  const nowShowing = useMemo(() => filtered.filter((m) => m.movieStatus !== "COMING_SOON"), [filtered]);
+  const comingSoon = useMemo(() => filtered.filter((m) => m.movieStatus === "COMING_SOON"), [filtered]);
 
   return (
     <div className="min-h-screen pt-16" style={{ backgroundColor: "#050505" }}>
@@ -164,7 +225,7 @@ export default function MoviesPage() {
         </div>
       </div>
 
-      {/* Grid */}
+      {/* Sections: Now Showing / Coming Soon */}
       <div className="mx-auto max-w-7xl px-6 py-10">
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-24 text-white/60">
@@ -176,12 +237,8 @@ export default function MoviesPage() {
           </div>
         ) : (
           <>
-            <p className="mb-5 text-sm text-white/40">{filtered.length} movies</p>
-            <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-              {filtered.map((movie) => (
-                <PosterCard key={movie.movieId} movie={movie} onOpen={() => setSelectedMovie(enrichMovie(movie))} />
-              ))}
-            </div>
+            <MovieSection id="now-showing" title="Now Showing" movies={nowShowing} onOpen={(movie) => setSelectedMovie(enrichMovie(movie))} />
+            <MovieSection id="coming-soon" title="Coming Soon" movies={comingSoon} onOpen={(movie) => setSelectedMovie(enrichMovie(movie))} />
           </>
         )}
       </div>
