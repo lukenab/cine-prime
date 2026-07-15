@@ -2,12 +2,14 @@ package movieservice.service;
 
 import movie.theater.common.exception.AppException;
 import movieservice.dto.request.CastRequest;
+import movieservice.dto.request.CreateMovieRequest;
 import movieservice.dto.request.TranslationRequest;
 import movieservice.dto.request.UpdateMovieRequest;
 import movieservice.entity.*;
 import movieservice.enums.GenreStatus;
 import movieservice.enums.MovieStatus;
 import movieservice.exception.MovieErrorCode;
+import movieservice.exception.MovieReadinessException;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +19,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -46,6 +49,7 @@ class MovieServiceTest {
     @Mock ShowTimeService showTimeService;
     @Mock AuditLogService auditLogService;
     @Mock ImageStorageService imageStorageService;
+    @Mock MovieReadinessValidator movieReadinessValidator;
 
     private MovieService movieService;
     private Movie movie;
@@ -56,13 +60,14 @@ class MovieServiceTest {
                 movieRepository, movieMapper, genreRepository, ageRatingRepository,
                 screeningFormatRepository, productionCompanyRepository, personRepository,
                 movieCastRepository, movieTranslationRepository, cinemaRoomService,
-                showTimeService, auditLogService, imageStorageService);
+                showTimeService, auditLogService, imageStorageService, movieReadinessValidator);
 
         movie = Movie.builder().movieId(1L).originalTitle("Existing Movie").build();
-        when(movieRepository.findById(1L)).thenReturn(java.util.Optional.of(movie));
         // lenient(): cac test kiem tra "throw truoc khi mutate" khong bao gio toi duoc dong
         // save()/toMovieResponse() (exception nem ra som hon) - khong dung lenient() se bi
         // Mockito strict-stubbing bao UnnecessaryStubbingException oan cho chinh nhung test do.
+        // findById(1L) cung lenient() vi cac test createMovie() moi khong dong toi ID nay.
+        lenient().when(movieRepository.findById(1L)).thenReturn(java.util.Optional.of(movie));
         lenient().when(movieRepository.save(any(Movie.class))).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(movieMapper.toMovieResponse(any())).thenReturn(null);
     }
@@ -360,5 +365,108 @@ class MovieServiceTest {
         movieService.submitForReview(1L, "admin");
 
         verify(movieRepository).updateStatus(1L, MovieStatus.PENDING_REVIEW, "admin");
+    }
+
+    // ── MOV-03: readiness gates wired into create/update/submit/approve/release ──
+
+    @Test
+    void createMoviePropagatesInvalidDateRangeAndNeverSaves() {
+        CreateMovieRequest request = CreateMovieRequest.builder()
+                .originalTitle("New Movie")
+                .originalLanguage("en")
+                .durationMinutes(100)
+                .releaseDate(LocalDate.of(2026, 8, 10))
+                .endDate(LocalDate.of(2026, 8, 1))
+                .genreIds(List.of(1L))
+                .formatIds(List.of(1))
+                .build();
+        Movie mapped = Movie.builder().originalTitle("New Movie")
+                .releaseDate(request.getReleaseDate()).endDate(request.getEndDate()).build();
+        when(movieRepository.existsByOriginalTitleIgnoreCase("New Movie")).thenReturn(false);
+        when(movieMapper.toMovie(request)).thenReturn(mapped);
+        doThrow(new AppException(MovieErrorCode.INVALID_MOVIE_DATE_RANGE))
+                .when(movieReadinessValidator)
+                .requireValidDateRange(request.getReleaseDate(), request.getEndDate());
+
+        AppException ex = assertThrows(AppException.class, () -> movieService.createMovie(request));
+
+        assertEquals(MovieErrorCode.INVALID_MOVIE_DATE_RANGE, ex.getErrorCode());
+        verify(movieRepository, never()).save(any(Movie.class));
+    }
+
+    @Test
+    void updateMoviePropagatesInvalidDateRangeAfterMergingRequestOntoEntity() {
+        movie.setReleaseDate(LocalDate.of(2026, 1, 1));
+        movie.setEndDate(LocalDate.of(2026, 12, 31));
+        // Request only changes releaseDate (partial update) - merged state now has an inverted range.
+        UpdateMovieRequest request = UpdateMovieRequest.builder()
+                .releaseDate(LocalDate.of(2027, 1, 1))
+                .build();
+        doAnswer(inv -> {
+            movie.setReleaseDate(request.getReleaseDate());
+            return null;
+        }).when(movieMapper).updateMovieFromRequest(request, movie);
+        doThrow(new AppException(MovieErrorCode.INVALID_MOVIE_DATE_RANGE))
+                .when(movieReadinessValidator)
+                .requireValidDateRange(LocalDate.of(2027, 1, 1), LocalDate.of(2026, 12, 31));
+
+        AppException ex = assertThrows(AppException.class, () -> movieService.updateMovie(1L, request));
+
+        assertEquals(MovieErrorCode.INVALID_MOVIE_DATE_RANGE, ex.getErrorCode());
+        verify(movieRepository, never()).save(any(Movie.class));
+    }
+
+    @Test
+    void submitForReviewPropagatesReadinessViolationAndNeverUpdatesStatus() {
+        movie.setStatus(MovieStatus.DRAFT);
+        movie.setGenres(List.of());
+        doThrow(new MovieReadinessException(MovieErrorCode.MOVIE_NOT_READY_FOR_REVIEW, List.of()))
+                .when(movieReadinessValidator).requireReadyForReview(movie);
+
+        assertThrows(MovieReadinessException.class, () -> movieService.submitForReview(1L, "admin"));
+
+        verify(movieRepository, never()).updateStatus(any(), any(), any());
+    }
+
+    @Test
+    void approveMoviePropagatesReadinessViolationAndNeverUpdatesStatus() {
+        movie.setStatus(MovieStatus.PENDING_REVIEW);
+        doThrow(new MovieReadinessException(MovieErrorCode.MOVIE_NOT_READY_FOR_APPROVAL, List.of()))
+                .when(movieReadinessValidator).requireReadyForApproval(movie);
+
+        assertThrows(MovieReadinessException.class, () -> movieService.approveMovie(1L, "admin"));
+
+        verify(movieRepository, never()).updateStatus(any(), any(), any());
+    }
+
+    @Test
+    void approveMovieSucceedsWhenValidatorPasses() {
+        movie.setStatus(MovieStatus.PENDING_REVIEW);
+
+        movieService.approveMovie(1L, "admin");
+
+        verify(movieReadinessValidator).requireReadyForApproval(movie);
+        verify(movieRepository).updateStatus(1L, MovieStatus.COMING_SOON, "admin");
+    }
+
+    @Test
+    void releaseMoviePropagatesReadinessViolationAndNeverUpdatesStatus() {
+        movie.setStatus(MovieStatus.COMING_SOON);
+        doThrow(new MovieReadinessException(MovieErrorCode.MOVIE_NOT_READY_FOR_RELEASE, List.of()))
+                .when(movieReadinessValidator).requireReadyForRelease(movie);
+
+        assertThrows(MovieReadinessException.class, () -> movieService.releaseMovie(1L, "admin"));
+
+        verify(movieRepository, never()).updateStatus(any(), any(), any());
+    }
+
+    @Test
+    void releaseMovieSucceedsWhenValidatorPasses() {
+        movie.setStatus(MovieStatus.COMING_SOON);
+
+        movieService.releaseMovie(1L, "admin");
+
+        verify(movieReadinessValidator).requireReadyForRelease(movie);
+        verify(movieRepository).updateStatus(1L, MovieStatus.NOW_SHOWING, "admin");
     }
 }

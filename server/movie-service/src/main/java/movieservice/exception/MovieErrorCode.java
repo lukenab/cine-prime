@@ -114,7 +114,15 @@ public enum MovieErrorCode implements BaseErrorCode {
 
     GENRE_PENDING_REVIEW(2040,
             "Cannot submit for review while the movie has a genre still PENDING_REVIEW.",
-            HttpStatus.BAD_REQUEST);
+            HttpStatus.BAD_REQUEST),
+
+    INVALID_MOVIE_DATE_RANGE(2036,
+            "releaseDate must be on or before endDate.",
+            HttpStatus.BAD_REQUEST),
+
+    MOVIE_NOT_READY_FOR_REVIEW(2041, "Movie is not ready for review.", HttpStatus.BAD_REQUEST),
+    MOVIE_NOT_READY_FOR_APPROVAL(2042, "Movie is not ready for approval.", HttpStatus.BAD_REQUEST),
+    MOVIE_NOT_READY_FOR_RELEASE(2043, "Movie is not ready for release.", HttpStatus.BAD_REQUEST);
 
     int code;
     String message;

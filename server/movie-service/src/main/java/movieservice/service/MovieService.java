@@ -54,6 +54,7 @@ public class MovieService {
     ShowTimeService showTimeService;
     AuditLogService auditLogService;
     ImageStorageService imageStorageService;
+    MovieReadinessValidator movieReadinessValidator;
 
     private static final long MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 
@@ -68,6 +69,7 @@ public class MovieService {
 
         Movie movie = movieMapper.toMovie(request);
         movie.setStatus(MovieStatus.DRAFT);
+        movieReadinessValidator.requireValidDateRange(movie.getReleaseDate(), movie.getEndDate());
 
         // Wire FK references
         if (request.getAgeRatingId() != null) {
@@ -197,6 +199,7 @@ public class MovieService {
 
         // 1) Scalar fields - null-safe qua @BeanMapping(IGNORE) tren mapper.
         movieMapper.updateMovieFromRequest(request, movie);
+        movieReadinessValidator.requireValidDateRange(movie.getReleaseDate(), movie.getEndDate());
 
         // 2) FK don le - null nghia la khong doi (giu nguyen quan he hien tai).
         if (request.getAgeRatingId() != null) {
@@ -372,7 +375,11 @@ public class MovieService {
     /**
      * TMDB-FIX-03: blocks DRAFT -> PENDING_REVIEW while the movie still has a genre that was
      * auto-created from an unmapped TMDB genre and hasn't been promoted to ACTIVE by a genre
-     * admin yet (see TmdbService.createPendingReviewGenre()).
+     * admin yet (see TmdbService.createPendingReviewGenre()). Kept as its own specific error
+     * (GENRE_PENDING_REVIEW) ahead of the generic MOV-03 gate below rather than folded into it,
+     * so this pre-existing, already-tested behavior doesn't change shape.
+     * MOV-03: also requires title/language/runtime/genre/format/date-range readiness
+     * (MovieReadinessValidator.requireReadyForReview()) before allowing the transition.
      */
     @Transactional
     public void submitForReview(Long id, String updatedBy) {
@@ -382,12 +389,15 @@ public class MovieService {
         if (hasPendingGenre) {
             throw new AppException(MovieErrorCode.GENRE_PENDING_REVIEW);
         }
+        movieReadinessValidator.requireReadyForReview(movie);
         movieRepository.updateStatus(id, MovieStatus.PENDING_REVIEW, updatedBy);
     }
 
+    /** MOV-03: requires age classification, primary image, synopsis/localized title and valid genre refs. */
     @Transactional
     public void approveMovie(Long id, String updatedBy) {
-        requireStatus(id, MovieStatus.PENDING_REVIEW);
+        Movie movie = requireStatus(id, MovieStatus.PENDING_REVIEW);
+        movieReadinessValidator.requireReadyForApproval(movie);
         movieRepository.updateStatus(id, MovieStatus.COMING_SOON, updatedBy);
     }
 
@@ -425,10 +435,15 @@ public class MovieService {
         movieRepository.updateStatus(id, MovieStatus.DRAFT, updatedBy);
     }
 
-    /** COMING_SOON → NOW_SHOWING: admin mở bán vé khi phim bắt đầu chiếu */
+    /**
+     * COMING_SOON → NOW_SHOWING: admin mở bán vé khi phim bắt đầu chiếu.
+     * MOV-03: also requires approval readiness plus release-window/showtime-policy readiness
+     * (MovieReadinessValidator.requireReadyForRelease()).
+     */
     @Transactional
     public void releaseMovie(Long id, String updatedBy) {
-        requireStatus(id, MovieStatus.COMING_SOON);
+        Movie movie = requireStatus(id, MovieStatus.COMING_SOON);
+        movieReadinessValidator.requireReadyForRelease(movie);
         movieRepository.updateStatus(id, MovieStatus.NOW_SHOWING, updatedBy);
     }
 
