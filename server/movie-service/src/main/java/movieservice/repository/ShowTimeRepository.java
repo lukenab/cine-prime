@@ -29,6 +29,15 @@ public interface ShowTimeRepository extends JpaRepository<ShowTime, Long> {
                         @Param("currentDate") LocalDate currentDate,
                         @Param("currentTime") LocalTime currentTime);
 
+        /** MOV-03 release gate: same as existsByMovieMovieIdAndFutureShowTime but excludes CANCELLED. */
+        @Query("SELECT COUNT(s) > 0 FROM ShowTime s WHERE s.movie.movieId = :movieId " +
+                        "AND s.status <> movieservice.enums.ShowTimeStatus.CANCELLED " +
+                        "AND (s.showDate > :currentDate OR (s.showDate = :currentDate AND s.startTime > :currentTime))")
+        boolean existsByMovieMovieIdAndFutureNonCancelledShowTime(
+                        @Param("movieId") Long movieId,
+                        @Param("currentDate") LocalDate currentDate,
+                        @Param("currentTime") LocalTime currentTime);
+
         @Query("SELECT COUNT(s) > 0 FROM ShowTime s WHERE s.showTimeId = :showTimeId " +
                         "AND (s.showDate > :currentDate OR (s.showDate = :currentDate AND s.startTime > :currentTime))")
         boolean existsByShowTimeIdAndFutureShowTime(

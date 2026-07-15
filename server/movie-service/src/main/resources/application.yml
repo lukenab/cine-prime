@@ -40,6 +40,11 @@ jwt:
 tmdb:
   api-key: 4cf6e7ff7b2095ae0d09da1cae2f1606
 
+movie:
+  readiness:
+    # MOV-03 release gate: require >=1 future non-cancelled showtime before COMING_SOON -> NOW_SHOWING.
+    require-showtime-for-release: ${MOVIE_REQUIRE_SHOWTIME_FOR_RELEASE:false}
+
 CLOUDINARY:
   CLOUD_NAME: dzlfgmtbc
   API_KEY: 144287537763843
