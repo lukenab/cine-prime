@@ -637,4 +637,76 @@ ON CONFLICT (genre_code) DO NOTHING;
 -- 5. ShowtimeSeat.SeatStatus enum: thêm BLOCKED, CANCELLED
 -- 6. CreateMovieRequest: bỏ movieNameVn/English, director/actor VARCHAR, version VARCHAR
 --    → thêm originalTitle, translations List<TranslationDto>, castIds List<CastDto>, formatIds List<Long>
-                     
+
+-- =============================================================================
+-- CINEMA CLUSTER SCHEMA
+-- Mirrors migrations V3–V9 and V15 so a fresh movie_db has the current cluster schema.
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS cinema_cluster (
+    cluster_id    BIGSERIAL     PRIMARY KEY,
+    cluster_name  VARCHAR(100)  NOT NULL,
+    province      VARCHAR(100)  NOT NULL,
+    address       VARCHAR(255)  NOT NULL,
+    phone_number  VARCHAR(20),
+    status        VARCHAR(20)   NOT NULL DEFAULT 'ACTIVE'
+                  CONSTRAINT chk_cluster_status
+                      CHECK (status IN ('DRAFT', 'PENDING_REVIEW', 'ACTIVE', 'INACTIVE')),
+    created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    latitude      DECIMAL(10, 7),
+    longitude     DECIMAL(10, 7),
+    rejection_note TEXT,
+    created_by    VARCHAR(100),
+    updated_by    VARCHAR(100)
+);
+
+CREATE TRIGGER trg_cinema_cluster_updated_at
+    BEFORE UPDATE ON cinema_cluster
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+ALTER TABLE cinema_room
+    ADD COLUMN IF NOT EXISTS cluster_id BIGINT
+        REFERENCES cinema_cluster(cluster_id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_cinema_room_cluster ON cinema_room(cluster_id);
+
+CREATE TABLE IF NOT EXISTS cluster_audit_log (
+    log_id       VARCHAR(36)   PRIMARY KEY,
+    cluster_id   BIGINT        NOT NULL
+                     REFERENCES cinema_cluster(cluster_id) ON DELETE CASCADE,
+    action       VARCHAR(20)   NOT NULL,
+    performed_by VARCHAR(255),
+    old_status   VARCHAR(20),
+    new_status   VARCHAR(20),
+    note         TEXT,
+    timestamp    TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cluster_audit_log_cluster_id
+    ON cluster_audit_log(cluster_id);
+
+CREATE INDEX IF NOT EXISTS idx_cluster_audit_log_timestamp
+    ON cluster_audit_log(timestamp DESC);
+
+INSERT INTO cinema_cluster
+        (cluster_id, cluster_name, province, address, phone_number, status, latitude, longitude)
+VALUES
+    (1, 'CinePrime Quận 1',    'TP. Hồ Chí Minh', '123 Nguyễn Huệ, Quận 1',       '19001000', 'ACTIVE',   10.7769660, 106.7009650),
+    (2, 'CinePrime Thủ Đức',   'TP. Hồ Chí Minh', '456 Võ Văn Ngân, TP. Thủ Đức', '19001000', 'ACTIVE',   10.8500000, 106.7716670),
+    (3, 'CinePrime Hoàn Kiếm', 'Hà Nội',          '78 Hàng Bài, Hoàn Kiếm',       '19001000', 'ACTIVE',   21.0285110, 105.8341600),
+    (4, 'CinePrime Cầu Giấy',  'Hà Nội',          '22 Xuân Thủy, Cầu Giấy',        '19001000', 'ACTIVE',   21.0363890, 105.7822220),
+    (5, 'CinePrime Hải Châu',  'Đà Nẵng',         '30 Trần Phú, Hải Châu',         '19001000', 'ACTIVE',   16.0680000, 108.2120000),
+    (6, 'CinePrime Ninh Kiều', 'Cần Thơ',         '15 Hai Bà Trưng, Ninh Kiều',    '19001000', 'INACTIVE', 10.0333330, 105.7833330)
+ON CONFLICT (cluster_id) DO NOTHING;
+
+SELECT setval(pg_get_serial_sequence('cinema_cluster', 'cluster_id'), 6, true);
+
+UPDATE cinema_room SET cluster_id = 1 WHERE cluster_id IS NULL;
+
+ALTER TABLE cinema_room
+    ADD CONSTRAINT uq_room_name_per_cluster
+    UNIQUE (cluster_id, cinema_room_name);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_cluster_name_ci
+    ON cinema_cluster (LOWER(cluster_name));

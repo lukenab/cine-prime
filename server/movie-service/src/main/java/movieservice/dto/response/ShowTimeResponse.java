@@ -15,8 +15,6 @@ public class ShowTimeResponse {
 
     Long showTimeId;
 
-    BigDecimal basePrice;
-
     LocalDate showDate;
 
     LocalTime startTime;

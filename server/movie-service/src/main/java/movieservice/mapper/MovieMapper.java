@@ -30,6 +30,12 @@ public interface MovieMapper {
     @Mapping(target = "company", ignore = true)
     Movie toMovie(CreateMovieRequest request);
 
+    // NullValuePropertyMappingStrategy.IGNORE: field khong xuat hien hoac gui null trong
+    // UpdateMovieRequest se KHONG ghi de gia tri hien co tren entity (xem issue #143 - truoc day
+    // MapStruct mac dinh se set null len entity cho moi field null trong request, gay mat du lieu
+    // khi client chi gui partial payload). FK/collection van duoc xu ly rieng trong MovieService
+    // (ignore o day) vi can validate ID ton tai / reconcile chu khong the map thang 1-doi-1.
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "movieId", ignore = true)
     @Mapping(target = "status", ignore = true)
     @Mapping(target = "genres", ignore = true)
@@ -93,6 +99,8 @@ public interface MovieMapper {
     @Mapping(target = "rooms", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
     CinemaCluster toCinemaCluster(CinemaClusterRequest request);
 
     @Mapping(target = "status", expression = "java(cluster.getStatus() != null ? cluster.getStatus().name() : null)")

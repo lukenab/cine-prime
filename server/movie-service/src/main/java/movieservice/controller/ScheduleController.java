@@ -8,6 +8,7 @@ import movieservice.dto.request.CreateShowTimeRequest;
 import movieservice.dto.request.UpdateShowTimeRequest;
 import movieservice.dto.response.BulkShowTimeCreateResponse;
 import movieservice.dto.response.BulkShowTimePreviewResponse;
+import movieservice.dto.response.ShowTimePricingResponse;
 import movieservice.dto.response.ShowTimeResponse;
 import movieservice.service.ShowTimeService;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -59,9 +60,9 @@ public class ScheduleController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasRole('ADMIN')")
-    public ApiResponse<ShowTimeResponse> createShowTime(
+    public ApiResponse<ShowTimePricingResponse> createShowTime(
             @Valid @RequestBody CreateShowTimeRequest request) {
-        return ApiResponse.<ShowTimeResponse>builder()
+        return ApiResponse.<ShowTimePricingResponse>builder()
                 .code(1000)
                 .message("Showtime created successfully")
                 .result(showTimeService.createStandalone(request))
@@ -94,10 +95,10 @@ public class ScheduleController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ApiResponse<ShowTimeResponse> updateShowTime(
+    public ApiResponse<ShowTimePricingResponse> updateShowTime(
             @PathVariable Long id,
-            @RequestBody UpdateShowTimeRequest request) {
-        return ApiResponse.<ShowTimeResponse>builder()
+            @Valid @RequestBody UpdateShowTimeRequest request) {
+        return ApiResponse.<ShowTimePricingResponse>builder()
                 .code(1000)
                 .message("Showtime updated successfully")
                 .result(showTimeService.update(id, request))

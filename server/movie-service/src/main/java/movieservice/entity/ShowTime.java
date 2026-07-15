@@ -55,9 +55,8 @@ public class ShowTime {
     @Column(name = "subtitle_code", length = 10)
     String subtitleCode;
 
-    @Column(name = "base_price", nullable = false, precision = 10, scale = 2)
-    @Builder.Default
-    BigDecimal basePrice = BigDecimal.ZERO;
+    @Column(name = "base_price", precision = 12, scale = 2)
+    BigDecimal basePrice;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
