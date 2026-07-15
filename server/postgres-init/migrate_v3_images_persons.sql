@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS movie_image (
     created_at    TIMESTAMPTZ   DEFAULT NOW(),
 
     CONSTRAINT chk_image_type CHECK (
-        image_type IN ('POSTER', 'BACKDROP', 'STILL', 'PROMOTIONAL')
+        image_type IN ('POSTER', 'BACKDROP', 'STILL', 'PROMOTIONAL', 'LOGO')
     )
 );
 
