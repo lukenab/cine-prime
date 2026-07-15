@@ -56,8 +56,8 @@ public class AuthEventPublisher {
             log.error("Interrupted while publishing event to topic {}", topic, e);
             throw new AppException(GlobalErrorCode.UNCATEGORIZED_EXCEPTION);
         } catch (ExecutionException | TimeoutException e) {
-            log.error("Failed to publish event to topic {}", topic, e);
-            throw new AppException(GGlobalErrorCode.UNCATEGORIZED_EXCEPTION);
+            log.error("Failed to send event to Kafka topic {}: {}", topic, e.getMessage());
+            throw new AppException(GlobalErrorCode.UNCATEGORIZED_EXCEPTION);
         }
     }
 }
