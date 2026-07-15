@@ -55,6 +55,12 @@ public class CinemaCluster {
     @Column(name = "updated_at")
     LocalDateTime updatedAt;
 
+    @Column(name = "created_by", length = 100)
+    String createdBy;
+
+    @Column(name = "updated_by", length = 100)
+    String updatedBy;
+
     @OneToMany(mappedBy = "cluster", fetch = FetchType.LAZY)
     List<CinemaRoom> rooms;
 

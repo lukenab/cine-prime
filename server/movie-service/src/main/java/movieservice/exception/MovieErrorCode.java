@@ -90,6 +90,18 @@ public enum MovieErrorCode implements BaseErrorCode {
 
     COUPLE_ROW_REQUIRES_EVEN_SEATS(2033,
             "seatsPerRow must be even when the room contains Couple rows.",
+            HttpStatus.BAD_REQUEST),
+
+    DUPLICATE_TRANSLATION_LANGUAGE(2034,
+            "Duplicate languageCode found in translations request.",
+            HttpStatus.BAD_REQUEST),
+
+    DUPLICATE_CAST_ENTRY(2035,
+            "Duplicate (personId, roleType) combination found in cast request.",
+            HttpStatus.BAD_REQUEST),
+
+    BULK_SHOWTIME_REQUEST_TOO_LARGE(2037,
+            "Bulk showtime request exceeds the allowed date range or candidate limit.",
             HttpStatus.BAD_REQUEST);
 
     int code;

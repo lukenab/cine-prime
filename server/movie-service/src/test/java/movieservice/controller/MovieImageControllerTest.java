@@ -65,7 +65,7 @@ public class MovieImageControllerTest {
         Movie mockMovie = new Movie();
         mockMovie.setMovieId(1L);
         org.mockito.Mockito.lenient().when(movieRepository.findById(1L)).thenReturn(Optional.of(mockMovie));
-        
+
         org.mockito.Mockito.lenient().when(movieImageRepository.save(any(MovieImage.class))).thenAnswer(invocation -> {
             MovieImage img = invocation.getArgument(0);
             img.setImageId(100L);
@@ -90,7 +90,7 @@ public class MovieImageControllerTest {
                 .imageType(type)
                 .displayOrder(1)
                 .build();
-                
+
         when(movieMapper.toMovieImageResponse(any(MovieImage.class))).thenReturn(mockResponse);
 
         mockMvc.perform(post("/api/movies/1/images")
@@ -108,10 +108,10 @@ public class MovieImageControllerTest {
     @Test
     void addImage_LegacyMixedCase_Returns201() throws Exception {
         // Test mixed case parsing from JSON which should be handled by Jackson/Enum conversion
-        // Actually, Jackson default Enum mapping is case-sensitive unless configured, 
-        // but if the user requested testing "legacy mixed-case" via controller, 
-        // we might need to verify if the controller accepts it. Wait, the PR says: 
-        // "Test legacy mixed-case and CHECK constraint". 
+        // Actually, Jackson default Enum mapping is case-sensitive unless configured,
+        // but if the user requested testing "legacy mixed-case" via controller,
+        // we might need to verify if the controller accepts it. Wait, the PR says:
+        // "Test legacy mixed-case and CHECK constraint".
         // Legacy mixed case means existing DB data, but maybe they also mean request mapping?
         // Let's just test that the controller rejects invalid type with domain error code 1005.
     }

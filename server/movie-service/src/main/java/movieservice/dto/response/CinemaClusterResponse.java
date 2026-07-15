@@ -22,4 +22,6 @@ public class CinemaClusterResponse {
     String rejectionNote;
     Integer totalRooms;
     Integer totalSeats;
+    String createdBy;
+    String updatedBy;
 }

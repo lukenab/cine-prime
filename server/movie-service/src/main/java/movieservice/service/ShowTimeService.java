@@ -4,7 +4,11 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -19,9 +23,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.exception.AppException;
+import movieservice.dto.request.BulkShowTimeRequest;
 import movieservice.dto.request.CreateShowTimeRequest;
 import movieservice.dto.request.ShowTimeRequest;
 import movieservice.dto.request.UpdateShowTimeRequest;
+import movieservice.dto.response.BulkShowTimeCreateResponse;
+import movieservice.dto.response.BulkShowTimePreviewResponse;
+import movieservice.dto.response.ShowTimeCandidateDto;
+import movieservice.dto.response.ShowTimeConflictDto;
+import movieservice.dto.response.ShowTimePricingResponse;
 import movieservice.dto.response.ShowTimeResponse;
 import movieservice.dto.response.ShowtimeSeatDto;
 import movieservice.entity.CinemaRoom;
@@ -47,6 +57,8 @@ import movieservice.repository.SeatRepository;
 @Slf4j
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ShowTimeService {
+    private static final BigDecimal DEFAULT_SEAT_PRICE = new BigDecimal("85000.00");
+
     ShowTimeRepository showTimeRepository;
     ShowtimeSeatRepository showtimeSeatRepository;
     SeatRepository seatRepository;
@@ -75,7 +87,7 @@ public class ShowTimeService {
                 showtimeSeat.setSeat(seat);
                 showtimeSeat.setSeatCode(seat.getSeatCode());
                 showtimeSeat.setSeatType(seat.getSeatType() != null ? seat.getSeatType() : SeatType.STANDARD);
-                showtimeSeat.setPrice(seat.getPrice() != null ? seat.getPrice() : new java.math.BigDecimal("100000.00"));
+                showtimeSeat.setPrice(resolveSeatPrice(showTime, seat));
                 showtimeSeat.setStatus(ShowtimeSeatStatus.AVAILABLE);
                 return showtimeSeat;
             }).collect(Collectors.toList());
@@ -271,9 +283,11 @@ public class ShowTimeService {
 
     private static final LocalTime OPENING_TIME = LocalTime.of(8, 0);
     private static final LocalTime CLOSING_TIME  = LocalTime.of(23, 0);
+    private static final int MAX_BULK_DATE_RANGE_DAYS = 31;
+    private static final int MAX_BULK_CANDIDATES = 5_000;
 
     @Transactional
-    public ShowTimeResponse createStandalone(CreateShowTimeRequest request) {
+    public ShowTimePricingResponse createStandalone(CreateShowTimeRequest request) {
         // 1. Movie exists
         Movie movie = movieRepository.findById(request.getMovieId())
                 .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
@@ -289,10 +303,8 @@ public class ShowTimeService {
 
         // 4. startTime in 08:00–23:00, endTime = startTime + duration <= 23:00
         LocalTime startTime = request.getStartTime();
-        LocalTime endTime   = startTime.plusMinutes(movie.getDurationMinutes());
-        if (startTime.isBefore(OPENING_TIME) || endTime.isAfter(CLOSING_TIME)) {
-            throw new AppException(MovieErrorCode.INVALID_SHOWTIME);
-        }
+        LocalTime endTime = validateAndCalculateEndTime(
+                request.getShowDate(), startTime, movie.getDurationMinutes());
 
         // 5. Overlap check with DB
         if (showTimeRepository.existsByCinemaRoomAndOverlappingTime(
@@ -311,12 +323,218 @@ public class ShowTimeService {
         showTime.setTotalSeats(room.getTotalSeatCapacity());
         showTime.setLanguageCode(request.getLanguageCode() != null ? request.getLanguageCode() : "vi");
         showTime.setSubtitleCode(request.getSubtitleCode());
+        showTime.setBasePrice(request.getBasePrice());
 
-        return toShowTimeResponse(showTimeRepository.save(showTime));
+        return toShowTimePricingResponse(showTimeRepository.save(showTime));
     }
 
+    // ── Bulk Generation API ───────────────────────────────────────────────────
+
+    /**
+     * POST /api/schedules/generate-preview
+     * Dry-run: generates candidate showtimes and detects conflicts without saving anything.
+     */
+    public BulkShowTimePreviewResponse generatePreview(BulkShowTimeRequest request) {
+        NormalizedBulkInput input = validateAndNormalizeBulkRequest(request);
+        Movie movie = movieRepository.findById(request.getMovieId())
+                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+
+        Map<Long, CinemaRoom> roomById = indexRooms(cinemaRoomRepository.findAllById(input.roomIds()));
+        List<ShowTime> existing = showTimeRepository.findActiveByRoomsAndDateRange(
+                input.roomIds(), request.getFromDate(), request.getToDate());
+        CandidateResult result = buildCandidateResult(request, input, movie, roomById, existing);
+
+        return BulkShowTimePreviewResponse.builder()
+                .validCount(result.valid().size())
+                .conflictCount(result.conflicts().size())
+                .valid(result.valid())
+                .conflicts(result.conflicts())
+                .build();
+    }
+
+    /**
+     * POST /api/schedules/bulk
+     * Persists only the valid, non-conflicting candidates in a single transaction.
+     */
     @Transactional
-    public ShowTimeResponse update(Long id, UpdateShowTimeRequest request) {
+    public BulkShowTimeCreateResponse bulkCreate(BulkShowTimeRequest request) {
+        NormalizedBulkInput input = validateAndNormalizeBulkRequest(request);
+        Movie movie = movieRepository.findById(request.getMovieId())
+                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+
+        // Lock rooms in a stable order. Concurrent bulk requests touching the
+        // same rooms are serialized before the final conflict check and save.
+        Map<Long, CinemaRoom> roomById = indexRooms(
+                cinemaRoomRepository.findAllByIdForUpdate(input.roomIds()));
+        List<ShowTime> existing = showTimeRepository.findActiveByRoomsAndDateRange(
+                input.roomIds(), request.getFromDate(), request.getToDate());
+        CandidateResult result = buildCandidateResult(request, input, movie, roomById, existing);
+
+        // Build entities for all valid candidates
+        List<ShowTime> toSave = result.valid().stream().map(candidate -> {
+            CinemaRoom room = roomById.get(candidate.getCinemaRoomId());
+            ShowTime st = new ShowTime();
+            st.setMovie(movie);
+            st.setCinemaRoom(room);
+            st.setShowDate(candidate.getShowDate());
+            st.setStartTime(candidate.getStartTime());
+            st.setEndTime(candidate.getEndTime());
+            st.setStatus(ShowTimeStatus.SCHEDULED);
+            st.setTotalSeats(room.getTotalSeatCapacity());
+            st.setLanguageCode(request.getLanguageCode() != null ? request.getLanguageCode() : "vi");
+            st.setSubtitleCode(request.getSubtitleCode());
+            st.setBasePrice(request.getBasePrice());
+            return st;
+        }).collect(Collectors.toList());
+
+        List<ShowTime> saved = showTimeRepository.saveAllAndFlush(toSave);
+        List<ShowTimeResponse> createdResponses = saved.stream()
+                .map(this::toShowTimeResponse)
+                .collect(Collectors.toList());
+
+        return BulkShowTimeCreateResponse.builder()
+                .createdCount(createdResponses.size())
+                .skippedCount(result.conflicts().size())
+                .created(createdResponses)
+                .skipped(result.conflicts())
+                .build();
+    }
+
+    /**
+     * Shared candidate generation logic.
+     * Iterates every (room × date × startTime) combination, checks all validation rules,
+     * and sorts each candidate into either {@code valid} or {@code conflicts}.
+     */
+    private CandidateResult buildCandidateResult(
+            BulkShowTimeRequest request,
+            NormalizedBulkInput input,
+            Movie movie,
+            Map<Long, CinemaRoom> roomById,
+            List<ShowTime> existingShowTimes) {
+
+        int duration = movie.getDurationMinutes();
+        List<ShowTimeCandidateDto> valid = new ArrayList<>();
+        List<ShowTimeConflictDto> conflicts = new ArrayList<>();
+        Map<RoomDateKey, List<ShowTime>> existingByRoomAndDate = existingShowTimes.stream()
+                .collect(Collectors.groupingBy(showTime -> new RoomDateKey(
+                        showTime.getCinemaRoom().getCinemaRoomId(), showTime.getShowDate())));
+        Map<RoomDateKey, LocalTime> lastGeneratedEnd = new HashMap<>();
+
+        for (Long roomId : input.roomIds()) {
+            CinemaRoom room = roomById.get(roomId);
+            for (LocalDate date = request.getFromDate();
+                    !date.isAfter(request.getToDate()); date = date.plusDays(1)) {
+                RoomDateKey key = new RoomDateKey(roomId, date);
+                for (LocalTime startTime : input.startTimes()) {
+                    LocalDateTime endDateTime = LocalDateTime.of(date, startTime).plusMinutes(duration);
+                    LocalTime endTime = endDateTime.toLocalTime();
+                    String conflictReason = null;
+
+                    // 1. Minimum show date: must be >= today + 3
+                    if (room == null) {
+                        conflictReason = "Cinema room not found";
+                    }
+                    // 2. Operating hours: startTime in 08:00–23:00, endTime <= 23:00
+                    else if (isOutsideOperatingHours(date, startTime, endDateTime)) {
+                        conflictReason = "Showtime falls outside operating hours (08:00–23:00)";
+                    }
+                    // 3. Room overlap with existing DB records
+                    else if (overlapsExisting(
+                            existingByRoomAndDate.getOrDefault(key, List.of()), startTime, endTime)) {
+                        conflictReason = "Room is already booked for an overlapping showtime";
+                    }
+                    // 4. Overlap with other newly generated showtimes in this request
+                    else if (lastGeneratedEnd.containsKey(key)
+                            && startTime.isBefore(lastGeneratedEnd.get(key))) {
+                        conflictReason = "Conflict with another generated showtime in this request";
+                    }
+
+                    if (conflictReason != null) {
+                        conflicts.add(ShowTimeConflictDto.builder()
+                                .showDate(date)
+                                .startTime(startTime)
+                                .endTime(endTime)
+                                .cinemaRoomId(roomId)
+                                .cinemaRoomName(room != null ? room.getCinemaRoomName() : "Unknown")
+                                .reason(conflictReason)
+                                .build());
+                    } else {
+                        valid.add(ShowTimeCandidateDto.builder()
+                                .showDate(date)
+                                .startTime(startTime)
+                                .endTime(endTime)
+                                .cinemaRoomId(roomId)
+                                .cinemaRoomName(room.getCinemaRoomName())
+                                .build());
+                        lastGeneratedEnd.put(key, endTime);
+                    }
+                }
+            }
+        }
+        return new CandidateResult(valid, conflicts);
+    }
+
+    private NormalizedBulkInput validateAndNormalizeBulkRequest(BulkShowTimeRequest request) {
+        if (request.getFromDate().isAfter(request.getToDate())
+                || request.getFromDate().isBefore(LocalDate.now().plusDays(3))) {
+            throw new AppException(MovieErrorCode.INVALID_SHOWDATE);
+        }
+
+        long daysBetween = ChronoUnit.DAYS.between(request.getFromDate(), request.getToDate());
+        if (daysBetween > MAX_BULK_DATE_RANGE_DAYS) {
+            throw new AppException(MovieErrorCode.BULK_SHOWTIME_REQUEST_TOO_LARGE);
+        }
+
+        List<Long> roomIds = request.getCinemaRoomIds().stream().distinct().sorted().toList();
+        List<LocalTime> startTimes = request.getStartTimes().stream()
+                .distinct()
+                .sorted(Comparator.naturalOrder())
+                .toList();
+        long totalCandidates = (long) roomIds.size() * (daysBetween + 1) * startTimes.size();
+        if (totalCandidates > MAX_BULK_CANDIDATES) {
+            throw new AppException(MovieErrorCode.BULK_SHOWTIME_REQUEST_TOO_LARGE);
+        }
+        return new NormalizedBulkInput(roomIds, startTimes);
+    }
+
+    private Map<Long, CinemaRoom> indexRooms(List<CinemaRoom> rooms) {
+        Map<Long, CinemaRoom> roomById = new LinkedHashMap<>();
+        rooms.forEach(room -> roomById.put(room.getCinemaRoomId(), room));
+        return roomById;
+    }
+
+    private boolean overlapsExisting(List<ShowTime> existing, LocalTime startTime, LocalTime endTime) {
+        return existing.stream().anyMatch(showTime ->
+                startTime.isBefore(showTime.getEndTime())
+                        && endTime.isAfter(showTime.getStartTime()));
+    }
+
+    private boolean isOutsideOperatingHours(
+            LocalDate showDate, LocalTime startTime, LocalDateTime endDateTime) {
+        LocalDateTime closingDateTime = LocalDateTime.of(showDate, CLOSING_TIME);
+        return startTime.isBefore(OPENING_TIME) || endDateTime.isAfter(closingDateTime);
+    }
+
+    private LocalTime validateAndCalculateEndTime(
+            LocalDate showDate, LocalTime startTime, int durationMinutes) {
+        LocalDateTime endDateTime = LocalDateTime.of(showDate, startTime).plusMinutes(durationMinutes);
+        if (isOutsideOperatingHours(showDate, startTime, endDateTime)) {
+            throw new AppException(MovieErrorCode.INVALID_SHOWTIME);
+        }
+        return endDateTime.toLocalTime();
+    }
+
+    private record NormalizedBulkInput(List<Long> roomIds, List<LocalTime> startTimes) {}
+
+    private record CandidateResult(
+            List<ShowTimeCandidateDto> valid,
+            List<ShowTimeConflictDto> conflicts) {}
+
+    private record RoomDateKey(Long roomId, LocalDate showDate) {}
+
+
+    @Transactional
+    public ShowTimePricingResponse update(Long id, UpdateShowTimeRequest request) {
         ShowTime showTime = showTimeRepository.findById(id)
                 .orElseThrow(() -> new AppException(MovieErrorCode.SHOWTIME_NOT_FOUND));
 
@@ -342,12 +560,14 @@ public class ShowTimeService {
 
         if (request.getStartTime() != null) {
             LocalTime startTime = request.getStartTime();
-            LocalTime endTime   = startTime.plusMinutes(showTime.getMovie().getDurationMinutes());
-            if (startTime.isBefore(OPENING_TIME) || endTime.isAfter(CLOSING_TIME)) {
-                throw new AppException(MovieErrorCode.INVALID_SHOWTIME);
-            }
+            LocalTime endTime = validateAndCalculateEndTime(
+                    showTime.getShowDate(), startTime, showTime.getMovie().getDurationMinutes());
             showTime.setStartTime(startTime);
             showTime.setEndTime(endTime);
+        }
+
+        if (request.isBasePricePresent()) {
+            showTime.setBasePrice(request.getBasePrice());
         }
 
         // Rerun overlap check (excluding self) when room, date, or time changed
@@ -363,7 +583,11 @@ public class ShowTimeService {
         }
 
         // updatedAt được set tự động bởi @PreUpdate
-        return toShowTimeResponse(showTimeRepository.save(showTime));
+        ShowTime saved = showTimeRepository.save(showTime);
+        if (request.isBasePricePresent()) {
+            synchronizeUnbookedSeatPrices(saved);
+        }
+        return toShowTimePricingResponse(saved);
     }
 
     @Transactional
@@ -402,5 +626,45 @@ public class ShowTimeService {
         r.setUpdatedAt(s.getUpdatedAt());
         enrichPrices(List.of(r));
         return r;
+    }
+
+    private ShowTimePricingResponse toShowTimePricingResponse(ShowTime showTime) {
+        ShowTimePricingResponse response = new ShowTimePricingResponse();
+        response.setShowTimeId(showTime.getShowTimeId());
+        response.setShowDate(showTime.getShowDate());
+        response.setStartTime(showTime.getStartTime());
+        response.setEndTime(showTime.getEndTime());
+        response.setStatus(showTime.getStatus() != null ? showTime.getStatus().name() : null);
+        response.setUpdatedAt(showTime.getUpdatedAt());
+        response.setBasePrice(showTime.getBasePrice());
+        if (showTime.getMovie() != null) {
+            response.setMovieId(showTime.getMovie().getMovieId());
+            response.setMovieName(showTime.getMovie().getOriginalTitle());
+        }
+        if (showTime.getCinemaRoom() != null) {
+            response.setCinemaRoomId(showTime.getCinemaRoom().getCinemaRoomId());
+            response.setCinemaRoomName(showTime.getCinemaRoom().getCinemaRoomName());
+        }
+        return response;
+    }
+
+    private BigDecimal resolveSeatPrice(ShowTime showTime, Seat seat) {
+        if (showTime.getBasePrice() != null) {
+            return showTime.getBasePrice();
+        }
+        return seat.getPrice() != null ? seat.getPrice() : DEFAULT_SEAT_PRICE;
+    }
+
+    private void synchronizeUnbookedSeatPrices(ShowTime showTime) {
+        List<ShowtimeSeat> seats = showtimeSeatRepository
+                .findByShowTime_ShowTimeId(showTime.getShowTimeId());
+        List<ShowtimeSeat> mutableSeats = seats.stream()
+                .filter(seat -> seat.getStatus() == ShowtimeSeatStatus.AVAILABLE
+                        || seat.getStatus() == ShowtimeSeatStatus.BLOCKED)
+                .peek(seat -> seat.setPrice(resolveSeatPrice(showTime, seat.getSeat())))
+                .toList();
+        if (!mutableSeats.isEmpty()) {
+            showtimeSeatRepository.saveAll(mutableSeats);
+        }
     }
 }

@@ -325,3 +325,125 @@ VALUES
 ON CONFLICT (cinema_room_id) DO NOTHING;
 
 SELECT setval(pg_get_serial_sequence('cinema_room', 'cinema_room_id'), 4, true);
+
+-- -----------------------------------------------------------------------------
+-- 10. SEATS (Populate seats for Room 1, 2, 3, 4)
+-- -----------------------------------------------------------------------------
+DO $$
+DECLARE
+    r_id INT;
+    row_char CHAR(1);
+    col_idx INT;
+    s_type VARCHAR(20);
+    s_price DECIMAL(10,2);
+    row_labels CHAR(1)[] := ARRAY['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+BEGIN
+    -- Room 1 (IMAX - capacity 120, cols 1-12)
+    FOR r_id IN 1..1 LOOP
+        FOR i IN 1..10 LOOP
+            row_char := row_labels[i];
+            FOR col_idx IN 1..12 LOOP
+                IF row_char IN ('H', 'I') THEN
+                    s_type := 'VIP';
+                    s_price := 110000.00;
+                ELSIF row_char = 'J' THEN
+                    s_type := 'COUPLE';
+                    s_price := 160000.00;
+                ELSE
+                    s_type := 'STANDARD';
+                    s_price := 80000.00;
+                END IF;
+
+                INSERT INTO seat (cinema_room_id, seat_code, row_label, col_number, seat_type, status, base_price)
+                VALUES (r_id, row_char || col_idx, row_char, col_idx, s_type, 'ACTIVE', s_price)
+                ON CONFLICT (cinema_room_id, seat_code) DO NOTHING;
+            END LOOP;
+        END LOOP;
+    END LOOP;
+
+    -- Room 2 (LARGE - capacity 80, cols 1-10)
+    FOR r_id IN 2..2 LOOP
+        FOR i IN 1..8 LOOP
+            row_char := row_labels[i];
+            FOR col_idx IN 1..10 LOOP
+                IF row_char IN ('F', 'G') THEN
+                    s_type := 'VIP';
+                    s_price := 100000.00;
+                ELSIF row_char = 'H' THEN
+                    s_type := 'COUPLE';
+                    s_price := 150000.00;
+                ELSE
+                    s_type := 'STANDARD';
+                    s_price := 70000.00;
+                END IF;
+
+                INSERT INTO seat (cinema_room_id, seat_code, row_label, col_number, seat_type, status, base_price)
+                VALUES (r_id, row_char || col_idx, row_char, col_idx, s_type, 'ACTIVE', s_price)
+                ON CONFLICT (cinema_room_id, seat_code) DO NOTHING;
+            END LOOP;
+        END LOOP;
+    END LOOP;
+
+    -- Room 3 (Standard - capacity 100, cols 1-10)
+    -- Room 4 (Standard - capacity 100, cols 1-10)
+    FOR r_id IN 3..4 LOOP
+        FOR i IN 1..10 LOOP
+            row_char := row_labels[i];
+            FOR col_idx IN 1..10 LOOP
+                IF row_char IN ('G', 'H', 'I') THEN
+                    s_type := 'VIP';
+                    s_price := 90000.00;
+                ELSIF row_char = 'J' THEN
+                    s_type := 'COUPLE';
+                    s_price := 140000.00;
+                ELSE
+                    s_type := 'STANDARD';
+                    s_price := 60000.00;
+                END IF;
+
+                INSERT INTO seat (cinema_room_id, seat_code, row_label, col_number, seat_type, status, base_price)
+                VALUES (r_id, row_char || col_idx, row_char, col_idx, s_type, 'ACTIVE', s_price)
+                ON CONFLICT (cinema_room_id, seat_code) DO NOTHING;
+            END LOOP;
+        END LOOP;
+    END LOOP;
+END $$;
+
+-- -----------------------------------------------------------------------------
+-- 11. SHOWTIMES (Populate some sample showtimes for testing)
+-- -----------------------------------------------------------------------------
+DO $$
+DECLARE
+    current_d DATE := CURRENT_DATE + 3; -- Showtimes must be scheduled at least 3 days in advance
+    st_id BIGINT;
+BEGIN
+    -- Room 1 (IMAX): Movie 1 (Dune: Part Two) in IMAX (format 3)
+    INSERT INTO show_time (showtime_id, movie_id, cinema_room_id, format_id, show_date, start_time, end_time, base_price, status, total_seats, sold_seats)
+    VALUES 
+        (1, 1, 1, 3, current_d, '09:00:00', '11:46:00', 120000.00, 'SCHEDULED', 120, 0),
+        (2, 1, 1, 3, current_d, '13:00:00', '15:46:00', 120000.00, 'SCHEDULED', 120, 0),
+        (3, 1, 1, 3, current_d, '19:00:00', '21:46:00', 140000.00, 'SCHEDULED', 120, 0)
+    ON CONFLICT (showtime_id) DO NOTHING;
+
+    -- Room 2 (3D): Movie 2 (Deadpool & Wolverine) in 3D (format 2)
+    INSERT INTO show_time (showtime_id, movie_id, cinema_room_id, format_id, show_date, start_time, end_time, base_price, status, total_seats, sold_seats)
+    VALUES 
+        (4, 2, 2, 2, current_d, '10:00:00', '12:08:00', 90000.00, 'SCHEDULED', 80, 0),
+        (5, 2, 2, 2, current_d, '14:00:00', '16:08:00', 90000.00, 'SCHEDULED', 80, 0),
+        (6, 2, 2, 2, current_d, '20:00:00', '22:08:00', 110000.00, 'SCHEDULED', 80, 0)
+    ON CONFLICT (showtime_id) DO NOTHING;
+
+    -- Room 3 (Standard): Movie 3 (Inside Out 2) in 2D (format 1)
+    INSERT INTO show_time (showtime_id, movie_id, cinema_room_id, format_id, show_date, start_time, end_time, base_price, status, total_seats, sold_seats)
+    VALUES 
+        (7, 3, 3, 1, current_d, '08:30:00', '10:10:00', 70000.00, 'SCHEDULED', 100, 0),
+        (8, 3, 3, 1, current_d, '11:00:00', '12:40:00', 70000.00, 'SCHEDULED', 100, 0),
+        (9, 3, 3, 1, current_d, '15:00:00', '16:40:00', 80000.00, 'SCHEDULED', 100, 0)
+    ON CONFLICT (showtime_id) DO NOTHING;
+
+    -- Reset sequences
+    IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'show_time_showtime_id_seq') THEN
+        PERFORM setval('show_time_showtime_id_seq', 9, true);
+    END IF;
+END $$;
+
