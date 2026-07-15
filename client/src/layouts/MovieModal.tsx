@@ -11,6 +11,7 @@ import {
   type ProductionCompanyResponse,
   type PersonResponse,
   type TmdbSearchItem,
+  type CastRequest,
   type CreateMovieRequest,
   type UpdateMovieRequest,
   type MovieV2,
@@ -28,7 +29,14 @@ import {
 
 type CastRow = {
   _key: string;
-  personId: number;
+  /**
+   * Issue #188 companion fix: null nghia la cast nay den tu TMDB preview nhung CHUA tung
+   * duoc import vao DB (backend preview khong con tu tao Person nua). Se duoc resolveCastPersonIds()
+   * tao that su (POST /api/persons) ngay luc admin bam Save, dung luc command duoc xac nhan.
+   */
+  personId: number | null;
+  /** tmdbId goc tu TMDB - dung de tao Person moi (neu can) va giu provenance. */
+  tmdbPersonId?: number;
   fullName: string;
   photoUrl?: string;
   roleType: "ACTOR" | "DIRECTOR";
@@ -203,6 +211,14 @@ export function MovieModal({
   const [companyLoading, setCompanyLoading] = useState(false);
   const companyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const companyRef = useRef<HTMLDivElement>(null);
+  /**
+   * Issue #188 companion fix: company lay tu TMDB preview nhung CHUA tung duoc import
+   * (localCompanyId null) duoc giu tam o day - se tao that su (POST /api/companies) ngay
+   * luc admin bam Save (resolveCompanyId()), khong phai luc xem preview.
+   */
+  const [pendingCompany, setPendingCompany] = useState<
+    { name: string; country?: string; logoUrl?: string } | null
+  >(null);
 
   // ── Person search ──────────────────────────────────────────
   const [personQ, setPersonQ] = useState("");
@@ -242,6 +258,7 @@ export function MovieModal({
       setImageUrl("");
       setLocalEditId(null);
       setJustCreated(false);
+      setPendingCompany(null);
       return;
     }
     if (!editMovieId) {
@@ -358,7 +375,17 @@ export function MovieModal({
     return h > 0 ? `${h}h ${min}m` : `${min}m`;
   };
 
-  const buildPayload = (): CreateMovieRequest => {
+  /**
+   * Issue #188 companion fix: companyId/cast KHONG con doc truc tiep tu form.companyId /
+   * form.cast[].personId nua ma phai nhan tu tham so - buoc goi phai di qua
+   * resolveCompanyId()/resolveCastPersonIds() truoc (xem handleSubmit), dam bao moi Person/
+   * ProductionCompany con thieu (den tu TMDB, chua tung import) da duoc tao that su truoc khi
+   * xay dung payload nay.
+   */
+  const buildPayload = (
+    resolvedCompanyId: number | undefined,
+    resolvedCast: CastRequest[]
+  ): CreateMovieRequest => {
     const translations: { languageCode: string; title: string; synopsis?: string }[] = [];
     if (form.vi_title.trim())
       translations.push({ languageCode: "vi", title: form.vi_title.trim(), synopsis: form.vi_synopsis.trim() || undefined });
@@ -373,7 +400,7 @@ export function MovieModal({
       endDate: form.endDate || undefined,
       country: form.country.trim() || undefined,
       ageRatingId: form.ageRatingId ?? undefined,
-      companyId: form.companyId ?? undefined,
+      companyId: resolvedCompanyId,
       genreIds: form.genreIds,
       formatIds: form.formatIds,
       posterUrl: form.posterUrl.trim() || undefined,
@@ -382,13 +409,48 @@ export function MovieModal({
       tmdbId: form.tmdbId,
       imdbId: form.imdbId,
       translations: translations.length ? translations : undefined,
-      cast: form.cast.map((c, i) => ({
-        personId: c.personId,
+      cast: resolvedCast,
+    };
+  };
+
+  /**
+   * Issue #188 companion fix: tao that su ProductionCompany/Person con thieu (den tu TMDB
+   * preview, chua tung import - id null) NGAY LUC NAY, tuc la luc admin xac nhan Save, KHONG
+   * phai luc xem preview trong applyTmdb(). Neu form.companyId/personId da co san (chon tu
+   * dropdown, hoac TMDB company/person do tung duoc import roi) thi dung nguyen, khong tao lai.
+   */
+  const resolveCompanyId = async (): Promise<number | undefined> => {
+    if (form.companyId) return form.companyId;
+    if (!pendingCompany) return undefined;
+    const created = await movieApi.createCompany({
+      name: pendingCompany.name,
+      country: pendingCompany.country,
+      logoUrl: pendingCompany.logoUrl,
+    });
+    return created.result.companyId;
+  };
+
+  const resolveCastPersonIds = async (): Promise<CastRequest[]> => {
+    const resolved: CastRequest[] = [];
+    for (let i = 0; i < form.cast.length; i++) {
+      const c = form.cast[i];
+      let personId = c.personId;
+      if (personId == null) {
+        const created = await movieApi.createPerson({
+          fullName: c.fullName,
+          photoUrl: c.photoUrl,
+          tmdbId: c.tmdbPersonId,
+        });
+        personId = created.result.personId;
+      }
+      resolved.push({
+        personId,
         roleType: c.roleType,
         characterName: c.characterName.trim() || undefined,
         billingOrder: i + 1,
-      })),
-    };
+      });
+    }
+    return resolved;
   };
 
   const validate = (): { ok: boolean; errTab?: number; msg?: string } => {
@@ -414,12 +476,27 @@ export function MovieModal({
     setSubmitting(true);
     setError("");
     try {
+      // Issue #188 companion fix: tao that su moi ProductionCompany/Person con thieu (den tu
+      // TMDB, chua tung import) O DAY - luc admin xac nhan Save - khong phai luc xem preview.
+      const [resolvedCompanyId, resolvedCast] = await Promise.all([
+        resolveCompanyId(),
+        resolveCastPersonIds(),
+      ]);
+      // Ghi lai ID that vao form state de tranh tao trung Company/Person neu bam Save lan nua.
+      setForm((p) => ({
+        ...p,
+        companyId: resolvedCompanyId ?? p.companyId,
+        cast: p.cast.map((c, i) => ({ ...c, personId: resolvedCast[i]?.personId ?? c.personId })),
+      }));
+      setPendingCompany(null);
+
+      const payload = buildPayload(resolvedCompanyId, resolvedCast);
       if (editMovieId) {
-        await onUpdate(editMovieId, buildPayload());
+        await onUpdate(editMovieId, payload);
         onClose();
       } else {
         // After create: stay open, unlock Gallery tab with the new ID
-        const created = await onCreate(buildPayload());
+        const created = await onCreate(payload);
         setLocalEditId(created.movieId);
         setJustCreated(true);
         setTab(4); // Switch to Gallery
@@ -440,6 +517,20 @@ export function MovieModal({
       const details = response.result;
       const vietnamese = details.translations?.find((translation) => translation.languageCode === "vi");
       const english = details.translations?.find((translation) => translation.languageCode === "en");
+
+      // Issue #188: preview khong con tra san companyId/cast[].personId da-tao-truoc nua
+      // (backend fix ngan preview tu upsert Company/Person). Company dau tien duoc "khop thu"
+      // theo ten - neu chua tung import (localCompanyId null) thi giu lai thong tin TMDB goc
+      // trong pendingCompany, se tao that su luc admin bam Save (xem resolveCompanyId()).
+      const primaryCompany = details.companies?.[0];
+      if (primaryCompany) {
+        setPendingCompany(
+          primaryCompany.localCompanyId
+            ? null
+            : { name: primaryCompany.name, country: primaryCompany.country, logoUrl: primaryCompany.logoUrl }
+        );
+      }
+
       setForm((p) => ({
         ...p,
         originalTitle: details.originalTitle || item.originalTitle || item.title || p.originalTitle,
@@ -447,8 +538,8 @@ export function MovieModal({
         durationMinutes: details.durationMinutes || p.durationMinutes,
         releaseDate: details.releaseDate || item.releaseDate || p.releaseDate,
         country: details.country || p.country,
-        companyId: details.companyId ?? p.companyId,
-        companyName: details.companyName || p.companyName,
+        companyId: primaryCompany ? (primaryCompany.localCompanyId ?? null) : p.companyId,
+        companyName: primaryCompany ? primaryCompany.name : p.companyName,
         posterUrl: details.posterUrl || item.posterUrl || p.posterUrl,
         thumbnailUrl: details.posterUrl || item.posterUrl || p.thumbnailUrl,
         tmdbId: details.tmdbId,
@@ -459,9 +550,13 @@ export function MovieModal({
         vi_synopsis: vietnamese?.synopsis ?? p.vi_synopsis,
         en_title: english?.title ?? details.originalTitle ?? p.en_title,
         en_synopsis: english?.synopsis ?? details.overview ?? p.en_synopsis,
+        // Issue #188: cast moi (chua tung import - localPersonId null) van hien thi day du
+        // (ten/anh tu TMDB), chi la personId=null cho toi khi resolveCastPersonIds() tao that
+        // su luc Save. tmdbPersonId duoc giu lai de tao Person voi dung provenance.
         cast: (details.cast ?? []).map((member, index) => ({
-          _key: `${member.personId}-${member.roleType}-${index}`,
-          personId: member.personId,
+          _key: `${member.tmdbId}-${member.roleType}-${index}`,
+          personId: member.localPersonId ?? null,
+          tmdbPersonId: member.tmdbId,
           fullName: member.fullName,
           photoUrl: member.photoUrl,
           roleType: member.roleType === "DIRECTOR" ? "DIRECTOR" : "ACTOR",
