@@ -3,6 +3,8 @@ package movieservice.dto.response;
 import lombok.Builder;
 import lombok.Getter;
 
+import java.util.List;
+
 @Getter
 @Builder
 public class TmdbImportResponse {
@@ -12,4 +14,5 @@ public class TmdbImportResponse {
     String status;
     int importedCastCount;
     int importedCompanyCount;
+    List<String> warnings;
 }

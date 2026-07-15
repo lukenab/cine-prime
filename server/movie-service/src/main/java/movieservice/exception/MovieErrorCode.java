@@ -102,6 +102,18 @@ public enum MovieErrorCode implements BaseErrorCode {
 
     BULK_SHOWTIME_REQUEST_TOO_LARGE(2037,
             "Bulk showtime request exceeds the allowed date range or candidate limit.",
+            HttpStatus.BAD_REQUEST),
+
+    MISSING_RUNTIME(2038,
+            "TMDB did not provide a runtime for this movie. Provide confirmedRuntimeMinutes to import.",
+            HttpStatus.BAD_REQUEST),
+
+    UNRESOLVED_GENRE_MAPPING(2039,
+            "One or more TMDB genres are unmapped. Map, create as pending review, or ignore them before importing.",
+            HttpStatus.BAD_REQUEST),
+
+    GENRE_PENDING_REVIEW(2040,
+            "Cannot submit for review while the movie has a genre still PENDING_REVIEW.",
             HttpStatus.BAD_REQUEST);
 
     int code;

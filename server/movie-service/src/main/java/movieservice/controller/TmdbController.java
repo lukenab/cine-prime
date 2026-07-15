@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import movie.theater.common.dto.ApiResponse;
 import movieservice.dto.request.TmdbImportRequest;
+import movieservice.dto.response.TmdbGenreSyncResponse;
 import movieservice.dto.response.TmdbImportResponse;
 import movieservice.dto.response.TmdbMovieDetailsResponse;
 import movieservice.dto.response.TmdbSearchResultItem;
@@ -69,7 +70,17 @@ public class TmdbController {
     public ApiResponse<TmdbImportResponse> importMovie(@Valid @RequestBody TmdbImportRequest request) {
         return ApiResponse.<TmdbImportResponse>builder()
                 .code(200)
-                .result(tmdbService.importMovie(request.getTmdbId()))
+                .result(tmdbService.importMovie(request))
+                .build();
+    }
+
+    /** So sanh taxonomy genre cua TMDB voi mapping local, tra ve genre chua duoc map (read-only) */
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/genres/sync")
+    public ApiResponse<TmdbGenreSyncResponse> syncGenres() {
+        return ApiResponse.<TmdbGenreSyncResponse>builder()
+                .code(200)
+                .result(tmdbService.syncGenres())
                 .build();
     }
 }

@@ -12,6 +12,7 @@ import movieservice.dto.request.TranslationRequest;
 import movieservice.dto.request.UpdateMovieRequest;
 import movieservice.dto.response.MovieResponse;
 import movieservice.entity.*;
+import movieservice.enums.GenreStatus;
 import movieservice.enums.MovieStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
@@ -368,9 +369,19 @@ public class MovieService {
 
     // ── Status transitions ────────────────────────────────────
 
+    /**
+     * TMDB-FIX-03: blocks DRAFT -> PENDING_REVIEW while the movie still has a genre that was
+     * auto-created from an unmapped TMDB genre and hasn't been promoted to ACTIVE by a genre
+     * admin yet (see TmdbService.createPendingReviewGenre()).
+     */
     @Transactional
     public void submitForReview(Long id, String updatedBy) {
-        requireStatus(id, MovieStatus.DRAFT);
+        Movie movie = requireStatus(id, MovieStatus.DRAFT);
+        boolean hasPendingGenre = movie.getGenres() != null && movie.getGenres().stream()
+                .anyMatch(g -> g.getStatus() == GenreStatus.PENDING_REVIEW);
+        if (hasPendingGenre) {
+            throw new AppException(MovieErrorCode.GENRE_PENDING_REVIEW);
+        }
         movieRepository.updateStatus(id, MovieStatus.PENDING_REVIEW, updatedBy);
     }
 
@@ -502,11 +513,12 @@ public class MovieService {
         return result;
     }
 
-    private void requireStatus(Long id, MovieStatus required) {
+    private Movie requireStatus(Long id, MovieStatus required) {
         Movie movie = movieRepository.findById(id)
                 .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
         if (movie.getStatus() != required) {
             throw new AppException(MovieErrorCode.INVALID_STATUS_TRANSITION);
         }
+        return movie;
     }
 }
