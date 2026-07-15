@@ -7,6 +7,7 @@ import { MovieStatsCards } from "../../layouts/MovieStatsCards";
 import { MovieTable } from "../../layouts/MovieTable";
 import { MovieModal } from "../../layouts/MovieModal";
 import { MovieDetailModal } from "../../layouts/MovieDetailModal";
+import { PendingReviewModal } from "../../layouts/PendingReviewModal";
 import {
   movieApi,
   type MovieApiResponse,
@@ -46,6 +47,8 @@ export default function ManageMoviePage() {
   const [editMovie, setEditMovie] = useState<MovieApiResponse | null>(null);
   const [detailMovie, setDetailMovie] = useState<MovieV2 | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [reviewMovie, setReviewMovie] = useState<MovieV2 | null>(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
 
   // ── Load movies from API ──────────────────────────────────────────────────
   const loadMovies = useCallback(async () => {
@@ -112,11 +115,33 @@ export default function ManageMoviePage() {
   };
 
   const handleSubmit    = (id: number) => makeWorkflowHandler(() => movieApi.submitForReview(id),   "Submit")();
-  const handleApprove   = (id: number) => makeWorkflowHandler(() => movieApi.approveMovie(id),      "Approve")();
-  const handleReject = (id: number, note: string) =>
-    makeWorkflowHandler(() => movieApi.requestMovieChanges(id, note), "Request changes")();
   const handleRework = (id: number) =>
     makeWorkflowHandler(() => movieApi.startMovieRevision(id), "Start revision")();
+
+  // ── Pending Review panel (issue #139): fetch full movie detail so the modal has
+  // enough context (poster/genre/duration/releaseDate/ageRating/synopsis) to decide. ──
+  const handleReviewClick = async (movie: MovieApiResponse) => {
+    setReviewLoading(true);
+    setReviewMovie(null);
+    try {
+      const res = await movieApi.getMovieById(movie.movieId);
+      setReviewMovie(res.result);
+    } catch {
+      setReviewMovie(null);
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  const handleReviewApprove = async (id: number) => {
+    await movieApi.approveMovie(id);
+    await loadMovies();
+  };
+
+  const handleReviewReject = async (id: number, note: string) => {
+    await movieApi.requestMovieChanges(id, note);
+    await loadMovies();
+  };
 
   const handleCreate = async (data: CreateMovieRequest): Promise<MovieV2> => {
     const res = await movieApi.createMovieV2(data);
@@ -309,8 +334,7 @@ export default function ManageMoviePage() {
           onEdit={handleEditMovie}
           onDelete={handleDeleteMovie}
           onSubmit={handleSubmit}
-          onApprove={handleApprove}
-          onReject={handleReject}
+          onReviewClick={handleReviewClick}
           onRework={handleRework}
           searchQuery={searchQuery}
           genreFilter={genreFilter}
@@ -334,6 +358,15 @@ export default function ManageMoviePage() {
         movie={detailMovie}
         loading={detailLoading}
         onClose={() => { setDetailMovie(null); setDetailLoading(false); }}
+      />
+
+      <PendingReviewModal
+        open={Boolean(reviewMovie) || reviewLoading}
+        movie={reviewMovie}
+        loading={reviewLoading}
+        onClose={() => { setReviewMovie(null); setReviewLoading(false); }}
+        onApprove={handleReviewApprove}
+        onReject={handleReviewReject}
       />
 
       <style>{`
