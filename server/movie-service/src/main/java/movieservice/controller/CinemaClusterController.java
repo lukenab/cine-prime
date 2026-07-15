@@ -18,6 +18,7 @@ import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.ClusterAuditLogRepository;
+import movieservice.service.CinemaClusterService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -31,12 +32,9 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class CinemaClusterController {
 
-    // Toàn chuỗi dùng chung 1 hotline tổng đài — khớp thực tế CGV/Lotte/Galaxy/BHD
-    // (không cấu hình riêng theo từng cụm rạp), nên không cho nhập qua request nữa.
-    private static final String DEFAULT_HOTLINE = "19001000";
-
     CinemaClusterRepository clusterRepository;
     ClusterAuditLogRepository auditLogRepository;
+    CinemaClusterService cinemaClusterService;
     MovieMapper movieMapper;
 
     // ── GET all ───────────────────────────────────────────────────────────────
@@ -101,29 +99,10 @@ public class CinemaClusterController {
     public ApiResponse<CinemaClusterResponse> create(
             @Valid @RequestBody CinemaClusterRequest req,
             Authentication authentication) {
-
-        String clusterName = req.getClusterName().trim();
-        if (clusterRepository.existsByClusterNameIgnoreCase(clusterName)) {
-            throw new AppException(MovieErrorCode.CLUSTER_NAME_EXISTED);
-        }
-
-        CinemaCluster cluster = movieMapper.toCinemaCluster(req);
-        cluster.setClusterName(clusterName);
-        cluster.setProvince(req.getProvince().trim());
-        cluster.setAddress(req.getAddress().trim());
-        cluster.setPhoneNumber(DEFAULT_HOTLINE);
-        // EMPLOYEE submissions go through DRAFT → PENDING_REVIEW → ACTIVE.
-        // ADMIN already holds approval authority, so their own creations skip the review queue.
-        ClusterStatus initialStatus = isAdminRole(authentication) ? ClusterStatus.ACTIVE : ClusterStatus.DRAFT;
-        cluster.setStatus(initialStatus);
-
-        CinemaCluster saved = clusterRepository.save(cluster);
-
-        logAction(saved.getClusterId(), ClusterAction.CREATE, getActor(authentication),
-                null, initialStatus, null);
-
         return ApiResponse.<CinemaClusterResponse>builder()
-                .code(201).result(toResponseWithStats(saved)).build();
+                .code(201)
+                .result(cinemaClusterService.createCluster(req, authentication))
+                .build();
     }
 
     // ── PUT update data (+ ACTIVE↔INACTIVE toggle) ────────────────────────────
@@ -134,61 +113,10 @@ public class CinemaClusterController {
             @PathVariable Long id,
             @Valid @RequestBody CinemaClusterRequest req,
             Authentication authentication) {
-
-        CinemaCluster cluster = clusterRepository.findById(id)
-                .orElseThrow(() -> new AppException(MovieErrorCode.CLUSTER_NOT_FOUND));
-
-        ClusterStatus oldStatus = cluster.getStatus();
-        ClusterAction action = ClusterAction.UPDATE;
-        boolean isAdmin = isAdminRole(authentication);
-
-        // EMPLOYEE chỉ được sửa cluster đang DRAFT (chưa submit hoặc đã bị reject)
-        if (!isAdmin && oldStatus != ClusterStatus.DRAFT) {
-            throw new AppException(MovieErrorCode.CLUSTER_INVALID_TRANSITION);
-        }
-
-        // Handle optional status change — only ACTIVE↔INACTIVE allowed via PUT (ADMIN only)
-        if (req.getStatus() != null) {
-            ClusterStatus newStatus = req.getStatus();
-            if (newStatus == ClusterStatus.DRAFT || newStatus == ClusterStatus.PENDING_REVIEW) {
-                throw new AppException(MovieErrorCode.CLUSTER_INVALID_TRANSITION);
-            }
-            if (!isAdmin) {
-                // EMPLOYEE không được đổi status qua PUT
-                throw new AppException(MovieErrorCode.CLUSTER_INVALID_TRANSITION);
-            }
-            boolean validToggle =
-                    (oldStatus == ClusterStatus.ACTIVE && newStatus == ClusterStatus.INACTIVE) ||
-                    (oldStatus == ClusterStatus.INACTIVE && newStatus == ClusterStatus.ACTIVE);
-            if (!validToggle && oldStatus != newStatus) {
-                throw new AppException(MovieErrorCode.CLUSTER_INVALID_TRANSITION);
-            }
-            if (newStatus == ClusterStatus.INACTIVE) action = ClusterAction.DEACTIVATE;
-            else if (newStatus == ClusterStatus.ACTIVE && oldStatus == ClusterStatus.INACTIVE)
-                action = ClusterAction.REACTIVATE;
-            cluster.setStatus(newStatus);
-        }
-
-        String newName = req.getClusterName().trim();
-        if (clusterRepository.existsByClusterNameIgnoreCaseAndClusterIdNot(newName, id)) {
-            throw new AppException(MovieErrorCode.CLUSTER_NAME_EXISTED);
-        }
-
-        cluster.setClusterName(newName);
-        cluster.setProvince(req.getProvince().trim());
-        cluster.setAddress(req.getAddress().trim());
-        if (req.getLatitude() != null) cluster.setLatitude(req.getLatitude());
-        if (req.getLongitude() != null) cluster.setLongitude(req.getLongitude());
-        // Xóa rejection note khi employee cập nhật lại data
-        if (oldStatus == ClusterStatus.DRAFT) cluster.setRejectionNote(null);
-
-        CinemaCluster saved = clusterRepository.save(cluster);
-
-        logAction(saved.getClusterId(), action, getActor(authentication),
-                oldStatus, saved.getStatus(), null);
-
         return ApiResponse.<CinemaClusterResponse>builder()
-                .code(200).result(toResponseWithStats(saved)).build();
+                .code(200)
+                .result(cinemaClusterService.updateCluster(id, req, authentication))
+                .build();
     }
 
     // ── DELETE ────────────────────────────────────────────────────────────────

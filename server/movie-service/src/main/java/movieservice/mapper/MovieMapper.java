@@ -93,6 +93,8 @@ public interface MovieMapper {
     @Mapping(target = "rooms", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
     CinemaCluster toCinemaCluster(CinemaClusterRequest request);
 
     @Mapping(target = "status", expression = "java(cluster.getStatus() != null ? cluster.getStatus().name() : null)")
