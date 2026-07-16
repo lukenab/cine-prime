@@ -28,4 +28,15 @@ public class PersonRequest {
     String biography;
 
     Integer tmdbId;
+
+    @Size(max = 10, message = "Gender too long")
+    String gender;
+
+    @Size(max = 50, message = "Known-for department too long")
+    String knownForDepartment;
+
+    LocalDate deathDate;
+
+    @Size(max = 255, message = "Place of birth too long")
+    String placeOfBirth;
 }

@@ -19,5 +19,9 @@ public class PersonResponse {
     LocalDate birthDate;
     String biography;
     Integer tmdbId;
+    String gender;
+    String knownForDepartment;
+    LocalDate deathDate;
+    String placeOfBirth;
     LocalDateTime createdAt;
 }
