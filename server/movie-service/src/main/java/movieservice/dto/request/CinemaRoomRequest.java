@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Size;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import movieservice.enums.RoomType;
+import movieservice.enums.PresentationSystem;
 
 import java.math.BigDecimal;
 
@@ -60,4 +61,29 @@ public class CinemaRoomRequest {
 
     @NotNull(message = "Cluster is required — every room must belong to a cinema cluster")
     Long clusterId;
+
+    // ── Wizard fields (optional — used only when wizardMode = true) ────────
+    // When wizardMode is true, the legacy fields above (numberOfRows, seatsPerRow,
+    // standardRowCount, vipRowCount, coupleRowCount, defaultPrice) are ignored server
+    // side and may be sent as harmless placeholders: the room is created DRAFT with no
+    // flat Seat generation, and the real layout is authored afterwards through
+    // RoomLayoutController. See CinemaRoomService.createCinemaRoom().
+    Boolean wizardMode;
+
+    String roomCode;
+
+    Integer auditoriumClassId;
+
+    BigDecimal lengthM;
+    BigDecimal widthM;
+    BigDecimal clearHeightM;
+
+    Integer projectionTechnologyId;
+    PresentationSystem presentationSystem;
+    Integer resolutionId;
+    BigDecimal screenWidthM;
+    BigDecimal screenHeightM;
+    Boolean supports2d;
+    Boolean supports3d;
+    Integer audioFormatId;
 }

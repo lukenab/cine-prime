@@ -22,4 +22,8 @@ public interface CinemaRoomRepository extends JpaRepository<CinemaRoom, Long> {
 
     boolean existsByCluster_ClusterIdAndCinemaRoomName(Long clusterId, String cinemaRoomName);
     List<CinemaRoom> findByCluster_ClusterId(Long clusterId);
+
+    boolean existsByCluster_ClusterIdAndRoomCode(Long clusterId, String roomCode);
+    boolean existsByCluster_ClusterIdAndRoomCodeAndCinemaRoomIdNot(Long clusterId, String roomCode, Long excludeId);
+    boolean existsByCluster_ClusterIdAndCinemaRoomNameAndCinemaRoomIdNot(Long clusterId, String cinemaRoomName, Long excludeId);
 }

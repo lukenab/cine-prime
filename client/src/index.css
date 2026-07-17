@@ -54,6 +54,40 @@ body {
   margin: 0;
 }
 
+/* Stepper already provides explicit minus/plus controls. Native number-input
+   spinners consume the narrow value column and can cover two-digit values. */
+.number-stepper-input {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.number-stepper-input::-webkit-inner-spin-button,
+.number-stepper-input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* Native option popups otherwise inherit inconsistent Windows/browser colors.
+   This keeps cinema-room form selects readable in both application themes. */
+.cinema-select {
+  color-scheme: light;
+}
+
+.cinema-select option {
+  color: #111827;
+  background-color: #ffffff;
+}
+
+.dark .cinema-select {
+  color-scheme: dark;
+}
+
+.dark .cinema-select option {
+  color: #f3f4f6;
+  background-color: #18181b;
+}
+
 #root {
   width: 1126px;
   max-width: 100%;

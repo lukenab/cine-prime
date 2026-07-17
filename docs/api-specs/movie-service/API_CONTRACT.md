@@ -160,18 +160,100 @@
 
 **CinemaCluster response:** có thêm `createdBy` và `updatedBy` (có thể `null` với record cũ hoặc trước lần cập nhật đầu tiên).
 
+**Operational profile (V25):** request/response gồm `clusterCode`, `venueType`, `openingDate`,
+`publicEmail`, `countryCode`, `district`, `ward`, `postalCode`, `buildingName`,
+`floorLocation`, `timezone` và `operatingHours` đủ bảy ngày. `clusterCode` unique
+không phân biệt hoa/thường và không được đổi sau khi cluster rời `DRAFT`.
+
+Mỗi phần tử `operatingHours` có `dayOfWeek`, `opensAt`, `closesAt`,
+`closesNextDay`, `closed`. Ngày đóng cửa không được mang giờ; ngày mở cửa phải có
+đủ giờ mở/đóng. Hotline `19001000` tiếp tục được quản lý tập trung ở backend và
+không phải input của form. Section Tiện ích chưa thuộc contract hiện tại.
+
 ---
 
 ### 4.9 Cinema Rooms — `/api/cinema-rooms`
 
 | Method | Endpoint | Mô tả | Auth |
 |--------|----------|-------|------|
-| `GET` | `/api/cinema-rooms` | Lấy toàn bộ phòng, hỗ trợ `?clusterId=` | Public |
-| `POST` | `/api/cinema-rooms` | Tạo phòng mới (tự động generate seats) | Public |
+| `GET` | `/api/cinema-rooms` | Lấy toàn bộ phòng, hỗ trợ `?clusterId=` — response đã bao gồm các field wizard (roomCode, dimensions, master-data flat fields, activeLayout) | Public |
+| `POST` | `/api/cinema-rooms` | Tạo phòng mới. Payload legacy (không có `wizardMode`) → tự generate seats, status `ACTIVE` ngay, hành vi y hệt trước đây. Payload `wizardMode: true` → tạo phòng `DRAFT` + layout v1 rỗng, không generate seat | ADMIN / EMPLOYEE |
+| `GET` | `/api/cinema-rooms/{id}` | Lấy chi tiết 1 phòng (mới) — dùng để resume wizard draft sau khi reload | Public |
+| `PUT` | `/api/cinema-rooms/{id}` | Cập nhật field bước 1/2 của wizard (roomCode, tên, auditoriumClassId, kích thước, presentationSystem, projection/resolution/screen/audio/2D/3D) — chỉ khi phòng đang `DRAFT` (mới) | ADMIN / EMPLOYEE |
 | `GET` | `/api/cinema-rooms/{id}/seats` | Lấy danh sách ghế của phòng | Public |
 | `POST` | `/api/cinema-rooms/{id}/maintenance` | Báo sự cố → phòng tự chuyển TEMPORARILY_UNAVAILABLE | Public |
 | `POST` | `/api/cinema-rooms/maintenance/{maintenanceId}/resolve` | Resolve sự cố → phòng tự trở về ACTIVE | Public |
 | `PATCH` | `/api/cinema-rooms/{id}/status` | Đặt thủ công trạng thái phòng | Public |
+
+**Wizard-mode `POST` body (`wizardMode: true`):** `cinemaRoomName`, `roomCode`,
+`clusterId`, `auditoriumClassId`, `lengthM`, `widthM`, `clearHeightM` bắt buộc;
+`projectionTechnologyId`, `presentationSystem`, `resolutionId`, `screenWidthM`, `screenHeightM`,
+`supports2d`, `supports3d`, `audioFormatId` optional (điền ở bước 2 qua `PUT`).
+Các field legacy (`roomType`, `numberOfRows`, `seatsPerRow`,
+`standardRowCount`, `vipRowCount`, `coupleRowCount`, `defaultPrice`) vẫn phải
+gửi (DTO dùng chung) nhưng bị bỏ qua ở backend khi `wizardMode: true` — gửi giá
+trị placeholder (`roomType: "STANDARD"`, `numberOfRows: 1`, `seatsPerRow: 1`,
+`standardRowCount: 1`, `vipRowCount: 0`, `coupleRowCount: 0`,
+`defaultPrice: 1`).
+
+**`CinemaRoomResponse` field mới (null nếu phòng tạo qua flow nhanh cũ):**
+`roomCode`, `lengthM`, `widthM`, `clearHeightM`, `areaSqm` (tính = length×width),
+`auditoriumClassId/Code/Name`, `projectionTechnologyId/Code/Name`, `presentationSystem`,
+`resolutionId/Code`, `screenWidthM`, `screenHeightM`, `screenAspectRatio` (tính),
+`supports2d`, `supports3d`, `audioFormatId/Code`, `activeLayout` (summary của
+layout ACTIVE, hoặc layout mới nhất nếu chưa có bản ACTIVE nào).
+
+---
+
+### 4.9a Cinema Room Master Data — `/api/cinema-room-master-data`
+
+| Method | Endpoint | Mô tả | Auth |
+|--------|----------|-------|------|
+| `GET` | `/api/cinema-room-master-data` | Aggregate read-only: 4 danh sách master data, database-managed `roomTemplates`, và các danh sách enum-backed, gồm `presentationSystems = [STANDARD, IMAX, DOLBY_CINEMA, SCREENX]`. `roomTemplates` cung cấp quick-start mặc định cho service tier, projection, resolution, audio, grid và layout rule; không chứa Room Code/Name, kích thước phòng hoặc kích thước màn hình. | Public |
+
+Không có CRUD endpoint riêng cho 4 master table này ở sprint này (seed qua
+migration `V18`) — xem [`CINEMA_ROOM_BUSINESS_RULES.md`](../../CINEMA_ROOM_BUSINESS_RULES.md#layout-p1-002--master-data-not-enums-for-configurable-dimensions).
+
+---
+
+### 4.9b Cinema Room Layouts — `/api/cinema-rooms/{roomId}/layouts`
+
+| Method | Endpoint | Mô tả | Auth |
+|--------|----------|-------|------|
+| `GET` | `/api/cinema-rooms/{roomId}/layouts` | Danh sách tất cả version của layout (mới nhất trước), dạng summary | Public |
+| `GET` | `/api/cinema-rooms/{roomId}/layouts/{layoutId}` | Chi tiết 1 version, gồm toàn bộ `positions` | Public |
+| `PUT` | `/api/cinema-rooms/{roomId}/layouts/{layoutId}` | Ghi đè toàn bộ `positions` + generator meta — chỉ khi layout đang `DRAFT` | ADMIN / EMPLOYEE |
+| `POST` | `/api/cinema-rooms/{roomId}/layouts/{layoutId}/submit` | `DRAFT` → `PENDING_APPROVAL` (+ room → `PENDING_APPROVAL`) | ADMIN / EMPLOYEE |
+| `POST` | `/api/cinema-rooms/{roomId}/layouts/{layoutId}/approve` | `PENDING_APPROVAL` → `APPROVED` (+ room → `APPROVED`) | ADMIN |
+| `POST` | `/api/cinema-rooms/{roomId}/layouts/{layoutId}/reject` | `PENDING_APPROVAL` → `DRAFT` + `rejectionReason` (+ room → `DRAFT`). Body: `{ "note": "..." }` | ADMIN |
+| `POST` | `/api/cinema-rooms/{roomId}/layouts/{layoutId}/activate` | `APPROVED` → `ACTIVE`, sync `seat` table, version cũ (nếu có) → `SUPERSEDED`, room → `ACTIVE` | ADMIN |
+| `POST` | `/api/cinema-rooms/{roomId}/layouts/{layoutId}/clone` | Clone version bất kỳ (trừ `DRAFT`/`PENDING_APPROVAL`) thành version mới `DRAFT` | ADMIN / EMPLOYEE |
+
+Khi `submit`, backend kiểm tra lại capacity envelope từ kích thước phòng: tối thiểu
+`0,80 m²/người`, `4,0 m³/người`, seat module rộng `0,50 m`, row pitch `0,95 m`
+và khoảng cách hàng đầu cho màn ảnh rộng. Layout vượt giới hạn trả
+`ROOM_LAYOUT_EXCEEDS_ROOM_ENVELOPE (2063)`; kiểm tra này là planning guard và
+không thay thế phê duyệt kiến trúc/PCCC.
+
+**`RoomLayoutSaveRequest` body:** `numberOfRows`, `maxPositionsPerRow`,
+`firstRowLabel`, `numberingDirection`, `numberingPolicy`
+(`CONTIGUOUS_SEATS`/`PHYSICAL_POSITION`), `generatorTemplateCode`,
+`generatorTemplateVersion`, `generationConfig` (versioned Layout Assistant JSON)
+và `positions`
+(bắt buộc, có thể rỗng khi còn nháp — `submit` mới chặn rỗng). Mỗi position:
+`rowIndex`, `columnIndex`, `rowLabel`, `positionType`
+(`SEAT`/`AISLE`/`EXIT`/`EMPTY_SPACE`), và khi `positionType = SEAT`:
+`seatNumber`, `seatCode`, `seatType`
+(`STANDARD`/`VIP`/`COUPLE`/`ACCESSIBLE`), `seatGroupId` (bắt buộc + trùng nhau
+giữa đúng 2 vị trí liền kề cùng hàng nếu `seatType = COUPLE`), `manualOverride`
+(đánh dấu vị trí được operator chỉnh sau khi generate để có thể giữ lại khi regenerate).
+
+`positions` là dữ liệu vật lý có hiệu lực. Generator metadata chỉ phục vụ tái tạo
+form/rule set và không được dùng thay thế cho dữ liệu layout đã lưu.
+
+**`personCapacity`/`sellableUnitCount`** trong response luôn do backend tính
+lại — client gửi gì cũng bị bỏ qua (xem
+[`CINEMA_ROOM_BUSINESS_RULES.md`](../../CINEMA_ROOM_BUSINESS_RULES.md#layout-p0-004--capacity-is-always-backend-derived)).
 
 ---
 
@@ -225,12 +307,15 @@
 | `MovieStatus` | `DRAFT`, `PENDING_REVIEW`, `COMING_SOON`, `NOW_SHOWING`, `SUSPENDED`, `ENDED`, `REJECTED` |
 | `ShowTimeStatus` | `SCHEDULED`, `ON_SALE`, `CANCELLED`, `COMPLETED`, `SUSPENDED` |
 | `ClusterStatus` | `DRAFT`, `PENDING_REVIEW`, `ACTIVE`, `INACTIVE` |
-| `CinemaRoomStatus` | `ACTIVE`, `TEMPORARILY_UNAVAILABLE`, `CLOSED` |
+| `CinemaRoomStatus` | Legacy: `ACTIVE`, `MAINTENANCE`, `TEMPORARILY_UNAVAILABLE`, `CLOSED`. Wizard-added: `DRAFT`, `PENDING_APPROVAL`, `APPROVED`, `SUSPENDED`, `RETIRED` |
 | `SeatType` | `STANDARD`, `VIP`, `COUPLE`, `ACCESSIBLE` |
-| `SeatStatus` | `ACTIVE`, `INACTIVE` |
-| `ShowtimeSeatStatus` | `AVAILABLE`, `RESERVED`, `SOLD`, `CANCELLED` |
-| `RoomType` | `STANDARD`, `LARGE`, `IMAX` |
+| `SeatStatus` | `ACTIVE`, `INACTIVE`, `MAINTENANCE` |
+| `ShowtimeSeatStatus` | `AVAILABLE`, `RESERVED`, `SOLD`, `BLOCKED`, `CANCELLED` |
+| `RoomType` | `STANDARD`, `LARGE`, `IMAX` (legacy quick-create only — wizard rooms use `auditoriumClassId` master data instead) |
 | `ImageType` | `POSTER`, `BACKDROP`, `STILL`, `PROMOTIONAL` |
+| `LayoutStatus` | `DRAFT`, `PENDING_APPROVAL`, `APPROVED`, `ACTIVE`, `REJECTED`, `SUPERSEDED` |
+| `LayoutPositionType` | `SEAT`, `AISLE`, `EXIT`, `EMPTY_SPACE` |
+| `NumberingDirection` | `LEFT_TO_RIGHT`, `RIGHT_TO_LEFT` |
 
 ---
 

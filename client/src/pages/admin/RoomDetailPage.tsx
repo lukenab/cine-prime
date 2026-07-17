@@ -1,7 +1,59 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation, useOutletContext } from "react-router-dom";
-import { ArrowLeft, Building2, Armchair, RefreshCw, AlertCircle, X, Check } from "lucide-react";
-import { movieApi, type SeatResponse, type RoomResponse, type SeatTypeValue, ROOM_TYPE_CONFIG } from "../../api/movieApi";
+import { ArrowLeft, Building2, Armchair, RefreshCw, AlertCircle, X, Check, SendHorizonal, CheckCircle, XCircle, Rocket, Clock } from "lucide-react";
+import { movieApi, type SeatResponse, type RoomResponse, type CinemaRoomDetail, type SeatTypeValue, ROOM_TYPE_CONFIG } from "../../api/movieApi";
+import { useRole } from "../../hooks/useRole";
+import { Toast } from "../../components/shared/Toast";
+
+// ── Layout workflow status config ───────────────────────────────────────────
+
+export const LAYOUT_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  DRAFT:             { label: "Draft",             color: "#6b7280", bg: "rgba(107,114,128,0.10)" },
+  PENDING_APPROVAL:  { label: "Pending Approval",   color: "#d97706", bg: "rgba(245,158,11,0.10)"  },
+  APPROVED:          { label: "Approved",           color: "#2563eb", bg: "rgba(37,99,235,0.10)"   },
+  ACTIVE:            { label: "Active",             color: "#10b981", bg: "rgba(16,185,129,0.10)"  },
+  REJECTED:          { label: "Rejected",           color: "#ef4444", bg: "rgba(239,68,68,0.10)"   },
+  SUPERSEDED:        { label: "Superseded",         color: "#9ca3af", bg: "rgba(156,163,175,0.10)" },
+};
+
+function RejectLayoutModal({ onConfirm, onCancel }: { onConfirm: (note: string) => void; onCancel: () => void }) {
+  const [value, setValue] = useState("");
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.45)" }} onClick={onCancel}>
+      <div className="rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-center w-12 h-12 rounded-full mx-auto mb-4" style={{ background: "#dc262618" }}>
+          <XCircle size={22} style={{ color: "#dc2626" }} />
+        </div>
+        <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-main)", textAlign: "center", marginBottom: "16px" }}>Reject Layout</h3>
+        <div className="mb-4">
+          <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-sub)", display: "block", marginBottom: "6px" }}>Rejection reason</label>
+          <textarea
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="Mô tả vấn đề cụ thể: sai số ghế, thiếu lối thoát hiểm, couple bị lỗi…"
+            rows={3}
+            autoFocus
+            className="w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 resize-none"
+            style={{ fontSize: "13px", background: "var(--bg-main)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
+          />
+        </div>
+        <div className="flex gap-3">
+          <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl border text-sm font-medium hover:opacity-80" style={{ color: "var(--text-main)", borderColor: "var(--border-color)", background: "transparent" }}>
+            Cancel
+          </button>
+          <button
+            onClick={() => value.trim() ? onConfirm(value.trim()) : null}
+            disabled={!value.trim()}
+            className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ background: "#dc2626" }}
+          >
+            Reject
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Seat type config ─────────────────────────────────────────────────────────
 
@@ -168,6 +220,7 @@ export default function RoomDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
+  const { isAdmin, can } = useRole();
 
   const passedRoom = (location.state as any)?.room as RoomResponse | undefined;
 
@@ -177,13 +230,24 @@ export default function RoomDetailPage() {
   const [editingSeat, setEditingSeat] = useState<SeatResponse | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const [room, setRoom] = useState<CinemaRoomDetail | null>(null);
+  const [workflowBusy, setWorkflowBusy] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  const showToast = (type: "success" | "error", message: string) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3500);
+  };
+
   const roomName =
+    room?.cinemaRoomName ??
     passedRoom?.cinemaRoomName ??
     seats[0]?.cinemaRoomName ??
     `Room #${id}`;
 
-  const backTarget = passedRoom?.clusterId
-    ? `/admin/clusters/${passedRoom.clusterId}`
+  const backTarget = (room?.clusterId ?? passedRoom?.clusterId)
+    ? `/admin/clusters/${room?.clusterId ?? passedRoom?.clusterId}`
     : "/admin/clusters";
 
   const loadSeats = useCallback(async () => {
@@ -200,7 +264,35 @@ export default function RoomDetailPage() {
     }
   }, [id]);
 
-  useEffect(() => { loadSeats(); }, [loadSeats]);
+  const loadRoom = useCallback(async () => {
+    if (!id) return;
+    try {
+      const res = await movieApi.getRoomDetail(Number(id));
+      setRoom(res.result);
+    } catch {
+      // Non-fatal — legacy rooms created via the old quick-create flow have no
+      // wizard/layout data; the seat grid below still works without it.
+    }
+  }, [id]);
+
+  useEffect(() => { loadSeats(); loadRoom(); }, [loadSeats, loadRoom]);
+
+  const layout = room?.activeLayout;
+  const layoutCfg = layout ? LAYOUT_STATUS_CONFIG[layout.status] : null;
+
+  const doLayoutWorkflow = async (fn: () => Promise<unknown>, successMessage: string) => {
+    if (!room || !layout) return;
+    setWorkflowBusy(true);
+    try {
+      await fn();
+      showToast("success", successMessage);
+      await Promise.all([loadRoom(), loadSeats()]);
+    } catch (err: any) {
+      showToast("error", err?.response?.data?.message ?? "Action failed.");
+    } finally {
+      setWorkflowBusy(false);
+    }
+  };
 
   const handleSave = async (seatType: SeatTypeValue, price: number) => {
     if (!editingSeat) return;
@@ -281,6 +373,94 @@ export default function RoomDetailPage() {
         </div>
       </div>
 
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
+
+      {/* Wizard layout workflow — only shown for rooms created via the wizard (have a
+          room_layout). Legacy quick-create rooms are already ACTIVE with real seats and
+          have no `activeLayout`, so this section stays hidden for them. */}
+      {layout && layoutCfg && (
+        <div className="rounded-2xl border p-4 mb-6 flex items-center gap-4 flex-wrap" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+          <span
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold flex-shrink-0"
+            style={{ background: layoutCfg.bg, color: layoutCfg.color }}
+          >
+            <Clock size={12} /> Layout v{layout.version} · {layoutCfg.label}
+          </span>
+          <span style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+            {layout.personCapacity} people capacity · {layout.sellableUnitCount} sellable units
+          </span>
+
+          <div className="flex items-center gap-2 ml-auto">
+            {layout.status === "DRAFT" && can.edit && (
+              <button
+                onClick={() => navigate(`/admin/clusters/${room?.clusterId}/rooms/${id}/edit`)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border hover:opacity-80"
+                style={{ fontSize: "13px", color: "var(--text-main)", borderColor: "var(--border-color)", background: "var(--bg-main)" }}
+              >
+                Continue Editing
+              </button>
+            )}
+            {layout.status === "PENDING_APPROVAL" && isAdmin && (
+              <>
+                <button
+                  disabled={workflowBusy}
+                  onClick={() => doLayoutWorkflow(
+                    () => movieApi.approveRoomLayout(Number(id), layout.roomLayoutId),
+                    "Layout approved."
+                  )}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl border hover:opacity-80 disabled:opacity-50"
+                  style={{ fontSize: "13px", color: "#059669", borderColor: "var(--border-color)", background: "var(--bg-main)" }}
+                >
+                  <CheckCircle size={14} /> Approve
+                </button>
+                <button
+                  disabled={workflowBusy}
+                  onClick={() => setRejecting(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl border hover:opacity-80 disabled:opacity-50"
+                  style={{ fontSize: "13px", color: "#dc2626", borderColor: "var(--border-color)", background: "var(--bg-main)" }}
+                >
+                  <XCircle size={14} /> Reject
+                </button>
+              </>
+            )}
+            {layout.status === "PENDING_APPROVAL" && !isAdmin && (
+              <span className="flex items-center gap-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+                <SendHorizonal size={14} /> Waiting for admin approval
+              </span>
+            )}
+            {layout.status === "APPROVED" && isAdmin && (
+              <button
+                disabled={workflowBusy}
+                onClick={() => doLayoutWorkflow(
+                  () => movieApi.activateRoomLayout(Number(id), layout.roomLayoutId),
+                  "Layout activated — seats are now live."
+                )}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white hover:opacity-90 disabled:opacity-50"
+                style={{ fontSize: "13px", fontWeight: 600, background: "#059669" }}
+              >
+                <Rocket size={14} /> {workflowBusy ? "Activating…" : "Activate"}
+              </button>
+            )}
+            {layout.status === "APPROVED" && !isAdmin && (
+              <span style={{ fontSize: "13px", color: "var(--text-sub)" }}>Approved — waiting for admin to activate</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {rejecting && layout && (
+        <RejectLayoutModal
+          onConfirm={(note) => {
+            setRejecting(false);
+            doLayoutWorkflow(
+              () => movieApi.rejectRoomLayout(Number(id), layout.roomLayoutId, note),
+              "Layout rejected."
+            );
+          }}
+          onCancel={() => setRejecting(false)}
+        />
+      )}
+
       {/* Type summary chips */}
       {!loading && seats.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-6">
@@ -328,7 +508,11 @@ export default function RoomDetailPage() {
         ) : seats.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-2">
             <Armchair size={32} style={{ color: "var(--text-sub)" }} />
-            <p style={{ fontSize: "14px", color: "var(--text-sub)" }}>No seats found for this room.</p>
+            <p style={{ fontSize: "14px", color: "var(--text-sub)" }}>
+              {layout && layout.status !== "ACTIVE"
+                ? `No seats yet — this room's layout is still ${LAYOUT_STATUS_CONFIG[layout.status]?.label.toLowerCase() ?? layout.status}. Seats are only created once the layout is Activated (see the banner above).`
+                : "No seats found for this room."}
+            </p>
           </div>
         ) : (
           <>

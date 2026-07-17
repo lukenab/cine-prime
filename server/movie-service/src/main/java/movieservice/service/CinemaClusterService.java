@@ -5,8 +5,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import movie.theater.common.exception.AppException;
 import movieservice.dto.request.CinemaClusterRequest;
+import movieservice.dto.request.ClusterOperatingHourRequest;
 import movieservice.dto.response.CinemaClusterResponse;
 import movieservice.entity.CinemaCluster;
+import movieservice.entity.CinemaClusterOperatingHour;
 import movieservice.entity.ClusterAuditLog;
 import movieservice.enums.ClusterAction;
 import movieservice.enums.ClusterStatus;
@@ -19,6 +21,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.DayOfWeek;
+import java.time.ZoneId;
+import java.time.DateTimeException;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -37,12 +46,18 @@ public class CinemaClusterService {
         if (cinemaClusterRepository.existsByClusterNameIgnoreCase(clusterName)) {
             throw new AppException(MovieErrorCode.CLUSTER_NAME_EXISTED);
         }
+        String clusterCode = normalizeCode(req.getClusterCode());
+        if (cinemaClusterRepository.existsByClusterCodeIgnoreCase(clusterCode)) {
+            throw new AppException(MovieErrorCode.CLUSTER_CODE_EXISTED);
+        }
+        validateOperationalConfiguration(req);
 
         CinemaCluster cluster = movieMapper.toCinemaCluster(req);
+        cluster.setClusterCode(clusterCode);
         cluster.setClusterName(clusterName);
-        cluster.setProvince(req.getProvince().trim());
-        cluster.setAddress(req.getAddress().trim());
+        applyClusterDetails(cluster, req);
         cluster.setPhoneNumber(DEFAULT_HOTLINE);
+        replaceOperatingHours(cluster, req.getOperatingHours());
 
         ClusterStatus iniStatus = isAdminRole(authentication) ? ClusterStatus.ACTIVE : ClusterStatus.DRAFT;
         cluster.setStatus(iniStatus);
@@ -107,16 +122,19 @@ public class CinemaClusterService {
             throw new AppException(MovieErrorCode.CLUSTER_NAME_EXISTED);
         }
 
-        cluster.setClusterName(newName);
-        cluster.setProvince(req.getProvince().trim());
-        cluster.setAddress(req.getAddress().trim());
+        String newCode = normalizeCode(req.getClusterCode());
+        if (!newCode.equalsIgnoreCase(cluster.getClusterCode()) && oldStatus != ClusterStatus.DRAFT) {
+            throw new AppException(MovieErrorCode.CLUSTER_CODE_IMMUTABLE);
+        }
+        if (cinemaClusterRepository.existsByClusterCodeIgnoreCaseAndClusterIdNot(newCode, id)) {
+            throw new AppException(MovieErrorCode.CLUSTER_CODE_EXISTED);
+        }
+        validateOperationalConfiguration(req);
 
-        if (req.getLatitude() != null) {
-            cluster.setLatitude(req.getLatitude());
-        }
-        if (req.getLongitude() != null) {
-            cluster.setLongitude(req.getLongitude());
-        }
+        cluster.setClusterCode(newCode);
+        cluster.setClusterName(newName);
+        applyClusterDetails(cluster, req);
+        replaceOperatingHours(cluster, req.getOperatingHours());
         if (oldStatus == ClusterStatus.DRAFT) {
             cluster.setRejectionNote(null);
         }
@@ -129,6 +147,68 @@ public class CinemaClusterService {
                 oldStatus, saved.getStatus(), null);
 
         return toResponseWithStats(saved);
+    }
+
+    private void applyClusterDetails(CinemaCluster cluster, CinemaClusterRequest req) {
+        cluster.setVenueType(req.getVenueType());
+        cluster.setOpeningDate(req.getOpeningDate());
+        cluster.setPublicEmail(normalizeOptional(req.getPublicEmail(), true));
+        cluster.setCountryCode(req.getCountryCode().trim().toUpperCase(Locale.ROOT));
+        cluster.setProvince(req.getProvince().trim());
+        cluster.setDistrict(req.getDistrict().trim());
+        cluster.setWard(normalizeOptional(req.getWard(), false));
+        cluster.setPostalCode(normalizeOptional(req.getPostalCode(), false));
+        cluster.setBuildingName(normalizeOptional(req.getBuildingName(), false));
+        cluster.setFloorLocation(normalizeOptional(req.getFloorLocation(), false));
+        cluster.setAddress(req.getAddress().trim());
+        cluster.setLatitude(req.getLatitude());
+        cluster.setLongitude(req.getLongitude());
+        cluster.setTimezone(req.getTimezone().trim());
+    }
+
+    private void validateOperationalConfiguration(CinemaClusterRequest req) {
+        try {
+            ZoneId.of(req.getTimezone().trim());
+        } catch (DateTimeException | NullPointerException exception) {
+            throw new AppException(MovieErrorCode.CLUSTER_TIMEZONE_INVALID);
+        }
+
+        List<ClusterOperatingHourRequest> hours = req.getOperatingHours();
+        if (hours == null || hours.size() != DayOfWeek.values().length) {
+            throw new AppException(MovieErrorCode.CLUSTER_OPERATING_HOURS_INVALID);
+        }
+        Set<DayOfWeek> uniqueDays = new HashSet<>();
+        for (ClusterOperatingHourRequest hour : hours) {
+            if (hour == null || hour.getDayOfWeek() == null || !hour.isScheduleValid()
+                    || !uniqueDays.add(hour.getDayOfWeek())) {
+                throw new AppException(MovieErrorCode.CLUSTER_OPERATING_HOURS_INVALID);
+            }
+        }
+    }
+
+    private void replaceOperatingHours(CinemaCluster cluster, List<ClusterOperatingHourRequest> requests) {
+        cluster.getOperatingHours().clear();
+        requests.stream()
+                .sorted((left, right) -> Integer.compare(left.getDayOfWeek().getValue(), right.getDayOfWeek().getValue()))
+                .map(request -> CinemaClusterOperatingHour.builder()
+                        .cluster(cluster)
+                        .dayOfWeek(request.getDayOfWeek())
+                        .opensAt(request.getOpensAt())
+                        .closesAt(request.getClosesAt())
+                        .closesNextDay(request.isClosesNextDay())
+                        .closed(request.isClosed())
+                        .build())
+                .forEach(cluster.getOperatingHours()::add);
+    }
+
+    private String normalizeCode(String value) {
+        return value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizeOptional(String value, boolean lowercase) {
+        if (value == null || value.isBlank()) return null;
+        String normalized = value.trim();
+        return lowercase ? normalized.toLowerCase(Locale.ROOT) : normalized;
     }
 
     private CinemaClusterResponse toResponseWithStats(CinemaCluster cluster) {

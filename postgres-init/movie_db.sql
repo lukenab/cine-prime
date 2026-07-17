@@ -320,6 +320,10 @@ CREATE TABLE IF NOT EXISTS cinema_room (
                       CONSTRAINT chk_room_type
                           CHECK (room_type IN ('STANDARD','LARGE','IMAX','4DX','SCREENX')),
 
+    presentation_system VARCHAR(30) NOT NULL DEFAULT 'STANDARD'
+                      CONSTRAINT chk_room_presentation_system
+                          CHECK (presentation_system IN ('STANDARD','IMAX','DOLBY_CINEMA','SCREENX')),
+
     total_seat_capacity INTEGER    NOT NULL DEFAULT 0,  -- số ghế theo thiết kế (capacity)
 
     -- Trạng thái phòng
@@ -645,8 +649,20 @@ ON CONFLICT (genre_code) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS cinema_cluster (
     cluster_id    BIGSERIAL     PRIMARY KEY,
+    cluster_code  VARCHAR(20)   NOT NULL,
     cluster_name  VARCHAR(100)  NOT NULL,
+    venue_type    VARCHAR(20)   NOT NULL DEFAULT 'MALL'
+                  CONSTRAINT chk_cluster_venue_type
+                      CHECK (venue_type IN ('MALL', 'STANDALONE', 'MIXED_USE')),
+    opening_date  DATE,
+    public_email  VARCHAR(150),
+    country_code  CHAR(2)       NOT NULL DEFAULT 'VN',
     province      VARCHAR(100)  NOT NULL,
+    district      VARCHAR(100)  NOT NULL,
+    ward          VARCHAR(100),
+    postal_code   VARCHAR(20),
+    building_name VARCHAR(150),
+    floor_location VARCHAR(50),
     address       VARCHAR(255)  NOT NULL,
     phone_number  VARCHAR(20),
     status        VARCHAR(20)   NOT NULL DEFAULT 'ACTIVE'
@@ -656,6 +672,7 @@ CREATE TABLE IF NOT EXISTS cinema_cluster (
     updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
     latitude      DECIMAL(10, 7),
     longitude     DECIMAL(10, 7),
+    timezone      VARCHAR(50)   NOT NULL DEFAULT 'Asia/Ho_Chi_Minh',
     rejection_note TEXT,
     created_by    VARCHAR(100),
     updated_by    VARCHAR(100)
@@ -690,14 +707,15 @@ CREATE INDEX IF NOT EXISTS idx_cluster_audit_log_timestamp
     ON cluster_audit_log(timestamp DESC);
 
 INSERT INTO cinema_cluster
-        (cluster_id, cluster_name, province, address, phone_number, status, latitude, longitude)
+        (cluster_id, cluster_code, cluster_name, venue_type, country_code, province, district,
+         address, phone_number, status, latitude, longitude, timezone)
 VALUES
-    (1, 'CinePrime Quận 1',    'TP. Hồ Chí Minh', '123 Nguyễn Huệ, Quận 1',       '19001000', 'ACTIVE',   10.7769660, 106.7009650),
-    (2, 'CinePrime Thủ Đức',   'TP. Hồ Chí Minh', '456 Võ Văn Ngân, TP. Thủ Đức', '19001000', 'ACTIVE',   10.8500000, 106.7716670),
-    (3, 'CinePrime Hoàn Kiếm', 'Hà Nội',          '78 Hàng Bài, Hoàn Kiếm',       '19001000', 'ACTIVE',   21.0285110, 105.8341600),
-    (4, 'CinePrime Cầu Giấy',  'Hà Nội',          '22 Xuân Thủy, Cầu Giấy',        '19001000', 'ACTIVE',   21.0363890, 105.7822220),
-    (5, 'CinePrime Hải Châu',  'Đà Nẵng',         '30 Trần Phú, Hải Châu',         '19001000', 'ACTIVE',   16.0680000, 108.2120000),
-    (6, 'CinePrime Ninh Kiều', 'Cần Thơ',         '15 Hai Bà Trưng, Ninh Kiều',    '19001000', 'INACTIVE', 10.0333330, 105.7833330)
+    (1, 'CP-001', 'CinePrime Quận 1',    'MALL', 'VN', 'TP. Hồ Chí Minh', 'Quận 1',             '123 Nguyễn Huệ, Quận 1',       '19001000', 'ACTIVE',   10.7769660, 106.7009650, 'Asia/Ho_Chi_Minh'),
+    (2, 'CP-002', 'CinePrime Thủ Đức',   'MALL', 'VN', 'TP. Hồ Chí Minh', 'Thành phố Thủ Đức',  '456 Võ Văn Ngân, TP. Thủ Đức', '19001000', 'ACTIVE',   10.8500000, 106.7716670, 'Asia/Ho_Chi_Minh'),
+    (3, 'CP-003', 'CinePrime Hoàn Kiếm', 'MALL', 'VN', 'Hà Nội',          'Hoàn Kiếm',           '78 Hàng Bài, Hoàn Kiếm',       '19001000', 'ACTIVE',   21.0285110, 105.8341600, 'Asia/Ho_Chi_Minh'),
+    (4, 'CP-004', 'CinePrime Cầu Giấy',  'MALL', 'VN', 'Hà Nội',          'Cầu Giấy',            '22 Xuân Thủy, Cầu Giấy',       '19001000', 'ACTIVE',   21.0363890, 105.7822220, 'Asia/Ho_Chi_Minh'),
+    (5, 'CP-005', 'CinePrime Hải Châu',  'MALL', 'VN', 'Đà Nẵng',         'Hải Châu',            '30 Trần Phú, Hải Châu',        '19001000', 'ACTIVE',   16.0680000, 108.2120000, 'Asia/Ho_Chi_Minh'),
+    (6, 'CP-006', 'CinePrime Ninh Kiều', 'MALL', 'VN', 'Cần Thơ',         'Ninh Kiều',           '15 Hai Bà Trưng, Ninh Kiều',   '19001000', 'INACTIVE', 10.0333330, 105.7833330, 'Asia/Ho_Chi_Minh')
 ON CONFLICT (cluster_id) DO NOTHING;
 
 SELECT setval(pg_get_serial_sequence('cinema_cluster', 'cluster_id'), 6, true);
@@ -710,3 +728,352 @@ ALTER TABLE cinema_room
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_cluster_name_ci
     ON cinema_cluster (LOWER(cluster_name));
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_cluster_code_ci
+    ON cinema_cluster (LOWER(cluster_code));
+
+CREATE TABLE IF NOT EXISTS cinema_cluster_operating_hour (
+    operating_hour_id BIGSERIAL PRIMARY KEY,
+    cluster_id BIGINT NOT NULL REFERENCES cinema_cluster(cluster_id) ON DELETE CASCADE,
+    day_of_week VARCHAR(9) NOT NULL
+        CHECK (day_of_week IN ('MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY','SUNDAY')),
+    opens_at TIME,
+    closes_at TIME,
+    closes_next_day BOOLEAN NOT NULL DEFAULT FALSE,
+    is_closed BOOLEAN NOT NULL DEFAULT FALSE,
+    CONSTRAINT uq_cluster_operating_day UNIQUE (cluster_id, day_of_week),
+    CONSTRAINT chk_cluster_operating_time CHECK (
+        (is_closed = TRUE AND opens_at IS NULL AND closes_at IS NULL AND closes_next_day = FALSE)
+        OR (is_closed = FALSE AND opens_at IS NOT NULL AND closes_at IS NOT NULL
+            AND opens_at <> closes_at
+            AND (closes_next_day = TRUE OR closes_at > opens_at))
+    )
+);
+
+INSERT INTO cinema_cluster_operating_hour
+    (cluster_id, day_of_week, opens_at, closes_at, closes_next_day, is_closed)
+SELECT cluster.cluster_id, day_name, TIME '08:00', TIME '23:00', FALSE, FALSE
+FROM cinema_cluster cluster
+CROSS JOIN (VALUES
+    ('MONDAY'), ('TUESDAY'), ('WEDNESDAY'), ('THURSDAY'),
+    ('FRIDAY'), ('SATURDAY'), ('SUNDAY')
+) AS days(day_name)
+ON CONFLICT (cluster_id, day_of_week) DO NOTHING;
+
+CREATE INDEX IF NOT EXISTS idx_cluster_operating_hour_cluster
+    ON cinema_cluster_operating_hour(cluster_id);
+
+-- =============================================================================
+-- SEAT-ZONE / ROW-LAYOUT COLUMNS + CINEMA ROOM CREATION WIZARD SCHEMA
+-- Mirrors migrations V10–V12 (seat_type ACCESSIBLE) and V13–V14 (row-zone
+-- columns), which this base seed had drifted out of sync with, plus V18
+-- (master data + versioned room_layout). Folded in here so a fresh
+-- `docker-compose up` produces the current schema without manually replaying
+-- every migration file in docs/database/movie-service/.
+-- =============================================================================
+
+ALTER TABLE seat DROP CONSTRAINT IF EXISTS chk_seat_type;
+ALTER TABLE seat ADD CONSTRAINT chk_seat_type
+    CHECK (seat_type IN ('STANDARD', 'VIP', 'COUPLE', 'ACCESSIBLE'));
+
+ALTER TABLE cinema_room
+    ADD COLUMN IF NOT EXISTS number_of_rows      INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS seats_per_row        INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS standard_row_count    INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS vip_row_count          INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS couple_row_count        INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE cinema_room
+    ADD CONSTRAINT chk_room_row_allocation_non_negative
+        CHECK (standard_row_count >= 0 AND vip_row_count >= 0 AND couple_row_count >= 0);
+
+-- ── Master data tables (auditorium class / projection tech / resolution / audio) ──
+
+CREATE TABLE IF NOT EXISTS auditorium_class (
+    class_id     SMALLSERIAL  PRIMARY KEY,
+    class_code   VARCHAR(20)  NOT NULL UNIQUE,
+    class_name   VARCHAR(100) NOT NULL,
+    description  VARCHAR(255),
+    active       BOOLEAN      NOT NULL DEFAULT TRUE
+);
+
+INSERT INTO auditorium_class (class_code, class_name, description) VALUES
+    ('STANDARD', 'Standard', 'Standard commercial service tier'),
+    ('PREMIUM',  'Premium',  'Enhanced comfort and service tier'),
+    ('LUXURY',   'Luxury',   'Luxury low-density service tier'),
+    ('PRIVATE',  'Private',  'Private screening or event service tier')
+ON CONFLICT (class_code) DO UPDATE SET
+    class_name  = EXCLUDED.class_name,
+    description = EXCLUDED.description,
+    active      = TRUE;
+
+-- PLF describes a presentation capability and MOTION describes a seat/experience
+-- capability. Keep historical rows for FK compatibility, but never offer them as
+-- commercial service tiers for newly created rooms.
+UPDATE auditorium_class
+SET active = FALSE
+WHERE class_code IN ('PLF', 'MOTION');
+
+CREATE TABLE IF NOT EXISTS projection_technology (
+    tech_id      SMALLSERIAL  PRIMARY KEY,
+    tech_code    VARCHAR(30)  NOT NULL UNIQUE,
+    tech_name    VARCHAR(100) NOT NULL,
+    description  VARCHAR(255),
+    active       BOOLEAN      NOT NULL DEFAULT TRUE
+);
+
+INSERT INTO projection_technology (tech_code, tech_name, description) VALUES
+    ('XENON',           'Xenon',           'Traditional xenon-lamp digital cinema projection system.'),
+    ('LASER',           'Laser',           'Laser-based digital cinema projection with high brightness and stable color performance.'),
+    ('DIRECT_VIEW_LED', 'Direct View LED', 'Direct-view LED cinema display that does not require a projector.')
+ON CONFLICT (tech_code) DO UPDATE SET
+    tech_name = EXCLUDED.tech_name,
+    description = EXCLUDED.description,
+    active = TRUE;
+
+CREATE TABLE IF NOT EXISTS resolution (
+    resolution_id    SMALLSERIAL  PRIMARY KEY,
+    resolution_code  VARCHAR(10)  NOT NULL UNIQUE,
+    resolution_name  VARCHAR(50)  NOT NULL,
+    active           BOOLEAN      NOT NULL DEFAULT TRUE
+);
+
+INSERT INTO resolution (resolution_code, resolution_name) VALUES
+    ('2K', '2K'),
+    ('4K', '4K')
+ON CONFLICT (resolution_code) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS audio_format (
+    audio_format_id  SMALLSERIAL  PRIMARY KEY,
+    format_code      VARCHAR(20)  NOT NULL UNIQUE,
+    format_name      VARCHAR(100) NOT NULL,
+    active           BOOLEAN      NOT NULL DEFAULT TRUE
+);
+
+INSERT INTO audio_format (format_code, format_name) VALUES
+    ('DOLBY_5_1',   'Dolby 5.1'),
+    ('DOLBY_7_1',   'Dolby 7.1'),
+    ('DOLBY_ATMOS', 'Dolby Atmos')
+ON CONFLICT (format_code) DO NOTHING;
+
+-- Database-managed room wizard templates. Physical and screen dimensions are
+-- deliberately not templated because they must match engineering measurements.
+CREATE TABLE IF NOT EXISTS room_configuration_template (
+    template_id                    SMALLSERIAL PRIMARY KEY,
+    template_code                  VARCHAR(40)  NOT NULL UNIQUE,
+    template_name                  VARCHAR(100) NOT NULL,
+    description                    VARCHAR(255),
+    auditorium_class_id            SMALLINT     NOT NULL REFERENCES auditorium_class(class_id),
+    projection_technology_id       SMALLINT     NOT NULL REFERENCES projection_technology(tech_id),
+    resolution_id                  SMALLINT     NOT NULL REFERENCES resolution(resolution_id),
+    audio_format_id                SMALLINT     NOT NULL REFERENCES audio_format(audio_format_id),
+    supports_2d                    BOOLEAN      NOT NULL DEFAULT TRUE,
+    supports_3d                    BOOLEAN      NOT NULL DEFAULT FALSE,
+    default_rows                   SMALLINT     NOT NULL CHECK (default_rows BETWEEN 1 AND 50),
+    default_positions_per_row      SMALLINT     NOT NULL CHECK (default_positions_per_row BETWEEN 1 AND 60),
+    layout_template_code           VARCHAR(40)  NOT NULL,
+    standard_row_percentage        SMALLINT     NOT NULL CHECK (standard_row_percentage BETWEEN 0 AND 100),
+    couple_last_row                BOOLEAN      NOT NULL DEFAULT FALSE,
+    center_aisle                   BOOLEAN      NOT NULL DEFAULT FALSE,
+    cross_aisle                    BOOLEAN      NOT NULL DEFAULT FALSE,
+    display_order                  SMALLINT     NOT NULL DEFAULT 0,
+    active                         BOOLEAN      NOT NULL DEFAULT TRUE
+);
+
+INSERT INTO room_configuration_template (
+    template_code, template_name, description,
+    auditorium_class_id, projection_technology_id, resolution_id, audio_format_id,
+    supports_2d, supports_3d, default_rows, default_positions_per_row,
+    layout_template_code, standard_row_percentage, couple_last_row,
+    center_aisle, cross_aisle, display_order, active
+)
+SELECT
+    seed.template_code, seed.template_name, seed.description,
+    ac.class_id, pt.tech_id, r.resolution_id, af.audio_format_id,
+    seed.supports_2d, seed.supports_3d, seed.default_rows, seed.default_positions_per_row,
+    seed.layout_template_code, seed.standard_row_percentage, seed.couple_last_row,
+    seed.center_aisle, seed.cross_aisle, seed.display_order, TRUE
+FROM (
+    VALUES
+        ('STANDARD_DIGITAL', 'Standard Digital',
+         'Standard 2D starting point with 2K Xenon projection and Dolby 5.1',
+         'STANDARD', 'XENON', '2K', 'DOLBY_5_1',
+         TRUE, FALSE, 8, 10, 'ALL_STANDARD', 100, FALSE, FALSE, FALSE, 10),
+        ('PREMIUM_LASER', 'Premium Laser',
+         'Balanced premium room with 4K laser projection, Dolby 7.1, two side aisles and a rear Couple row',
+         'PREMIUM', 'LASER', '4K', 'DOLBY_7_1',
+         TRUE, TRUE, 11, 14, 'BALANCED', 40, TRUE, TRUE, FALSE, 20),
+        ('LUXURY_ATMOS', 'Luxury Atmos',
+         'Low-density luxury room with 4K laser projection, Dolby Atmos, paired side aisles and a complete rear Couple row',
+         'LUXURY', 'LASER', '4K', 'DOLBY_ATMOS',
+         TRUE, FALSE, 10, 14, 'PREMIUM', 25, TRUE, TRUE, FALSE, 30)
+) AS seed(
+    template_code, template_name, description,
+    class_code, tech_code, resolution_code, format_code,
+    supports_2d, supports_3d, default_rows, default_positions_per_row,
+    layout_template_code, standard_row_percentage, couple_last_row,
+    center_aisle, cross_aisle, display_order
+)
+JOIN auditorium_class ac ON ac.class_code = seed.class_code
+JOIN projection_technology pt ON pt.tech_code = seed.tech_code
+JOIN resolution r ON r.resolution_code = seed.resolution_code
+JOIN audio_format af ON af.format_code = seed.format_code
+ON CONFLICT (template_code) DO UPDATE SET
+    template_name = EXCLUDED.template_name,
+    description = EXCLUDED.description,
+    auditorium_class_id = EXCLUDED.auditorium_class_id,
+    projection_technology_id = EXCLUDED.projection_technology_id,
+    resolution_id = EXCLUDED.resolution_id,
+    audio_format_id = EXCLUDED.audio_format_id,
+    supports_2d = EXCLUDED.supports_2d,
+    supports_3d = EXCLUDED.supports_3d,
+    default_rows = EXCLUDED.default_rows,
+    default_positions_per_row = EXCLUDED.default_positions_per_row,
+    layout_template_code = EXCLUDED.layout_template_code,
+    standard_row_percentage = EXCLUDED.standard_row_percentage,
+    couple_last_row = EXCLUDED.couple_last_row,
+    center_aisle = EXCLUDED.center_aisle,
+    cross_aisle = EXCLUDED.cross_aisle,
+    display_order = EXCLUDED.display_order,
+    active = TRUE;
+
+-- ── cinema_room: room_code + physical dimensions + screen/tech fields ───────
+
+ALTER TABLE cinema_room
+    ADD COLUMN IF NOT EXISTS room_code               VARCHAR(20),
+    ADD COLUMN IF NOT EXISTS length_m                 DECIMAL(6,2),
+    ADD COLUMN IF NOT EXISTS width_m                  DECIMAL(6,2),
+    ADD COLUMN IF NOT EXISTS clear_height_m            DECIMAL(6,2),
+    ADD COLUMN IF NOT EXISTS auditorium_class_id       SMALLINT REFERENCES auditorium_class(class_id),
+    ADD COLUMN IF NOT EXISTS projection_technology_id  SMALLINT REFERENCES projection_technology(tech_id),
+    ADD COLUMN IF NOT EXISTS presentation_system       VARCHAR(30) NOT NULL DEFAULT 'STANDARD',
+    ADD COLUMN IF NOT EXISTS resolution_id             SMALLINT REFERENCES resolution(resolution_id),
+    ADD COLUMN IF NOT EXISTS screen_width_m            DECIMAL(6,2),
+    ADD COLUMN IF NOT EXISTS screen_height_m           DECIMAL(6,2),
+    ADD COLUMN IF NOT EXISTS supports_2d               BOOLEAN NOT NULL DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS supports_3d               BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS audio_format_id           SMALLINT REFERENCES audio_format(audio_format_id);
+
+ALTER TABLE cinema_room DROP CONSTRAINT IF EXISTS chk_room_presentation_system;
+ALTER TABLE cinema_room ADD CONSTRAINT chk_room_presentation_system
+    CHECK (presentation_system IN ('STANDARD', 'IMAX', 'DOLBY_CINEMA', 'SCREENX'));
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_room_code_per_cluster
+    ON cinema_room(cluster_id, room_code)
+    WHERE room_code IS NOT NULL;
+
+ALTER TABLE cinema_room DROP CONSTRAINT IF EXISTS chk_room_status;
+ALTER TABLE cinema_room ADD CONSTRAINT chk_room_status
+    CHECK (status IN (
+        'DRAFT', 'PENDING_APPROVAL', 'APPROVED',
+        'ACTIVE', 'MAINTENANCE', 'TEMPORARILY_UNAVAILABLE', 'SUSPENDED', 'CLOSED', 'RETIRED'
+    ));
+
+ALTER TABLE seat
+    ADD COLUMN IF NOT EXISTS seat_group_id VARCHAR(36);
+
+CREATE INDEX IF NOT EXISTS idx_seat_group_id ON seat(seat_group_id) WHERE seat_group_id IS NOT NULL;
+
+-- ── room_layout: versioned seat-layout authoring/approval ───────────────────
+
+CREATE TABLE IF NOT EXISTS room_layout (
+    room_layout_id      BIGSERIAL    PRIMARY KEY,
+    cinema_room_id       BIGINT       NOT NULL REFERENCES cinema_room(cinema_room_id) ON DELETE CASCADE,
+    version               INTEGER      NOT NULL,
+    status                 VARCHAR(20)  NOT NULL DEFAULT 'DRAFT'
+                          CONSTRAINT chk_layout_status
+                              CHECK (status IN ('DRAFT','PENDING_APPROVAL','APPROVED','ACTIVE','REJECTED','SUPERSEDED')),
+
+    number_of_rows          INTEGER     NOT NULL DEFAULT 0,
+    max_positions_per_row    INTEGER     NOT NULL DEFAULT 0,
+    first_row_label           VARCHAR(5)  NOT NULL DEFAULT 'A',
+    numbering_direction       VARCHAR(20) NOT NULL DEFAULT 'LEFT_TO_RIGHT'
+                          CONSTRAINT chk_numbering_direction
+                              CHECK (numbering_direction IN ('LEFT_TO_RIGHT','RIGHT_TO_LEFT')),
+    numbering_policy          VARCHAR(30) NOT NULL DEFAULT 'CONTIGUOUS_SEATS'
+                          CONSTRAINT chk_numbering_policy
+                              CHECK (numbering_policy IN ('CONTIGUOUS_SEATS','PHYSICAL_POSITION')),
+    generator_template_code   VARCHAR(50),
+    generator_template_version INTEGER,
+    generation_config         TEXT,
+
+    person_capacity            INTEGER    NOT NULL DEFAULT 0,
+    sellable_unit_count         INTEGER    NOT NULL DEFAULT 0,
+
+    submitted_at                 TIMESTAMPTZ,
+    submitted_by                  VARCHAR(100),
+    approved_at                    TIMESTAMPTZ,
+    approved_by                     VARCHAR(100),
+    rejection_reason                 TEXT,
+
+    created_at                        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_by                         VARCHAR(100),
+    updated_at                          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_by                           VARCHAR(100),
+
+    CONSTRAINT uq_room_layout_version UNIQUE (cinema_room_id, version)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_room_layout_single_active
+    ON room_layout(cinema_room_id) WHERE status = 'ACTIVE';
+
+CREATE INDEX IF NOT EXISTS idx_room_layout_room ON room_layout(cinema_room_id);
+
+CREATE TRIGGER trg_room_layout_updated_at
+    BEFORE UPDATE ON room_layout
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ── room_layout_position: từng ô trong sơ đồ ────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS room_layout_position (
+    position_id        BIGSERIAL    PRIMARY KEY,
+    room_layout_id       BIGINT       NOT NULL REFERENCES room_layout(room_layout_id) ON DELETE CASCADE,
+
+    row_index              INTEGER      NOT NULL,
+    column_index             INTEGER      NOT NULL,
+    row_label                  VARCHAR(5)   NOT NULL,
+
+    position_type               VARCHAR(20)  NOT NULL
+                             CONSTRAINT chk_position_type
+                                 CHECK (position_type IN ('SEAT','AISLE','EXIT','EMPTY_SPACE')),
+
+    seat_number                   INTEGER,
+    seat_code                       VARCHAR(10),
+    seat_type                         VARCHAR(20)
+                             CONSTRAINT chk_position_seat_type
+                                 CHECK (seat_type IS NULL OR seat_type IN ('STANDARD','VIP','COUPLE','ACCESSIBLE')),
+    seat_group_id                       VARCHAR(36),
+    seat_status                           VARCHAR(20) NOT NULL DEFAULT 'ACTIVE'
+                             CONSTRAINT chk_position_seat_status
+                                 CHECK (seat_status IN ('ACTIVE','INACTIVE','MAINTENANCE')),
+    manual_override                       BOOLEAN NOT NULL DEFAULT FALSE,
+
+    CONSTRAINT uq_layout_coordinate UNIQUE (room_layout_id, row_index, column_index),
+    CONSTRAINT chk_position_seat_fields CHECK (
+        (position_type = 'SEAT' AND seat_number IS NOT NULL AND seat_code IS NOT NULL AND seat_type IS NOT NULL)
+        OR
+        (position_type <> 'SEAT' AND seat_number IS NULL AND seat_code IS NULL AND seat_type IS NULL AND seat_group_id IS NULL)
+    )
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_layout_seat_code
+    ON room_layout_position(room_layout_id, seat_code) WHERE seat_code IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_layout_position_layout ON room_layout_position(room_layout_id);
+CREATE INDEX IF NOT EXISTS idx_layout_position_group ON room_layout_position(seat_group_id) WHERE seat_group_id IS NOT NULL;
+
+-- ── room_layout_audit_log — mirrors cluster_audit_log ───────────────────────
+
+CREATE TABLE IF NOT EXISTS room_layout_audit_log (
+    log_id        VARCHAR(36)  PRIMARY KEY,
+    room_layout_id BIGINT       NOT NULL REFERENCES room_layout(room_layout_id) ON DELETE CASCADE,
+    action          VARCHAR(20)  NOT NULL,
+    performed_by     VARCHAR(255),
+    old_status        VARCHAR(20),
+    new_status         VARCHAR(20),
+    note                TEXT,
+    timestamp            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_room_layout_audit_log_layout ON room_layout_audit_log(room_layout_id);
+CREATE INDEX IF NOT EXISTS idx_room_layout_audit_log_timestamp ON room_layout_audit_log(timestamp DESC);

@@ -532,8 +532,565 @@ paths:
                   result:
                     $ref: "#/components/schemas/CinemaClusterResponse"
 
+  /api/cinema-room-master-data:
+    get:
+      tags:
+        - Room Master Data Controller
+      summary: Aggregate master data for the Cinema Room creation wizard
+      description: Read-only. Frontend dropdowns and quick-start room templates must consume this instead of hardcoding lists.
+      operationId: getCinemaRoomMasterData
+      responses:
+        "200":
+          description: Master data returned successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  result:
+                    $ref: "#/components/schemas/CinemaRoomMasterDataResponse"
+
+  /api/cinema-rooms/{roomId}/layouts:
+    get:
+      tags:
+        - Room Layout Controller
+      summary: List all layout versions for a room
+      operationId: listRoomLayouts
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Layout version summaries, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  result:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RoomLayoutSummaryResponse"
+
+  /api/cinema-rooms/{roomId}/layouts/{layoutId}:
+    get:
+      tags:
+        - Room Layout Controller
+      summary: Get one layout version, including all positions
+      operationId: getRoomLayout
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: layoutId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Layout detail returned successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  result:
+                    $ref: "#/components/schemas/RoomLayoutResponse"
+    put:
+      tags:
+        - Room Layout Controller
+      summary: Replace the position set of a DRAFT layout
+      description: Rejected with ROOM_LAYOUT_NOT_EDITABLE (2046) unless the layout is DRAFT. personCapacity/sellableUnitCount are always recomputed server-side.
+      operationId: saveRoomLayout
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: layoutId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoomLayoutSaveRequest"
+      responses:
+        "200":
+          description: Layout saved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  result:
+                    $ref: "#/components/schemas/RoomLayoutResponse"
+
+  /api/cinema-rooms/{roomId}/layouts/{layoutId}/submit:
+    post:
+      tags:
+        - Room Layout Controller
+      summary: Submit a DRAFT layout for approval (DRAFT -> PENDING_APPROVAL)
+      description: >-
+        Revalidates the stored layout against the room planning envelope before transition.
+        Returns ROOM_LAYOUT_EXCEEDS_ROOM_ENVELOPE (2063) when person capacity, minimum
+        seat-row footprint, or screen-clearance depth exceeds the configured room dimensions.
+      operationId: submitRoomLayout
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: layoutId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Layout submitted successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  result:
+                    $ref: "#/components/schemas/RoomLayoutResponse"
+
+  /api/cinema-rooms/{roomId}/layouts/{layoutId}/approve:
+    post:
+      tags:
+        - Room Layout Controller
+      summary: Approve a PENDING_APPROVAL layout (ADMIN only)
+      operationId: approveRoomLayout
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: layoutId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Layout approved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  result:
+                    $ref: "#/components/schemas/RoomLayoutResponse"
+
+  /api/cinema-rooms/{roomId}/layouts/{layoutId}/reject:
+    post:
+      tags:
+        - Room Layout Controller
+      summary: Reject a PENDING_APPROVAL layout back to DRAFT (ADMIN only)
+      operationId: rejectRoomLayout
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: layoutId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note:
+                  type: string
+                  example: "Couple rows too close to the exit — please move them."
+      responses:
+        "200":
+          description: Layout rejected successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  result:
+                    $ref: "#/components/schemas/RoomLayoutResponse"
+
+  /api/cinema-rooms/{roomId}/layouts/{layoutId}/activate:
+    post:
+      tags:
+        - Room Layout Controller
+      summary: Activate an APPROVED layout (ADMIN only) — syncs the seat table
+      description: Blocked with ROOM_LAYOUT_HAS_FUTURE_SHOWTIMES (2051) if the room has an ACTIVE layout and any SCHEDULED/ON_SALE showtime today or later.
+      operationId: activateRoomLayout
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: layoutId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Layout activated successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  result:
+                    $ref: "#/components/schemas/RoomLayoutResponse"
+
+  /api/cinema-rooms/{roomId}/layouts/{layoutId}/clone:
+    post:
+      tags:
+        - Room Layout Controller
+      summary: Clone a layout version into a new DRAFT version+1
+      description: Rejected with ROOM_LAYOUT_INVALID_TRANSITION if the source is DRAFT or PENDING_APPROVAL.
+      operationId: cloneRoomLayout
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: layoutId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "201":
+          description: Layout cloned successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 201
+                  result:
+                    $ref: "#/components/schemas/RoomLayoutResponse"
+
 components:
   schemas:
+    MasterDataItemResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+          example: "STANDARD"
+        name:
+          type: string
+          example: "Standard"
+        description:
+          type: string
+          nullable: true
+
+    CinemaRoomMasterDataResponse:
+      type: object
+      properties:
+        auditoriumClasses:
+          type: array
+          description: >-
+            Active commercial service tiers only (STANDARD, PREMIUM, LUXURY,
+            PRIVATE). This classification is independent from presentation/audio
+            capabilities, seat mix and capacity; PLF and MOTION are not service tiers.
+          items:
+            $ref: "#/components/schemas/MasterDataItemResponse"
+        projectionTechnologies:
+          type: array
+          items:
+            $ref: "#/components/schemas/MasterDataItemResponse"
+        resolutions:
+          type: array
+          items:
+            $ref: "#/components/schemas/MasterDataItemResponse"
+        audioFormats:
+          type: array
+          items:
+            $ref: "#/components/schemas/MasterDataItemResponse"
+        presentationSystems:
+          type: array
+          description: Commercial presentation system, independent from projection technology and 2D/3D format.
+          items:
+            type: string
+            enum: [STANDARD, IMAX, DOLBY_CINEMA, SCREENX]
+        roomTemplates:
+          type: array
+          description: Database-managed operational defaults. Identity and physical/screen measurements are never templated.
+          items:
+            $ref: "#/components/schemas/RoomConfigurationTemplateResponse"
+        seatTypes:
+          type: array
+          items:
+            type: string
+          example: ["STANDARD", "VIP", "COUPLE", "ACCESSIBLE"]
+        numberingDirections:
+          type: array
+          items:
+            type: string
+          example: ["LEFT_TO_RIGHT", "RIGHT_TO_LEFT"]
+        layoutPositionTypes:
+          type: array
+          items:
+            type: string
+          example: ["SEAT", "AISLE", "EXIT", "EMPTY_SPACE"]
+        roomStatuses:
+          type: array
+          items:
+            type: string
+        layoutStatuses:
+          type: array
+          items:
+            type: string
+
+    RoomConfigurationTemplateResponse:
+      type: object
+      required: [id, code, name, auditoriumClassId, projectionTechnologyId, resolutionId, audioFormatId, numberOfRows, maxPositionsPerRow, layoutTemplateCode]
+      properties:
+        id: { type: integer }
+        code: { type: string, example: PREMIUM_LASER }
+        name: { type: string, example: Premium Laser }
+        description: { type: string, nullable: true }
+        auditoriumClassId: { type: integer }
+        projectionTechnologyId: { type: integer }
+        resolutionId: { type: integer }
+        audioFormatId: { type: integer }
+        supports2d: { type: boolean }
+        supports3d: { type: boolean }
+        numberOfRows: { type: integer, example: 12 }
+        maxPositionsPerRow: { type: integer, example: 16 }
+        layoutTemplateCode: { type: string, example: BALANCED }
+        standardRowPercentage: { type: integer, minimum: 0, maximum: 100 }
+        coupleLastRow: { type: boolean }
+        centerAisle: { type: boolean }
+        crossAisle: { type: boolean }
+
+    LayoutPositionRequest:
+      type: object
+      required: [rowIndex, columnIndex, rowLabel, positionType]
+      properties:
+        rowIndex:
+          type: integer
+        columnIndex:
+          type: integer
+        rowLabel:
+          type: string
+          example: "A"
+        positionType:
+          type: string
+          enum: [SEAT, AISLE, EXIT, EMPTY_SPACE]
+        seatNumber:
+          type: integer
+          nullable: true
+        seatCode:
+          type: string
+          nullable: true
+          example: "A1"
+        seatType:
+          type: string
+          nullable: true
+          enum: [STANDARD, VIP, COUPLE, ACCESSIBLE]
+        seatGroupId:
+          type: string
+          nullable: true
+          description: Required and shared by exactly 2 adjacent same-row positions when seatType=COUPLE.
+        manualOverride:
+          type: boolean
+          default: false
+          description: True when an operator manually changed this coordinate after rule-based generation.
+
+    LayoutPositionResponse:
+      allOf:
+        - $ref: "#/components/schemas/LayoutPositionRequest"
+        - type: object
+          properties:
+            positionId:
+              type: integer
+              format: int64
+            seatStatus:
+              type: string
+              enum: [ACTIVE, INACTIVE, MAINTENANCE]
+
+    RoomLayoutSaveRequest:
+      type: object
+      required: [positions]
+      properties:
+        numberOfRows:
+          type: integer
+        maxPositionsPerRow:
+          type: integer
+        firstRowLabel:
+          type: string
+          example: "A"
+        numberingDirection:
+          type: string
+          enum: [LEFT_TO_RIGHT, RIGHT_TO_LEFT]
+        numberingPolicy:
+          type: string
+          enum: [CONTIGUOUS_SEATS, PHYSICAL_POSITION]
+          default: CONTIGUOUS_SEATS
+        generatorTemplateCode:
+          type: string
+          nullable: true
+        generatorTemplateVersion:
+          type: integer
+          nullable: true
+        generationConfig:
+          type: string
+          nullable: true
+          description: Versioned JSON authoring metadata. Persisted positions remain authoritative.
+        positions:
+          type: array
+          description: May be empty while still a draft — submit rejects an empty layout.
+          items:
+            $ref: "#/components/schemas/LayoutPositionRequest"
+
+    RoomLayoutSummaryResponse:
+      type: object
+      properties:
+        roomLayoutId:
+          type: integer
+          format: int64
+        version:
+          type: integer
+        status:
+          type: string
+          enum: [DRAFT, PENDING_APPROVAL, APPROVED, ACTIVE, REJECTED, SUPERSEDED]
+        personCapacity:
+          type: integer
+        sellableUnitCount:
+          type: integer
+        submittedAt:
+          type: string
+          format: date-time
+          nullable: true
+        approvedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    RoomLayoutResponse:
+      allOf:
+        - $ref: "#/components/schemas/RoomLayoutSummaryResponse"
+        - type: object
+          properties:
+            cinemaRoomId:
+              type: integer
+              format: int64
+            numberOfRows:
+              type: integer
+            maxPositionsPerRow:
+              type: integer
+            firstRowLabel:
+              type: string
+            numberingDirection:
+              type: string
+              enum: [LEFT_TO_RIGHT, RIGHT_TO_LEFT]
+            numberingPolicy:
+              type: string
+              enum: [CONTIGUOUS_SEATS, PHYSICAL_POSITION]
+            generatorTemplateCode:
+              type: string
+              nullable: true
+            generatorTemplateVersion:
+              type: integer
+              nullable: true
+            generationConfig:
+              type: string
+              nullable: true
+            submittedBy:
+              type: string
+              nullable: true
+            approvedBy:
+              type: string
+              nullable: true
+            rejectionReason:
+              type: string
+              nullable: true
+            positions:
+              type: array
+              items:
+                $ref: "#/components/schemas/LayoutPositionResponse"
+            createdAt:
+              type: string
+              format: date-time
+            createdBy:
+              type: string
+              nullable: true
+            updatedAt:
+              type: string
+              format: date-time
+            updatedBy:
+              type: string
+              nullable: true
+
     CreateMovieRequest:
       type: object
       required:
@@ -680,6 +1237,10 @@ components:
         seatQuantity:
           type: integer
           example: 100
+        presentationSystem:
+          type: string
+          enum: [STANDARD, IMAX, DOLBY_CINEMA, SCREENX]
+          default: STANDARD
 
     CinemaRoomResponse:
       type: object
@@ -693,22 +1254,65 @@ components:
         seatQuantity:
           type: integer
           example: 100
+        presentationSystem:
+          type: string
+          enum: [STANDARD, IMAX, DOLBY_CINEMA, SCREENX]
+          example: SCREENX
 
     CinemaClusterRequest:
       type: object
       required:
+        - clusterCode
         - clusterName
+        - venueType
+        - countryCode
         - province
+        - district
         - address
+        - timezone
+        - operatingHours
       properties:
+        clusterCode:
+          type: string
+          pattern: '^[A-Z0-9][A-Z0-9-]{1,19}$'
+          example: "CP-HCM-01"
         clusterName:
           type: string
           minLength: 2
           maxLength: 100
           example: "CinePrime Quận 1"
+        venueType:
+          type: string
+          enum: [MALL, STANDALONE, MIXED_USE]
+        openingDate:
+          type: string
+          format: date
+          nullable: true
+        publicEmail:
+          type: string
+          format: email
+          nullable: true
+        countryCode:
+          type: string
+          example: "VN"
         province:
           type: string
           example: "TP. Hồ Chí Minh"
+        district:
+          type: string
+          example: "Quận 1"
+        ward:
+          type: string
+          nullable: true
+        postalCode:
+          type: string
+          nullable: true
+        buildingName:
+          type: string
+          nullable: true
+        floorLocation:
+          type: string
+          nullable: true
         address:
           type: string
           minLength: 10
@@ -726,6 +1330,15 @@ components:
           minimum: -180
           maximum: 180
           example: 106.7009
+        timezone:
+          type: string
+          example: "Asia/Ho_Chi_Minh"
+        operatingHours:
+          type: array
+          minItems: 7
+          maxItems: 7
+          items:
+            $ref: "#/components/schemas/ClusterOperatingHour"
         status:
           type: string
           enum: [DRAFT, PENDING_REVIEW, ACTIVE, INACTIVE]
@@ -737,12 +1350,44 @@ components:
           type: integer
           format: int64
           example: 7
+        clusterCode:
+          type: string
+          example: "CP-HCM-01"
         clusterName:
           type: string
           example: "CinePrime Quận 1"
+        venueType:
+          type: string
+          example: MALL
+        openingDate:
+          type: string
+          format: date
+          nullable: true
+        publicEmail:
+          type: string
+          format: email
+          nullable: true
+        countryCode:
+          type: string
+          example: VN
         province:
           type: string
           example: "TP. Hồ Chí Minh"
+        district:
+          type: string
+          example: "Quận 1"
+        ward:
+          type: string
+          nullable: true
+        postalCode:
+          type: string
+          nullable: true
+        buildingName:
+          type: string
+          nullable: true
+        floorLocation:
+          type: string
+          nullable: true
         address:
           type: string
           example: "123 Nguyễn Huệ, Quận 1"
@@ -757,6 +1402,13 @@ components:
           type: number
           format: double
           nullable: true
+        timezone:
+          type: string
+          example: "Asia/Ho_Chi_Minh"
+        operatingHours:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClusterOperatingHour"
         status:
           type: string
           example: ACTIVE
@@ -777,6 +1429,30 @@ components:
           type: string
           nullable: true
           example: "audit.editor"
+
+    ClusterOperatingHour:
+      type: object
+      required: [dayOfWeek, closesNextDay, closed]
+      properties:
+        dayOfWeek:
+          type: string
+          enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY]
+        opensAt:
+          type: string
+          format: time
+          nullable: true
+          example: "08:00:00"
+        closesAt:
+          type: string
+          format: time
+          nullable: true
+          example: "23:00:00"
+        closesNextDay:
+          type: boolean
+          default: false
+        closed:
+          type: boolean
+          default: false
 
     TypeRequest:
       type: object

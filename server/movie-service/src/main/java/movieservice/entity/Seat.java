@@ -56,6 +56,12 @@ public class Seat {
     @Column(name = "base_price", nullable = false, precision = 10, scale = 2)
     BigDecimal price;
 
+    // Danh dau 2 Seat thuoc cung 1 cap Couple sync tu RoomLayoutPosition khi activate
+    // layout — null voi ghe sinh tu flow nhanh cu (khong co khai niem group rieng, van
+    // dung SeatType.COUPLE + colSpan nhu truoc). Cho phep booking/locking nhan dien group.
+    @Column(name = "seat_group_id", length = 36)
+    String seatGroupId;
+
     @Column(name = "created_at", updatable = false)
     LocalDateTime createdAt;
 

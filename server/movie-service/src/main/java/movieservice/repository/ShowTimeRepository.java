@@ -59,6 +59,15 @@ public interface ShowTimeRepository extends JpaRepository<ShowTime, Long> {
 
         boolean existsByCinemaRoomCinemaRoomId(Long roomId);
 
+        /** Layout-activation guard (ROOM_LAYOUT_HAS_FUTURE_SHOWTIMES): blocks activating a new
+         *  layout version while the room has upcoming scheduled/on-sale showtimes. */
+        @Query("SELECT COUNT(s) > 0 FROM ShowTime s WHERE s.cinemaRoom.cinemaRoomId = :roomId " +
+                        "AND s.status IN :statuses AND s.showDate >= :fromDate")
+        boolean existsByCinemaRoomCinemaRoomIdAndStatusInAndShowDateGreaterThanEqual(
+                        @Param("roomId") Long roomId,
+                        @Param("statuses") List<movieservice.enums.ShowTimeStatus> statuses,
+                        @Param("fromDate") LocalDate fromDate);
+
         List<ShowTime> findByMovieMovieId(Long movieId);
 
         List<ShowTime> findByMovieMovieIdAndShowDate(Long movieId, LocalDate showDate);

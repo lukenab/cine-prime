@@ -3,6 +3,7 @@ import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import {
   ArrowLeft, MapPin, Phone, Building2, Armchair, RefreshCw, AlertCircle,
   Plus, Search, ChevronRight, CheckCircle, CheckCircle2, XCircle, Clock, SendHorizonal, Edit2, Trash2,
+  CalendarDays, Mail, Timer, Globe2,
 } from "lucide-react";
 import {
   movieApi,
@@ -11,8 +12,8 @@ import {
   type RoomResponse,
   ROOM_TYPE_CONFIG,
 } from "../../api/movieApi";
-import { AddCinemaRoomModal } from "../../layouts/AddCinemaRoomModal";
 import { useRole } from "../../hooks/useRole";
+import { RoomCreationMethodDialog } from "./cinemaRoomEditor/RoomCreationMethodDialog";
 
 // ── Status config (small local copy — kept in sync with ManageCinemaClusterPage.tsx) ──
 
@@ -22,6 +23,8 @@ const STATUS_CONFIG: Record<ClusterStatus, { label: string; icon: React.ElementT
   ACTIVE:         { label: "Active",         icon: CheckCircle, color: "#10b981", bg: "rgba(16,185,129,0.10)"  },
   INACTIVE:       { label: "Inactive",       icon: XCircle,     color: "#ef4444", bg: "rgba(239,68,68,0.10)"   },
 };
+
+const OPERATING_DAY_LABELS = { MONDAY: "Mon", TUESDAY: "Tue", WEDNESDAY: "Wed", THURSDAY: "Thu", FRIDAY: "Fri", SATURDAY: "Sat", SUNDAY: "Sun" } as const;
 
 // Nhan hang kieu Excel (khop rowLabel() ben backend): 0->A, 1->B, ..., 25->Z, 26->AA...
 function excelRowLabel(index: number): string {
@@ -103,12 +106,11 @@ export default function ClusterDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [workflowBusy, setWorkflowBusy] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deletingRoomId, setDeletingRoomId] = useState<number | null>(null);
+  const [choosingRoomCreationMethod, setChoosingRoomCreationMethod] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const showToast = (type: "success" | "error", message: string) => {
@@ -134,24 +136,6 @@ export default function ClusterDetailPage() {
   }, [clusterId]);
 
   useEffect(() => { load(); }, [load]);
-
-  const handleCreateRoom = async (data: Parameters<typeof movieApi.createRoom>[0]) => {
-    setSubmitting(true);
-    try {
-      const res = await movieApi.createRoom(data);
-      setRooms((prev) => [...prev, res.result]);
-      setModalOpen(false);
-      showToast("success", `Room "${res.result.cinemaRoomName}" created.`);
-      // Room counts on the cluster (totalRooms/totalSeats) are computed server-side —
-      // refresh so the stat cards below reflect the room we just added.
-      const clusterRes = await movieApi.getClusterById(clusterId);
-      setCluster(clusterRes.result);
-    } catch (err: any) {
-      showToast("error", err?.response?.data?.message ?? "Create failed.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const handleDeleteRoom = async (room: RoomResponse, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -312,7 +296,7 @@ export default function ClusterDetailPage() {
           )}
           {can.edit && (
             <button
-              onClick={() => navigate("/admin/clusters", { state: { editClusterId: cluster.clusterId } })}
+              onClick={() => navigate(`/admin/clusters/${cluster.clusterId}/edit`)}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl border hover:opacity-80"
               style={{ fontSize: "13px", color: "var(--text-main)", borderColor: "var(--border-color)", background: "var(--bg-card)" }}
             >
@@ -330,6 +314,45 @@ export default function ClusterDetailPage() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* Operational profile — Sections 1-4 only; amenities remain out of scope. */}
+      <div className="mb-6 grid grid-cols-1 gap-5 xl:grid-cols-2">
+        <section className="rounded-2xl border p-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+          <div className="mb-4 flex items-center gap-2"><Building2 size={16} className="text-blue-600" /><h2 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-main)" }}>Cluster profile</h2></div>
+          <dl className="grid grid-cols-2 gap-x-5 gap-y-3 text-sm">
+            {[
+              ["Cluster code", cluster.clusterCode ?? `Cluster ${cluster.clusterId}`],
+              ["Venue type", (cluster.venueType ?? "MALL").replace(/_/g, " ")],
+              ["District", cluster.district || "—"],
+              ["Building / Floor", [cluster.buildingName, cluster.floorLocation].filter(Boolean).join(" · ") || "—"],
+              ["Opening date", cluster.openingDate || "—"],
+              ["Timezone", cluster.timezone ?? "Asia/Ho_Chi_Minh"],
+            ].map(([label, value]) => (
+              <div key={label}><dt style={{ fontSize: "10.5px", color: "var(--text-sub)" }}>{label}</dt><dd className="mt-0.5 capitalize" style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-main)" }}>{value}</dd></div>
+            ))}
+          </dl>
+          <div className="mt-4 flex flex-wrap gap-3 border-t pt-3" style={{ borderColor: "var(--border-color)" }}>
+            {cluster.publicEmail && <a href={`mailto:${cluster.publicEmail}`} className="flex items-center gap-1.5" style={{ fontSize: "11.5px", color: "#2563eb" }}><Mail size={12} />{cluster.publicEmail}</a>}
+            <span className="flex items-center gap-1.5" style={{ fontSize: "11.5px", color: "var(--text-sub)" }}><Phone size={12} />{cluster.phoneNumber ?? "19001000"}</span>
+            <span className="flex items-center gap-1.5" style={{ fontSize: "11.5px", color: "var(--text-sub)" }}><Globe2 size={12} />{cluster.countryCode ?? "VN"}</span>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border p-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+          <div className="mb-4 flex items-center gap-2"><CalendarDays size={16} className="text-blue-600" /><h2 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-main)" }}>Operating schedule</h2></div>
+          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            {(cluster.operatingHours ?? []).slice().sort((left, right) => Object.keys(OPERATING_DAY_LABELS).indexOf(left.dayOfWeek) - Object.keys(OPERATING_DAY_LABELS).indexOf(right.dayOfWeek)).map((hours) => (
+              <div key={hours.dayOfWeek} className="flex items-center justify-between rounded-lg border px-3 py-2" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
+                <strong style={{ fontSize: "11.5px", color: "var(--text-main)" }}>{OPERATING_DAY_LABELS[hours.dayOfWeek]}</strong>
+                <span className="flex items-center gap-1" style={{ fontSize: "11px", color: hours.closed ? "#ef4444" : "var(--text-sub)" }}>
+                  <Timer size={11} />{hours.closed ? "Closed" : `${hours.opensAt?.slice(0, 5)}–${hours.closesAt?.slice(0, 5)}${hours.closesNextDay ? " +1" : ""}`}
+                </span>
+              </div>
+            ))}
+            {!cluster.operatingHours?.length && <p style={{ fontSize: "12px", color: "var(--text-sub)" }}>Operating schedule has not been migrated for this cluster.</p>}
+          </div>
+        </section>
       </div>
 
       {/* Stats */}
@@ -387,7 +410,7 @@ export default function ClusterDetailPage() {
         </button>
         {can.edit && cluster.status === "ACTIVE" && (
           <button
-            onClick={() => setModalOpen(true)}
+            onClick={() => setChoosingRoomCreationMethod(true)}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all shadow-sm"
             style={{ fontSize: "14px", fontWeight: 500, background: isDarkMode ? "#3b82f6" : "#2563eb" }}
           >
@@ -400,6 +423,15 @@ export default function ClusterDetailPage() {
           </span>
         )}
       </div>
+
+      {choosingRoomCreationMethod && (
+        <RoomCreationMethodDialog
+          rooms={rooms}
+          onClose={() => setChoosingRoomCreationMethod(false)}
+          onCreateNew={() => navigate(`/admin/clusters/${cluster.clusterId}/rooms/new`)}
+          onDuplicate={(sourceRoomId) => navigate(`/admin/clusters/${cluster.clusterId}/rooms/new?duplicateFrom=${sourceRoomId}`)}
+        />
+      )}
 
       {/* Rooms table */}
       <div className="rounded-2xl border overflow-hidden" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
@@ -508,15 +540,6 @@ export default function ClusterDetailPage() {
           </div>
         )}
       </div>
-
-      <AddCinemaRoomModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSave={handleCreateRoom}
-        submitting={submitting}
-        clusterId={cluster.clusterId}
-        existingRoomNames={rooms.map((r) => r.cinemaRoomName)}
-      />
 
       {rejecting && (
         <RejectModal
