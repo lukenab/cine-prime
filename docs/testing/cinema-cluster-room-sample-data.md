@@ -1,5 +1,12 @@
 # Dữ liệu rạp chiếu phim thực tế — để tạo thủ công trên Admin UI
 
+> **Cập nhật V25:** form Cinema Cluster hiện yêu cầu thêm mã cụm rạp, loại địa điểm,
+> quốc gia, quận/huyện, timezone và lịch vận hành đủ 7 ngày. Các ví dụ payload đầy đủ,
+> có thể copy trực tiếp vào Postman, nằm tại
+> [`movie-service-postman-test-cases.md`](./movie-service-postman-test-cases.md#61-admin-created-active-cluster).
+> Danh sách phía dưới vẫn dùng làm dữ liệu tham chiếu tên và địa chỉ; hướng dẫn cũ nói
+> chỉ nhập Name/Province/Address không còn là contract hiện hành.
+
 Data lấy từ tên/địa chỉ thật của các cụm rạp CGV, Lotte Cinema, Galaxy Cinema, BHD Star đang hoạt động tại Việt Nam (tra cứu qua web, tháng 7/2026), khớp đúng danh sách **province được validate cứng** trong `ProvinceValidator.java` (`movie-service`). Ghi chú rõ ở cột "Nguồn" để bạn biết field nào là dữ liệu thật, field nào là số hợp lệ nhưng không phải hotline thật.
 
 ⚠️ **`phoneNumber` không còn nhập thủ công (V8):** thực tế các chuỗi CGV/Lotte/Galaxy/BHD dùng chung **một** hotline tổng đài cho toàn chuỗi, không cấu hình riêng theo từng cụm rạp — nên form tạo/sửa cluster đã **bỏ hẳn ô nhập Hotline**. Backend tự gán cố định `19001000` cho mọi cluster khi tạo (`CinemaClusterController.DEFAULT_HOTLINE`) và không cho sửa qua API nữa. Dữ liệu cũ (seed từ V6, mỗi cluster một số khác nhau) đã được chuẩn hoá về cùng giá trị này qua `V8__unify_cluster_hotline.sql`.

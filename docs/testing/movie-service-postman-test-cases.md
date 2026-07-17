@@ -555,11 +555,31 @@ Authorization: Bearer {{adminToken}}
 
 ```json
 {
+  "clusterCode": "CP-A{{runId}}",
   "clusterName": "CinePrime Postman Admin {{runId}}",
+  "venueType": "MALL",
+  "openingDate": "2026-07-01",
+  "publicEmail": "cluster.admin@cineprime.vn",
+  "countryCode": "VN",
+  "district": "Quận 1",
+  "ward": "Phường Sài Gòn",
+  "postalCode": "700000",
+  "buildingName": "CinePrime Center",
+  "floorLocation": "Tầng 5",
   "province": "TP. Hồ Chí Minh",
   "address": "123 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh",
   "latitude": 10.7731,
-  "longitude": 106.7030
+  "longitude": 106.7030,
+  "timezone": "Asia/Ho_Chi_Minh",
+  "operatingHours": [
+    { "dayOfWeek": "MONDAY", "opensAt": "08:00", "closesAt": "23:00", "closesNextDay": false, "closed": false },
+    { "dayOfWeek": "TUESDAY", "opensAt": "08:00", "closesAt": "23:00", "closesNextDay": false, "closed": false },
+    { "dayOfWeek": "WEDNESDAY", "opensAt": "08:00", "closesAt": "23:00", "closesNextDay": false, "closed": false },
+    { "dayOfWeek": "THURSDAY", "opensAt": "08:00", "closesAt": "23:00", "closesNextDay": false, "closed": false },
+    { "dayOfWeek": "FRIDAY", "opensAt": "08:00", "closesAt": "23:30", "closesNextDay": false, "closed": false },
+    { "dayOfWeek": "SATURDAY", "opensAt": "08:00", "closesAt": "00:30", "closesNextDay": true, "closed": false },
+    { "dayOfWeek": "SUNDAY", "opensAt": "08:00", "closesAt": "23:00", "closesNextDay": false, "closed": false }
+  ]
 }
 ```
 
@@ -571,11 +591,25 @@ Create with EMPLOYEE token and a different name:
 
 ```json
 {
+  "clusterCode": "CP-E{{runId}}",
   "clusterName": "CinePrime Postman Employee {{runId}}",
+  "venueType": "MALL",
+  "countryCode": "VN",
+  "district": "Hoàn Kiếm",
   "province": "Hà Nội",
   "address": "100 Tràng Tiền, Hoàn Kiếm, Hà Nội",
   "latitude": 21.0245,
-  "longitude": 105.8572
+  "longitude": 105.8572,
+  "timezone": "Asia/Ho_Chi_Minh",
+  "operatingHours": [
+    { "dayOfWeek": "MONDAY", "opensAt": "08:00", "closesAt": "23:00", "closesNextDay": false, "closed": false },
+    { "dayOfWeek": "TUESDAY", "opensAt": "08:00", "closesAt": "23:00", "closesNextDay": false, "closed": false },
+    { "dayOfWeek": "WEDNESDAY", "opensAt": "08:00", "closesAt": "23:00", "closesNextDay": false, "closed": false },
+    { "dayOfWeek": "THURSDAY", "opensAt": "08:00", "closesAt": "23:00", "closesNextDay": false, "closed": false },
+    { "dayOfWeek": "FRIDAY", "opensAt": "08:00", "closesAt": "23:00", "closesNextDay": false, "closed": false },
+    { "dayOfWeek": "SATURDAY", "opensAt": "08:00", "closesAt": "23:00", "closesNextDay": false, "closed": false },
+    { "dayOfWeek": "SUNDAY", "opensAt": null, "closesAt": null, "closesNextDay": false, "closed": true }
+  ]
 }
 ```
 
@@ -632,16 +666,39 @@ resubmit it.
 | CLU-23 | Delete empty cluster as ADMIN | 200 |
 | CLU-24 | Delete cluster containing a room | 409, code 2024 |
 | CLU-25 | Delete as EMPLOYEE | 403 |
+| CLU-26 | Missing or lowercase/invalid `clusterCode` | 400; code must match `^[A-Z0-9][A-Z0-9-]{1,19}$` |
+| CLU-27 | Duplicate `clusterCode` ignoring case | 409, code 2065 |
+| CLU-28 | Change `clusterCode` after cluster leaves DRAFT | 400, code 2066 |
+| CLU-29 | Missing district or invalid IANA timezone | 400; invalid timezone uses code 2068 |
+| CLU-30 | `operatingHours` does not contain exactly seven entries | 400 |
+| CLU-31 | Seven entries contain a duplicate day and omit another day | 400, code 2067 |
+| CLU-32 | Open day has no times, equal times, or overnight close without `closesNextDay=true` | 400 validation error |
+| CLU-33 | Closed day still contains opening/closing time | 400 validation error |
 
 Admin status toggle body must still provide all required fields:
 
 ```json
 {
+  "clusterCode": "CP-A{{runId}}",
   "clusterName": "CinePrime Postman Admin {{runId}}",
+  "venueType": "MALL",
+  "publicEmail": "cluster.admin@cineprime.vn",
+  "countryCode": "VN",
+  "district": "Quận 1",
   "province": "TP. Hồ Chí Minh",
   "address": "123 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh",
   "latitude": 10.7731,
   "longitude": 106.7030,
+  "timezone": "Asia/Ho_Chi_Minh",
+  "operatingHours": [
+    { "dayOfWeek": "MONDAY", "opensAt": "08:00", "closesAt": "23:00", "closesNextDay": false, "closed": false },
+    { "dayOfWeek": "TUESDAY", "opensAt": "08:00", "closesAt": "23:00", "closesNextDay": false, "closed": false },
+    { "dayOfWeek": "WEDNESDAY", "opensAt": "08:00", "closesAt": "23:00", "closesNextDay": false, "closed": false },
+    { "dayOfWeek": "THURSDAY", "opensAt": "08:00", "closesAt": "23:00", "closesNextDay": false, "closed": false },
+    { "dayOfWeek": "FRIDAY", "opensAt": "08:00", "closesAt": "23:30", "closesNextDay": false, "closed": false },
+    { "dayOfWeek": "SATURDAY", "opensAt": "08:00", "closesAt": "00:30", "closesNextDay": true, "closed": false },
+    { "dayOfWeek": "SUNDAY", "opensAt": "08:00", "closesAt": "23:00", "closesNextDay": false, "closed": false }
+  ],
   "status": "INACTIVE"
 }
 ```

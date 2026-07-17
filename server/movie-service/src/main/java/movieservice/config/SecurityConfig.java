@@ -25,6 +25,7 @@ public class SecurityConfig extends JwtResourceServerSecuritySupport {
                         .requestMatchers(HttpMethod.GET, "/api/movies/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/genres/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/cinema-rooms/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/cinema-room-master-data").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/seats/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/schedules/**").permitAll()
                         // Cinema clusters — GET public (controller filters by role internally)

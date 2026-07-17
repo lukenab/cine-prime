@@ -52,6 +52,7 @@ export const ROOM_TYPE_CONFIG: Record<RoomType, { maxSeats: number; seatsPerRow:
 export type RoomResponse = {
   cinemaRoomId: number;
   cinemaRoomName: string;
+  roomCode?: string;
   roomType: RoomType;
   seatQuantity: number;
   numberOfRows: number;
@@ -69,6 +70,7 @@ export type RoomResponse = {
 export type RoomApiResponse = {
   cinemaRoomId: number;
   cinemaRoomName: string;
+  roomCode?: string;
   roomType: RoomType;
   totalSeatCapacity: number;
   numberOfRows: number;
@@ -131,18 +133,212 @@ export type CreateRoomPayload = {
   clusterId: number;
 };
 
+// ── Cinema Room creation wizard (layout versioning / approval workflow) ────────
+// See docs/CINEMA_ROOM_CREATION_FLOW.md. These types/endpoints are additive: the
+// legacy RoomType/CreateRoomPayload/AddCinemaRoomModal quick-create flow above is
+// untouched and keeps working exactly as before.
+
+export type MasterDataItem = {
+  id: number;
+  code: string;
+  name: string;
+  description?: string;
+};
+
+export type RoomConfigurationTemplate = {
+  id: number;
+  code: string;
+  name: string;
+  description?: string;
+  auditoriumClassId: number;
+  projectionTechnologyId: number;
+  resolutionId: number;
+  audioFormatId: number;
+  supports2d: boolean;
+  supports3d: boolean;
+  numberOfRows: number;
+  maxPositionsPerRow: number;
+  layoutTemplateCode: string;
+  standardRowPercentage: number;
+  coupleLastRow: boolean;
+  centerAisle: boolean;
+  crossAisle: boolean;
+};
+
+export type CinemaRoomMasterData = {
+  auditoriumClasses: MasterDataItem[];
+  projectionTechnologies: MasterDataItem[];
+  resolutions: MasterDataItem[];
+  audioFormats: MasterDataItem[];
+  roomTemplates?: RoomConfigurationTemplate[];
+  presentationSystems?: PresentationSystemValue[];
+  seatTypes: string[];
+  numberingDirections: string[];
+  layoutPositionTypes: string[];
+  roomStatuses: string[];
+  layoutStatuses: string[];
+};
+
+export type LayoutPositionType = "SEAT" | "AISLE" | "EXIT" | "EMPTY_SPACE";
+export type PresentationSystemValue = "STANDARD" | "IMAX" | "DOLBY_CINEMA" | "SCREENX";
+export type NumberingDirectionValue = "LEFT_TO_RIGHT" | "RIGHT_TO_LEFT";
+export type NumberingPolicyValue = "CONTIGUOUS_SEATS" | "PHYSICAL_POSITION";
+export type LayoutStatusValue = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "ACTIVE" | "REJECTED" | "SUPERSEDED";
+export type CinemaRoomWizardStatus =
+  | "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "ACTIVE"
+  | "MAINTENANCE" | "TEMPORARILY_UNAVAILABLE" | "SUSPENDED" | "CLOSED" | "RETIRED";
+
+export type LayoutPosition = {
+  positionId?: number;
+  rowIndex: number;
+  columnIndex: number;
+  rowLabel: string;
+  positionType: LayoutPositionType;
+  seatNumber?: number | null;
+  seatCode?: string | null;
+  seatType?: SeatTypeValue | null;
+  seatGroupId?: string | null;
+  seatStatus?: string;
+  /** True when an operator changed this coordinate after generation. The
+   *  Layout Assistant uses it to preserve exceptions during regeneration. */
+  manualOverride?: boolean;
+};
+
+export type RoomLayoutSummary = {
+  roomLayoutId: number;
+  version: number;
+  status: LayoutStatusValue;
+  personCapacity: number;
+  sellableUnitCount: number;
+  submittedAt?: string;
+  approvedAt?: string;
+};
+
+export type RoomLayoutDetail = RoomLayoutSummary & {
+  cinemaRoomId: number;
+  numberOfRows: number;
+  maxPositionsPerRow: number;
+  firstRowLabel: string;
+  numberingDirection: NumberingDirectionValue;
+  numberingPolicy: NumberingPolicyValue;
+  generatorTemplateCode?: string;
+  generatorTemplateVersion?: number;
+  generationConfig?: string;
+  submittedBy?: string;
+  approvedBy?: string;
+  rejectionReason?: string;
+  positions: LayoutPosition[];
+  createdAt?: string;
+  createdBy?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+};
+
+export type RoomLayoutSavePayload = {
+  numberOfRows?: number;
+  maxPositionsPerRow?: number;
+  firstRowLabel?: string;
+  numberingDirection?: NumberingDirectionValue;
+  numberingPolicy?: NumberingPolicyValue;
+  generatorTemplateCode?: string;
+  generatorTemplateVersion?: number;
+  generationConfig?: string;
+  positions: LayoutPosition[];
+};
+
+/** Step 1/2 wizard fields captured when creating the DRAFT room. */
+export type CreateRoomWizardPayload = {
+  cinemaRoomName: string;
+  roomCode: string;
+  clusterId: number;
+  auditoriumClassId: number;
+  lengthM: number;
+  widthM: number;
+  clearHeightM: number;
+  projectionTechnologyId?: number;
+  presentationSystem?: PresentationSystemValue;
+  resolutionId?: number;
+  screenWidthM?: number;
+  screenHeightM?: number;
+  supports2d?: boolean;
+  supports3d?: boolean;
+  audioFormatId?: number;
+};
+
+/** Step 1/2 partial update while the room is still DRAFT — every field optional. */
+export type UpdateRoomWizardPayload = Partial<CreateRoomWizardPayload>;
+
+export type CinemaRoomDetail = {
+  cinemaRoomId: number;
+  cinemaRoomName: string;
+  roomCode?: string;
+  status: CinemaRoomWizardStatus;
+  clusterId: number;
+  clusterName?: string;
+
+  lengthM?: number;
+  widthM?: number;
+  clearHeightM?: number;
+  areaSqm?: number;
+
+  auditoriumClassId?: number;
+  auditoriumClassCode?: string;
+  auditoriumClassName?: string;
+
+  projectionTechnologyId?: number;
+  projectionTechnologyCode?: string;
+  projectionTechnologyName?: string;
+  presentationSystem?: PresentationSystemValue;
+
+  resolutionId?: number;
+  resolutionCode?: string;
+
+  screenWidthM?: number;
+  screenHeightM?: number;
+  screenAspectRatio?: number;
+  supports2d?: boolean;
+  supports3d?: boolean;
+
+  audioFormatId?: number;
+  audioFormatCode?: string;
+
+  activeLayout?: RoomLayoutSummary;
+};
+
 // ── Cinema Cluster ────────────────────────────────────────────────────────────
 
 export type ClusterStatus = "DRAFT" | "PENDING_REVIEW" | "ACTIVE" | "INACTIVE";
+export type ClusterVenueType = "MALL" | "STANDALONE" | "MIXED_USE";
+export type ClusterOperatingDay = "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
+
+export type ClusterOperatingHour = {
+  dayOfWeek: ClusterOperatingDay;
+  opensAt?: string;
+  closesAt?: string;
+  closesNextDay: boolean;
+  closed: boolean;
+};
 
 export type ClusterResponse = {
   clusterId: number;
+  clusterCode: string;
   clusterName: string;
+  venueType: ClusterVenueType;
+  openingDate?: string;
+  publicEmail?: string;
+  countryCode: string;
   province: string;
+  district: string;
+  ward?: string;
+  postalCode?: string;
+  buildingName?: string;
+  floorLocation?: string;
   address: string;
   phoneNumber?: string;
   latitude?: number;
   longitude?: number;
+  timezone: string;
+  operatingHours: ClusterOperatingHour[];
   status: ClusterStatus;
   rejectionNote?: string;
   totalRooms?: number;
@@ -150,11 +346,23 @@ export type ClusterResponse = {
 };
 
 export type CreateClusterPayload = {
+  clusterCode: string;
   clusterName: string;
+  venueType: ClusterVenueType;
+  openingDate?: string;
+  publicEmail?: string;
+  countryCode: string;
   province: string;
+  district: string;
+  ward?: string;
+  postalCode?: string;
+  buildingName?: string;
+  floorLocation?: string;
   address: string;
   latitude?: number;
   longitude?: number;
+  timezone: string;
+  operatingHours: ClusterOperatingHour[];
   status?: ClusterStatus;
 };
 
@@ -470,6 +678,7 @@ const toLegacyMovie = (movie: MovieV2): MovieApiResponse => {
 const toLegacyRoom = (room: RoomApiResponse): RoomResponse => ({
   cinemaRoomId: room.cinemaRoomId,
   cinemaRoomName: room.cinemaRoomName,
+  roomCode: room.roomCode,
   roomType: room.roomType,
   seatQuantity: room.totalSeatCapacity,
   numberOfRows: room.numberOfRows,
@@ -695,6 +904,65 @@ export const movieApi = {
     const response = await axiosClient.get(`/api/cinema-rooms?clusterId=${clusterId}`) as ApiWrapper<RoomApiResponse[]>;
     return { ...response, result: (response.result ?? []).map(toLegacyRoom) } as ApiWrapper<RoomResponse[]>;
   },
+
+  // ── Cinema Room creation wizard ───────────────────────────────────────────
+
+  getRoomMasterData: () =>
+    axiosClient.get('/api/cinema-room-master-data') as Promise<ApiWrapper<CinemaRoomMasterData>>,
+
+  getRoomDetail: (roomId: number) =>
+    axiosClient.get(`/api/cinema-rooms/${roomId}`) as Promise<ApiWrapper<CinemaRoomDetail>>,
+
+  /** Creates a DRAFT room (step 1) + an empty layout v1 shell. The legacy row/price
+   *  fields are still required by the backend DTO but are ignored server-side when
+   *  wizardMode=true — send harmless placeholders so validation on the shared DTO passes. */
+  createRoomDraft: (payload: CreateRoomWizardPayload) => {
+    const wirePayload = {
+      ...payload,
+      wizardMode: true,
+      roomType: 'STANDARD',
+      numberOfRows: 1,
+      seatsPerRow: 1,
+      standardRowCount: 1,
+      vipRowCount: 0,
+      coupleRowCount: 0,
+      defaultPrice: 1,
+    };
+    return axiosClient.post('/api/cinema-rooms', wirePayload) as Promise<ApiWrapper<CinemaRoomDetail>>;
+  },
+
+  /** Step 1/2 partial update — only while the room is DRAFT. */
+  updateRoomDraft: (roomId: number, payload: UpdateRoomWizardPayload) =>
+    axiosClient.put(`/api/cinema-rooms/${roomId}`, payload) as Promise<ApiWrapper<CinemaRoomDetail>>,
+
+  getRoomLayouts: (roomId: number) =>
+    axiosClient.get(`/api/cinema-rooms/${roomId}/layouts`) as Promise<ApiWrapper<RoomLayoutSummary[]>>,
+
+  getRoomLayout: (roomId: number, layoutId: number) =>
+    axiosClient.get(`/api/cinema-rooms/${roomId}/layouts/${layoutId}`) as Promise<ApiWrapper<RoomLayoutDetail>>,
+
+  saveRoomLayout: (roomId: number, layoutId: number, payload: RoomLayoutSavePayload) =>
+    axiosClient.put(`/api/cinema-rooms/${roomId}/layouts/${layoutId}`, payload) as Promise<ApiWrapper<RoomLayoutDetail>>,
+
+  /** DRAFT → PENDING_APPROVAL */
+  submitRoomLayout: (roomId: number, layoutId: number) =>
+    axiosClient.post(`/api/cinema-rooms/${roomId}/layouts/${layoutId}/submit`) as Promise<ApiWrapper<RoomLayoutDetail>>,
+
+  /** PENDING_APPROVAL → APPROVED (ADMIN only) */
+  approveRoomLayout: (roomId: number, layoutId: number) =>
+    axiosClient.post(`/api/cinema-rooms/${roomId}/layouts/${layoutId}/approve`) as Promise<ApiWrapper<RoomLayoutDetail>>,
+
+  /** PENDING_APPROVAL → DRAFT + rejectionReason (ADMIN only) */
+  rejectRoomLayout: (roomId: number, layoutId: number, note: string) =>
+    axiosClient.post(`/api/cinema-rooms/${roomId}/layouts/${layoutId}/reject`, { note }) as Promise<ApiWrapper<RoomLayoutDetail>>,
+
+  /** APPROVED → ACTIVE — syncs Seat table (ADMIN only) */
+  activateRoomLayout: (roomId: number, layoutId: number) =>
+    axiosClient.post(`/api/cinema-rooms/${roomId}/layouts/${layoutId}/activate`) as Promise<ApiWrapper<RoomLayoutDetail>>,
+
+  /** Clones an APPROVED/ACTIVE/REJECTED/SUPERSEDED version into a new DRAFT version+1 */
+  cloneRoomLayout: (roomId: number, layoutId: number) =>
+    axiosClient.post(`/api/cinema-rooms/${roomId}/layouts/${layoutId}/clone`) as Promise<ApiWrapper<RoomLayoutDetail>>,
 };
 
 export function toDateStr(val: string | number[] | undefined): string {

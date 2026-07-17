@@ -101,12 +101,16 @@ public interface MovieMapper {
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "operatingHours", ignore = true)
     CinemaCluster toCinemaCluster(CinemaClusterRequest request);
 
     @Mapping(target = "status", expression = "java(cluster.getStatus() != null ? cluster.getStatus().name() : null)")
+    @Mapping(target = "venueType", expression = "java(cluster.getVenueType() != null ? cluster.getVenueType().name() : null)")
     @Mapping(target = "totalRooms", ignore = true)
     @Mapping(target = "totalSeats", ignore = true)
     CinemaClusterResponse toCinemaClusterResponse(CinemaCluster cluster);
+
+    ClusterOperatingHourResponse toClusterOperatingHourResponse(CinemaClusterOperatingHour operatingHour);
 
     // ── Cinema room ───────────────────────────────────────────
 

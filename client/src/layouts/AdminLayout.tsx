@@ -69,6 +69,12 @@ export default function AdminLayout() {
           --text-muted: #ccc;
           --text-sub: #555;
           --progress-track: rgba(255, 255, 255, 0.05);
+          --modal-surface: #171a21;
+          --modal-surface-highlight: #202633;
+          --modal-option: #10141b;
+          --modal-border: rgba(148, 163, 184, 0.20);
+          --modal-text-sub: #9ca3af;
+          --modal-backdrop: rgba(2, 6, 23, 0.60);
         }
 
         .theme-light {
@@ -79,6 +85,12 @@ export default function AdminLayout() {
           --text-muted: #333333;
           --text-sub: #7a7a7a;
           --progress-track: rgba(0, 0, 0, 0.06);
+          --modal-surface: #ffffff;
+          --modal-surface-highlight: #f5f8ff;
+          --modal-option: #f8fafc;
+          --modal-border: rgba(15, 23, 42, 0.12);
+          --modal-text-sub: #64748b;
+          --modal-backdrop: rgba(15, 23, 42, 0.42);
         }
 
         * {

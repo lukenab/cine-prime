@@ -7,23 +7,39 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.exception.AppException;
 import movieservice.dto.request.CinemaRoomRequest;
+import movieservice.dto.request.CinemaRoomUpdateRequest;
 import movieservice.dto.request.MaintenanceRequest;
 import movieservice.dto.response.CinemaRoomResponse;
+import movieservice.entity.AudioFormat;
+import movieservice.entity.AuditoriumClass;
 import movieservice.entity.CinemaCluster;
 import movieservice.entity.CinemaRoom;
 import movieservice.entity.CinemaRoomMaintenance;
+import movieservice.entity.ProjectionTechnology;
+import movieservice.entity.Resolution;
+import movieservice.entity.RoomLayout;
 import movieservice.enums.CinemaRoomStatus;
 import movieservice.enums.ClusterStatus;
+import movieservice.enums.LayoutStatus;
+import movieservice.enums.PresentationSystem;
+import movieservice.enums.RoomType;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
+import movieservice.repository.AudioFormatRepository;
+import movieservice.repository.AuditoriumClassRepository;
 import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.CinemaRoomMaintenanceRepository;
 import movieservice.repository.CinemaRoomRepository;
+import movieservice.repository.ProjectionTechnologyRepository;
+import movieservice.repository.ResolutionRepository;
+import movieservice.repository.RoomLayoutRepository;
 import movieservice.repository.ShowTimeRepository;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -43,8 +59,21 @@ public class CinemaRoomService {
     AuditLogService auditLogService;
     SeatService seatService;
 
+    AuditoriumClassRepository auditoriumClassRepository;
+    ProjectionTechnologyRepository projectionTechnologyRepository;
+    ResolutionRepository resolutionRepository;
+    AudioFormatRepository audioFormatRepository;
+    RoomLayoutRepository roomLayoutRepository;
+    RoomLayoutService roomLayoutService;
+
+    /** Overload preserved for existing callers/tests that don't carry an authenticated actor. */
     @Transactional
     public CinemaRoomResponse createCinemaRoom(CinemaRoomRequest request) {
+        return createCinemaRoom(request, "SYSTEM");
+    }
+
+    @Transactional
+    public CinemaRoomResponse createCinemaRoom(CinemaRoomRequest request, String actor) {
         CinemaCluster cluster = cinemaClusterRepository.findById(request.getClusterId())
                 .orElseThrow(() -> new AppException(MovieErrorCode.CLUSTER_NOT_FOUND));
 
@@ -55,6 +84,10 @@ public class CinemaRoomService {
         if (cinemaRoomRepository.existsByCluster_ClusterIdAndCinemaRoomName(
                 request.getClusterId(), request.getCinemaRoomName())) {
             throw new AppException(MovieErrorCode.CINEMA_ROOM_NAME_EXISTED);
+        }
+
+        if (Boolean.TRUE.equals(request.getWizardMode())) {
+            return createWizardRoom(request, cluster, actor);
         }
 
         if (request.getNumberOfRows() > SeatService.MAX_ROWS) {
@@ -87,6 +120,8 @@ public class CinemaRoomService {
         room.setTotalSeatCapacity(estimatedSeats);
         room.setCluster(cluster);
         room.setStatus(CinemaRoomStatus.ACTIVE);
+        room.setCreatedBy(actor);
+        room.setUpdatedBy(actor);
         room = cinemaRoomRepository.save(room);
 
         seatService.generateSeatsForRoom(room, request.getDefaultPrice());
@@ -98,8 +133,154 @@ public class CinemaRoomService {
         return movieMapper.toCinemaRoomResponse(room);
     }
 
-    // Chỉ cho xóa cứng room chưa từng gắn showtime nào — có showtime rồi (kể cả đã qua/đã hủy)
-    // thì bắt buộc dùng setRoomStatus(CLOSED) để giữ nguyên vẹn lịch sử vé/doanh thu.
+    // ── Wizard creation (Step 1 of the room wizard) ─────────────────────────
+    // Creates a DRAFT room with no flat Seat generation — the real layout is
+    // authored afterwards through RoomLayoutController and only synced into
+    // Seat when a layout version is ACTIVATEd (see RoomLayoutService).
+    private CinemaRoomResponse createWizardRoom(CinemaRoomRequest request, CinemaCluster cluster, String actor) {
+        String roomCode = normalizeRoomCode(request.getRoomCode());
+        if (cinemaRoomRepository.existsByCluster_ClusterIdAndRoomCode(request.getClusterId(), roomCode)) {
+            throw new AppException(MovieErrorCode.ROOM_CODE_ALREADY_EXISTS);
+        }
+
+        validatePositiveDimension(request.getLengthM());
+        validatePositiveDimension(request.getWidthM());
+        validatePositiveDimension(request.getClearHeightM());
+        validateScreenFitsRoom(request.getScreenWidthM(), request.getScreenHeightM(),
+                request.getWidthM(), request.getClearHeightM());
+        boolean supports2d = request.getSupports2d() == null || request.getSupports2d();
+        boolean supports3d = request.getSupports3d() != null && request.getSupports3d();
+        validatePresentationFormats(supports2d, supports3d);
+
+        AuditoriumClass auditoriumClass = findActiveAuditoriumClass(request.getAuditoriumClassId());
+        ProjectionTechnology projectionTechnology = request.getProjectionTechnologyId() != null
+                ? findActiveProjectionTechnology(request.getProjectionTechnologyId()) : null;
+        Resolution resolution = request.getResolutionId() != null
+                ? findActiveResolution(request.getResolutionId()) : null;
+        AudioFormat audioFormat = request.getAudioFormatId() != null
+                ? findActiveAudioFormat(request.getAudioFormatId()) : null;
+
+        CinemaRoom room = CinemaRoom.builder()
+                .cinemaRoomName(request.getCinemaRoomName())
+                .roomCode(roomCode)
+                .roomType(RoomType.STANDARD) // legacy NOT NULL column — wizard rooms no longer derive
+                                              // seat-type ratios from this; auditoriumClass carries the
+                                              // real "phân hạng phòng" going forward.
+                .totalSeatCapacity(0)
+                // Legacy row-zone columns are meaningless for wizard rooms (the real layout lives in
+                // RoomLayout/RoomLayoutPosition) but are still NOT NULL and covered by pre-existing DB
+                // CHECK constraints from V13/V14 (chk_room_row_allocation_total requires
+                // standardRowCount+vipRowCount+coupleRowCount == numberOfRows;
+                // chk_room_has_single_seat_row requires standardRowCount+vipRowCount > 0) — use the
+                // smallest placeholder set that satisfies both rather than all-zeros.
+                .numberOfRows(1)
+                .seatsPerRow(1)
+                .standardRowCount(1)
+                .vipRowCount(0)
+                .coupleRowCount(0)
+                .status(CinemaRoomStatus.DRAFT)
+                .lengthM(request.getLengthM())
+                .widthM(request.getWidthM())
+                .clearHeightM(request.getClearHeightM())
+                .auditoriumClass(auditoriumClass)
+                .projectionTechnology(projectionTechnology)
+                .presentationSystem(request.getPresentationSystem() != null
+                        ? request.getPresentationSystem() : PresentationSystem.STANDARD)
+                .resolution(resolution)
+                .screenWidthM(request.getScreenWidthM())
+                .screenHeightM(request.getScreenHeightM())
+                .supports2d(supports2d)
+                .supports3d(supports3d)
+                .audioFormat(audioFormat)
+                .cluster(cluster)
+                .createdBy(actor)
+                .updatedBy(actor)
+                .build();
+        room = cinemaRoomRepository.save(room);
+
+        roomLayoutService.createInitialDraft(room, actor);
+
+        auditLogService.logAction("SYSTEM", "Admin",
+                "cinema_room:" + room.getCinemaRoomId(),
+                "Created draft cinema room via wizard: " + room.getCinemaRoomName());
+
+        return toDetailResponse(room);
+    }
+
+    // ── Read / update (wizard step 1/2) ─────────────────────────────────────
+
+    public CinemaRoomResponse getRoomDetail(Long roomId) {
+        CinemaRoom room = cinemaRoomRepository.findById(roomId)
+                .orElseThrow(() -> new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND));
+        return toDetailResponse(room);
+    }
+
+    @Transactional
+    public CinemaRoomResponse updateRoom(Long roomId, CinemaRoomUpdateRequest request, String actor) {
+        CinemaRoom room = cinemaRoomRepository.findById(roomId)
+                .orElseThrow(() -> new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND));
+        if (room.getStatus() != CinemaRoomStatus.DRAFT) {
+            throw new AppException(MovieErrorCode.ROOM_NOT_DRAFT);
+        }
+
+        if (request.getRoomCode() != null) {
+            String roomCode = normalizeRoomCode(request.getRoomCode());
+            if (cinemaRoomRepository.existsByCluster_ClusterIdAndRoomCodeAndCinemaRoomIdNot(
+                    room.getCluster().getClusterId(), roomCode, roomId)) {
+                throw new AppException(MovieErrorCode.ROOM_CODE_ALREADY_EXISTS);
+            }
+            room.setRoomCode(roomCode);
+        }
+        if (request.getCinemaRoomName() != null) {
+            if (cinemaRoomRepository.existsByCluster_ClusterIdAndCinemaRoomNameAndCinemaRoomIdNot(
+                    room.getCluster().getClusterId(), request.getCinemaRoomName(), roomId)) {
+                throw new AppException(MovieErrorCode.CINEMA_ROOM_NAME_EXISTED);
+            }
+            room.setCinemaRoomName(request.getCinemaRoomName());
+        }
+        if (request.getAuditoriumClassId() != null) {
+            room.setAuditoriumClass(findActiveAuditoriumClass(request.getAuditoriumClassId()));
+        }
+        if (request.getLengthM() != null) {
+            validatePositiveDimension(request.getLengthM());
+            room.setLengthM(request.getLengthM());
+        }
+        if (request.getWidthM() != null) {
+            validatePositiveDimension(request.getWidthM());
+            room.setWidthM(request.getWidthM());
+        }
+        if (request.getClearHeightM() != null) {
+            validatePositiveDimension(request.getClearHeightM());
+            room.setClearHeightM(request.getClearHeightM());
+        }
+        if (request.getProjectionTechnologyId() != null) {
+            room.setProjectionTechnology(findActiveProjectionTechnology(request.getProjectionTechnologyId()));
+        }
+        if (request.getPresentationSystem() != null) {
+            room.setPresentationSystem(request.getPresentationSystem());
+        }
+        if (request.getResolutionId() != null) {
+            room.setResolution(findActiveResolution(request.getResolutionId()));
+        }
+        if (request.getScreenWidthM() != null) room.setScreenWidthM(request.getScreenWidthM());
+        if (request.getScreenHeightM() != null) room.setScreenHeightM(request.getScreenHeightM());
+        if (request.getSupports2d() != null) room.setSupports2d(request.getSupports2d());
+        if (request.getSupports3d() != null) room.setSupports3d(request.getSupports3d());
+        if (request.getAudioFormatId() != null) {
+            room.setAudioFormat(findActiveAudioFormat(request.getAudioFormatId()));
+        }
+
+        validateScreenFitsRoom(room.getScreenWidthM(), room.getScreenHeightM(),
+                room.getWidthM(), room.getClearHeightM());
+        validatePresentationFormats(Boolean.TRUE.equals(room.getSupports2d()), Boolean.TRUE.equals(room.getSupports3d()));
+
+        room.setUpdatedBy(actor);
+        room = cinemaRoomRepository.save(room);
+        return toDetailResponse(room);
+    }
+
+    // ── Chỉ cho xóa cứng room chưa từng gắn showtime nào ────────────────────
+
     @Transactional
     public void deleteCinemaRoom(Long roomId) {
         if (!cinemaRoomRepository.existsById(roomId)) {
@@ -125,7 +306,7 @@ public class CinemaRoomService {
         List<CinemaRoom> rooms = (clusterId != null)
                 ? cinemaRoomRepository.findByCluster_ClusterId(clusterId)
                 : cinemaRoomRepository.findAll();
-        return movieMapper.toCinemaRoomResponseList(rooms);
+        return rooms.stream().map(this::toDetailResponse).toList();
     }
 
     // ── Maintenance ───────────────────────────────────────────
@@ -137,7 +318,6 @@ public class CinemaRoomService {
         CinemaRoom room = cinemaRoomRepository.findById(roomId)
                 .orElseThrow(() -> new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND));
 
-        // Tạo maintenance record
         CinemaRoomMaintenance maintenance = CinemaRoomMaintenance.builder()
                 .cinemaRoom(room)
                 .reason(request.getReason())
@@ -149,7 +329,6 @@ public class CinemaRoomService {
 
         maintenanceRepository.save(maintenance);
 
-        // Tự động set room status → TEMPORARILY_UNAVAILABLE
         room.setStatus(CinemaRoomStatus.TEMPORARILY_UNAVAILABLE);
         room.setMaintenanceNote(request.getReason());
         cinemaRoomRepository.save(room);
@@ -188,5 +367,129 @@ public class CinemaRoomService {
         room.setStatus(newStatus);
         room.setUpdatedBy(updatedBy);
         return movieMapper.toCinemaRoomResponse(cinemaRoomRepository.save(room));
+    }
+
+    // ── Validation helpers ───────────────────────────────────────────────────
+
+    private String normalizeRoomCode(String rawRoomCode) {
+        if (rawRoomCode == null || rawRoomCode.isBlank()) {
+            throw new AppException(MovieErrorCode.ROOM_CODE_REQUIRED);
+        }
+        return rawRoomCode.trim().toUpperCase();
+    }
+
+    private void validatePositiveDimension(BigDecimal value) {
+        if (value == null || value.signum() <= 0) {
+            throw new AppException(MovieErrorCode.ROOM_DIMENSION_INVALID);
+        }
+    }
+
+    private void validateScreenFitsRoom(BigDecimal screenWidthM, BigDecimal screenHeightM,
+            BigDecimal roomWidthM, BigDecimal roomClearHeightM) {
+        if (screenWidthM != null && roomWidthM != null && screenWidthM.compareTo(roomWidthM) > 0) {
+            throw new AppException(MovieErrorCode.ROOM_SCREEN_EXCEEDS_ROOM_DIMENSIONS);
+        }
+        if (screenHeightM != null && roomClearHeightM != null && screenHeightM.compareTo(roomClearHeightM) > 0) {
+            throw new AppException(MovieErrorCode.ROOM_SCREEN_EXCEEDS_ROOM_DIMENSIONS);
+        }
+    }
+
+    private void validatePresentationFormats(boolean supports2d, boolean supports3d) {
+        if (!supports2d && !supports3d) {
+            throw new AppException(MovieErrorCode.ROOM_PRESENTATION_FORMAT_REQUIRED);
+        }
+    }
+
+    private AuditoriumClass findActiveAuditoriumClass(Integer id) {
+        AuditoriumClass entity = auditoriumClassRepository.findById(id)
+                .orElseThrow(() -> new AppException(MovieErrorCode.AUDITORIUM_CLASS_NOT_FOUND));
+        if (!Boolean.TRUE.equals(entity.getActive())) {
+            throw new AppException(MovieErrorCode.AUDITORIUM_CLASS_NOT_FOUND);
+        }
+        return entity;
+    }
+
+    private ProjectionTechnology findActiveProjectionTechnology(Integer id) {
+        ProjectionTechnology entity = projectionTechnologyRepository.findById(id)
+                .orElseThrow(() -> new AppException(MovieErrorCode.PROJECTION_TECHNOLOGY_NOT_FOUND));
+        if (!Boolean.TRUE.equals(entity.getActive())) {
+            throw new AppException(MovieErrorCode.PROJECTION_TECHNOLOGY_NOT_FOUND);
+        }
+        return entity;
+    }
+
+    private Resolution findActiveResolution(Integer id) {
+        Resolution entity = resolutionRepository.findById(id)
+                .orElseThrow(() -> new AppException(MovieErrorCode.RESOLUTION_NOT_FOUND));
+        if (!Boolean.TRUE.equals(entity.getActive())) {
+            throw new AppException(MovieErrorCode.RESOLUTION_NOT_FOUND);
+        }
+        return entity;
+    }
+
+    private AudioFormat findActiveAudioFormat(Integer id) {
+        AudioFormat entity = audioFormatRepository.findById(id)
+                .orElseThrow(() -> new AppException(MovieErrorCode.AUDIO_FORMAT_NOT_FOUND));
+        if (!Boolean.TRUE.equals(entity.getActive())) {
+            throw new AppException(MovieErrorCode.AUDIO_FORMAT_NOT_FOUND);
+        }
+        return entity;
+    }
+
+    // ── Response enrichment ──────────────────────────────────────────────────
+
+    CinemaRoomResponse toDetailResponse(CinemaRoom room) {
+        CinemaRoomResponse res = movieMapper.toCinemaRoomResponse(room);
+
+        if (room.getLengthM() != null && room.getWidthM() != null) {
+            res.setAreaSqm(room.getLengthM().multiply(room.getWidthM()));
+        }
+        if (room.getScreenWidthM() != null && room.getScreenHeightM() != null
+                && room.getScreenHeightM().signum() != 0) {
+            res.setScreenAspectRatio(room.getScreenWidthM()
+                    .divide(room.getScreenHeightM(), 4, java.math.RoundingMode.HALF_UP));
+        }
+
+        AuditoriumClass ac = room.getAuditoriumClass();
+        if (ac != null) {
+            res.setAuditoriumClassId(ac.getClassId());
+            res.setAuditoriumClassCode(ac.getClassCode());
+            res.setAuditoriumClassName(ac.getClassName());
+        }
+        ProjectionTechnology pt = room.getProjectionTechnology();
+        if (pt != null) {
+            res.setProjectionTechnologyId(pt.getTechId());
+            res.setProjectionTechnologyCode(pt.getTechCode());
+            res.setProjectionTechnologyName(pt.getTechName());
+        }
+        Resolution r = room.getResolution();
+        if (r != null) {
+            res.setResolutionId(r.getResolutionId());
+            res.setResolutionCode(r.getResolutionCode());
+        }
+        AudioFormat af = room.getAudioFormat();
+        if (af != null) {
+            res.setAudioFormatId(af.getAudioFormatId());
+            res.setAudioFormatCode(af.getFormatCode());
+        }
+
+        Optional<RoomLayout> activeLayout = roomLayoutRepository
+                .findByCinemaRoomCinemaRoomIdAndStatus(room.getCinemaRoomId(), LayoutStatus.ACTIVE);
+        RoomLayout latest = activeLayout.orElseGet(() ->
+                roomLayoutRepository.findByCinemaRoomCinemaRoomIdOrderByVersionDesc(room.getCinemaRoomId())
+                        .stream().findFirst().orElse(null));
+        if (latest != null) {
+            res.setActiveLayout(movieservice.dto.response.RoomLayoutSummaryResponse.builder()
+                    .roomLayoutId(latest.getRoomLayoutId())
+                    .version(latest.getVersion())
+                    .status(latest.getStatus().name())
+                    .personCapacity(latest.getPersonCapacity())
+                    .sellableUnitCount(latest.getSellableUnitCount())
+                    .submittedAt(latest.getSubmittedAt())
+                    .approvedAt(latest.getApprovedAt())
+                    .build());
+        }
+
+        return res;
     }
 }

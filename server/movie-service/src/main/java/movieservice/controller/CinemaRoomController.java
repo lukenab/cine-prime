@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import movie.theater.common.dto.ApiResponse;
 import movieservice.dto.request.CinemaRoomRequest;
+import movieservice.dto.request.CinemaRoomUpdateRequest;
 import movieservice.dto.request.MaintenanceRequest;
 import movieservice.dto.response.CinemaRoomResponse;
 import movieservice.dto.response.SeatResponse;
@@ -13,6 +14,7 @@ import movieservice.enums.CinemaRoomStatus;
 import movieservice.service.CinemaRoomService;
 import movieservice.service.SeatService;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -37,10 +39,32 @@ public class CinemaRoomController {
 
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @PostMapping
-    public ApiResponse<CinemaRoomResponse> createRoom(@Valid @RequestBody CinemaRoomRequest request) {
+    public ApiResponse<CinemaRoomResponse> createRoom(
+            @Valid @RequestBody CinemaRoomRequest request, Authentication authentication) {
         return ApiResponse.<CinemaRoomResponse>builder()
                 .code(200)
-                .result(cinemaRoomService.createCinemaRoom(request))
+                .result(cinemaRoomService.createCinemaRoom(request, actor(authentication)))
+                .build();
+    }
+
+    @GetMapping("/{id}")
+    public ApiResponse<CinemaRoomResponse> getRoomDetail(@PathVariable Long id) {
+        return ApiResponse.<CinemaRoomResponse>builder()
+                .code(200)
+                .result(cinemaRoomService.getRoomDetail(id))
+                .build();
+    }
+
+    /** Step 1/2 wizard fields — only while the room is DRAFT (see CinemaRoomService.updateRoom). */
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PutMapping("/{id}")
+    public ApiResponse<CinemaRoomResponse> updateRoom(
+            @PathVariable Long id,
+            @RequestBody CinemaRoomUpdateRequest request,
+            Authentication authentication) {
+        return ApiResponse.<CinemaRoomResponse>builder()
+                .code(200)
+                .result(cinemaRoomService.updateRoom(id, request, actor(authentication)))
                 .build();
     }
 
@@ -106,5 +130,9 @@ public class CinemaRoomController {
                 .code(200)
                 .result(cinemaRoomService.setRoomStatus(id, status, updatedBy))
                 .build();
+    }
+
+    private String actor(Authentication authentication) {
+        return authentication != null ? authentication.getName() : "UNKNOWN";
     }
 }
