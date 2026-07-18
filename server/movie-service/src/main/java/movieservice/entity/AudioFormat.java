@@ -25,6 +25,9 @@ public class AudioFormat {
     @Column(name = "format_name", nullable = false, length = 100)
     String formatName;
 
+    @Column(name = "description", length = 255)
+    String description;
+
     @Column(name = "active", nullable = false)
     @Builder.Default
     Boolean active = true;

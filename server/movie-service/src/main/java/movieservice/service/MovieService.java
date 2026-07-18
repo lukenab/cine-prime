@@ -11,7 +11,9 @@ import movieservice.dto.request.CreateMovieRequest;
 import movieservice.dto.request.TranslationRequest;
 import movieservice.dto.request.UpdateMovieRequest;
 import movieservice.dto.response.MovieResponse;
+import movieservice.dto.response.PublicMovieResponse;
 import movieservice.entity.*;
+import movieservice.enums.AvailabilityStatus;
 import movieservice.enums.GenreStatus;
 import movieservice.enums.MovieStatus;
 import movieservice.exception.MovieErrorCode;
@@ -27,6 +29,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -55,6 +58,8 @@ public class MovieService {
     AuditLogService auditLogService;
     ImageStorageService imageStorageService;
     MovieReadinessValidator movieReadinessValidator;
+    MovieAvailabilityRepository movieAvailabilityRepository;
+    MovieStatusHistoryRepository movieStatusHistoryRepository;
 
     private static final long MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 
@@ -149,12 +154,84 @@ public class MovieService {
         return response;
     }
 
+    /**
+     * MOV-LC-07: displayStatus is derived from content approval + cluster
+     * availability + showtimes, never from Movie.status directly. With a
+     * clusterId, every field (including bookingAvailable/nextShowtimeAt) is
+     * authoritative for that cluster. Without one, this is aggregate discovery
+     * only — clusterId/nextShowtimeAt/bookingAvailable are not meaningful for a
+     * specific cinema and must not be used to decide whether booking is possible.
+     */
     @Transactional
-    public List<MovieResponse> findAllPublic() {
-        // Public: only visible statuses
-        List<Movie> movies = movieRepository.findByStatusIn(
-                List.of(MovieStatus.COMING_SOON, MovieStatus.NOW_SHOWING));
-        return movieMapper.toMovieResponseList(movies);
+    public List<PublicMovieResponse> findAllPublic(Long clusterId) {
+        LocalDate today = LocalDate.now();
+        LocalTime now = LocalTime.now();
+
+        if (clusterId != null) {
+            return movieAvailabilityRepository.findPubliclyRelevant(clusterId, today).stream()
+                    .map(availability -> toPublicMovieResponse(availability.getMovie(), clusterId, availability, today, now))
+                    .collect(Collectors.toList());
+        }
+
+        List<MovieAvailability> relevant = movieAvailabilityRepository.search(null, null, null).stream()
+                .filter(a -> a.getMovie().getStatus() == MovieStatus.APPROVED)
+                .filter(a -> a.getStatus() == AvailabilityStatus.PLANNED || a.getStatus() == AvailabilityStatus.OPEN)
+                .filter(a -> a.getShowingEndDate() == null || !a.getShowingEndDate().isBefore(today))
+                .collect(Collectors.toList());
+
+        Map<Long, Movie> movieById = new LinkedHashMap<>();
+        Map<Long, Boolean> anyOpenByMovie = new LinkedHashMap<>();
+        for (MovieAvailability a : relevant) {
+            Long movieId = a.getMovie().getMovieId();
+            movieById.putIfAbsent(movieId, a.getMovie());
+            anyOpenByMovie.merge(movieId, a.getStatus() == AvailabilityStatus.OPEN, (existing, isOpen) -> existing || isOpen);
+        }
+
+        return movieById.values().stream()
+                .map(movie -> toPublicMovieResponse(movie, Boolean.TRUE.equals(anyOpenByMovie.get(movie.getMovieId()))))
+                .collect(Collectors.toList());
+    }
+
+    private PublicMovieResponse toPublicMovieResponse(Movie movie, Long clusterId, MovieAvailability availability, LocalDate today, LocalTime now) {
+        java.util.Optional<ShowTime> nextShowtime =
+                showTimeService.findNextSaleableShowTime(movie.getMovieId(), clusterId, today, now);
+        boolean nowShowing = availability.getStatus() == AvailabilityStatus.OPEN && nextShowtime.isPresent();
+        return PublicMovieResponse.builder()
+                .movieId(movie.getMovieId())
+                .originalTitle(movie.getOriginalTitle())
+                .posterUrl(movie.getPosterUrl())
+                .thumbnailUrl(movie.getThumbnailUrl())
+                .trailerUrl(movie.getTrailerUrl())
+                .synopsis(movie.getSynopsis())
+                .durationMinutes(movie.getDurationMinutes())
+                .genres(mapGenres(movie))
+                .displayStatus(nowShowing ? "NOW_SHOWING" : "COMING_SOON")
+                .clusterId(clusterId)
+                .clusterName(availability.getCluster() != null ? availability.getCluster().getClusterName() : null)
+                .nextShowtimeAt(nextShowtime.map(st -> LocalDateTime.of(st.getShowDate(), st.getStartTime())).orElse(null))
+                .bookingAvailable(nowShowing)
+                .build();
+    }
+
+    /** Aggregate-discovery variant (no clusterId) — see findAllPublic javadoc. */
+    private PublicMovieResponse toPublicMovieResponse(Movie movie, boolean anyClusterOpen) {
+        return PublicMovieResponse.builder()
+                .movieId(movie.getMovieId())
+                .originalTitle(movie.getOriginalTitle())
+                .posterUrl(movie.getPosterUrl())
+                .thumbnailUrl(movie.getThumbnailUrl())
+                .trailerUrl(movie.getTrailerUrl())
+                .synopsis(movie.getSynopsis())
+                .durationMinutes(movie.getDurationMinutes())
+                .genres(mapGenres(movie))
+                .displayStatus(anyClusterOpen ? "NOW_SHOWING" : "COMING_SOON")
+                .bookingAvailable(false)
+                .build();
+    }
+
+    private List<movieservice.dto.response.GenreResponse> mapGenres(Movie movie) {
+        if (movie.getGenres() == null) return List.of();
+        return movie.getGenres().stream().map(movieMapper::toGenreResponse).collect(Collectors.toList());
     }
 
     @Transactional
@@ -196,6 +273,12 @@ public class MovieService {
     public MovieResponse updateMovie(Long id, UpdateMovieRequest request) {
         Movie movie = movieRepository.findById(id)
                 .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+
+        // Only DRAFT is directly editable — a revision must go back through
+        // start-revision first (CHANGES_REQUESTED -> DRAFT) before it can be edited again.
+        if (movie.getStatus() != MovieStatus.DRAFT) {
+            throw new AppException(MovieErrorCode.MOVIE_NOT_EDITABLE);
+        }
 
         // 1) Scalar fields - null-safe qua @BeanMapping(IGNORE) tren mapper.
         movieMapper.updateMovieFromRequest(request, movie);
@@ -382,7 +465,7 @@ public class MovieService {
      * (MovieReadinessValidator.requireReadyForReview()) before allowing the transition.
      */
     @Transactional
-    public void submitForReview(Long id, String updatedBy) {
+    public MovieResponse submitForReview(Long id, String updatedBy) {
         Movie movie = requireStatus(id, MovieStatus.DRAFT);
         boolean hasPendingGenre = movie.getGenres() != null && movie.getGenres().stream()
                 .anyMatch(g -> g.getStatus() == GenreStatus.PENDING_REVIEW);
@@ -390,84 +473,71 @@ public class MovieService {
             throw new AppException(MovieErrorCode.GENRE_PENDING_REVIEW);
         }
         movieReadinessValidator.requireReadyForReview(movie);
-        movieRepository.updateStatus(id, MovieStatus.PENDING_REVIEW, updatedBy);
-    }
-
-    /** MOV-03: requires age classification, primary image, synopsis/localized title and valid genre refs. */
-    @Transactional
-    public void approveMovie(Long id, String updatedBy) {
-        Movie movie = requireStatus(id, MovieStatus.PENDING_REVIEW);
-        movieReadinessValidator.requireReadyForApproval(movie);
-        movieRepository.updateStatus(id, MovieStatus.COMING_SOON, updatedBy);
-    }
-
-    @Transactional
-    public void rejectMovie(Long id, String note, String updatedBy) {
-        requireStatus(id, MovieStatus.PENDING_REVIEW);
-        movieRepository.rejectMovie(id, note, updatedBy);
-    }
-
-    @Transactional
-    public void suspendMovie(Long id, String reason, String updatedBy) {
-        Movie movie = movieRepository.findById(id)
-                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
-        if (movie.getStatus() != MovieStatus.NOW_SHOWING && movie.getStatus() != MovieStatus.COMING_SOON) {
-            throw new AppException(MovieErrorCode.INVALID_STATUS_TRANSITION);
-        }
-        movieRepository.suspendMovie(id, reason, updatedBy);
-    }
-
-    @Transactional
-    public void endMovie(Long id, String updatedBy) {
-        Movie movie = movieRepository.findById(id)
-                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
-        if (movie.getStatus() == MovieStatus.DRAFT || movie.getStatus() == MovieStatus.PENDING_REVIEW
-                || movie.getStatus() == MovieStatus.REJECTED) {
-            throw new AppException(MovieErrorCode.INVALID_STATUS_TRANSITION);
-        }
-        movieRepository.updateStatus(id, MovieStatus.ENDED, updatedBy);
-    }
-
-    /** REJECTED → DRAFT: employee chỉnh sửa lại sau khi bị từ chối */
-    @Transactional
-    public void reworkMovie(Long id, String updatedBy) {
-        requireStatus(id, MovieStatus.REJECTED);
-        movieRepository.updateStatus(id, MovieStatus.DRAFT, updatedBy);
+        return transitionTo(movie, MovieStatus.PENDING_REVIEW, updatedBy, null);
     }
 
     /**
-     * COMING_SOON → NOW_SHOWING: admin mở bán vé khi phim bắt đầu chiếu.
-     * MOV-03: also requires approval readiness plus release-window/showtime-policy readiness
-     * (MovieReadinessValidator.requireReadyForRelease()).
+     * PENDING_REVIEW → APPROVED. This is a pure content decision — it does NOT
+     * make the movie public or on-sale anywhere; that is entirely a
+     * MovieAvailability concern (MOV-LC-06). MOV-03: requires age classification,
+     * primary image, synopsis/localized title and valid genre refs.
      */
     @Transactional
-    public void releaseMovie(Long id, String updatedBy) {
-        Movie movie = requireStatus(id, MovieStatus.COMING_SOON);
-        movieReadinessValidator.requireReadyForRelease(movie);
-        movieRepository.updateStatus(id, MovieStatus.NOW_SHOWING, updatedBy);
+    public MovieResponse approveMovie(Long id, String updatedBy) {
+        Movie movie = requireStatus(id, MovieStatus.PENDING_REVIEW);
+        movieReadinessValidator.requireReadyForApproval(movie);
+        return transitionTo(movie, MovieStatus.APPROVED, updatedBy, null);
     }
 
-    /** SUSPENDED → NOW_SHOWING: admin phục hồi phim sau khi xử lý sự cố */
+    /** PENDING_REVIEW → CHANGES_REQUESTED. Reason is mandatory and preserved on the movie. */
     @Transactional
-    public void reinstateMovie(Long id, String updatedBy) {
-        requireStatus(id, MovieStatus.SUSPENDED);
-        movieRepository.updateStatus(id, MovieStatus.NOW_SHOWING, updatedBy);
+    public MovieResponse requestChanges(Long id, String note, String updatedBy) {
+        Movie movie = requireStatus(id, MovieStatus.PENDING_REVIEW);
+        movie.setRejectionNote(note);
+        return transitionTo(movie, MovieStatus.CHANGES_REQUESTED, updatedBy, note);
     }
 
-    // ── Delete (soft via SUSPENDED/ENDED) ────────────────────
-
+    /** CHANGES_REQUESTED → DRAFT: author edits and resubmits. */
     @Transactional
-    public void deleteMovie(Long id) {
-        Movie movie = movieRepository.findById(id)
-                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+    public MovieResponse startRevision(Long id, String updatedBy) {
+        Movie movie = requireStatus(id, MovieStatus.CHANGES_REQUESTED);
+        return transitionTo(movie, MovieStatus.DRAFT, updatedBy, null);
+    }
 
-        boolean hasFutureShowTimes = showTimeService.existsMovie(
-                movie.getMovieId(), LocalDate.now(), LocalTime.now());
-        if (hasFutureShowTimes) {
-            throw new AppException(MovieErrorCode.ACTIVE_SHOWTIMES_EXIST);
+    /**
+     * APPROVED → ARCHIVED: explicit admin catalog decision, not a side effect of
+     * ending exhibition anywhere. Blocked while any availability window is still
+     * PLANNED or OPEN — those must be closed first (MOV-LC-06), so archive never
+     * silently orphans a still-active release plan.
+     */
+    @Transactional
+    public MovieResponse archiveMovie(Long id, String updatedBy) {
+        Movie movie = requireStatus(id, MovieStatus.APPROVED);
+        boolean hasActiveAvailability = movieAvailabilityRepository.existsByMovie_MovieIdAndStatusIn(
+                id, List.of(AvailabilityStatus.PLANNED, AvailabilityStatus.OPEN));
+        if (hasActiveAvailability) {
+            throw new AppException(MovieErrorCode.MOVIE_HAS_ACTIVE_AVAILABILITY);
         }
+        return transitionTo(movie, MovieStatus.ARCHIVED, updatedBy, null);
+    }
 
-        movieRepository.updateStatus(id, MovieStatus.ENDED, "SYSTEM");
+    /** Persists the transition (through save(), so @Version actually engages) and
+     *  its audit trail row in one place — every content-status command goes through here. */
+    private MovieResponse transitionTo(Movie movie, MovieStatus to, String actor, String reason) {
+        MovieStatus from = movie.getStatus();
+        movie.setStatus(to);
+        movie.setUpdatedBy(actor);
+        Movie saved = movieRepository.save(movie);
+
+        movieStatusHistoryRepository.save(MovieStatusHistory.builder()
+                .movieId(saved.getMovieId())
+                .fromStatus(from)
+                .toStatus(to)
+                .actor(actor)
+                .reason(reason)
+                .build());
+
+        return movieMapper.toMovieResponse(saved);
     }
 
     // ── Image upload ──────────────────────────────────────────

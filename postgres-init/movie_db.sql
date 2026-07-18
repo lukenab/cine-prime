@@ -185,28 +185,28 @@ CREATE TABLE IF NOT EXISTS movie (
     -- Mô tả
     synopsis          TEXT,             -- trước: content (nội dung gốc)
 
-    -- Trạng thái vòng đời phim
-    -- DRAFT          : đang soạn, chưa public
-    -- PENDING_REVIEW : EMPLOYEE submit lên, chờ ADMIN duyệt
-    -- REJECTED       : ADMIN từ chối, kèm rejection_note — EMPLOYEE sửa lại và submit lại
-    -- COMING_SOON    : sắp chiếu — hiển thị trên trang, chưa bán vé
-    -- NOW_SHOWING    : đang chiếu — cho phép tạo suất chiếu và bán vé
-    -- SUSPENDED      : tạm dừng (sự cố bản quyền, kỹ thuật…) — suất chiếu mới bị chặn
-    -- ENDED          : đã kết thúc — không tạo suất chiếu mới, archive
+    -- Trạng thái nội dung (content review) — KHÔNG còn mang ý nghĩa vận
+    -- hành/phát hành. Xem docs/api-specs/movie-service/MOVIE_LIFECYCLE_CONTRACT.md.
+    -- DRAFT             : đang soạn, chỉ trạng thái này được sửa trực tiếp
+    -- PENDING_REVIEW    : đã submit, chờ ADMIN duyệt nội dung
+    -- APPROVED          : nội dung đã duyệt — KHÔNG đồng nghĩa đang public/mở bán,
+    --                     việc đó do movie_availability (theo từng cluster) quyết định
+    -- CHANGES_REQUESTED : ADMIN yêu cầu sửa lại, kèm rejection_note bắt buộc
+    -- ARCHIVED          : quyết định quản trị catalog, chặn nếu còn availability active
     --
-    -- State machine (ai được chuyển):
-    --   EMPLOYEE : DRAFT → PENDING_REVIEW
-    --              REJECTED → DRAFT (sửa lại)
-    --   ADMIN    : PENDING_REVIEW → COMING_SOON | NOW_SHOWING (approve)
-    --              PENDING_REVIEW → REJECTED (từ chối, bắt buộc ghi rejection_note)
-    --              NOW_SHOWING → SUSPENDED | ENDED
-    --              SUSPENDED   → NOW_SHOWING | ENDED
+    -- State machine (command rõ ràng, xem MovieController #submit/#approve/
+    -- #request-changes/#start-revision/#archive):
+    --   EMPLOYEE/ADMIN : DRAFT → PENDING_REVIEW (submit)
+    --                    CHANGES_REQUESTED → DRAFT (start-revision)
+    --   ADMIN          : PENDING_REVIEW → APPROVED (approve)
+    --                    PENDING_REVIEW → CHANGES_REQUESTED (request-changes, bắt buộc note)
+    --                    APPROVED → ARCHIVED (archive, chặn nếu còn availability PLANNED/OPEN)
     status            VARCHAR(20)   NOT NULL DEFAULT 'DRAFT'
                       CONSTRAINT chk_movie_status
-                          CHECK (status IN ('DRAFT','PENDING_REVIEW','REJECTED',
-                                            'COMING_SOON','NOW_SHOWING','SUSPENDED','ENDED')),
-    suspended_reason  TEXT,             -- bắt buộc ghi lý do khi set SUSPENDED (validate ở service layer)
-    rejection_note    TEXT,             -- bắt buộc ghi lý do khi ADMIN set REJECTED
+                          CHECK (status IN ('DRAFT','PENDING_REVIEW','APPROVED',
+                                            'CHANGES_REQUESTED','ARCHIVED')),
+    rejection_note    TEXT,             -- bắt buộc ghi lý do khi ADMIN set CHANGES_REQUESTED
+    version           BIGINT        NOT NULL DEFAULT 0,   -- optimistic locking cho lifecycle commands
 
     -- Audit
     created_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
@@ -223,13 +223,27 @@ CREATE INDEX IF NOT EXISTS idx_movie_status        ON movie(status);
 CREATE INDEX IF NOT EXISTS idx_movie_release_date  ON movie(release_date);
 CREATE INDEX IF NOT EXISTS idx_movie_tmdb          ON movie(tmdb_id) WHERE tmdb_id IS NOT NULL;
 
-COMMENT ON TABLE  movie IS 'Bảng phim chính — status enum kiểm soát vòng đời với review workflow';
+COMMENT ON TABLE  movie IS 'Bảng phim chính — status chỉ còn kiểm soát content review workflow, không mang trạng thái vận hành/phát hành';
 COMMENT ON COLUMN movie.original_title    IS 'Tên phim gốc (từ nhà sản xuất hoặc TMDB). Bản dịch VN/EN lưu ở movie_translation';
 COMMENT ON COLUMN movie.duration_minutes  IS 'CHECK 1–600 phút. Trước là BIGINT không có giới hạn';
-COMMENT ON COLUMN movie.status            IS 'Enum: DRAFT | PENDING_REVIEW | REJECTED | COMING_SOON | NOW_SHOWING | SUSPENDED | ENDED';
-COMMENT ON COLUMN movie.suspended_reason  IS 'Bắt buộc điền khi chuyển sang SUSPENDED để giải trình';
-COMMENT ON COLUMN movie.rejection_note    IS 'Bắt buộc điền khi ADMIN set REJECTED. EMPLOYEE đọc lý do để sửa lại';
+COMMENT ON COLUMN movie.status            IS 'Enum: DRAFT | PENDING_REVIEW | APPROVED | CHANGES_REQUESTED | ARCHIVED — content review only, xem movie_availability cho vận hành';
+COMMENT ON COLUMN movie.rejection_note    IS 'Bắt buộc điền khi ADMIN set CHANGES_REQUESTED. EMPLOYEE đọc lý do để sửa lại';
 COMMENT ON COLUMN movie.tmdb_id           IS 'Dùng để dedup khi import phim từ TMDB API. UNIQUE constraint ngăn trùng lặp';
+
+-- Audit trail cho từng content-status transition (MOV-LC-04)
+CREATE TABLE IF NOT EXISTS movie_status_history (
+    history_id   BIGSERIAL     PRIMARY KEY,
+    movie_id     BIGINT        NOT NULL REFERENCES movie(movie_id) ON DELETE CASCADE,
+    from_status  VARCHAR(20)   NULL,
+    to_status    VARCHAR(20)   NOT NULL,
+    actor        VARCHAR(100)  NOT NULL,
+    reason       VARCHAR(500)  NULL,
+    created_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_movie_status_history_movie ON movie_status_history(movie_id, created_at);
+
+-- movie_availability / movie_availability_history: định nghĩa ngay sau bảng
+-- cinema_cluster bên dưới (cần FK cluster_id đã tồn tại) — xem đoạn đó.
 
 -- =============================================================================
 -- 7. MOVIE TRANSLATION  (đa ngôn ngữ — thay thế movie_name_vn + movie_name_english)
@@ -658,7 +672,6 @@ CREATE TABLE IF NOT EXISTS cinema_cluster (
     public_email  VARCHAR(150),
     country_code  CHAR(2)       NOT NULL DEFAULT 'VN',
     province      VARCHAR(100)  NOT NULL,
-    district      VARCHAR(100)  NOT NULL,
     ward          VARCHAR(100),
     postal_code   VARCHAR(20),
     building_name VARCHAR(150),
@@ -707,15 +720,15 @@ CREATE INDEX IF NOT EXISTS idx_cluster_audit_log_timestamp
     ON cluster_audit_log(timestamp DESC);
 
 INSERT INTO cinema_cluster
-        (cluster_id, cluster_code, cluster_name, venue_type, country_code, province, district,
+        (cluster_id, cluster_code, cluster_name, venue_type, country_code, province,
          address, phone_number, status, latitude, longitude, timezone)
 VALUES
-    (1, 'CP-001', 'CinePrime Quận 1',    'MALL', 'VN', 'TP. Hồ Chí Minh', 'Quận 1',             '123 Nguyễn Huệ, Quận 1',       '19001000', 'ACTIVE',   10.7769660, 106.7009650, 'Asia/Ho_Chi_Minh'),
-    (2, 'CP-002', 'CinePrime Thủ Đức',   'MALL', 'VN', 'TP. Hồ Chí Minh', 'Thành phố Thủ Đức',  '456 Võ Văn Ngân, TP. Thủ Đức', '19001000', 'ACTIVE',   10.8500000, 106.7716670, 'Asia/Ho_Chi_Minh'),
-    (3, 'CP-003', 'CinePrime Hoàn Kiếm', 'MALL', 'VN', 'Hà Nội',          'Hoàn Kiếm',           '78 Hàng Bài, Hoàn Kiếm',       '19001000', 'ACTIVE',   21.0285110, 105.8341600, 'Asia/Ho_Chi_Minh'),
-    (4, 'CP-004', 'CinePrime Cầu Giấy',  'MALL', 'VN', 'Hà Nội',          'Cầu Giấy',            '22 Xuân Thủy, Cầu Giấy',       '19001000', 'ACTIVE',   21.0363890, 105.7822220, 'Asia/Ho_Chi_Minh'),
-    (5, 'CP-005', 'CinePrime Hải Châu',  'MALL', 'VN', 'Đà Nẵng',         'Hải Châu',            '30 Trần Phú, Hải Châu',        '19001000', 'ACTIVE',   16.0680000, 108.2120000, 'Asia/Ho_Chi_Minh'),
-    (6, 'CP-006', 'CinePrime Ninh Kiều', 'MALL', 'VN', 'Cần Thơ',         'Ninh Kiều',           '15 Hai Bà Trưng, Ninh Kiều',   '19001000', 'INACTIVE', 10.0333330, 105.7833330, 'Asia/Ho_Chi_Minh')
+    (1, 'CP-001', 'CinePrime Quận 1',    'MALL', 'VN', 'TP. Hồ Chí Minh', '123 Nguyễn Huệ, Quận 1',       '19001000', 'ACTIVE',   10.7769660, 106.7009650, 'Asia/Ho_Chi_Minh'),
+    (2, 'CP-002', 'CinePrime Thủ Đức',   'MALL', 'VN', 'TP. Hồ Chí Minh', '456 Võ Văn Ngân, TP. Thủ Đức', '19001000', 'ACTIVE',   10.8500000, 106.7716670, 'Asia/Ho_Chi_Minh'),
+    (3, 'CP-003', 'CinePrime Hoàn Kiếm', 'MALL', 'VN', 'Hà Nội',          '78 Hàng Bài, Hoàn Kiếm',       '19001000', 'ACTIVE',   21.0285110, 105.8341600, 'Asia/Ho_Chi_Minh'),
+    (4, 'CP-004', 'CinePrime Cầu Giấy',  'MALL', 'VN', 'Hà Nội',          '22 Xuân Thủy, Cầu Giấy',       '19001000', 'ACTIVE',   21.0363890, 105.7822220, 'Asia/Ho_Chi_Minh'),
+    (5, 'CP-005', 'CinePrime Hải Châu',  'MALL', 'VN', 'Đà Nẵng',         '30 Trần Phú, Hải Châu',        '19001000', 'ACTIVE',   16.0680000, 108.2120000, 'Asia/Ho_Chi_Minh'),
+    (6, 'CP-006', 'CinePrime Ninh Kiều', 'MALL', 'VN', 'Cần Thơ',         '15 Hai Bà Trưng, Ninh Kiều',   '19001000', 'INACTIVE', 10.0333330, 105.7833330, 'Asia/Ho_Chi_Minh')
 ON CONFLICT (cluster_id) DO NOTHING;
 
 SELECT setval(pg_get_serial_sequence('cinema_cluster', 'cluster_id'), 6, true);
@@ -731,6 +744,50 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_cluster_name_ci
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_cluster_code_ci
     ON cinema_cluster (LOWER(cluster_code));
+
+-- Kế hoạch phát hành/chiếu theo từng cinema cluster — tách khỏi movie.status
+-- (MOV-LC-03). Một phim APPROVED có thể có nhiều availability ở nhiều cluster,
+-- mỗi cái với vòng đời PLANNED → OPEN ⇄ SUSPENDED → CLOSED độc lập.
+CREATE TABLE IF NOT EXISTS movie_availability (
+    availability_id     BIGSERIAL     PRIMARY KEY,
+    movie_id             BIGINT        NOT NULL REFERENCES movie(movie_id) ON DELETE CASCADE,
+    cluster_id           BIGINT        NOT NULL REFERENCES cinema_cluster(cluster_id),
+    status                VARCHAR(20)   NOT NULL DEFAULT 'PLANNED'
+                          CONSTRAINT chk_availability_status
+                              CHECK (status IN ('PLANNED', 'OPEN', 'SUSPENDED', 'CLOSED')),
+    sales_start_at        TIMESTAMPTZ   NULL,
+    showing_start_date    DATE          NOT NULL,
+    showing_end_date      DATE          NULL,
+    suspension_reason     VARCHAR(500)  NULL,
+    version               BIGINT        NOT NULL DEFAULT 0,
+    created_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    created_by            VARCHAR(100)  NULL,
+    updated_by            VARCHAR(100)  NULL,
+    CONSTRAINT chk_availability_date_range
+        CHECK (showing_end_date IS NULL OR showing_end_date >= showing_start_date),
+    CONSTRAINT uq_availability_window UNIQUE (movie_id, cluster_id, showing_start_date)
+);
+CREATE INDEX IF NOT EXISTS idx_movie_availability_cluster_status
+    ON movie_availability(cluster_id, status, showing_start_date);
+CREATE INDEX IF NOT EXISTS idx_movie_availability_movie_cluster
+    ON movie_availability(movie_id, cluster_id);
+
+CREATE TRIGGER trg_movie_availability_updated_at
+    BEFORE UPDATE ON movie_availability
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TABLE IF NOT EXISTS movie_availability_history (
+    history_id       BIGSERIAL     PRIMARY KEY,
+    availability_id   BIGINT        NOT NULL REFERENCES movie_availability(availability_id) ON DELETE CASCADE,
+    from_status       VARCHAR(20)   NULL,
+    to_status         VARCHAR(20)   NOT NULL,
+    actor             VARCHAR(100)  NOT NULL,
+    reason            VARCHAR(500)  NULL,
+    created_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_movie_availability_history_availability
+    ON movie_availability_history(availability_id, created_at);
 
 CREATE TABLE IF NOT EXISTS cinema_cluster_operating_hour (
     operating_hour_id BIGSERIAL PRIMARY KEY,
@@ -835,26 +892,34 @@ CREATE TABLE IF NOT EXISTS resolution (
     resolution_id    SMALLSERIAL  PRIMARY KEY,
     resolution_code  VARCHAR(10)  NOT NULL UNIQUE,
     resolution_name  VARCHAR(50)  NOT NULL,
+    description      VARCHAR(255),
     active           BOOLEAN      NOT NULL DEFAULT TRUE
 );
 
-INSERT INTO resolution (resolution_code, resolution_name) VALUES
-    ('2K', '2K'),
-    ('4K', '4K')
-ON CONFLICT (resolution_code) DO NOTHING;
+INSERT INTO resolution (resolution_code, resolution_name, description) VALUES
+    ('2K', '2K', '2K digital cinema projection resolution (approximately 2048x1080).'),
+    ('4K', '4K', '4K digital cinema projection resolution (approximately 4096x2160), sharper detail than 2K.')
+ON CONFLICT (resolution_code) DO UPDATE SET
+    resolution_name = EXCLUDED.resolution_name,
+    description = EXCLUDED.description,
+    active = TRUE;
 
 CREATE TABLE IF NOT EXISTS audio_format (
     audio_format_id  SMALLSERIAL  PRIMARY KEY,
     format_code      VARCHAR(20)  NOT NULL UNIQUE,
     format_name      VARCHAR(100) NOT NULL,
+    description      VARCHAR(255),
     active           BOOLEAN      NOT NULL DEFAULT TRUE
 );
 
-INSERT INTO audio_format (format_code, format_name) VALUES
-    ('DOLBY_5_1',   'Dolby 5.1'),
-    ('DOLBY_7_1',   'Dolby 7.1'),
-    ('DOLBY_ATMOS', 'Dolby Atmos')
-ON CONFLICT (format_code) DO NOTHING;
+INSERT INTO audio_format (format_code, format_name, description) VALUES
+    ('DOLBY_5_1',   'Dolby 5.1',   'Dolby 5.1 surround sound with six discrete channels.'),
+    ('DOLBY_7_1',   'Dolby 7.1',   'Dolby 7.1 surround sound with eight discrete channels for wider surround coverage.'),
+    ('DOLBY_ATMOS', 'Dolby Atmos', 'Dolby Atmos object-based immersive audio with overhead sound channels.')
+ON CONFLICT (format_code) DO UPDATE SET
+    format_name = EXCLUDED.format_name,
+    description = EXCLUDED.description,
+    active = TRUE;
 
 -- Database-managed room wizard templates. Physical and screen dimensions are
 -- deliberately not templated because they must match engineering measurements.

@@ -1,9 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation, useOutletContext } from "react-router-dom";
-import { ArrowLeft, Building2, Armchair, RefreshCw, AlertCircle, X, Check, SendHorizonal, CheckCircle, XCircle, Rocket, Clock } from "lucide-react";
+import { Armchair, RefreshCw, AlertCircle, X, Check, SendHorizonal, CheckCircle, XCircle, Rocket, Clock } from "lucide-react";
 import { movieApi, type SeatResponse, type RoomResponse, type CinemaRoomDetail, type SeatTypeValue, ROOM_TYPE_CONFIG } from "../../api/movieApi";
 import { useRole } from "../../hooks/useRole";
 import { Toast } from "../../components/shared/Toast";
+import { CinemaRoomHeader } from "./cinemaRoomEditor/CinemaRoomHeader";
+import { AudioCoverageFrame, ProjectionBeamOverlay, ProjectionScreenVisualization } from "./cinemaRoomEditor/AuditoriumVisualization";
+import { ProjectorLegendMarker, SpeakerLegendMarker } from "./cinemaRoomEditor/SeatLegend";
+import type { AuditoriumVisualizationConfig } from "./cinemaRoomEditor/cinemaRoomEditor.types";
 
 // ── Layout workflow status config ───────────────────────────────────────────
 
@@ -250,6 +254,8 @@ export default function RoomDetailPage() {
     ? `/admin/clusters/${room?.clusterId ?? passedRoom?.clusterId}`
     : "/admin/clusters";
 
+  const clusterName = room?.clusterName ?? passedRoom?.clusterName;
+
   const loadSeats = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -331,47 +337,47 @@ export default function RoomDetailPage() {
     return acc;
   }, {});
 
+  // Mirrors the create page's visualization exactly — same config shape, same
+  // graceful fallback to a plain Standard screen when a legacy room has no
+  // projection/audio tech recorded.
+  const visualizationConfig: AuditoriumVisualizationConfig = {
+    presentationSystem: room?.presentationSystem ?? "STANDARD",
+    projectionTechnologyCode: room?.projectionTechnologyCode,
+    projectionTechnologyName: room?.projectionTechnologyName,
+    resolutionCode: room?.resolutionCode,
+    audioFormatCode: room?.audioFormatCode,
+  };
+  const showProjector = visualizationConfig.projectionTechnologyCode === "LASER" || visualizationConfig.projectionTechnologyCode === "XENON";
+  const showSpeakers = Boolean(visualizationConfig.audioFormatCode);
+
   return (
     <>
-      {/* Back header */}
-      <div className="flex items-center gap-4 mb-7">
-        <button
-          onClick={() => navigate(backTarget)}
-          className="flex items-center gap-2 px-3 py-2 rounded-xl border transition-all hover:opacity-80"
-          style={{ fontSize: "13px", color: "var(--text-sub)", borderColor: "var(--border-color)", background: "var(--bg-card)" }}
-        >
-          <ArrowLeft size={15} /> Back
-        </button>
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-            <Building2 size={18} className="text-blue-600" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 mb-0.5">
-              <h1 style={{ color: "var(--text-main)", fontWeight: 700, fontSize: "20px", lineHeight: 1.2 }}>
-                {roomName}
-              </h1>
-              {passedRoom?.roomType && (() => {
-                const cfg = ROOM_TYPE_CONFIG[passedRoom.roomType];
-                const colors: Record<string, { bg: string; text: string }> = {
-                  STANDARD: { bg: "rgba(59,130,246,0.12)",  text: "#3b82f6" },
-                  LARGE:    { bg: "rgba(16,185,129,0.12)",  text: "#059669" },
-                  IMAX:     { bg: "rgba(139,92,246,0.12)",  text: "#7c3aed" },
-                };
-                const c = colors[passedRoom.roomType] ?? { bg: "rgba(128,128,128,0.1)", text: "#6b7280" };
-                return (
-                  <span style={{ padding: "2px 10px", borderRadius: "999px", fontSize: "11px", fontWeight: 700, background: c.bg, color: c.text, letterSpacing: "0.04em" }}>
-                    {cfg?.label ?? passedRoom.roomType}
-                  </span>
-                );
-              })()}
-            </div>
-            <p style={{ color: "var(--text-sub)", fontSize: "13px" }}>
-              {seats.length} seats · {rows.length} rows
-            </p>
-          </div>
-        </div>
-      </div>
+      <CinemaRoomHeader
+        mode="view"
+        roomName={roomName}
+        clusterName={clusterName}
+        onBack={() => navigate(backTarget)}
+        badges={passedRoom?.roomType && (() => {
+          const cfg = ROOM_TYPE_CONFIG[passedRoom.roomType];
+          const colors: Record<string, { bg: string; text: string }> = {
+            STANDARD: { bg: "rgba(59,130,246,0.12)",  text: "#3b82f6" },
+            LARGE:    { bg: "rgba(16,185,129,0.12)",  text: "#059669" },
+            IMAX:     { bg: "rgba(139,92,246,0.12)",  text: "#7c3aed" },
+          };
+          const c = colors[passedRoom.roomType] ?? { bg: "rgba(128,128,128,0.1)", text: "#6b7280" };
+          return (
+            <span style={{ padding: "2px 10px", borderRadius: "999px", fontSize: "11px", fontWeight: 700, background: c.bg, color: c.text, letterSpacing: "0.04em" }}>
+              {cfg?.label ?? passedRoom.roomType}
+            </span>
+          );
+        })()}
+        subtitle={
+          <p style={{ color: "var(--text-sub)", fontSize: "13px" }}>
+            {clusterName && <>{clusterName} · </>}
+            {seats.length} seats · {rows.length} rows
+          </p>
+        }
+      />
 
       {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
 
@@ -516,31 +522,20 @@ export default function RoomDetailPage() {
           </div>
         ) : (
           <>
-            {/* Scrollable seat map — centred horizontally */}
-            <div style={{ overflowX: "auto", paddingBottom: "4px" }}>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: "fit-content", margin: "0 auto" }}>
+            {/* Screen + projector booth — same visualization as the create page,
+                driven by the room's recorded projection/audio tech. */}
+            <div className={`relative${showProjector ? " pb-7" : ""}`}>
+              <ProjectionScreenVisualization config={visualizationConfig} />
+              <ProjectionBeamOverlay technologyCode={visualizationConfig.projectionTechnologyCode} />
 
-                {/* Screen */}
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", marginBottom: "32px" }}>
-                  <div
-                    style={{
-                      width: "70%",
-                      height: "6px",
-                      borderRadius: "50% 50% 0 0 / 100% 100% 0 0",
-                      background: isDarkMode
-                        ? "linear-gradient(to right, transparent, rgba(255,255,255,0.18), transparent)"
-                        : "linear-gradient(to right, transparent, rgba(0,0,0,0.12), transparent)",
-                      marginBottom: "8px",
-                    }}
-                  />
-                  <span style={{ fontSize: "11px", color: "var(--text-sub)", letterSpacing: "0.14em", textTransform: "uppercase", fontWeight: 600 }}>
-                    Screen
-                  </span>
-                </div>
+              <AudioCoverageFrame config={visualizationConfig}>
+                {/* Scrollable seat map — centred horizontally */}
+                <div style={{ overflowX: "auto", paddingBottom: "4px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: "fit-content", margin: "0 auto" }}>
 
-                {/* Rows */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  {rows.map((row) => (
+                    {/* Rows */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {rows.map((row) => (
                     <div key={row} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                       {/* Row label */}
                       <span
@@ -623,12 +618,34 @@ export default function RoomDetailPage() {
                       </span>
                     </div>
                   ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </AudioCoverageFrame>
             </div>
 
             {/* Legend */}
-            <div className="flex flex-wrap items-center gap-4 mt-8 pt-5" style={{ borderTop: "1px solid var(--border-color)" }}>
+            {(showProjector || showSpeakers) && (
+              <div
+                className="mb-3 inline-flex flex-wrap items-center gap-4 rounded-lg border px-2.5 py-1.5 mt-8"
+                style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}
+                aria-label="Room equipment"
+              >
+                {showProjector && (
+                  <div className="flex items-center gap-1.5">
+                    <ProjectorLegendMarker />
+                    <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-main)" }}>Projector</span>
+                  </div>
+                )}
+                {showSpeakers && (
+                  <div className="flex items-center gap-1.5">
+                    <SpeakerLegendMarker />
+                    <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-main)" }}>Speaker</span>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className={`flex flex-wrap items-center gap-4 pt-5 ${showProjector || showSpeakers ? "" : "mt-8"}`} style={{ borderTop: "1px solid var(--border-color)" }}>
               <span style={{ fontSize: "11px", color: "var(--text-sub)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>
                 Legend
               </span>

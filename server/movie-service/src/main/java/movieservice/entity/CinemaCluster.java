@@ -49,9 +49,6 @@ public class CinemaCluster {
     @Column(name = "province", nullable = false, length = 100)
     String province;
 
-    @Column(name = "district", nullable = false, length = 100)
-    String district;
-
     @Column(name = "ward", length = 100)
     String ward;
 

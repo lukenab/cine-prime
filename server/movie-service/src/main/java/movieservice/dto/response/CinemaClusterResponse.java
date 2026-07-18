@@ -21,7 +21,6 @@ public class CinemaClusterResponse {
     String publicEmail;
     String countryCode;
     String province;
-    String district;
     String ward;
     String postalCode;
     String buildingName;

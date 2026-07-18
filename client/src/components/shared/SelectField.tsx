@@ -18,7 +18,7 @@ type Props<T extends string | number> = {
   onFocus?: () => void;
 };
 
-function InfoTooltip({ label, text }: { label: string; text: string }) {
+export function InfoTooltip({ label, text }: { label: string; text: string }) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const tooltipId = useId();
   const [open, setOpen] = useState(false);

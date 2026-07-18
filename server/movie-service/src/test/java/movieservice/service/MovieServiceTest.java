@@ -6,6 +6,7 @@ import movieservice.dto.request.CreateMovieRequest;
 import movieservice.dto.request.TranslationRequest;
 import movieservice.dto.request.UpdateMovieRequest;
 import movieservice.entity.*;
+import movieservice.enums.AvailabilityStatus;
 import movieservice.enums.GenreStatus;
 import movieservice.enums.MovieStatus;
 import movieservice.exception.MovieErrorCode;
@@ -50,6 +51,8 @@ class MovieServiceTest {
     @Mock AuditLogService auditLogService;
     @Mock ImageStorageService imageStorageService;
     @Mock MovieReadinessValidator movieReadinessValidator;
+    @Mock MovieAvailabilityRepository movieAvailabilityRepository;
+    @Mock MovieStatusHistoryRepository movieStatusHistoryRepository;
 
     private MovieService movieService;
     private Movie movie;
@@ -60,7 +63,8 @@ class MovieServiceTest {
                 movieRepository, movieMapper, genreRepository, ageRatingRepository,
                 screeningFormatRepository, productionCompanyRepository, personRepository,
                 movieCastRepository, movieTranslationRepository, cinemaRoomService,
-                showTimeService, auditLogService, imageStorageService, movieReadinessValidator);
+                showTimeService, auditLogService, imageStorageService, movieReadinessValidator,
+                movieAvailabilityRepository, movieStatusHistoryRepository);
 
         movie = Movie.builder().movieId(1L).originalTitle("Existing Movie").build();
         // lenient(): cac test kiem tra "throw truoc khi mutate" khong bao gio toi duoc dong
@@ -352,7 +356,7 @@ class MovieServiceTest {
         AppException ex = assertThrows(AppException.class, () -> movieService.submitForReview(1L, "admin"));
 
         assertEquals(MovieErrorCode.GENRE_PENDING_REVIEW, ex.getErrorCode());
-        verify(movieRepository, never()).updateStatus(any(), any(), any());
+        verify(movieRepository, never()).save(any(Movie.class));
     }
 
     @Test
@@ -364,7 +368,7 @@ class MovieServiceTest {
 
         movieService.submitForReview(1L, "admin");
 
-        verify(movieRepository).updateStatus(1L, MovieStatus.PENDING_REVIEW, "admin");
+        assertEquals(MovieStatus.PENDING_REVIEW, movie.getStatus());
     }
 
     // ── MOV-03: readiness gates wired into create/update/submit/approve/release ──
@@ -417,7 +421,7 @@ class MovieServiceTest {
     }
 
     @Test
-    void submitForReviewPropagatesReadinessViolationAndNeverUpdatesStatus() {
+    void submitForReviewPropagatesReadinessViolationAndNeverSaves() {
         movie.setStatus(MovieStatus.DRAFT);
         movie.setGenres(List.of());
         doThrow(new MovieReadinessException(MovieErrorCode.MOVIE_NOT_READY_FOR_REVIEW, List.of()))
@@ -425,20 +429,22 @@ class MovieServiceTest {
 
         assertThrows(MovieReadinessException.class, () -> movieService.submitForReview(1L, "admin"));
 
-        verify(movieRepository, never()).updateStatus(any(), any(), any());
+        verify(movieRepository, never()).save(any(Movie.class));
     }
 
     @Test
-    void approveMoviePropagatesReadinessViolationAndNeverUpdatesStatus() {
+    void approveMoviePropagatesReadinessViolationAndNeverSaves() {
         movie.setStatus(MovieStatus.PENDING_REVIEW);
         doThrow(new MovieReadinessException(MovieErrorCode.MOVIE_NOT_READY_FOR_APPROVAL, List.of()))
                 .when(movieReadinessValidator).requireReadyForApproval(movie);
 
         assertThrows(MovieReadinessException.class, () -> movieService.approveMovie(1L, "admin"));
 
-        verify(movieRepository, never()).updateStatus(any(), any(), any());
+        verify(movieRepository, never()).save(any(Movie.class));
     }
 
+    /** MOV-LC-04: approve is a pure content decision — it must land on APPROVED,
+     *  never on an exhibition state, and it must record a status-history row. */
     @Test
     void approveMovieSucceedsWhenValidatorPasses() {
         movie.setStatus(MovieStatus.PENDING_REVIEW);
@@ -446,27 +452,96 @@ class MovieServiceTest {
         movieService.approveMovie(1L, "admin");
 
         verify(movieReadinessValidator).requireReadyForApproval(movie);
-        verify(movieRepository).updateStatus(1L, MovieStatus.COMING_SOON, "admin");
+        assertEquals(MovieStatus.APPROVED, movie.getStatus());
+        assertEquals("admin", movie.getUpdatedBy());
+
+        ArgumentCaptor<MovieStatusHistory> historyCaptor = ArgumentCaptor.forClass(MovieStatusHistory.class);
+        verify(movieStatusHistoryRepository).save(historyCaptor.capture());
+        assertEquals(MovieStatus.PENDING_REVIEW, historyCaptor.getValue().getFromStatus());
+        assertEquals(MovieStatus.APPROVED, historyCaptor.getValue().getToStatus());
+        assertEquals("admin", historyCaptor.getValue().getActor());
     }
 
     @Test
-    void releaseMoviePropagatesReadinessViolationAndNeverUpdatesStatus() {
-        movie.setStatus(MovieStatus.COMING_SOON);
-        doThrow(new MovieReadinessException(MovieErrorCode.MOVIE_NOT_READY_FOR_RELEASE, List.of()))
-                .when(movieReadinessValidator).requireReadyForRelease(movie);
+    void approveRejectsWhenNotPendingReview() {
+        movie.setStatus(MovieStatus.DRAFT);
 
-        assertThrows(MovieReadinessException.class, () -> movieService.releaseMovie(1L, "admin"));
+        AppException ex = assertThrows(AppException.class, () -> movieService.approveMovie(1L, "admin"));
 
-        verify(movieRepository, never()).updateStatus(any(), any(), any());
+        assertEquals(MovieErrorCode.INVALID_STATUS_TRANSITION, ex.getErrorCode());
+        verify(movieRepository, never()).save(any(Movie.class));
     }
 
     @Test
-    void releaseMovieSucceedsWhenValidatorPasses() {
-        movie.setStatus(MovieStatus.COMING_SOON);
+    void requestChangesRequiresPendingReviewAndStoresNote() {
+        movie.setStatus(MovieStatus.PENDING_REVIEW);
 
-        movieService.releaseMovie(1L, "admin");
+        movieService.requestChanges(1L, "Poster is missing", "admin");
 
-        verify(movieReadinessValidator).requireReadyForRelease(movie);
-        verify(movieRepository).updateStatus(1L, MovieStatus.NOW_SHOWING, "admin");
+        assertEquals(MovieStatus.CHANGES_REQUESTED, movie.getStatus());
+        assertEquals("Poster is missing", movie.getRejectionNote());
+    }
+
+    @Test
+    void startRevisionMovesChangesRequestedBackToDraft() {
+        movie.setStatus(MovieStatus.CHANGES_REQUESTED);
+
+        movieService.startRevision(1L, "employee1");
+
+        assertEquals(MovieStatus.DRAFT, movie.getStatus());
+    }
+
+    @Test
+    void startRevisionRejectsWhenNotChangesRequested() {
+        movie.setStatus(MovieStatus.DRAFT);
+
+        AppException ex = assertThrows(AppException.class, () -> movieService.startRevision(1L, "employee1"));
+
+        assertEquals(MovieErrorCode.INVALID_STATUS_TRANSITION, ex.getErrorCode());
+    }
+
+    @Test
+    void archiveRequiresApprovedAndNoActiveAvailability() {
+        movie.setStatus(MovieStatus.APPROVED);
+        when(movieAvailabilityRepository.existsByMovie_MovieIdAndStatusIn(1L,
+                List.of(AvailabilityStatus.PLANNED, AvailabilityStatus.OPEN))).thenReturn(false);
+
+        movieService.archiveMovie(1L, "admin");
+
+        assertEquals(MovieStatus.ARCHIVED, movie.getStatus());
+    }
+
+    @Test
+    void archiveBlockedWhileAvailabilityIsPlannedOrOpen() {
+        movie.setStatus(MovieStatus.APPROVED);
+        when(movieAvailabilityRepository.existsByMovie_MovieIdAndStatusIn(1L,
+                List.of(AvailabilityStatus.PLANNED, AvailabilityStatus.OPEN))).thenReturn(true);
+
+        AppException ex = assertThrows(AppException.class, () -> movieService.archiveMovie(1L, "admin"));
+
+        assertEquals(MovieErrorCode.MOVIE_HAS_ACTIVE_AVAILABILITY, ex.getErrorCode());
+        verify(movieRepository, never()).save(any(Movie.class));
+    }
+
+    @Test
+    void archiveRejectsWhenNotApproved() {
+        movie.setStatus(MovieStatus.DRAFT);
+
+        AppException ex = assertThrows(AppException.class, () -> movieService.archiveMovie(1L, "admin"));
+
+        assertEquals(MovieErrorCode.INVALID_STATUS_TRANSITION, ex.getErrorCode());
+    }
+
+    // ── updateMovie: only DRAFT is directly editable ────────────────────────
+
+    @Test
+    void updateMovieRejectsWhenNotDraft() {
+        movie.setStatus(MovieStatus.PENDING_REVIEW);
+        UpdateMovieRequest request = UpdateMovieRequest.builder().originalTitle("New title").build();
+
+        AppException ex = assertThrows(AppException.class, () -> movieService.updateMovie(1L, request));
+
+        assertEquals(MovieErrorCode.MOVIE_NOT_EDITABLE, ex.getErrorCode());
+        verify(movieRepository, never()).save(any(Movie.class));
     }
 }

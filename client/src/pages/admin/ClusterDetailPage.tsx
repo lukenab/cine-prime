@@ -3,17 +3,19 @@ import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import {
   ArrowLeft, MapPin, Phone, Building2, Armchair, RefreshCw, AlertCircle,
   Plus, Search, ChevronRight, CheckCircle, CheckCircle2, XCircle, Clock, SendHorizonal, Edit2, Trash2,
-  CalendarDays, Mail, Timer, Globe2,
+  CalendarDays, Mail, Timer,
 } from "lucide-react";
 import {
   movieApi,
   type ClusterResponse,
   type ClusterStatus,
+  type ClusterOperatingHour,
   type RoomResponse,
   ROOM_TYPE_CONFIG,
 } from "../../api/movieApi";
 import { useRole } from "../../hooks/useRole";
 import { RoomCreationMethodDialog } from "./cinemaRoomEditor/RoomCreationMethodDialog";
+import { ClusterWizardModal } from "./ClusterWizardModal";
 
 // ── Status config (small local copy — kept in sync with ManageCinemaClusterPage.tsx) ──
 
@@ -25,6 +27,42 @@ const STATUS_CONFIG: Record<ClusterStatus, { label: string; icon: React.ElementT
 };
 
 const OPERATING_DAY_LABELS = { MONDAY: "Mon", TUESDAY: "Tue", WEDNESDAY: "Wed", THURSDAY: "Thu", FRIDAY: "Fri", SATURDAY: "Sat", SUNDAY: "Sun" } as const;
+const OPERATING_DAY_ORDER = Object.keys(OPERATING_DAY_LABELS) as Array<keyof typeof OPERATING_DAY_LABELS>;
+
+function formatHourRange(hour: ClusterOperatingHour): string {
+  if (hour.closed) return "Closed";
+  if (!hour.opensAt || !hour.closesAt) return "—";
+  return `${hour.opensAt.slice(0, 5)}–${hour.closesAt.slice(0, 5)}${hour.closesNextDay ? " (overnight)" : ""}`;
+}
+
+/** Groups consecutive days sharing the same hours into one line each (e.g. "Mon–Sun 08:00–23:00"
+ *  instead of 7 near-identical boxes) — the common case (uniform week) collapses to a single row. */
+function summarizeSchedule(hours: ClusterOperatingHour[]) {
+  const groups: Array<{ labels: string[]; hour: ClusterOperatingHour }> = [];
+  for (const id of OPERATING_DAY_ORDER) {
+    const hour = hours.find((h) => h.dayOfWeek === id);
+    if (!hour) continue;
+    const label: string = OPERATING_DAY_LABELS[id];
+    const last = groups[groups.length - 1];
+    if (
+      last
+      && last.hour.closed === hour.closed
+      && last.hour.opensAt === hour.opensAt
+      && last.hour.closesAt === hour.closesAt
+      && last.hour.closesNextDay === hour.closesNextDay
+    ) {
+      last.labels.push(label);
+    } else {
+      groups.push({ labels: [label], hour });
+    }
+  }
+
+  return groups.map(({ labels, hour }) => ({
+    range: labels.length > 1 ? `${labels[0]}–${labels[labels.length - 1]}` : labels[0],
+    hours: formatHourRange(hour),
+    closed: hour.closed,
+  }));
+}
 
 // Nhan hang kieu Excel (khop rowLabel() ben backend): 0->A, 1->B, ..., 25->Z, 26->AA...
 function excelRowLabel(index: number): string {
@@ -111,6 +149,7 @@ export default function ClusterDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [deletingRoomId, setDeletingRoomId] = useState<number | null>(null);
   const [choosingRoomCreationMethod, setChoosingRoomCreationMethod] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const showToast = (type: "success" | "error", message: string) => {
@@ -296,7 +335,7 @@ export default function ClusterDetailPage() {
           )}
           {can.edit && (
             <button
-              onClick={() => navigate(`/admin/clusters/${cluster.clusterId}/edit`)}
+              onClick={() => setEditOpen(true)}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl border hover:opacity-80"
               style={{ fontSize: "13px", color: "var(--text-main)", borderColor: "var(--border-color)", background: "var(--bg-card)" }}
             >
@@ -316,66 +355,54 @@ export default function ClusterDetailPage() {
         </div>
       </div>
 
-      {/* Operational profile — Sections 1-4 only; amenities remain out of scope. */}
-      <div className="mb-6 grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <section className="rounded-2xl border p-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-          <div className="mb-4 flex items-center gap-2"><Building2 size={16} className="text-blue-600" /><h2 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-main)" }}>Cluster profile</h2></div>
-          <dl className="grid grid-cols-2 gap-x-5 gap-y-3 text-sm">
-            {[
-              ["Cluster code", cluster.clusterCode ?? `Cluster ${cluster.clusterId}`],
-              ["Venue type", (cluster.venueType ?? "MALL").replace(/_/g, " ")],
-              ["District", cluster.district || "—"],
-              ["Building / Floor", [cluster.buildingName, cluster.floorLocation].filter(Boolean).join(" · ") || "—"],
-              ["Opening date", cluster.openingDate || "—"],
-              ["Timezone", cluster.timezone ?? "Asia/Ho_Chi_Minh"],
-            ].map(([label, value]) => (
-              <div key={label}><dt style={{ fontSize: "10.5px", color: "var(--text-sub)" }}>{label}</dt><dd className="mt-0.5 capitalize" style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-main)" }}>{value}</dd></div>
-            ))}
-          </dl>
-          <div className="mt-4 flex flex-wrap gap-3 border-t pt-3" style={{ borderColor: "var(--border-color)" }}>
-            {cluster.publicEmail && <a href={`mailto:${cluster.publicEmail}`} className="flex items-center gap-1.5" style={{ fontSize: "11.5px", color: "#2563eb" }}><Mail size={12} />{cluster.publicEmail}</a>}
-            <span className="flex items-center gap-1.5" style={{ fontSize: "11.5px", color: "var(--text-sub)" }}><Phone size={12} />{cluster.phoneNumber ?? "19001000"}</span>
-            <span className="flex items-center gap-1.5" style={{ fontSize: "11.5px", color: "var(--text-sub)" }}><Globe2 size={12} />{cluster.countryCode ?? "VN"}</span>
-          </div>
-        </section>
+      {/* Operational profile — Sections 1-4 only; amenities remain out of scope. Everything
+          reads as two flowing lines (like the "province · address · phone" line in the
+          header) instead of a labeled dl-grid + divided sub-sections — that stacked so much
+          vertical chrome it ate half the page before the room table even showed up. */}
+      <section className="mb-6 rounded-2xl border p-4" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+        <div className="flex items-center gap-2"><Building2 size={16} className="text-blue-600" /><h2 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-main)" }}>Cluster profile</h2></div>
 
-        <section className="rounded-2xl border p-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-          <div className="mb-4 flex items-center gap-2"><CalendarDays size={16} className="text-blue-600" /><h2 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-main)" }}>Operating schedule</h2></div>
-          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-            {(cluster.operatingHours ?? []).slice().sort((left, right) => Object.keys(OPERATING_DAY_LABELS).indexOf(left.dayOfWeek) - Object.keys(OPERATING_DAY_LABELS).indexOf(right.dayOfWeek)).map((hours) => (
-              <div key={hours.dayOfWeek} className="flex items-center justify-between rounded-lg border px-3 py-2" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
-                <strong style={{ fontSize: "11.5px", color: "var(--text-main)" }}>{OPERATING_DAY_LABELS[hours.dayOfWeek]}</strong>
-                <span className="flex items-center gap-1" style={{ fontSize: "11px", color: hours.closed ? "#ef4444" : "var(--text-sub)" }}>
-                  <Timer size={11} />{hours.closed ? "Closed" : `${hours.opensAt?.slice(0, 5)}–${hours.closesAt?.slice(0, 5)}${hours.closesNextDay ? " +1" : ""}`}
-                </span>
-              </div>
-            ))}
-            {!cluster.operatingHours?.length && <p style={{ fontSize: "12px", color: "var(--text-sub)" }}>Operating schedule has not been migrated for this cluster.</p>}
-          </div>
-        </section>
-      </div>
+        <p className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-1" style={{ fontSize: "12.5px", color: "var(--text-sub)" }}>
+          {[
+            cluster.clusterCode ?? `Cluster ${cluster.clusterId}`,
+            (cluster.venueType ?? "MALL").replace(/_/g, " "),
+            cluster.timezone ?? "Asia/Ho_Chi_Minh",
+            cluster.countryCode ?? "VN",
+            cluster.openingDate && `Opened ${cluster.openingDate}`,
+            cluster.ward,
+            [cluster.buildingName, cluster.floorLocation].filter(Boolean).join(" · ") || undefined,
+          ].filter(Boolean).map((part, i, arr) => (
+            <span key={i}>
+              <strong style={{ color: "var(--text-main)", fontWeight: 600 }}>{part}</strong>{i < arr.length - 1 && <span className="ml-1.5">·</span>}
+            </span>
+          ))}
+          {cluster.publicEmail && (
+            <>
+              <span>·</span>
+              <a href={`mailto:${cluster.publicEmail}`} className="inline-flex items-center gap-1" style={{ color: "#2563eb", fontWeight: 600 }}>
+                <Mail size={11} />{cluster.publicEmail}
+              </a>
+            </>
+          )}
+        </p>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-5 mb-6">
-        <div className="rounded-2xl border p-5 flex items-center gap-4" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-          <div className="w-12 h-12 rounded-xl bg-violet-50 flex items-center justify-center flex-shrink-0">
-            <Building2 size={20} className="text-violet-600" />
-          </div>
-          <div>
-            <p style={{ fontSize: "13px", color: "var(--text-sub)" }}>Rooms</p>
-            <p style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-main)", lineHeight: 1.2 }}>{cluster.totalRooms ?? rooms.length}</p>
-          </div>
+        <div className="mt-3 pt-3 border-t flex flex-wrap items-center gap-x-4 gap-y-2" style={{ borderColor: "var(--border-color)" }}>
+          <span className="flex items-center gap-1.5" style={{ fontSize: "12.5px", color: "var(--text-sub)" }}>
+            <Building2 size={13} className="text-violet-600" /><strong style={{ color: "var(--text-main)" }}>{cluster.totalRooms ?? rooms.length}</strong> rooms
+          </span>
+          <span className="flex items-center gap-1.5" style={{ fontSize: "12.5px", color: "var(--text-sub)" }}>
+            <Armchair size={13} className="text-emerald-600" /><strong style={{ color: "var(--text-main)" }}>{(cluster.totalSeats ?? totalSeats).toLocaleString()}</strong> seats
+          </span>
+          <span style={{ width: "1px", height: "14px", background: "var(--border-color)" }} />
+          {summarizeSchedule(cluster.operatingHours ?? []).map((group) => (
+            <span key={group.range} className="flex items-center gap-1.5" style={{ fontSize: "12.5px", color: group.closed ? "#ef4444" : "var(--text-sub)" }}>
+              <Timer size={13} style={{ color: group.closed ? "#ef4444" : "#2563eb" }} />
+              <strong style={{ color: group.closed ? "#ef4444" : "var(--text-main)" }}>{group.range}</strong> {group.hours}
+            </span>
+          ))}
+          {!cluster.operatingHours?.length && <span style={{ fontSize: "12.5px", color: "var(--text-sub)" }}>Schedule not migrated</span>}
         </div>
-        <div className="rounded-2xl border p-5 flex items-center gap-4" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
-            <Armchair size={20} className="text-emerald-600" />
-          </div>
-          <div>
-            <p style={{ fontSize: "13px", color: "var(--text-sub)" }}>Seats</p>
-            <p style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-main)", lineHeight: 1.2 }}>{(cluster.totalSeats ?? totalSeats).toLocaleString()}</p>
-          </div>
-        </div>
-      </div>
+      </section>
 
       {/* Error */}
       {error && (
@@ -390,7 +417,6 @@ export default function ClusterDetailPage() {
 
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap mb-4">
-        <h2 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-main)" }}>Rooms in this cluster</h2>
         <div className="relative flex-1 min-w-48">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-sub)" }} />
           <input
@@ -423,6 +449,14 @@ export default function ClusterDetailPage() {
           </span>
         )}
       </div>
+
+      <ClusterWizardModal
+        open={editOpen}
+        mode="edit"
+        clusterId={cluster.clusterId}
+        onClose={() => setEditOpen(false)}
+        onSaved={(saved) => setCluster(saved)}
+      />
 
       {choosingRoomCreationMethod && (
         <RoomCreationMethodDialog

@@ -1,6 +1,6 @@
 import type { CinemaRoomMasterData } from "../../../api/movieApi";
 import { Check } from "lucide-react";
-import { SelectField } from "../../../components/shared/SelectField";
+import { SelectField, InfoTooltip } from "../../../components/shared/SelectField";
 import type { TechConfigForm } from "./cinemaRoomEditor.types";
 import { getFieldError, getFieldWarning, type ValidationIssue } from "./cinemaRoomValidation";
 import type { PresentationSystemValue } from "../../../api/movieApi";
@@ -116,7 +116,14 @@ export function ProjectionConfigurationSection({ masterData, value, onChange, is
                       style={{ width: "20px", height: "20px", background: active ? "#2563eb" : "transparent", border: `1.5px solid ${active ? "#2563eb" : "var(--border-color)"}`, color: "white" }}>
                       {active && <Check size={12} strokeWidth={3} />}
                     </span>
-                    <strong style={{ fontSize: "12px", color: active ? "#2563eb" : "var(--text-main)" }}>{resolution.name}</strong>
+                    <span className="min-w-0 flex items-center gap-1">
+                      <strong style={{ fontSize: "12px", color: active ? "#2563eb" : "var(--text-main)" }}>{resolution.name}</strong>
+                      {resolution.description && (
+                        <span onClick={(e) => e.stopPropagation()}>
+                          <InfoTooltip label={resolution.name} text={resolution.description} />
+                        </span>
+                      )}
+                    </span>
                   </button>
                 );
               })}
@@ -134,6 +141,7 @@ export function ProjectionConfigurationSection({ masterData, value, onChange, is
             options={masterData.resolutions}
             disabled={disabled}
             error={getFieldError(issues, "resolutionId")}
+            descriptionDisplay="tooltip"
           />
         )}
       </div>

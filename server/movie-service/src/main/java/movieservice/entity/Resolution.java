@@ -25,6 +25,9 @@ public class Resolution {
     @Column(name = "resolution_name", nullable = false, length = 50)
     String resolutionName;
 
+    @Column(name = "description", length = 255)
+    String description;
+
     @Column(name = "active", nullable = false)
     @Builder.Default
     Boolean active = true;

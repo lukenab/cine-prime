@@ -107,6 +107,7 @@ class CinemaRoomLayoutWizardIntegrationTest {
         movieRepository.deleteAll();
 
         CinemaCluster cluster = CinemaCluster.builder()
+                .clusterCode("IT-CLUSTER-1")
                 .clusterName("Integration Test Cluster")
                 .province("HCM")
                 .address("123 Test St")
@@ -140,7 +141,6 @@ class CinemaRoomLayoutWizardIntegrationTest {
         // 1. Create DRAFT room via the wizard — no flat Seat generation yet.
         CinemaRoomRequest createRequest = CinemaRoomRequest.builder()
                 .cinemaRoomName("Wizard Room 1")
-                .wizardMode(true)
                 .roomCode("W1")
                 .auditoriumClassId(auditoriumClassId)
                 .lengthM(new BigDecimal("20"))
@@ -199,7 +199,7 @@ class CinemaRoomLayoutWizardIntegrationTest {
                 .originalTitle("Integration Test Movie")
                 .originalLanguage("en")
                 .durationMinutes(100)
-                .status(MovieStatus.NOW_SHOWING)
+                .status(MovieStatus.APPROVED)
                 .build();
         movie = movieRepository.saveAndFlush(movie);
 
@@ -258,7 +258,6 @@ class CinemaRoomLayoutWizardIntegrationTest {
     void activate_blockedByFutureShowtimesOnCurrentActiveLayout() {
         CinemaRoomRequest createRequest = CinemaRoomRequest.builder()
                 .cinemaRoomName("Wizard Room 2")
-                .wizardMode(true)
                 .roomCode("W2")
                 .auditoriumClassId(auditoriumClassId)
                 .lengthM(new BigDecimal("20"))
@@ -282,7 +281,7 @@ class CinemaRoomLayoutWizardIntegrationTest {
         CinemaRoom activatedRoom = cinemaRoomRepository.findById(roomId).get();
         Movie movie = movieRepository.saveAndFlush(Movie.builder()
                 .originalTitle("Future Showtime Movie").originalLanguage("en")
-                .durationMinutes(100).status(MovieStatus.NOW_SHOWING).build());
+                .durationMinutes(100).status(MovieStatus.APPROVED).build());
         showTimeRepository.saveAndFlush(ShowTime.builder()
                 .movie(movie).cinemaRoom(activatedRoom)
                 .showDate(LocalDate.now().plusDays(3))

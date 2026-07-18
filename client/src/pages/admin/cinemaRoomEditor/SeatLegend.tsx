@@ -1,7 +1,7 @@
 import type { SeatTypeValue } from "../../../api/movieApi";
 import { SEAT_TYPE_COLORS, SEAT_TYPE_LABELS } from "./cinemaRoomLayoutGenerator";
 
-function ProjectorLegendMarker() {
+export function ProjectorLegendMarker() {
   return (
     <span className="relative block h-[17px] w-[28px] shrink-0" aria-hidden="true">
       <span
@@ -16,7 +16,7 @@ function ProjectorLegendMarker() {
   );
 }
 
-function SpeakerLegendMarker() {
+export function SpeakerLegendMarker() {
   return (
     <span
       className="block h-[20px] w-[9px] shrink-0 rounded-[3px]"

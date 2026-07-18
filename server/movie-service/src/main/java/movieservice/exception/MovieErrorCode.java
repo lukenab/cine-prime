@@ -51,10 +51,6 @@ public enum MovieErrorCode implements BaseErrorCode {
     SEAT_NOT_FOUND(2012, "Seat not found.", HttpStatus.NOT_FOUND),
     INVALID_SEAT_STATUS(4001, "Invalid seat status", HttpStatus.BAD_REQUEST),
 
-    SEAT_QUANTITY_EXCEEDS_LIMIT(2013,
-            "Seat quantity exceeds the maximum allowed for this room type.",
-            HttpStatus.BAD_REQUEST),
-
     MOVIE_ALREADY_EXISTS(2014, "A movie with this Vietnamese title and format already exists.", HttpStatus.CONFLICT),
 
     SHOWTIME_NOT_FOUND(2015, "Showtime not found.", HttpStatus.NOT_FOUND),
@@ -78,18 +74,6 @@ public enum MovieErrorCode implements BaseErrorCode {
 
     SEAT_ROW_LIMIT_EXCEEDED(2030,
             "Seat quantity for this room type produces too many rows to lay out safely.",
-            HttpStatus.BAD_REQUEST),
-
-    SEAT_QUANTITY_TOO_SMALL(2031,
-            "numberOfRows x seatsPerRow is below the minimum room capacity (10).",
-            HttpStatus.BAD_REQUEST),
-
-    SEAT_ROW_ALLOCATION_INVALID(2032,
-            "standardRowCount + vipRowCount + coupleRowCount must equal numberOfRows, with at least one Standard or VIP row.",
-            HttpStatus.BAD_REQUEST),
-
-    COUPLE_ROW_REQUIRES_EVEN_SEATS(2033,
-            "seatsPerRow must be even when the room contains Couple rows.",
             HttpStatus.BAD_REQUEST),
 
     DUPLICATE_TRANSLATION_LANGUAGE(2034,
@@ -173,7 +157,39 @@ public enum MovieErrorCode implements BaseErrorCode {
     CLUSTER_CODE_IMMUTABLE(2066, "Cluster code cannot be changed after the cluster leaves DRAFT.", HttpStatus.BAD_REQUEST),
     CLUSTER_OPERATING_HOURS_INVALID(2067,
             "Operating hours must contain each day exactly once and use valid local times.", HttpStatus.BAD_REQUEST),
-    CLUSTER_TIMEZONE_INVALID(2068, "Timezone must be a valid IANA timezone identifier.", HttpStatus.BAD_REQUEST);
+    CLUSTER_TIMEZONE_INVALID(2068, "Timezone must be a valid IANA timezone identifier.", HttpStatus.BAD_REQUEST),
+
+    // ── Movie content/exhibition lifecycle separation (MOV-LC-04/06) ────────
+
+    MOVIE_NOT_EDITABLE(2069,
+            "Only a DRAFT movie can be edited directly. Start a revision first if changes were requested.",
+            HttpStatus.CONFLICT),
+    MOVIE_HAS_ACTIVE_AVAILABILITY(2071,
+            "Cannot archive a movie that still has a PLANNED or OPEN availability window. Close them first.",
+            HttpStatus.CONFLICT),
+
+    AVAILABILITY_NOT_FOUND(2072, "Movie availability not found.", HttpStatus.NOT_FOUND),
+    AVAILABILITY_INVALID_TRANSITION(2073,
+            "Invalid availability status transition. Check the current status and use the correct command.",
+            HttpStatus.CONFLICT),
+    AVAILABILITY_MOVIE_NOT_APPROVED(2075,
+            "An availability window can only be created for a movie whose content status is APPROVED.",
+            HttpStatus.CONFLICT),
+    AVAILABILITY_CLUSTER_NOT_ACTIVE(2076,
+            "Cannot create an availability window at a cluster that is not ACTIVE.", HttpStatus.BAD_REQUEST),
+    AVAILABILITY_DATE_RANGE_INVALID(2077,
+            "showingEndDate must be on or after showingStartDate.", HttpStatus.BAD_REQUEST),
+    AVAILABILITY_WINDOW_ALREADY_EXISTS(2078,
+            "An availability window for this movie, cluster and showingStartDate already exists.",
+            HttpStatus.CONFLICT),
+    AVAILABILITY_NOT_EDITABLE(2079,
+            "Only a PLANNED availability window can be edited directly.", HttpStatus.CONFLICT),
+
+    CLUSTER_SELF_APPROVAL_FORBIDDEN(2080,
+            "You cannot approve or reject a cluster you created yourself. Another admin must review it.",
+            HttpStatus.FORBIDDEN),
+    CLUSTER_NOT_OWNER(2081,
+            "Only the cluster's creator or an admin can submit it for review.", HttpStatus.FORBIDDEN);
 
     int code;
     String message;

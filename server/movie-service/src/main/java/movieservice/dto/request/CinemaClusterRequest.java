@@ -32,10 +32,6 @@ public class CinemaClusterRequest {
 
     LocalDate openingDate;
 
-    @Email(message = "Public email must be valid")
-    @Size(max = 150, message = "Public email must not exceed 150 characters")
-    String publicEmail;
-
     @NotBlank(message = "Country code is required")
     @Pattern(regexp = "^[A-Z]{2}$", message = "Country code must be an ISO 3166-1 alpha-2 code")
     String countryCode;
@@ -43,10 +39,6 @@ public class CinemaClusterRequest {
     @NotBlank(message = "Province is required")
     @ValidProvince
     String province;
-
-    @NotBlank(message = "District is required")
-    @Size(max = 100, message = "District must not exceed 100 characters")
-    String district;
 
     @Size(max = 100, message = "Ward must not exceed 100 characters")
     String ward;

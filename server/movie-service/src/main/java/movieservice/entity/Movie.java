@@ -72,15 +72,24 @@ public class Movie {
     String synopsis;
 
     // ── Status / lifecycle ────────────────────────────────────
+    // Content-review status only — see MovieAvailability for per-cluster
+    // exhibition state. See docs/api-specs/movie-service/MOVIE_LIFECYCLE_CONTRACT.md.
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     MovieStatus status = MovieStatus.DRAFT;
 
-    @Column(name = "suspended_reason", columnDefinition = "TEXT")
-    String suspendedReason;
-
     @Column(name = "rejection_note", columnDefinition = "TEXT")
     String rejectionNote;
+
+    // Optimistic locking for lifecycle commands — a stale concurrent transition
+    // throws ObjectOptimisticLockingFailureException, translated to 409 by
+    // MovieService's transition methods (which use save(), not @Modifying bulk
+    // updates, specifically so this actually engages).
+    @Builder.Default
+    @Version
+    @Column(name = "version", nullable = false)
+    Long version = 0L;
 
     // ── Relationships ─────────────────────────────────────────
     @ManyToMany

@@ -8,7 +8,6 @@ import movieservice.entity.CinemaCluster;
 import movieservice.entity.CinemaRoom;
 import movieservice.enums.ClusterStatus;
 import movieservice.enums.PresentationSystem;
-import movieservice.enums.RoomType;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.AudioFormatRepository;
@@ -68,7 +67,6 @@ class CinemaRoomServiceTest {
     private CinemaRoomRequest.CinemaRoomRequestBuilder wizardRequest() {
         return CinemaRoomRequest.builder()
                 .cinemaRoomName("Room W1")
-                .wizardMode(true)
                 .roomCode("R01")
                 .auditoriumClassId(1)
                 .lengthM(new BigDecimal("20"))
@@ -170,49 +168,4 @@ class CinemaRoomServiceTest {
         assertEquals(PresentationSystem.SCREENX, captor.getValue().getPresentationSystem());
     }
 
-    @Test
-    void rejectsAllocationWhoseRowsDoNotMatchRoomRows() {
-        CinemaRoomRequest request = validRequest()
-                .numberOfRows(10)
-                .standardRowCount(5)
-                .vipRowCount(3)
-                .coupleRowCount(1)
-                .build();
-
-        AppException exception = assertThrows(
-                AppException.class,
-                () -> cinemaRoomService.createCinemaRoom(request));
-
-        assertEquals(MovieErrorCode.SEAT_ROW_ALLOCATION_INVALID, exception.getErrorCode());
-    }
-
-    @Test
-    void rejectsOddRowWidthWhenCoupleRowsExist() {
-        CinemaRoomRequest request = validRequest()
-                .numberOfRows(9)
-                .seatsPerRow(9)
-                .standardRowCount(5)
-                .vipRowCount(3)
-                .coupleRowCount(1)
-                .build();
-
-        AppException exception = assertThrows(
-                AppException.class,
-                () -> cinemaRoomService.createCinemaRoom(request));
-
-        assertEquals(MovieErrorCode.COUPLE_ROW_REQUIRES_EVEN_SEATS, exception.getErrorCode());
-    }
-
-    private CinemaRoomRequest.CinemaRoomRequestBuilder validRequest() {
-        return CinemaRoomRequest.builder()
-                .cinemaRoomName("Room 1")
-                .roomType(RoomType.STANDARD)
-                .numberOfRows(10)
-                .seatsPerRow(10)
-                .standardRowCount(6)
-                .vipRowCount(3)
-                .coupleRowCount(1)
-                .defaultPrice(new BigDecimal("90000"))
-                .clusterId(1L);
-    }
 }

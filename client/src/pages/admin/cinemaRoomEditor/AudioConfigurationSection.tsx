@@ -23,6 +23,7 @@ export function AudioConfigurationSection({ masterData, value, onChange, issues,
       options={masterData.audioFormats}
       disabled={disabled}
       error={getFieldError(issues, "audioFormatId")}
+      descriptionDisplay="tooltip"
     />
   );
 }
