@@ -189,7 +189,14 @@ public enum MovieErrorCode implements BaseErrorCode {
             "You cannot approve or reject a cluster you created yourself. Another admin must review it.",
             HttpStatus.FORBIDDEN),
     CLUSTER_NOT_OWNER(2081,
-            "Only the cluster's creator or an admin can submit it for review.", HttpStatus.FORBIDDEN);
+            "Only the cluster's creator or an admin can submit it for review.", HttpStatus.FORBIDDEN),
+
+    CINEMA_ROOM_DELETE_NOT_ALLOWED(2082,
+            "Only an unused DRAFT cinema room that has never entered an operational workflow can be permanently deleted.",
+            HttpStatus.CONFLICT),
+    CINEMA_ROOM_DELETE_FORBIDDEN(2083,
+            "Only an ADMIN or the employee who created this draft cinema room can permanently delete it.",
+            HttpStatus.FORBIDDEN);
 
     int code;
     String message;

@@ -241,6 +241,7 @@ public class RoomLayoutService {
     @Transactional
     public RoomLayoutResponse submit(Long roomId, Long layoutId, String actor) {
         RoomLayout layout = getLayoutEntityOrThrow(roomId, layoutId);
+        CinemaRoom room = lockRoomForTransition(roomId);
         if (layout.getStatus() != LayoutStatus.DRAFT) {
             throw new AppException(MovieErrorCode.ROOM_LAYOUT_INVALID_TRANSITION);
         }
@@ -250,7 +251,7 @@ public class RoomLayoutService {
             throw new AppException(MovieErrorCode.ROOM_LAYOUT_EMPTY);
         }
         validateStoredPositions(positions);
-        validateRoomCapacityEnvelope(layout.getCinemaRoom(), positions);
+        validateRoomCapacityEnvelope(room, positions);
 
         LayoutStatus old = layout.getStatus();
         layout.setStatus(LayoutStatus.PENDING_APPROVAL);
@@ -260,7 +261,7 @@ public class RoomLayoutService {
         layout.setUpdatedBy(actor);
         layout = roomLayoutRepository.save(layout);
 
-        transitionRoom(layout.getCinemaRoom(), CinemaRoomStatus.PENDING_APPROVAL, actor);
+        transitionRoom(room, CinemaRoomStatus.PENDING_APPROVAL, actor);
 
         logAction(layoutId, RoomLayoutAction.SUBMIT, actor, old, layout.getStatus(), null);
         return toResponse(layout, positions);
@@ -269,6 +270,7 @@ public class RoomLayoutService {
     @Transactional
     public RoomLayoutResponse approve(Long roomId, Long layoutId, String actor) {
         RoomLayout layout = getLayoutEntityOrThrow(roomId, layoutId);
+        CinemaRoom room = lockRoomForTransition(roomId);
         if (layout.getStatus() != LayoutStatus.PENDING_APPROVAL) {
             throw new AppException(MovieErrorCode.ROOM_LAYOUT_INVALID_TRANSITION);
         }
@@ -280,7 +282,7 @@ public class RoomLayoutService {
         layout.setUpdatedBy(actor);
         layout = roomLayoutRepository.save(layout);
 
-        transitionRoom(layout.getCinemaRoom(), CinemaRoomStatus.APPROVED, actor);
+        transitionRoom(room, CinemaRoomStatus.APPROVED, actor);
 
         logAction(layoutId, RoomLayoutAction.APPROVE, actor, old, layout.getStatus(), null);
         return toResponse(layout, positionRepository
@@ -290,6 +292,7 @@ public class RoomLayoutService {
     @Transactional
     public RoomLayoutResponse reject(Long roomId, Long layoutId, String reason, String actor) {
         RoomLayout layout = getLayoutEntityOrThrow(roomId, layoutId);
+        CinemaRoom room = lockRoomForTransition(roomId);
         if (layout.getStatus() != LayoutStatus.PENDING_APPROVAL) {
             throw new AppException(MovieErrorCode.ROOM_LAYOUT_INVALID_TRANSITION);
         }
@@ -300,7 +303,7 @@ public class RoomLayoutService {
         layout.setUpdatedBy(actor);
         layout = roomLayoutRepository.save(layout);
 
-        transitionRoom(layout.getCinemaRoom(), CinemaRoomStatus.DRAFT, actor);
+        transitionRoom(room, CinemaRoomStatus.DRAFT, actor);
 
         logAction(layoutId, RoomLayoutAction.REJECT, actor, old, layout.getStatus(), reason);
         return toResponse(layout, positionRepository
@@ -310,11 +313,11 @@ public class RoomLayoutService {
     @Transactional
     public RoomLayoutResponse activate(Long roomId, Long layoutId, String actor) {
         RoomLayout layout = getLayoutEntityOrThrow(roomId, layoutId);
+        CinemaRoom room = lockRoomForTransition(roomId);
         if (layout.getStatus() != LayoutStatus.APPROVED) {
             throw new AppException(MovieErrorCode.ROOM_LAYOUT_INVALID_TRANSITION);
         }
 
-        CinemaRoom room = layout.getCinemaRoom();
         Optional<RoomLayout> currentActive = roomLayoutRepository
                 .findByCinemaRoomCinemaRoomIdAndStatus(room.getCinemaRoomId(), LayoutStatus.ACTIVE);
 
@@ -499,6 +502,11 @@ public class RoomLayoutService {
         room.setStatus(newStatus);
         room.setUpdatedBy(actor);
         cinemaRoomRepository.save(room);
+    }
+
+    private CinemaRoom lockRoomForTransition(Long roomId) {
+        return cinemaRoomRepository.findByIdForUpdate(roomId)
+                .orElseThrow(() -> new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND));
     }
 
     /** Defense-in-depth re-check of persisted positions (mirrors validateIncomingPositions). */

@@ -33,7 +33,9 @@ import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.ProjectionTechnologyRepository;
 import movieservice.repository.ResolutionRepository;
 import movieservice.repository.RoomLayoutRepository;
+import movieservice.repository.SeatRepository;
 import movieservice.repository.ShowTimeRepository;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -53,7 +55,7 @@ public class CinemaRoomService {
     ShowTimeRepository showTimeRepository;
     MovieMapper movieMapper;
     AuditLogService auditLogService;
-    SeatService seatService;
+    SeatRepository seatRepository;
 
     AuditoriumClassRepository auditoriumClassRepository;
     ProjectionTechnologyRepository projectionTechnologyRepository;
@@ -231,23 +233,69 @@ public class CinemaRoomService {
         return toDetailResponse(room);
     }
 
-    // ── Chỉ cho xóa cứng room chưa từng gắn showtime nào ────────────────────
+    // ── Hard delete: only an unused DRAFT that never entered operations ────
 
     @Transactional
-    public void deleteCinemaRoom(Long roomId) {
-        if (!cinemaRoomRepository.existsById(roomId)) {
-            throw new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND);
+    public void deleteCinemaRoom(Long roomId, Authentication authentication) {
+        CinemaRoom room = cinemaRoomRepository.findByIdForUpdate(roomId)
+                .orElseThrow(() -> new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND));
+
+        String actor = authenticatedActor(authentication);
+        boolean admin = hasRole(authentication, "ROLE_ADMIN");
+        boolean draftCreator = hasRole(authentication, "ROLE_EMPLOYEE")
+                && actor.equals(room.getCreatedBy());
+        if (!admin && !draftCreator) {
+            throw new AppException(MovieErrorCode.CINEMA_ROOM_DELETE_FORBIDDEN);
+        }
+
+        if (room.getStatus() != CinemaRoomStatus.DRAFT) {
+            throw new AppException(MovieErrorCode.CINEMA_ROOM_DELETE_NOT_ALLOWED);
         }
 
         if (showTimeRepository.existsByCinemaRoomCinemaRoomId(roomId)) {
             throw new AppException(MovieErrorCode.CINEMA_ROOM_HAS_SHOWTIMES);
         }
 
-        seatService.deleteSeatsByRoom(roomId);
-        cinemaRoomRepository.deleteById(roomId);
+        List<RoomLayout> layouts = roomLayoutRepository
+                .findByCinemaRoomCinemaRoomIdOrderByVersionDesc(roomId);
+        boolean hasWorkflowHistory = layouts.stream().anyMatch(layout ->
+                layout.getStatus() != LayoutStatus.DRAFT
+                        || layout.getSubmittedAt() != null
+                        || layout.getApprovedAt() != null);
+        if (hasWorkflowHistory
+                || seatRepository.existsByCinemaRoomCinemaRoomId(roomId)
+                || maintenanceRepository.existsByCinemaRoom_CinemaRoomId(roomId)) {
+            throw new AppException(MovieErrorCode.CINEMA_ROOM_DELETE_NOT_ALLOWED);
+        }
 
-        auditLogService.logAction("SYSTEM", "Admin",
-                "cinema_room:" + roomId, "Deleted cinema room");
+        // Draft positions are owned by their layout and cascade from RoomLayout.
+        // Layout audit rows intentionally keep their scalar layout id as tombstone history.
+        auditLogService.logAction(actor, primaryRole(authentication),
+                "cinema_room:" + roomId,
+                "Permanently deleted unused draft cinema room: " + room.getCinemaRoomName());
+        roomLayoutRepository.deleteAll(layouts);
+        cinemaRoomRepository.delete(room);
+    }
+
+    private String authenticatedActor(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()
+                || authentication.getName() == null
+                || authentication.getName().isBlank()) {
+            throw new AppException(MovieErrorCode.CINEMA_ROOM_DELETE_FORBIDDEN);
+        }
+        return authentication.getName();
+    }
+
+    private boolean hasRole(Authentication authentication, String role) {
+        return authentication != null && authentication.getAuthorities() != null
+                && authentication.getAuthorities().stream()
+                .anyMatch(authority -> role.equals(authority.getAuthority()));
+    }
+
+    private String primaryRole(Authentication authentication) {
+        if (hasRole(authentication, "ROLE_ADMIN")) return "ADMIN";
+        if (hasRole(authentication, "ROLE_EMPLOYEE")) return "EMPLOYEE";
+        return "AUTHENTICATED_USER";
     }
 
     public CinemaRoom findByCinemaRoom(Long cinemaId) {

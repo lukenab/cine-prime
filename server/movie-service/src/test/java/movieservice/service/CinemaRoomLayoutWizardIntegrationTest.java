@@ -60,6 +60,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @SpringBootTest(properties = {
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.sql.init.mode=never",
+        "spring.flyway.enabled=false",
         "eureka.client.enabled=false",
         "spring.cloud.discovery.enabled=false"
 })
