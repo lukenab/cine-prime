@@ -1,21 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
 import { Search, Plus, SlidersHorizontal, RefreshCw, AlertCircle } from "lucide-react";
 import { useRole } from "../../hooks/useRole";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useNavigate } from "react-router-dom";
 
 import { MovieStatsCards } from "../../layouts/MovieStatsCards";
 import { MovieTable } from "../../layouts/MovieTable";
-import { MovieModal } from "../../layouts/MovieModal";
 import { MovieDetailModal } from "../../layouts/MovieDetailModal";
 import { PendingReviewModal } from "../../layouts/PendingReviewModal";
 import {
   movieApi,
   type MovieApiResponse,
   type GenreResponse,
-  type ScreeningFormatResponse,
-  type AgeRatingResponse,
-  type CreateMovieRequest,
-  type UpdateMovieRequest,
   type MovieV2,
 } from "../../api/movieApi";
 import {
@@ -27,13 +22,12 @@ import {
 export default function ManageMoviePage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
   const { isAdmin } = useRole();
+  const navigate = useNavigate();
 
   const [movies, setMovies] = useState<MovieApiResponse[]>([]);
 
-  // v2 lookup data for MovieModal
+  // Genre names for the filter panel (Add/Edit now happens on a dedicated page - see MovieEditorPage).
   const [genres, setGenres] = useState<GenreResponse[]>([]);
-  const [formats, setFormats] = useState<ScreeningFormatResponse[]>([]);
-  const [ageRatings, setAgeRatings] = useState<AgeRatingResponse[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,8 +37,6 @@ export default function ManageMoviePage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editMovie, setEditMovie] = useState<MovieApiResponse | null>(null);
   const [detailMovie, setDetailMovie] = useState<MovieV2 | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [reviewMovie, setReviewMovie] = useState<MovieV2 | null>(null);
@@ -69,20 +61,12 @@ export default function ManageMoviePage() {
   useEffect(() => {
     loadMovies();
     movieApi.getGenres().then((r) => setGenres(r.result ?? [])).catch(() => {});
-    movieApi.getScreeningFormats().then((r) => setFormats(r.result ?? [])).catch(() => {});
-    movieApi.getAgeRatings().then((r) => setAgeRatings(r.result ?? [])).catch(() => {});
   }, [loadMovies]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
-  const handleAddMovie = () => {
-    setEditMovie(null);
-    setModalOpen(true);
-  };
+  const handleAddMovie = () => navigate("/admin/movies/new");
 
-  const handleEditMovie = (movie: MovieApiResponse) => {
-    setEditMovie(movie);
-    setModalOpen(true);
-  };
+  const handleEditMovie = (movie: MovieApiResponse) => navigate(`/admin/movies/${movie.movieId}/edit`);
 
   const handleViewMovie = async (movie: MovieApiResponse) => {
     setDetailLoading(true);
@@ -140,17 +124,6 @@ export default function ManageMoviePage() {
 
   const handleReviewReject = async (id: number, note: string) => {
     await movieApi.requestMovieChanges(id, note);
-    await loadMovies();
-  };
-
-  const handleCreate = async (data: CreateMovieRequest): Promise<MovieV2> => {
-    const res = await movieApi.createMovieV2(data);
-    await loadMovies();
-    return res.result;
-  };
-
-  const handleUpdate = async (id: number, data: UpdateMovieRequest) => {
-    await movieApi.updateMovieV2(id, data);
     await loadMovies();
   };
 
@@ -341,17 +314,6 @@ export default function ManageMoviePage() {
           statusFilter={statusFilter}
         />
       )}
-
-      <MovieModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onCreate={handleCreate}
-        onUpdate={handleUpdate}
-        editMovieId={editMovie?.movieId ?? null}
-        genres={genres}
-        formats={formats}
-        ageRatings={ageRatings}
-      />
 
       <MovieDetailModal
         open={Boolean(detailMovie) || detailLoading}

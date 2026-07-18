@@ -3,7 +3,9 @@ package movieservice.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import org.hibernate.annotations.ColumnDefault;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import movieservice.enums.MovieImageType;
 
@@ -39,6 +41,33 @@ public class MovieImage {
 
     @Column(name = "caption", length = 255)
     String caption;
+
+    // TMDB | MANUAL | CLOUDINARY - where this asset came from
+    @Column(name = "source", length = 30)
+    String source;
+
+    // Upstream provider's own path/id (e.g. TMDB file_path) - combined with source +
+    // movie_id, prevents duplicate re-import (see uq_movie_image_source_path).
+    @Column(name = "external_path", length = 500)
+    String externalPath;
+
+    @Column(name = "language_code", length = 10)
+    String languageCode;
+
+    @Column(name = "width")
+    Integer width;
+
+    @Column(name = "height")
+    Integer height;
+
+    @Column(name = "aspect_ratio", precision = 6, scale = 3)
+    BigDecimal aspectRatio;
+
+    // The recommended/primary pick for this image_type at import time.
+    @Column(name = "is_default", nullable = false)
+    @ColumnDefault("false")
+    @Builder.Default
+    Boolean isDefault = false;
 
     @Column(name = "created_at", updatable = false)
     LocalDateTime createdAt;

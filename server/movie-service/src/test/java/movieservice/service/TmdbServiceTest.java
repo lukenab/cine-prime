@@ -81,7 +81,8 @@ class TmdbServiceTest {
                 productionCompanyRepository,
                 genreRepository,
                 ageRatingRepository,
-                "dummy-api-key");
+                "dummy-api-key",
+                10);
         // TmdbService tu new RestTemplate() trong constructor - thay bang mock qua reflection
         // de co the stub cac cuoc goi HTTP ben trong fetchMovieDetail()/fetchCredits()/...
         ReflectionTestUtils.setField(tmdbService, "restTemplate", restTemplate);

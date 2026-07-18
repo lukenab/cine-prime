@@ -118,6 +118,23 @@
 
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<!--
+						MovieServiceApplication.main() forces UTC before Spring starts
+						(Windows' "SE Asia Standard Time" resolves to the deprecated tzdata
+						alias "Asia/Saigon", which recent Postgres tzdata builds reject as
+						an invalid TimeZone value). @SpringBootTest never calls main(), so
+						tests need the same override here — otherwise anything that opens a
+						real JDBC connection (Flyway's eager connection during context
+						refresh in particular) fails locally on machines set to this zone.
+					-->
+					<argLine>-Duser.timezone=UTC</argLine>
+				</configuration>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<configuration>
 					<annotationProcessorPaths>

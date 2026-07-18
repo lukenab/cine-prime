@@ -15,4 +15,11 @@ public class MovieImageResponse {
     MovieImageType imageType;
     Integer displayOrder;
     String caption;
+    String source;
+    String externalPath;
+    String languageCode;
+    Integer width;
+    Integer height;
+    java.math.BigDecimal aspectRatio;
+    Boolean isDefault;
 }

@@ -4,6 +4,8 @@ import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.exception.AppException;
 import movieservice.dto.request.TmdbImportRequest;
+import movieservice.dto.response.MovieMediaCandidateResponse;
+import movieservice.dto.response.MovieMediaPreviewResponse;
 import movieservice.dto.response.TmdbCastPreview;
 import movieservice.dto.response.TmdbCompanyPreview;
 import movieservice.dto.response.TmdbGenrePreview;
@@ -14,9 +16,11 @@ import movieservice.dto.response.TmdbSearchResultItem;
 import movieservice.dto.response.TranslationResponse;
 import movieservice.dto.tmdb.TmdbCastDraft;
 import movieservice.dto.tmdb.TmdbCompanyDraft;
+import movieservice.dto.tmdb.TmdbConfigurationResponse;
 import movieservice.dto.tmdb.TmdbCreditsResponse;
 import movieservice.dto.tmdb.TmdbGenreDraft;
 import movieservice.dto.tmdb.TmdbGenreListResponse;
+import movieservice.dto.tmdb.TmdbImagesResponse;
 import movieservice.dto.tmdb.TmdbMovieDetail;
 import movieservice.dto.tmdb.TmdbMovieDraft;
 import movieservice.dto.tmdb.TmdbReleaseDatesResponse;
@@ -61,9 +65,30 @@ public class TmdbService {
     private final GenreRepository genreRepository;
     private final AgeRatingRepository ageRatingRepository;
     private final String apiKey;
+    private final int maxStills;
     private final RestTemplate restTemplate;
 
     private static final String TMDB_BASE = "https://api.themoviedb.org/3";
+
+    // include_image_language=vi,en,null - TMDB-FIX-05: prefer Vietnamese, then English,
+    // then textless (no-language) assets over any other locale.
+    private static final String IMAGE_LANGUAGE_PARAM = "vi,en,null";
+    private static final List<String> LANGUAGE_PRIORITY = List.of("vi", "en", "");
+
+    // TMDB's own aspect ratios have natural jitter (2.03, 1.777..., 1.78...) - tolerate a
+    // reasonable band around the canonical ratio rather than requiring an exact match.
+    private static final double POSTER_ASPECT_MIN = 0.5;
+    private static final double POSTER_ASPECT_MAX = 0.8;
+    private static final double BACKDROP_ASPECT_MIN = 1.5;
+    private static final double BACKDROP_ASPECT_MAX = 2.0;
+
+    private static final String PREFERRED_POSTER_SIZE = "w780";
+    private static final String PREFERRED_THUMBNAIL_SIZE = "w342";
+    private static final String PREFERRED_BACKDROP_SIZE = "w1280";
+
+    /** Fetched once and cached - TMDB's image configuration (base URL, available size profiles)
+     *  is effectively static for the lifetime of the app. */
+    private volatile TmdbConfigurationResponse cachedConfig;
 
     /**
      * Maps US MPAA certification → local VN rating code.
@@ -109,7 +134,8 @@ public class TmdbService {
             ProductionCompanyRepository productionCompanyRepository,
             GenreRepository genreRepository,
             AgeRatingRepository ageRatingRepository,
-            @Value("${tmdb.api-key}") String apiKey) {
+            @Value("${tmdb.api-key}") String apiKey,
+            @Value("${tmdb.image.max-stills:10}") int maxStills) {
         this.movieRepository = movieRepository;
         this.movieTranslationRepository = movieTranslationRepository;
         this.movieCastRepository = movieCastRepository;
@@ -118,7 +144,12 @@ public class TmdbService {
         this.genreRepository = genreRepository;
         this.ageRatingRepository = ageRatingRepository;
         this.apiKey = apiKey;
+        this.maxStills = maxStills;
         this.restTemplate = new RestTemplate();
+    }
+
+    public int getMaxStills() {
+        return maxStills;
     }
 
     // ── Search ────────────────────────────────────────────────
@@ -249,6 +280,11 @@ public class TmdbService {
                 .filter(m -> m.mappingStatus() == GenreMappingStatus.UNMAPPED)
                 .forEach(m -> warnings.add("GENRE_UNMAPPED:" + m.tmdbGenreId()));
 
+        PosterMedia posterMedia = resolvePosterMedia(tmdbId, draft.getPosterUrl());
+        if (posterMedia.media().getRecommendedPosterPath() == null && draft.getPosterUrl() == null) {
+            warnings.add("POSTER_NOT_AVAILABLE");
+        }
+
         return TmdbMovieDetailsResponse.builder()
                 .tmdbId(tmdbId)
                 .imdbId(draft.getImdbId())
@@ -257,8 +293,10 @@ public class TmdbService {
                 .durationMinutes(draft.getRuntimeMinutes())
                 .releaseDate(draft.getReleaseDate())
                 .country(draft.getCountry())
-                .posterUrl(draft.getPosterUrl())
+                .posterUrl(posterMedia.posterUrl())
+                .thumbnailUrl(posterMedia.thumbnailUrl())
                 .overview(draft.getOverview())
+                .media(posterMedia.media())
                 .companies(companies)
                 .translations(toTranslationResponses(draft.getTranslations()))
                 .cast(cast)
@@ -266,6 +304,29 @@ public class TmdbService {
                 .ageRatingId(resolvedRating != null ? resolvedRating.getRatingId() : null)
                 .warnings(warnings)
                 .build();
+    }
+
+    private record PosterMedia(String posterUrl, String thumbnailUrl, MovieMediaPreviewResponse media) {
+    }
+
+    /**
+     * Shared by getDetails() (preview) and importMovie() so both compute the movie-level
+     * posterUrl/thumbnailUrl the exact same way (TMDB-FIX-02 precedent) - fixes the original bug
+     * where the frontend copied one TMDB poster string into both fields. thumbnailUrl is always a
+     * genuinely smaller CDN size profile of the same recommended poster, never a raw copy.
+     */
+    private PosterMedia resolvePosterMedia(Integer tmdbId, String fallbackPosterUrl) {
+        TmdbImagesResponse imagesResponse = fetchImages(tmdbId);
+        TmdbConfigurationResponse config = getImageConfig();
+        MovieMediaPreviewResponse media = buildMediaPreview(imagesResponse, config, maxStills);
+
+        String posterUrl = media.getRecommendedPosterPath() != null
+                ? buildSizedUrl(config, media.getRecommendedPosterPath(), PREFERRED_POSTER_SIZE)
+                : fallbackPosterUrl;
+        String thumbnailUrl = media.getRecommendedPosterPath() != null
+                ? buildSizedUrl(config, media.getRecommendedPosterPath(), PREFERRED_THUMBNAIL_SIZE)
+                : fallbackPosterUrl;
+        return new PosterMedia(posterUrl, thumbnailUrl, media);
     }
 
     // ── Import ────────────────────────────────────────────────
@@ -320,6 +381,10 @@ public class TmdbService {
         // 7. Screening format - never inferred from movie master; belongs to release-version/showtime
         warnings.add("SCREENING_FORMAT_NOT_SET");
 
+        // 7b. Poster + thumbnail - same resolution logic as preview (TMDB-FIX-02), never a
+        // straight copy of the same URL into both fields.
+        PosterMedia posterMedia = resolvePosterMedia(tmdbId, draft.getPosterUrl());
+
         // 8. Build & save movie - DRAFT only, never auto-published
         Movie movie = Movie.builder()
                 .tmdbId(tmdbId)
@@ -329,7 +394,8 @@ public class TmdbService {
                 .durationMinutes(runtimeMinutes)
                 .releaseDate(parseDate(draft.getReleaseDate()))
                 .country(draft.getCountry())
-                .posterUrl(draft.getPosterUrl())
+                .posterUrl(posterMedia.posterUrl())
+                .thumbnailUrl(posterMedia.thumbnailUrl())
                 .synopsis(draft.getOverview())
                 .status(MovieStatus.DRAFT)
                 .company(companies.isEmpty() ? null : companies.get(0))
@@ -466,6 +532,178 @@ public class TmdbService {
             log.warn("TMDB fetchReleaseDates failed for tmdbId={}: {}", tmdbId, e.getMessage());
             return new TmdbReleaseDatesResponse();
         }
+    }
+
+    /** TMDB-FIX-05: posters/backdrops/logos, filtered to Vietnamese/English/textless assets. */
+    TmdbImagesResponse fetchImages(Integer tmdbId) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(TMDB_BASE + "/movie/" + tmdbId + "/images")
+                .queryParam("api_key", apiKey)
+                .queryParam("include_image_language", IMAGE_LANGUAGE_PARAM)
+                .build().toUri();
+        try {
+            TmdbImagesResponse r = restTemplate.getForObject(uri, TmdbImagesResponse.class);
+            return r != null ? r : new TmdbImagesResponse();
+        } catch (RestClientException e) {
+            log.warn("TMDB fetchImages failed for tmdbId={}: {}", tmdbId, e.getMessage());
+            return new TmdbImagesResponse();
+        }
+    }
+
+    /** Cached - TMDB's image configuration (base URL, size profiles) is effectively static. */
+    TmdbConfigurationResponse getImageConfig() {
+        TmdbConfigurationResponse cached = cachedConfig;
+        if (cached != null) return cached;
+        URI uri = UriComponentsBuilder.fromHttpUrl(TMDB_BASE + "/configuration")
+                .queryParam("api_key", apiKey)
+                .build().toUri();
+        try {
+            TmdbConfigurationResponse fetched = restTemplate.getForObject(uri, TmdbConfigurationResponse.class);
+            if (fetched == null || fetched.getImages() == null) {
+                fetched = fallbackConfig();
+            }
+            cachedConfig = fetched;
+            return fetched;
+        } catch (RestClientException e) {
+            log.warn("TMDB fetchConfiguration failed, using fallback size profile: {}", e.getMessage());
+            return fallbackConfig();
+        }
+    }
+
+    /** Only used if /configuration itself is unreachable - the same default TMDB has used for years. */
+    private static TmdbConfigurationResponse fallbackConfig() {
+        TmdbConfigurationResponse config = new TmdbConfigurationResponse();
+        TmdbConfigurationResponse.Images images = new TmdbConfigurationResponse.Images();
+        images.setSecureBaseUrl("https://image.tmdb.org/t/p/");
+        images.setPosterSizes(List.of("w92", "w154", "w185", "w342", "w500", "w780", "original"));
+        images.setBackdropSizes(List.of("w300", "w780", "w1280", "original"));
+        config.setImages(images);
+        return config;
+    }
+
+    /** Package-visible: reused by MovieImageService when persisting a selected TMDB image. */
+    String resolveImageUrl(TmdbConfigurationResponse config, String filePath, movieservice.enums.MovieImageType type) {
+        String preferredSize = type == movieservice.enums.MovieImageType.POSTER
+                ? PREFERRED_POSTER_SIZE : PREFERRED_BACKDROP_SIZE;
+        return buildSizedUrl(config, filePath, preferredSize);
+    }
+
+    String buildSizedUrl(TmdbConfigurationResponse config, String filePath, String preferredSize) {
+        if (filePath == null) return null;
+        TmdbConfigurationResponse.Images images = config.getImages();
+        String baseUrl = images != null && images.getSecureBaseUrl() != null
+                ? images.getSecureBaseUrl() : "https://image.tmdb.org/t/p/";
+        List<String> available = preferredSize.startsWith("w7") || preferredSize.equals("w342")
+                ? (images != null ? images.getPosterSizes() : null)
+                : (images != null ? images.getBackdropSizes() : null);
+        String size = pickSize(available, preferredSize);
+        return baseUrl + size + filePath;
+    }
+
+    /** Uses the preferred size if TMDB's own configuration lists it as available, otherwise the
+     *  closest smaller listed size, otherwise "original" - never silently hardcodes w500. */
+    private String pickSize(List<String> available, String preferred) {
+        if (available == null || available.isEmpty()) return preferred;
+        if (available.contains(preferred)) return preferred;
+        return available.contains("original") ? "original" : available.get(available.size() - 1);
+    }
+
+    /**
+     * TMDB-FIX-05: normalizes raw TMDB images into ranked candidates. Selection weighs, in order:
+     * (1) locale match (vi > en > textless > other), (2) TMDB vote_average, (3) resolution. Assets
+     * with an aspect ratio outside a sane band for their category (mistagged uploads) are dropped.
+     * TMDB's movie /images endpoint has no "stills" category - extra backdrops beyond the single
+     * recommended one become our own STILL candidates, capped at maxStillsAllowed.
+     */
+    private MovieMediaPreviewResponse buildMediaPreview(
+            TmdbImagesResponse images, TmdbConfigurationResponse config, int maxStillsAllowed) {
+
+        List<TmdbImagesResponse.TmdbImageItem> posterItems = dedupeByFilePath(images.getPosters());
+        List<TmdbImagesResponse.TmdbImageItem> backdropItems = dedupeByFilePath(images.getBackdrops());
+
+        List<MovieMediaCandidateResponse> posters = rankCandidates(
+                posterItems, config, PREFERRED_POSTER_SIZE, POSTER_ASPECT_MIN, POSTER_ASPECT_MAX);
+        List<MovieMediaCandidateResponse> backdrops = rankCandidates(
+                backdropItems, config, PREFERRED_BACKDROP_SIZE, BACKDROP_ASPECT_MIN, BACKDROP_ASPECT_MAX);
+
+        String recommendedPosterPath = posters.isEmpty() ? null : posters.get(0).getFilePath();
+        String recommendedBackdropPath = backdrops.isEmpty() ? null : backdrops.get(0).getFilePath();
+
+        List<MovieMediaCandidateResponse> stills = backdrops.stream()
+                .skip(backdrops.isEmpty() ? 0 : 1)
+                .limit(Math.max(0, maxStillsAllowed))
+                .collect(Collectors.toList());
+
+        return MovieMediaPreviewResponse.builder()
+                .recommendedPosterPath(recommendedPosterPath)
+                .recommendedBackdropPath(recommendedBackdropPath)
+                .posters(markRecommended(posters, recommendedPosterPath))
+                .backdrops(markRecommended(backdrops, recommendedBackdropPath))
+                .stills(stills)
+                .build();
+    }
+
+    private List<TmdbImagesResponse.TmdbImageItem> dedupeByFilePath(List<TmdbImagesResponse.TmdbImageItem> items) {
+        if (items == null) return List.of();
+        Map<String, TmdbImagesResponse.TmdbImageItem> byPath = new LinkedHashMap<>();
+        for (TmdbImagesResponse.TmdbImageItem item : items) {
+            if (item.getFilePath() != null) byPath.putIfAbsent(item.getFilePath(), item);
+        }
+        return new ArrayList<>(byPath.values());
+    }
+
+    private List<MovieMediaCandidateResponse> rankCandidates(
+            List<TmdbImagesResponse.TmdbImageItem> items, TmdbConfigurationResponse config,
+            String preferredSize, double aspectMin, double aspectMax) {
+
+        return items.stream()
+                .filter(item -> item.getAspectRatio() == null
+                        || (item.getAspectRatio() >= aspectMin && item.getAspectRatio() <= aspectMax))
+                .sorted(Comparator
+                        .comparingInt((TmdbImagesResponse.TmdbImageItem item) -> languageRank(item.getIso6391()))
+                        .thenComparing(Comparator.comparingDouble(
+                                (TmdbImagesResponse.TmdbImageItem item) ->
+                                        item.getVoteAverage() != null ? item.getVoteAverage() : 0.0).reversed())
+                        .thenComparing(Comparator.comparingInt(
+                                (TmdbImagesResponse.TmdbImageItem item) -> resolutionOf(item)).reversed()))
+                .map(item -> MovieMediaCandidateResponse.builder()
+                        .filePath(item.getFilePath())
+                        .url(buildSizedUrl(config, item.getFilePath(), preferredSize))
+                        .width(item.getWidth())
+                        .height(item.getHeight())
+                        .aspectRatio(item.getAspectRatio())
+                        .languageCode(normalizeLanguage(item.getIso6391()))
+                        .voteAverage(item.getVoteAverage())
+                        .recommended(false)
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    private int languageRank(String iso6391) {
+        int rank = LANGUAGE_PRIORITY.indexOf(normalizeLanguage(iso6391));
+        return rank >= 0 ? rank : LANGUAGE_PRIORITY.size();
+    }
+
+    private String normalizeLanguage(String iso6391) {
+        return iso6391 == null ? "" : iso6391;
+    }
+
+    private int resolutionOf(TmdbImagesResponse.TmdbImageItem item) {
+        if (item.getWidth() == null || item.getHeight() == null) return 0;
+        return item.getWidth() * item.getHeight();
+    }
+
+    private List<MovieMediaCandidateResponse> markRecommended(
+            List<MovieMediaCandidateResponse> candidates, String recommendedPath) {
+        if (recommendedPath == null) return candidates;
+        return candidates.stream()
+                .map(c -> c.getFilePath().equals(recommendedPath)
+                        ? MovieMediaCandidateResponse.builder()
+                                .filePath(c.getFilePath()).url(c.getUrl()).width(c.getWidth())
+                                .height(c.getHeight()).aspectRatio(c.getAspectRatio())
+                                .languageCode(c.getLanguageCode()).voteAverage(c.getVoteAverage())
+                                .recommended(true).build()
+                        : c)
+                .collect(Collectors.toList());
     }
 
     // ── Company / person resolution ───────────────────────────
