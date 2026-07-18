@@ -8,6 +8,7 @@ import {
   MOVIE_CONTENT_STATUS_META,
   toMovieContentStatus,
 } from "../utils/movieContentStatus";
+import { MovieAvailabilityPanel } from "./MovieAvailabilityPanel";
 
 type Props = {
   open: boolean;
@@ -351,6 +352,14 @@ export function MovieDetailModal({ open, movie, loading, onClose }: Props) {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Availability by cluster — content must be APPROVED before any
+                  release plan can exist (MOV-LC-06). */}
+              {contentStatus === "APPROVED" && (
+                <div className="rounded-xl border p-3" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+                  <MovieAvailabilityPanel movieId={movie.movieId} />
                 </div>
               )}
 

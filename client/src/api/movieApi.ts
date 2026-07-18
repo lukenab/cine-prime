@@ -23,10 +23,13 @@ export type MovieApiResponse = {
   content: string;
   duration: number;
   version: string;
-  /** Legacy boolean — use movieStatus for real workflow state */
+  /** Legacy boolean — content-only statuses have no "on sale" meaning anymore, always false. */
   status: boolean;
-  /** Real V2 workflow status */
+  /** Content-review status (DRAFT/PENDING_REVIEW/APPROVED/CHANGES_REQUESTED/ARCHIVED). Admin use only. */
   movieStatus?: MovieStatus;
+  /** Cluster-derived exhibition status (MOV-LC-07) — only set on getPublicMovies() results.
+   *  Use this, not movieStatus, to decide Now Showing / Coming Soon on customer pages. */
+  displayStatus?: DisplayStatus;
   movieProductionCompany: string;
   largeImage: string;
   smallImage: string;
@@ -121,22 +124,11 @@ export type UpdateMoviePayload = {
   typeIds?: number[];
 };
 
-export type CreateRoomPayload = {
-  cinemaRoomName: string;
-  roomType: RoomType;
-  numberOfRows: number;
-  seatsPerRow: number;
-  standardRowCount: number;
-  vipRowCount: number;
-  coupleRowCount: number;
-  defaultPrice: number;
-  clusterId: number;
-};
-
 // ── Cinema Room creation wizard (layout versioning / approval workflow) ────────
-// See docs/CINEMA_ROOM_CREATION_FLOW.md. These types/endpoints are additive: the
-// legacy RoomType/CreateRoomPayload/AddCinemaRoomModal quick-create flow above is
-// untouched and keeps working exactly as before.
+// See docs/CINEMA_ROOM_CREATION_FLOW.md. Room creation always goes through this
+// flow — the old flat quick-create endpoint (no review, straight to ACTIVE) was
+// removed so rooms are governed the same way as cinema clusters (draft -> submit
+// -> admin approve -> activate).
 
 export type MasterDataItem = {
   id: number;
@@ -328,7 +320,6 @@ export type ClusterResponse = {
   publicEmail?: string;
   countryCode: string;
   province: string;
-  district: string;
   ward?: string;
   postalCode?: string;
   buildingName?: string;
@@ -341,6 +332,8 @@ export type ClusterResponse = {
   operatingHours: ClusterOperatingHour[];
   status: ClusterStatus;
   rejectionNote?: string;
+  createdBy?: string;
+  updatedBy?: string;
   totalRooms?: number;
   totalSeats?: number;
 };
@@ -350,10 +343,8 @@ export type CreateClusterPayload = {
   clusterName: string;
   venueType: ClusterVenueType;
   openingDate?: string;
-  publicEmail?: string;
   countryCode: string;
   province: string;
-  district: string;
   ward?: string;
   postalCode?: string;
   buildingName?: string;
@@ -403,18 +394,21 @@ type ApiWrapper<T> = { code: number; message?: string; result: T };
 // V2 Types (movie-service v2 API)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Content-review status only — never exhibition/publish state. See
+// docs/api-specs/movie-service/MOVIE_LIFECYCLE_CONTRACT.md. Exhibition state
+// lives on MovieAvailability; customer-facing display status is a derived
+// "NOW_SHOWING" | "COMING_SOON" string returned by /api/movies/public, not a
+// MovieStatus value.
 export type MovieStatus =
   | 'DRAFT'
   | 'PENDING_REVIEW'
   | 'APPROVED'
   | 'CHANGES_REQUESTED'
-  | 'ARCHIVED'
-  // Legacy exhibition states kept only for backward-compatible API parsing.
-  | 'COMING_SOON'
-  | 'NOW_SHOWING'
-  | 'SUSPENDED'
-  | 'ENDED'
-  | 'REJECTED';
+  | 'ARCHIVED';
+
+export type AvailabilityStatus = 'PLANNED' | 'OPEN' | 'SUSPENDED' | 'CLOSED';
+
+export type DisplayStatus = 'NOW_SHOWING' | 'COMING_SOON';
 
 export type GenreResponse = {
   genreId: number;
@@ -515,6 +509,54 @@ export type MovieV2 = {
   createdAt?: string;
   updatedAt?: string;
 };
+
+/** Read-model returned by GET /api/movies/public (MOV-LC-07) — displayStatus is
+ *  derived server-side from content approval + cluster availability + showtimes,
+ *  never persisted. clusterId/nextShowtimeAt/bookingAvailable are only
+ *  authoritative when the request included a clusterId (see contract). */
+export type PublicMovieResponse = {
+  movieId: number;
+  originalTitle: string;
+  posterUrl?: string;
+  thumbnailUrl?: string;
+  trailerUrl?: string;
+  synopsis?: string;
+  durationMinutes?: number;
+  genres: GenreResponse[];
+  displayStatus: DisplayStatus;
+  clusterId?: number;
+  clusterName?: string;
+  nextShowtimeAt?: string;
+  bookingAvailable: boolean;
+};
+
+export type MovieAvailabilityResponse = {
+  availabilityId: number;
+  movieId: number;
+  movieTitle?: string;
+  clusterId: number;
+  clusterName?: string;
+  status: AvailabilityStatus;
+  salesStartAt?: string;
+  showingStartDate: string;
+  showingEndDate?: string;
+  suspensionReason?: string;
+  version?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
+  updatedBy?: string;
+};
+
+export type CreateMovieAvailabilityPayload = {
+  movieId: number;
+  clusterId: number;
+  salesStartAt?: string;
+  showingStartDate: string;
+  showingEndDate?: string;
+};
+
+export type UpdateMovieAvailabilityPayload = Partial<Omit<CreateMovieAvailabilityPayload, 'movieId' | 'clusterId'>>;
 
 export type TmdbSearchItem = {
   tmdbId: number;
@@ -660,7 +702,9 @@ const toLegacyMovie = (movie: MovieV2): MovieApiResponse => {
     content: vietnamese?.synopsis ?? english?.synopsis ?? movie.synopsis ?? '',
     duration: movie.durationMinutes,
     version: movie.formats?.map((item) => item.formatName).join(', ') ?? '',
-    status: movie.status === 'NOW_SHOWING' || movie.status === 'COMING_SOON',
+    // Content-only statuses have no "on sale" meaning — kept as a stable false
+    // rather than removed, since some legacy admin UI still reads this field.
+    status: false,
     movieStatus: movie.status,
     movieProductionCompany: movie.companyName ?? '',
     largeImage: movie.posterUrl ?? '',
@@ -672,6 +716,39 @@ const toLegacyMovie = (movie: MovieV2): MovieApiResponse => {
     endDate: movie.endDate,
   };
 };
+
+/** Bridges the lightweight MOV-LC-07 public read-model onto the legacy
+ *  MovieApiResponse shape so existing customer components (MovieCard,
+ *  NowShowing, ComingSoon, MoviesPage) keep working unchanged — only
+ *  displayStatus is new/authoritative here; director/actor/localized titles
+ *  aren't part of the public read-model and are left blank. */
+const toLegacyPublicMovie = (movie: PublicMovieResponse): MovieApiResponse => ({
+  movieId: movie.movieId,
+  movieNameVn: movie.originalTitle,
+  movieNameEnglish: movie.originalTitle,
+  director: '',
+  actor: '',
+  content: movie.synopsis ?? '',
+  duration: movie.durationMinutes ?? 0,
+  version: '',
+  status: movie.displayStatus === 'NOW_SHOWING',
+  movieStatus: undefined,
+  displayStatus: movie.displayStatus,
+  movieProductionCompany: '',
+  largeImage: movie.posterUrl ?? '',
+  smallImage: movie.thumbnailUrl ?? movie.posterUrl ?? '',
+  movieType: movie.genres?.map((item) => item.genreName) ?? [],
+  showTimes: movie.nextShowtimeAt ? [{
+    showTimeId: 0,
+    showDate: movie.nextShowtimeAt,
+    startTime: movie.nextShowtimeAt,
+    endTime: movie.nextShowtimeAt,
+    cinemaRoomId: 0,
+    cinemaRoomName: movie.clusterName ?? '',
+    updateAt: '',
+  }] : [],
+  createAt: '',
+});
 
 /** Backend uses `totalSeatCapacity`; UI has used `seatQuantity` throughout —
  *  bridge the two here so callers don't have to change. */
@@ -701,14 +778,17 @@ export const movieApi = {
     } as ApiWrapper<MovieApiResponse[]>;
   },
 
-  /** Public — no auth required. Only COMING_SOON/NOW_SHOWING movies (see
-   *  MovieService.findAllPublic()). Use from guest/customer-facing pages
-   *  (HomePage, MoviesPage, ShowtimePage) — getAllMovies() 401/403s for guests. */
-  getPublicMovies: async () => {
-    const response = await axiosClient.get('/api/movies/public') as ApiWrapper<MovieV2[]>;
+  /** Public — no auth required. displayStatus is derived per cluster (MOV-LC-07);
+   *  without a clusterId this is aggregate discovery only (see contract) — every
+   *  cluster/booking-scoped field on the result is best-effort, not authoritative.
+   *  Use from guest/customer-facing pages (HomePage, MoviesPage, ShowtimePage) —
+   *  getAllMovies() 401/403s for guests. */
+  getPublicMovies: async (clusterId?: number) => {
+    const url = clusterId ? `/api/movies/public?clusterId=${clusterId}` : '/api/movies/public';
+    const response = await axiosClient.get(url) as ApiWrapper<PublicMovieResponse[]>;
     return {
       ...response,
-      result: (response.result ?? []).map(toLegacyMovie),
+      result: (response.result ?? []).map(toLegacyPublicMovie),
     } as ApiWrapper<MovieApiResponse[]>;
   },
 
@@ -726,28 +806,9 @@ export const movieApi = {
   updateMovie: (id: number, payload: UpdateMoviePayload) =>
     axiosClient.put(`/api/movies/${id}`, payload) as Promise<ApiWrapper<MovieApiResponse>>,
 
-  deleteMovie: (id: number) =>
-    axiosClient.delete(`/api/movies/${id}`) as Promise<ApiWrapper<void>>,
-
   getRooms: async () => {
     const response = await axiosClient.get('/api/cinema-rooms') as ApiWrapper<RoomApiResponse[]>;
     return { ...response, result: (response.result ?? []).map(toLegacyRoom) } as ApiWrapper<RoomResponse[]>;
-  },
-
-  createRoom: async (payload: CreateRoomPayload) => {
-    const wirePayload = {
-      cinemaRoomName: payload.cinemaRoomName,
-      roomType: payload.roomType,
-      numberOfRows: payload.numberOfRows,
-      seatsPerRow: payload.seatsPerRow,
-      standardRowCount: payload.standardRowCount,
-      vipRowCount: payload.vipRowCount,
-      coupleRowCount: payload.coupleRowCount,
-      defaultPrice: payload.defaultPrice,
-      clusterId: payload.clusterId,
-    };
-    const response = await axiosClient.post('/api/cinema-rooms', wirePayload) as ApiWrapper<RoomApiResponse>;
-    return { ...response, result: toLegacyRoom(response.result) } as ApiWrapper<RoomResponse>;
   },
 
   deleteRoom: (roomId: number) =>
@@ -836,23 +897,61 @@ export const movieApi = {
   deleteMovieImage: (movieId: number, imageId: number) =>
     axiosClient.delete(`/api/movies/${movieId}/images/${imageId}`) as Promise<ApiWrapper<void>>,
 
-  // ── Workflow / Status transitions ─────────────────────────────────────────
+  // ── Content lifecycle commands (MOV-LC-04) — every command returns the
+  // updated MovieV2, not void. See MOVIE_LIFECYCLE_CONTRACT.md.
 
   /** DRAFT → PENDING_REVIEW */
   submitForReview: (id: number) =>
-    axiosClient.post(`/api/movies/${id}/submit`) as Promise<ApiWrapper<void>>,
+    axiosClient.post(`/api/movies/${id}/submit`) as Promise<ApiWrapper<MovieV2>>,
 
-  /** PENDING_REVIEW → approved (legacy backend currently returns COMING_SOON) */
+  /** PENDING_REVIEW → APPROVED. Content-only — does not publish or open sales anywhere. */
   approveMovie: (id: number) =>
-    axiosClient.post(`/api/movies/${id}/approve`) as Promise<ApiWrapper<void>>,
+    axiosClient.post(`/api/movies/${id}/approve`) as Promise<ApiWrapper<MovieV2>>,
 
-  /** Request content changes (legacy backend currently returns REJECTED) */
+  /** PENDING_REVIEW → CHANGES_REQUESTED */
   requestMovieChanges: (id: number, note: string) =>
-    axiosClient.post(`/api/movies/${id}/reject`, { note }) as Promise<ApiWrapper<void>>,
+    axiosClient.post(`/api/movies/${id}/request-changes`, { note }) as Promise<ApiWrapper<MovieV2>>,
 
-  /** Start a new draft revision (legacy backend route is /rework) */
+  /** CHANGES_REQUESTED → DRAFT */
   startMovieRevision: (id: number) =>
-    axiosClient.post(`/api/movies/${id}/rework`) as Promise<ApiWrapper<void>>,
+    axiosClient.post(`/api/movies/${id}/start-revision`) as Promise<ApiWrapper<MovieV2>>,
+
+  /** APPROVED → ARCHIVED. Blocked while any availability window is PLANNED/OPEN. */
+  archiveMovie: (id: number) =>
+    axiosClient.post(`/api/movies/${id}/archive`) as Promise<ApiWrapper<MovieV2>>,
+
+  // ── Movie availability — per-cluster exhibition/release plan (MOV-LC-06) ──
+
+  searchAvailabilities: (params: { movieId?: number; clusterId?: number; status?: AvailabilityStatus }) => {
+    const query = new URLSearchParams();
+    if (params.movieId) query.set('movieId', String(params.movieId));
+    if (params.clusterId) query.set('clusterId', String(params.clusterId));
+    if (params.status) query.set('status', params.status);
+    const qs = query.toString();
+    return axiosClient.get(`/api/movie-availabilities${qs ? `?${qs}` : ''}`) as Promise<ApiWrapper<MovieAvailabilityResponse[]>>;
+  },
+
+  createAvailability: (payload: CreateMovieAvailabilityPayload) =>
+    axiosClient.post('/api/movie-availabilities', payload) as Promise<ApiWrapper<MovieAvailabilityResponse>>,
+
+  updateAvailability: (id: number, payload: UpdateMovieAvailabilityPayload) =>
+    axiosClient.put(`/api/movie-availabilities/${id}`, payload) as Promise<ApiWrapper<MovieAvailabilityResponse>>,
+
+  /** PLANNED → OPEN */
+  openAvailability: (id: number) =>
+    axiosClient.post(`/api/movie-availabilities/${id}/open`) as Promise<ApiWrapper<MovieAvailabilityResponse>>,
+
+  /** PLANNED/OPEN → SUSPENDED, reason required */
+  suspendAvailability: (id: number, reason: string) =>
+    axiosClient.post(`/api/movie-availabilities/${id}/suspend`, { reason }) as Promise<ApiWrapper<MovieAvailabilityResponse>>,
+
+  /** SUSPENDED → OPEN */
+  resumeAvailability: (id: number) =>
+    axiosClient.post(`/api/movie-availabilities/${id}/resume`) as Promise<ApiWrapper<MovieAvailabilityResponse>>,
+
+  /** PLANNED/OPEN/SUSPENDED → CLOSED */
+  closeAvailability: (id: number) =>
+    axiosClient.post(`/api/movie-availabilities/${id}/close`) as Promise<ApiWrapper<MovieAvailabilityResponse>>,
 
   // TMDB APIs
   tmdbSearch: (q: string) =>
@@ -913,23 +1012,9 @@ export const movieApi = {
   getRoomDetail: (roomId: number) =>
     axiosClient.get(`/api/cinema-rooms/${roomId}`) as Promise<ApiWrapper<CinemaRoomDetail>>,
 
-  /** Creates a DRAFT room (step 1) + an empty layout v1 shell. The legacy row/price
-   *  fields are still required by the backend DTO but are ignored server-side when
-   *  wizardMode=true — send harmless placeholders so validation on the shared DTO passes. */
-  createRoomDraft: (payload: CreateRoomWizardPayload) => {
-    const wirePayload = {
-      ...payload,
-      wizardMode: true,
-      roomType: 'STANDARD',
-      numberOfRows: 1,
-      seatsPerRow: 1,
-      standardRowCount: 1,
-      vipRowCount: 0,
-      coupleRowCount: 0,
-      defaultPrice: 1,
-    };
-    return axiosClient.post('/api/cinema-rooms', wirePayload) as Promise<ApiWrapper<CinemaRoomDetail>>;
-  },
+  /** Creates a DRAFT room (step 1) + an empty layout v1 shell. */
+  createRoomDraft: (payload: CreateRoomWizardPayload) =>
+    axiosClient.post('/api/cinema-rooms', payload) as Promise<ApiWrapper<CinemaRoomDetail>>,
 
   /** Step 1/2 partial update — only while the room is DRAFT. */
   updateRoomDraft: (roomId: number, payload: UpdateRoomWizardPayload) =>

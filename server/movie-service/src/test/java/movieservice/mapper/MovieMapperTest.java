@@ -34,7 +34,7 @@ class MovieMapperTest {
                 .thumbnailUrl("https://example.com/thumb.jpg")
                 .trailerUrl("https://example.com/trailer.mp4")
                 .synopsis("Original synopsis")
-                .status(MovieStatus.NOW_SHOWING)
+                .status(MovieStatus.APPROVED)
                 .build();
     }
 
@@ -103,7 +103,7 @@ class MovieMapperTest {
 
         assertEquals(1L, movie.getMovieId(),
                 "movieId phai duoc @Mapping(ignore = true), khong duoc mapper dong vao");
-        assertEquals(MovieStatus.NOW_SHOWING, movie.getStatus(),
+        assertEquals(MovieStatus.APPROVED, movie.getStatus(),
                 "status phai duoc @Mapping(ignore = true), khong duoc mapper dong vao - "
                         + "chuyen trang thai chi qua cac endpoint status transition rieng");
     }

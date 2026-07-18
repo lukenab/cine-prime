@@ -21,16 +21,18 @@
 
 ## Checklist tạo issue
 
-- [ ] Tạo MOV-LC-01 — frontend compatibility hiện tại
-- [ ] Tạo MOV-LC-02 — chốt contract trước khi đổi backend/database
-- [ ] Tạo MOV-LC-03 — schema availability dạng additive migration
-- [ ] Tạo MOV-LC-04 — content workflow canonical
-- [ ] Tạo MOV-LC-05 — migration và backfill dữ liệu cũ
-- [ ] Tạo MOV-LC-06 — availability commands theo cluster
-- [ ] Tạo MOV-LC-07 — public display status được suy ra
-- [ ] Tạo MOV-LC-08 — bỏ frontend compatibility adapter
-- [ ] Tạo MOV-LC-09 — UI quản lý kế hoạch phát hành
-- [ ] Tạo MOV-LC-10 — homepage/movies page theo cluster
+- [x] Tạo MOV-LC-01 — frontend compatibility hiện tại (đã làm ở phiên trước)
+- [x] Tạo MOV-LC-02 — chốt contract trước khi đổi backend/database
+- [x] Tạo MOV-LC-03 — schema availability dạng additive migration
+- [x] Tạo MOV-LC-04 — content workflow canonical
+- [x] Tạo MOV-LC-05 — migration và backfill dữ liệu cũ
+- [x] Tạo MOV-LC-06 — availability commands theo cluster
+- [x] Tạo MOV-LC-07 — public display status được suy ra
+- [x] Tạo MOV-LC-08 — bỏ frontend compatibility adapter
+- [x] Tạo MOV-LC-09 — UI quản lý kế hoạch phát hành
+- [x] Tạo MOV-LC-10 — homepage/movies page theo cluster (**scope thu hẹp** — xem ghi chú trong mục MOV-LC-10, chưa có location picker ở customer site)
+
+**Trạng thái tổng thể sau phiên này:** toàn bộ backend (MOV-LC-02/03/04/05/06/07) đã triển khai, build sạch, test pass, và verify end-to-end qua browser thật (login → submit → approve → tạo availability → open → hiển thị public homepage). Frontend (MOV-LC-08/09) hoàn thành đúng scope. MOV-LC-10 hoàn thành phần kỹ thuật (dùng `displayStatus` thay vì `movieStatus`) nhưng KHÔNG đạt mục tiêu nghiệp vụ đầy đủ vì thiếu location/cluster picker ở customer site — cần issue riêng để hoàn tất. 3 bug hạ tầng phát hiện và sửa trong lúc QA trực tiếp: (1) cột `movie.version` đụng tên với cột `version VARCHAR` cũ chưa từng bị xóa (V30 migration), (2) API Gateway thiếu route cho `/api/movie-availabilities/**`, (3) `api-gateway`/`movie-service` cần restart sau khi đổi schema live để làm mới prepared-statement cache.
 
 ---
 
@@ -114,22 +116,22 @@ Chốt contract chính thức trước khi thay đổi backend và database. Tà
 
 ## Estimate
 
-- [ ] M (2–4h)
+- [x] M (2–4h)
 
 ---
 
 ## Acceptance Criteria (Definition of Done)
 
-- [ ] Định nghĩa Movie content states: `DRAFT`, `PENDING_REVIEW`, `APPROVED`, `CHANGES_REQUESTED`, `ARCHIVED`
-- [ ] Định nghĩa Availability states: `PLANNED`, `OPEN`, `SUSPENDED`, `CLOSED`
-- [ ] Định nghĩa public display states: `NOW_SHOWING`, `COMING_SOON`
-- [ ] Có state-transition matrix kèm role, request body và validation cho từng command
-- [ ] Xác nhận `NOW_SHOWING`/`COMING_SOON` không được lưu trong `Movie.status`
-- [ ] Xác nhận `suspend/resume/close` tác động lên availability hoặc showtime, không tác động global Movie
-- [ ] Định nghĩa compatibility/deprecation plan cho endpoint cũ
-- [ ] Định nghĩa deployment order cho schema, backend, data migration và frontend
-- [ ] Update OpenAPI YAML và `API_CONTRACT.md`
-- [ ] Product Owner hoặc reviewer backend xác nhận contract trước khi merge MOV-LC-03/MOV-LC-04
+- [x] Định nghĩa Movie content states: `DRAFT`, `PENDING_REVIEW`, `APPROVED`, `CHANGES_REQUESTED`, `ARCHIVED`
+- [x] Định nghĩa Availability states: `PLANNED`, `OPEN`, `SUSPENDED`, `CLOSED`
+- [x] Định nghĩa public display states: `NOW_SHOWING`, `COMING_SOON`
+- [x] Có state-transition matrix kèm role, request body và validation cho từng command
+- [x] Xác nhận `NOW_SHOWING`/`COMING_SOON` không được lưu trong `Movie.status`
+- [x] Xác nhận `suspend/resume/close` tác động lên availability hoặc showtime, không tác động global Movie
+- [x] Định nghĩa compatibility/deprecation plan cho endpoint cũ
+- [x] Định nghĩa deployment order cho schema, backend, data migration và frontend
+- [ ] Update OpenAPI YAML và `API_CONTRACT.md` — theo sau khi backend hoàn tất, tránh drift tài liệu vs code
+- [ ] Product Owner hoặc reviewer backend xác nhận contract trước khi merge MOV-LC-03/MOV-LC-04 — cần review ngoài phiên làm việc này
 
 ---
 
@@ -174,24 +176,24 @@ Thêm resource lưu kế hoạch phát hành theo từng cinema cluster thay vì
 
 ## Estimate
 
-- [ ] L (4–8h)
+- [x] L (4–8h)
 
 ---
 
 ## Acceptance Criteria (Definition of Done)
 
-- [ ] Tạo bảng `movie_availability`
-- [ ] Mỗi availability liên kết bắt buộc với một `movie_id` và một `cluster_id`
-- [ ] Hỗ trợ nhiều release window của cùng một phim tại cùng cluster
-- [ ] Có status `PLANNED`, `OPEN`, `SUSPENDED`, `CLOSED`
-- [ ] Có `sales_start_at`, `showing_start_date`, `showing_end_date`
-- [ ] Có `suspension_reason`, `created_at`, `updated_at`, `created_by`, `updated_by`
-- [ ] Có cột `version` để hỗ trợ optimistic locking
-- [ ] Có check constraint `showing_end_date IS NULL OR showing_end_date >= showing_start_date`
-- [ ] Có index cho `(cluster_id, status, showing_start_date)` và `(movie_id, cluster_id)`
-- [ ] Có unique constraint chống tạo trùng cùng release window
-- [ ] Update init SQL và DBML
-- [ ] Migration chạy được trên database có dữ liệu mà không xóa/chuyển đổi `movie.status` ngay
+- [x] Tạo bảng `movie_availability`
+- [x] Mỗi availability liên kết bắt buộc với một `movie_id` và một `cluster_id`
+- [x] Hỗ trợ nhiều release window của cùng một phim tại cùng cluster (unique key gồm `showing_start_date`)
+- [x] Có status `PLANNED`, `OPEN`, `SUSPENDED`, `CLOSED`
+- [x] Có `sales_start_at`, `showing_start_date`, `showing_end_date`
+- [x] Có `suspension_reason`, `created_at`, `updated_at`, `created_by`, `updated_by`
+- [x] Có cột `version` để hỗ trợ optimistic locking
+- [x] Có check constraint `showing_end_date IS NULL OR showing_end_date >= showing_start_date`
+- [x] Có index cho `(cluster_id, status, showing_start_date)` và `(movie_id, cluster_id)`
+- [x] Có unique constraint chống tạo trùng cùng release window (`uq_availability_window`)
+- [x] Update `postgres-init/movie_db.sql` (đặt đúng vị trí sau `cinema_cluster` để FK hợp lệ trên DB mới) — DBML không có trong repo này nên bỏ qua
+- [x] Migration additive (V28), không đổi `movie.status`/xóa cột nào tới khi backfill (V29) chạy riêng
 
 ---
 
@@ -248,25 +250,26 @@ Refactor Movie lifecycle để `Movie.status` chỉ thể hiện trạng thái n
 
 ## Estimate
 
-- [ ] L (4–8h)
+- [x] L (4–8h)
 
 ---
 
 ## Acceptance Criteria (Definition of Done)
 
-- [ ] `MovieStatus` canonical chỉ còn `DRAFT`, `PENDING_REVIEW`, `APPROVED`, `CHANGES_REQUESTED`, `ARCHIVED`
-- [ ] Movie mới luôn được tạo ở `DRAFT`; request không được tự chọn status
-- [ ] `DRAFT → PENDING_REVIEW` qua submit
-- [ ] `PENDING_REVIEW → APPROVED` qua approve
-- [ ] `PENDING_REVIEW → CHANGES_REQUESTED` qua request changes và bắt buộc có note
-- [ ] `CHANGES_REQUESTED → DRAFT` qua start revision
-- [ ] `APPROVED → ARCHIVED` chỉ dành cho ADMIN và bị chặn khi còn availability/showtime hoạt động
-- [ ] Chỉ `DRAFT` được chỉnh sửa trực tiếp; revision phải quay về `DRAFT` trước khi edit
-- [ ] Mỗi transition lưu actor, from-state, to-state, reason và timestamp
-- [ ] Invalid transition trả HTTP 409 với error code riêng
-- [ ] Có optimistic locking hoặc kiểm tra version để tránh hai admin duyệt đồng thời
-- [ ] Có unit test cho transition matrix và controller test cho role/invalid transition
-- [ ] Legacy endpoints có deprecation plan, không bị xóa trước khi frontend cutover
+- [x] `MovieStatus` canonical chỉ còn `DRAFT`, `PENDING_REVIEW`, `APPROVED`, `CHANGES_REQUESTED`, `ARCHIVED`
+- [x] Movie mới luôn được tạo ở `DRAFT`; request không được tự chọn status (không có field status trên create/update DTO)
+- [x] `DRAFT → PENDING_REVIEW` qua submit
+- [x] `PENDING_REVIEW → APPROVED` qua approve (không còn set COMING_SOON)
+- [x] `PENDING_REVIEW → CHANGES_REQUESTED` qua request changes và bắt buộc có note
+- [x] `CHANGES_REQUESTED → DRAFT` qua start revision
+- [x] `APPROVED → ARCHIVED` chỉ dành cho ADMIN và bị chặn khi còn availability PLANNED/OPEN
+- [x] Chỉ `DRAFT` được chỉnh sửa trực tiếp (MOVIE_NOT_EDITABLE guard trong updateMovie)
+- [x] Mỗi transition lưu actor, from-state, to-state, reason và timestamp (movie_status_history)
+- [x] Invalid transition trả HTTP 409 (INVALID_STATUS_TRANSITION, MOVIE_NOT_EDITABLE, MOVIE_HAS_ACTIVE_AVAILABILITY đều CONFLICT)
+- [x] Có optimistic locking (Movie.version, @Version + save() thay bulk @Modifying — OptimisticLockingFailureException → 409 qua GlobalExceptionHandler)
+- [x] Có unit test cho transition matrix (MovieServiceTest: submit/approve/request-changes/start-revision/archive, happy path + invalid-transition path)
+- [x] Legacy endpoint đã xóa hoàn toàn trong cùng lần cutover này (reject/rework/suspend/end/release/reinstate/DELETE) — xác nhận trước khi xóa: frontend chỉ có 1 caller mỗi endpoint, không cần deprecation window riêng
+- [ ] Controller test cho role/invalid transition qua HTTP — còn thiếu, chỉ có MovieServiceTest ở tầng service
 
 ---
 
@@ -321,27 +324,27 @@ Chuyển dữ liệu hiện có từ lifecycle trộn lẫn sang content status 
 
 ## Estimate
 
-- [ ] L (4–8h)
+- [x] L (4–8h)
 
 ---
 
 ## Acceptance Criteria (Definition of Done)
 
-- [ ] Có backup/verification query trước migration
-- [ ] `DRAFT → DRAFT`
-- [ ] `PENDING_REVIEW → PENDING_REVIEW`
-- [ ] `REJECTED → CHANGES_REQUESTED`
-- [ ] `COMING_SOON`, `NOW_SHOWING`, `SUSPENDED`, `ENDED → APPROVED` ở content status
-- [ ] `COMING_SOON` tạo availability `PLANNED` cho cluster xác định được
-- [ ] `NOW_SHOWING` tạo availability `OPEN` cho cluster có showtime tương ứng
-- [ ] `SUSPENDED` tạo availability `SUSPENDED` cho cluster xác định được
-- [ ] `ENDED` tạo availability `CLOSED`; không tự động archive Movie content
-- [ ] Cluster được suy ra từ showtime hiện có; không tự gán phim cho tất cả cluster
-- [ ] Record không xác định được cluster được xuất ra migration report để xử lý thủ công
-- [ ] Phân biệt legacy `ENDED` do soft delete nếu action log đủ dữ liệu; trường hợp không phân biệt được phải đưa vào report
-- [ ] Migration idempotent hoặc có guard chống chạy lặp
-- [ ] Có post-migration queries chứng minh không mất Movie, showtime hoặc availability
-- [ ] Seed data và Postman IDs được cập nhật nếu cần
+- [x] Có backup trước migration (`pg_dump --data-only --column-inserts` cho bảng `movie`)
+- [x] `DRAFT → DRAFT`
+- [x] `PENDING_REVIEW → PENDING_REVIEW`
+- [x] `REJECTED → CHANGES_REQUESTED` (0 row trong dataset thật tại thời điểm chạy, nhưng statement đã có sẵn và đúng)
+- [x] `COMING_SOON`, `NOW_SHOWING`, `SUSPENDED`, `ENDED → APPROVED` ở content status
+- [x] `COMING_SOON` tạo availability `PLANNED` cho cluster xác định được
+- [x] `NOW_SHOWING` tạo availability `OPEN` cho cluster có showtime tương ứng
+- [x] `SUSPENDED` tạo availability `SUSPENDED` cho cluster xác định được (0 row trong dataset thật)
+- [x] `ENDED` tạo availability `CLOSED`; không tự động archive Movie content
+- [x] Cluster được suy ra từ showtime hiện có (`JOIN show_time/cinema_room`); không tự gán phim cho tất cả cluster
+- [ ] Record không xác định được cluster được xuất ra migration report — **chưa làm dạng report riêng**: 13/14 movie có status vận hành cũ nhưng không có showtime nên không tạo availability nào (đúng theo rule "không đoán"), nhưng chỉ verify thủ công qua SQL trong phiên làm việc, không có file report xuất ra để review sau
+- [ ] Phân biệt legacy `ENDED` do soft delete — N/A, dataset thật không có row nào ở `ENDED` lẫn với soft-delete rõ ràng để phải phân biệt
+- [x] Migration idempotent (mọi UPDATE có `WHERE status = ...`, INSERT có `ON CONFLICT DO NOTHING`)
+- [x] Có post-migration queries xác nhận số lượng: `movie` status distribution + `movie_availability` row count đã verify trực tiếp qua psql
+- [ ] Seed data và Postman IDs — không áp dụng, repo này không có Postman collection theo dõi được
 
 ---
 
@@ -380,25 +383,26 @@ Xây dựng service/API quản lý release window của một phim tại một c
 
 ## Estimate
 
-- [ ] L (4–8h)
+- [x] L (4–8h)
 
 ---
 
 ## Acceptance Criteria (Definition of Done)
 
-- [ ] Có entity, repository, DTO, mapper và service cho `MovieAvailability`
-- [ ] Tạo plan chỉ khi Movie content là `APPROVED`
-- [ ] Cluster phải tồn tại và ở trạng thái cho phép lập lịch
-- [ ] Date range hợp lệ và không tạo release window trùng/overlap ngoài policy
-- [ ] `PLANNED → OPEN` qua open command
-- [ ] `PLANNED/OPEN → SUSPENDED` qua suspend command và bắt buộc có reason
-- [ ] `SUSPENDED → OPEN` qua resume command
-- [ ] `PLANNED/OPEN/SUSPENDED → CLOSED` qua close command
-- [ ] `CLOSED` không tự động làm Movie thành `ARCHIVED`
-- [ ] Open availability kiểm tra ít nhất một showtime hợp lệ hoặc áp dụng rule presale đã chốt trong MOV-LC-02
-- [ ] Mọi command có audit actor/reason/from-state/to-state
-- [ ] Có optimistic locking bằng `version`
-- [ ] Có controller/integration tests cho role, transition, overlap và concurrency conflict
+- [x] Có entity, repository, DTO, mapper và service cho `MovieAvailability`
+- [x] Tạo plan chỉ khi Movie content là `APPROVED`
+- [x] Cluster phải tồn tại và ở trạng thái `ACTIVE`
+- [x] Date range hợp lệ (`showingEndDate >= showingStartDate`); trùng window bị chặn qua unique constraint → `AVAILABILITY_WINDOW_ALREADY_EXISTS`
+- [x] `PLANNED → OPEN` qua open command
+- [x] `PLANNED/OPEN → SUSPENDED` qua suspend command và bắt buộc có reason
+- [x] `SUSPENDED → OPEN` qua resume command
+- [x] `PLANNED/OPEN/SUSPENDED → CLOSED` qua close command
+- [x] `CLOSED` không tự động làm Movie thành `ARCHIVED` (MovieScheduler chỉ đóng availability, không đụng Movie.status)
+- [ ] Open availability kiểm tra ít nhất một showtime hợp lệ — **chưa làm**, hiện `open` chỉ kiểm tra status PLANNED, chưa gate theo showtime tồn tại (rule presale chưa chốt ở MOV-LC-02, để mở sau)
+- [x] Mọi command có audit actor/reason/from-state/to-state (`movie_availability_history`)
+- [x] Có optimistic locking bằng `version` (dùng chung cơ chế `@Version` + `GlobalExceptionHandler` với MOV-LC-04)
+- [x] Có unit test cho transition matrix (`MovieAvailabilityServiceTest`, 12 test: create guards + open/suspend/resume/close happy-path và invalid-transition)
+- [ ] Controller/integration test qua HTTP cho overlap và concurrency conflict — chưa làm, chỉ có test tầng service
 
 ---
 
@@ -464,23 +468,23 @@ Thay public filtering dựa trên `Movie.status` bằng read model được suy 
 
 ## Estimate
 
-- [ ] L (4–8h)
+- [x] L (4–8h)
 
 ---
 
 ## Acceptance Criteria (Definition of Done)
 
-- [ ] Public API nhận `clusterId` và chỉ tính trạng thái trong cluster đó
-- [ ] Chỉ Movie content `APPROVED` mới có thể xuất hiện public
-- [ ] `NOW_SHOWING` khi availability đang `OPEN` và có ít nhất một showtime saleable theo rule thời gian đã chốt
-- [ ] `COMING_SOON` khi có availability tương lai hợp lệ nhưng chưa có showtime hiện hành/saleable
-- [ ] `SUSPENDED` hoặc `CLOSED` không xuất hiện như public display status
-- [ ] Response trả field `displayStatus`, không dùng content `status` cho customer logic
-- [ ] Booking CTA chỉ được bật khi có showtime đặt vé được
-- [ ] Query tránh N+1 và có index support
-- [ ] Có test cùng một Movie tại ít nhất ba cluster với ba kết quả khác nhau
-- [ ] Có test boundary theo timezone `Asia/Ho_Chi_Minh`
-- [ ] Public detail không làm lộ `DRAFT`, `PENDING_REVIEW`, `CHANGES_REQUESTED`, `ARCHIVED`
+- [x] Public API nhận `clusterId` (optional) và chỉ tính trạng thái trong cluster đó khi có
+- [x] Chỉ Movie content `APPROVED` mới có thể xuất hiện public
+- [x] `NOW_SHOWING` khi availability đang `OPEN` và có showtime saleable (`SCHEDULED`/`ON_SALE`, chưa qua giờ)
+- [x] `COMING_SOON` khi có availability tương lai hợp lệ nhưng chưa có showtime hiện hành/saleable
+- [x] `SUSPENDED` hoặc `CLOSED` không xuất hiện như public display status
+- [x] Response trả field `displayStatus`, không dùng content `status` cho customer logic
+- [x] `bookingAvailable` field có trong response, phản ánh đúng điều kiện — **nhưng frontend chưa wire CTA theo field này** (xem MOV-LC-10)
+- [ ] Query tránh N+1 — **chưa tối ưu**: nhánh có `clusterId` gọi `findNextSaleableShowTime` riêng cho từng availability (N+1 thật), chấp nhận được ở quy mô dữ liệu hiện tại nhưng cần batch query nếu số lượng availability/cluster lớn
+- [ ] Có test cùng một Movie tại ít nhất ba cluster với ba kết quả khác nhau — **chưa có test tự động**, chỉ verify thủ công qua browser thật với 1 cluster (xem QA log)
+- [ ] Có test boundary theo timezone `Asia/Ho_Chi_Minh` — **chưa làm**
+- [x] Public detail không làm lộ `DRAFT`, `PENDING_REVIEW`, `CHANGES_REQUESTED`, `ARCHIVED` (query lọc `status = APPROVED` ở cả hai nhánh)
 
 ---
 
@@ -537,23 +541,23 @@ Sau khi backend canonical lifecycle được deploy, xóa compatibility mapping 
 
 ## Estimate
 
-- [ ] M (2–4h)
+- [x] M (2–4h)
 
 ---
 
 ## Acceptance Criteria (Definition of Done)
 
-- [ ] `MovieStatus` frontend chỉ còn năm canonical content states
-- [ ] Xóa mapping từ `COMING_SOON/NOW_SHOWING/SUSPENDED/ENDED/REJECTED`
-- [ ] Request Changes gọi `/request-changes`
-- [ ] Start Revision gọi `/start-revision`
-- [ ] Archive gọi `/archive`, không gọi `DELETE` legacy
-- [ ] Command response cập nhật row từ response hoặc reload an toàn
-- [ ] Edit chỉ khả dụng ở `DRAFT`
-- [ ] Invalid transition/409 hiển thị message dễ hiểu, không dùng browser `alert`
-- [ ] Role visibility khớp backend contract
-- [ ] Unit test cho status mapping/action visibility
-- [ ] Build và browser QA trên dark/light mode
+- [x] `MovieStatus` frontend chỉ còn năm canonical content states
+- [x] Xóa mapping từ `COMING_SOON/NOW_SHOWING/SUSPENDED/ENDED/REJECTED` (`toMovieContentStatus` giờ là identity map)
+- [x] Request Changes gọi `/request-changes`
+- [x] Start Revision gọi `/start-revision`
+- [x] Archive gọi `/archive`, không gọi `DELETE` legacy (endpoint DELETE đã xóa hoàn toàn ở backend)
+- [x] Command response cập nhật row từ response hoặc reload an toàn (giữ pattern reload-after-command sẵn có)
+- [x] Edit chỉ khả dụng ở `DRAFT` (đã đúng ở UI gating từ trước, giờ backend cũng enforce qua `MOVIE_NOT_EDITABLE`)
+- [ ] Invalid transition/409 hiển thị message dễ hiểu, không dùng browser `alert` — **chưa làm**, UI vẫn dùng `alert()` cho lỗi workflow, ngoài phạm vi session này
+- [x] Role visibility khớp backend contract (bỏ nút Archive ở trạng thái DRAFT vì backend chỉ cho APPROVED→ARCHIVED)
+- [ ] Unit test cho status mapping/action visibility — **chưa làm**, không có frontend unit test mới cho phần này
+- [x] Build sạch (typecheck + 160/160 vitest) và browser QA đã chạy qua Playwright thật (dark mode); light mode chưa QA riêng
 
 ---
 
@@ -596,23 +600,22 @@ Thêm khu vực quản lý kế hoạch phát hành theo cluster, tách khỏi M
 
 ## Estimate
 
-- [ ] L (4–8h)
+- [x] L (4–8h)
 
 ---
 
 ## Acceptance Criteria (Definition of Done)
 
-- [ ] Movie detail admin có section/tab `Availability`
-- [ ] Hiển thị cluster, release window, sales start và availability status
-- [ ] Tạo plan bắt buộc chọn cluster và date range hợp lệ
-- [ ] Chỉ Movie `APPROVED` mới hiển thị Create Availability
-- [ ] Action buttons hiển thị đúng theo status/role
-- [ ] Suspend bắt buộc nhập reason
-- [ ] Conflict/overlap/409 được hiển thị rõ
-- [ ] Refresh sau command không làm mất filter/selected Movie
-- [ ] Không thay đổi Movie content badge khi open/suspend/close availability
-- [ ] QA một Movie có availability khác nhau tại ít nhất hai cluster
-- [ ] Build và browser QA dark/light mode
+- [x] Movie detail admin có section/tab `Availability` (`MovieAvailabilityPanel` trong `MovieDetailModal`)
+- [x] Hiển thị cluster, release window, sales start (form) và availability status (list)
+- [x] Tạo plan bắt buộc chọn cluster và date range hợp lệ
+- [x] Chỉ Movie `APPROVED` mới hiển thị Create Availability (toàn bộ panel chỉ render khi `contentStatus === "APPROVED"`)
+- [x] Action buttons hiển thị đúng theo status/role (Open chỉ ở PLANNED, Suspend ở PLANNED/OPEN, Resume ở SUSPENDED, Close luôn trừ CLOSED; toàn bộ action chỉ cho `isAdmin`)
+- [x] Suspend bắt buộc nhập reason (modal riêng, nút Suspend disable khi rỗng)
+- [ ] Conflict/overlap/409 được hiển thị rõ — có hiển thị message lỗi nhưng chưa polish riêng cho từng loại conflict
+- [x] Không thay đổi Movie content badge khi open/suspend/close availability — **verify trực tiếp qua browser thật**: badge "Approved" của Moana không đổi sau khi Open availability
+- [ ] QA một Movie có availability khác nhau tại ít nhất hai cluster — chỉ QA 1 cluster (CinePrime Hoàn Kiếm) trong session này
+- [x] Build sạch, browser QA thật qua Playwright (dark mode) xác nhận tạo plan + Open hoạt động end-to-end với backend thật; light mode chưa QA riêng
 
 ---
 
@@ -656,22 +659,24 @@ Update homepage và Movies page để lấy `displayStatus` được backend suy
 
 ## Estimate
 
-- [ ] M (2–4h)
+- [x] M (2–4h) — nhưng scope thực tế bị thu hẹp, xem ghi chú bên dưới
 
 ---
 
 ## Acceptance Criteria (Definition of Done)
 
-- [ ] Public movie request gửi `clusterId` đang chọn
-- [ ] Section Now Showing chỉ nhận `displayStatus = NOW_SHOWING`
-- [ ] Section Coming Soon chỉ nhận `displayStatus = COMING_SOON`
-- [ ] Booking CTA chỉ bật khi `bookingAvailable = true`
-- [ ] Đổi cluster làm reload đúng danh sách mà không cần refresh trang
-- [ ] Không dùng `movie.movieStatus` content workflow để chia customer sections
-- [ ] Empty state rõ ràng khi cluster không có phim hoặc lịch chiếu
-- [ ] Không fallback sang mock data trong production khi API lỗi
-- [ ] QA cùng một Movie tại hai cluster có display status khác nhau
-- [ ] Build và responsive browser QA
+- [ ] Public movie request gửi `clusterId` đang chọn — **chưa làm**: không có location/cluster picker nào ở customer homepage/MoviesPage hiện tại, nên frontend gọi `getPublicMovies()` không kèm `clusterId`, rơi vào nhánh "aggregate discovery" mà contract đã cho phép (xem MOVIE_LIFECYCLE_CONTRACT.md) thay vì per-cluster thật
+- [x] Section Now Showing chỉ nhận `displayStatus = NOW_SHOWING`
+- [x] Section Coming Soon chỉ nhận `displayStatus = COMING_SOON`
+- [ ] Booking CTA chỉ bật khi `bookingAvailable = true` — **chưa wire**, `bookingAvailable` có trong response nhưng chưa dùng để gate nút đặt vé
+- [ ] Đổi cluster làm reload đúng danh sách — N/A vì chưa có cluster switcher
+- [x] Không dùng `movie.movieStatus` content workflow để chia customer sections (đổi hết sang `displayStatus`)
+- [ ] Empty state rõ ràng khi cluster không có phim — chưa test riêng
+- [x] Không fallback sang mock data trong production khi API lỗi (hành vi cũ giữ nguyên)
+- [ ] QA cùng một Movie tại hai cluster có display status khác nhau — chưa test (mới verify 1 cluster, xem MOV-LC-09)
+- [x] Build sạch (typecheck + 160/160 vitest); browser QA thật xác nhận homepage guest hiển thị đúng "Now Showing" sau khi Open availability — responsive QA đầy đủ chưa làm
+
+**Ghi chú quan trọng:** issue này maker giả định có sẵn UI chọn cluster ở customer site — thực tế KHÔNG có. Nên "cùng một phim NOW_SHOWING ở cluster A, COMING_SOON ở cluster B" (mục tiêu chính của MOV-LC-07) **chưa thể trải nghiệm được ở tầng customer** trong lần triển khai này; nó chỉ đúng ở tầng API. Cần một issue/PR riêng để thêm location picker cho HomePage/MoviesPage trước khi coi MOV-LC-10 hoàn thành đúng nghĩa.
 
 ---
 

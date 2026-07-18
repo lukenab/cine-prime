@@ -94,10 +94,11 @@ function MovieActions({
       {/* Always: View */}
       <ActionBtn icon={Eye} title="View details" onClick={onView} />
 
+      {/* Archive is an APPROVED → ARCHIVED content command (MOV-LC-04) — a DRAFT
+          movie was never approved, so there's nothing to archive yet. */}
       {status === "DRAFT" && <>
         {can.submit  && <ActionBtn icon={SendHorizonal} title="Submit for review" onClick={onSubmit} color="#2563eb" />}
         {can.edit    && <ActionBtn icon={Pencil}        title="Edit"              onClick={onEdit} />}
-        {can.archive && <ActionBtn icon={Trash2}        title="Archive"           onClick={onDelete} color="#ef4444" />}
       </>}
 
       {status === "PENDING_REVIEW" && <>

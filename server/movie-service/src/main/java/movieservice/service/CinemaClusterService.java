@@ -34,6 +34,7 @@ import java.util.Set;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class CinemaClusterService {
     private static final String DEFAULT_HOTLINE = "19001000";
+    private static final String DEFAULT_PUBLIC_EMAIL = "contact@cineprime.vn";
 
     CinemaClusterRepository cinemaClusterRepository;
     ClusterAuditLogRepository clusterAuditLogRepository;
@@ -57,16 +58,16 @@ public class CinemaClusterService {
         cluster.setClusterName(clusterName);
         applyClusterDetails(cluster, req);
         cluster.setPhoneNumber(DEFAULT_HOTLINE);
+        cluster.setPublicEmail(DEFAULT_PUBLIC_EMAIL);
         replaceOperatingHours(cluster, req.getOperatingHours());
 
-        ClusterStatus iniStatus = isAdminRole(authentication) ? ClusterStatus.ACTIVE : ClusterStatus.DRAFT;
-        cluster.setStatus(iniStatus);
+        cluster.setStatus(ClusterStatus.DRAFT);
         cluster.setCreatedBy(actor);
 
         CinemaCluster saved = cinemaClusterRepository.save(cluster);
 
         logAction(saved.getClusterId(), ClusterAction.CREATE, actor,
-                null, iniStatus, null);
+                null, ClusterStatus.DRAFT, null);
         return toResponseWithStats(saved);
     }
 
@@ -152,10 +153,8 @@ public class CinemaClusterService {
     private void applyClusterDetails(CinemaCluster cluster, CinemaClusterRequest req) {
         cluster.setVenueType(req.getVenueType());
         cluster.setOpeningDate(req.getOpeningDate());
-        cluster.setPublicEmail(normalizeOptional(req.getPublicEmail(), true));
         cluster.setCountryCode(req.getCountryCode().trim().toUpperCase(Locale.ROOT));
         cluster.setProvince(req.getProvince().trim());
-        cluster.setDistrict(req.getDistrict().trim());
         cluster.setWard(normalizeOptional(req.getWard(), false));
         cluster.setPostalCode(normalizeOptional(req.getPostalCode(), false));
         cluster.setBuildingName(normalizeOptional(req.getBuildingName(), false));

@@ -71,7 +71,7 @@ class BulkShowTimeConcurrencyIntegrationTest {
         movie.setOriginalTitle("Concurrent Bulk Test");
         movie.setOriginalLanguage("en");
         movie.setDurationMinutes(90);
-        movie.setStatus(MovieStatus.NOW_SHOWING);
+        movie.setStatus(MovieStatus.APPROVED);
         movieId = movieRepository.saveAndFlush(movie).getMovieId();
 
         CinemaRoom room = new CinemaRoom();

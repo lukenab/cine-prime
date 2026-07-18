@@ -14,7 +14,7 @@ function firstShowDate(movie: MovieApiResponse): string {
 }
 
 export function ComingSoon({ movies }: Props) {
-  const comingMovies = movies.filter((movie) => movie.movieStatus === "COMING_SOON").slice(0, 3);
+  const comingMovies = movies.filter((movie) => movie.displayStatus === "COMING_SOON").slice(0, 3);
 
   if (comingMovies.length === 0) {
     return null;

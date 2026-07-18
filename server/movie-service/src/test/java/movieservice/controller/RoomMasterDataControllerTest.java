@@ -58,14 +58,35 @@ class RoomMasterDataControllerTest {
     }
 
     @Test
+    void resolutionAndAudioFormatItemsIncludeDescription() {
+        when(auditoriumClassRepository.findByActiveTrue()).thenReturn(List.of());
+        when(projectionTechnologyRepository.findByActiveTrue()).thenReturn(List.of());
+        when(resolutionRepository.findByActiveTrue()).thenReturn(List.of(
+                Resolution.builder().resolutionId(1).resolutionCode("4K").resolutionName("4K")
+                        .description("4K digital cinema projection resolution").active(true).build()));
+        when(audioFormatRepository.findByActiveTrue()).thenReturn(List.of(
+                AudioFormat.builder().audioFormatId(1).formatCode("DOLBY_ATMOS").formatName("Dolby Atmos")
+                        .description("Dolby Atmos object-based immersive audio").active(true).build()));
+
+        CinemaRoomMasterDataResponse result = controller.getMasterData().getResult();
+
+        assertEquals("4K digital cinema projection resolution",
+                result.getResolutions().getFirst().getDescription());
+        assertEquals("Dolby Atmos object-based immersive audio",
+                result.getAudioFormats().getFirst().getDescription());
+    }
+
+    @Test
     void returnsDatabaseManagedRoomTemplatesWithMasterDataIds() {
         AuditoriumClass auditoriumClass = tier(2, "PREMIUM", "Premium");
         ProjectionTechnology projection = ProjectionTechnology.builder()
                 .techId(3).techCode("LASER").techName("Laser").active(true).build();
         Resolution resolution = Resolution.builder()
-                .resolutionId(4).resolutionCode("4K").resolutionName("4K").active(true).build();
+                .resolutionId(4).resolutionCode("4K").resolutionName("4K")
+                .description("4K digital cinema projection resolution").active(true).build();
         AudioFormat audio = AudioFormat.builder()
-                .audioFormatId(5).formatCode("DOLBY_ATMOS").formatName("Dolby Atmos").active(true).build();
+                .audioFormatId(5).formatCode("DOLBY_ATMOS").formatName("Dolby Atmos")
+                .description("Dolby Atmos object-based immersive audio").active(true).build();
         when(roomConfigurationTemplateRepository.findByActiveTrueOrderByDisplayOrderAscTemplateNameAsc())
                 .thenReturn(List.of(RoomConfigurationTemplate.builder()
                         .templateId(10).templateCode("PREMIUM_LASER").templateName("Premium Laser")

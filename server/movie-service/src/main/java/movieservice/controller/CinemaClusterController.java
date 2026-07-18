@@ -92,7 +92,7 @@ public class CinemaClusterController {
                 .code(200).result(toResponseWithStats(cluster)).build();
     }
 
-    // ── POST create → EMPLOYEE: DRAFT (needs approval) / ADMIN: ACTIVE (self-approved) ──
+    // ── POST create → always DRAFT regardless of role; must go through submit/approve ──
 
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @PostMapping
@@ -150,12 +150,17 @@ public class CinemaClusterController {
             throw new AppException(MovieErrorCode.CLUSTER_INVALID_TRANSITION);
         }
 
+        String actor = getActor(authentication);
+        if (!isAdminRole(authentication) && !actor.equals(cluster.getCreatedBy())) {
+            throw new AppException(MovieErrorCode.CLUSTER_NOT_OWNER);
+        }
+
         ClusterStatus oldStatus = cluster.getStatus();
         cluster.setStatus(ClusterStatus.PENDING_REVIEW);
         cluster.setRejectionNote(null); // clear previous rejection note on re-submit
         CinemaCluster saved = clusterRepository.save(cluster);
 
-        logAction(saved.getClusterId(), ClusterAction.SUBMIT, getActor(authentication),
+        logAction(saved.getClusterId(), ClusterAction.SUBMIT, actor,
                 oldStatus, ClusterStatus.PENDING_REVIEW, null);
 
         return ApiResponse.<CinemaClusterResponse>builder()
@@ -177,11 +182,16 @@ public class CinemaClusterController {
             throw new AppException(MovieErrorCode.CLUSTER_INVALID_TRANSITION);
         }
 
+        String actor = getActor(authentication);
+        if (actor.equals(cluster.getCreatedBy())) {
+            throw new AppException(MovieErrorCode.CLUSTER_SELF_APPROVAL_FORBIDDEN);
+        }
+
         ClusterStatus oldStatus = cluster.getStatus();
         cluster.setStatus(ClusterStatus.ACTIVE);
         CinemaCluster saved = clusterRepository.save(cluster);
 
-        logAction(saved.getClusterId(), ClusterAction.APPROVE, getActor(authentication),
+        logAction(saved.getClusterId(), ClusterAction.APPROVE, actor,
                 oldStatus, ClusterStatus.ACTIVE, null);
 
         return ApiResponse.<CinemaClusterResponse>builder()
@@ -204,12 +214,17 @@ public class CinemaClusterController {
             throw new AppException(MovieErrorCode.CLUSTER_INVALID_TRANSITION);
         }
 
+        String actor = getActor(authentication);
+        if (actor.equals(cluster.getCreatedBy())) {
+            throw new AppException(MovieErrorCode.CLUSTER_SELF_APPROVAL_FORBIDDEN);
+        }
+
         ClusterStatus oldStatus = cluster.getStatus();
         cluster.setStatus(ClusterStatus.DRAFT);
         cluster.setRejectionNote(req.getNote());
         CinemaCluster saved = clusterRepository.save(cluster);
 
-        logAction(saved.getClusterId(), ClusterAction.REJECT, getActor(authentication),
+        logAction(saved.getClusterId(), ClusterAction.REJECT, actor,
                 oldStatus, ClusterStatus.DRAFT, req.getNote());
 
         return ApiResponse.<CinemaClusterResponse>builder()

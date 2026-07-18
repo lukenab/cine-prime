@@ -29,6 +29,19 @@ public interface ShowTimeRepository extends JpaRepository<ShowTime, Long> {
                         @Param("currentDate") LocalDate currentDate,
                         @Param("currentTime") LocalTime currentTime);
 
+        /** MOV-LC-07: next bookable showtime for a movie at a specific cluster —
+         *  "saleable" here means SCHEDULED or ON_SALE (not CANCELLED/COMPLETED/SUSPENDED). */
+        @Query("SELECT s FROM ShowTime s WHERE s.movie.movieId = :movieId " +
+                        "AND s.cinemaRoom.cluster.clusterId = :clusterId " +
+                        "AND s.status IN (movieservice.enums.ShowTimeStatus.SCHEDULED, movieservice.enums.ShowTimeStatus.ON_SALE) " +
+                        "AND (s.showDate > :currentDate OR (s.showDate = :currentDate AND s.startTime >= :currentTime)) " +
+                        "ORDER BY s.showDate ASC, s.startTime ASC")
+        List<ShowTime> findUpcomingSaleableByMovieAndCluster(
+                        @Param("movieId") Long movieId,
+                        @Param("clusterId") Long clusterId,
+                        @Param("currentDate") LocalDate currentDate,
+                        @Param("currentTime") LocalTime currentTime);
+
         /** MOV-03 release gate: same as existsByMovieMovieIdAndFutureShowTime but excludes CANCELLED. */
         @Query("SELECT COUNT(s) > 0 FROM ShowTime s WHERE s.movie.movieId = :movieId " +
                         "AND s.status <> movieservice.enums.ShowTimeStatus.CANCELLED " +

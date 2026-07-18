@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Plus, Search, RefreshCw, AlertCircle, MapPin, Building2,
-  Armchair, Edit2, Trash2, CheckCircle, XCircle,
+  Armchair, Edit2, Trash2, CheckCircle, XCircle, Eye,
   Clock, SendHorizonal,
 } from "lucide-react";
 import { useOutletContext, useNavigate } from "react-router-dom";
@@ -11,6 +11,8 @@ import {
   type ClusterStatus,
 } from "../../api/movieApi";
 import { useRole } from "../../hooks/useRole";
+import { ClusterWizardModal } from "./ClusterWizardModal";
+import { ClusterReviewModal } from "../../layouts/ClusterReviewModal";
 
 // ── Status config ─────────────────────────────────────────────────────────────
 
@@ -20,54 +22,6 @@ const STATUS_CONFIG: Record<ClusterStatus, { label: string; icon: React.ElementT
   ACTIVE:         { label: "Active",         icon: CheckCircle, color: "#10b981", bg: "rgba(16,185,129,0.10)"  },
   INACTIVE:       { label: "Inactive",       icon: XCircle,     color: "#ef4444", bg: "rgba(239,68,68,0.10)"   },
 };
-
-// ── InputModal (for reject note) ──────────────────────────────────────────────
-
-function InputModal({
-  title, label, placeholder, confirmLabel, confirmColor, onConfirm, onCancel, icon: Icon,
-}: {
-  title: string; label: string; placeholder: string;
-  confirmLabel: string; confirmColor: string;
-  onConfirm: (value: string) => void; onCancel: () => void;
-  icon: React.ElementType;
-}) {
-  const [value, setValue] = useState("");
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.45)" }} onClick={onCancel}>
-      <div className="rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }} onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-center w-12 h-12 rounded-full mx-auto mb-4" style={{ background: `${confirmColor}18` }}>
-          <Icon size={22} style={{ color: confirmColor }} />
-        </div>
-        <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-main)", textAlign: "center", marginBottom: "16px" }}>{title}</h3>
-        <div className="mb-4">
-          <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-sub)", display: "block", marginBottom: "6px" }}>{label}</label>
-          <textarea
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder={placeholder}
-            rows={3}
-            autoFocus
-            className="w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 resize-none"
-            style={{ fontSize: "13px", background: "var(--bg-main)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
-          />
-        </div>
-        <div className="flex gap-3">
-          <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl border text-sm font-medium hover:opacity-80" style={{ color: "var(--text-main)", borderColor: "var(--border-color)", background: "transparent" }}>
-            Cancel
-          </button>
-          <button
-            onClick={() => value.trim() ? onConfirm(value.trim()) : null}
-            disabled={!value.trim()}
-            className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ background: confirmColor }}
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── Action button ─────────────────────────────────────────────────────────────
 
@@ -88,11 +42,11 @@ function ActionBtn({ icon: Icon, title, onClick, color = "var(--text-sub)" }: {
 // ── Status-aware action buttons ───────────────────────────────────────────────
 
 function ClusterActions({
-  cluster, onEdit, onDelete, onSubmit, onApprove, onRejectClick,
+  cluster, onEdit, onDelete, onSubmit, onReview,
 }: {
   cluster: ClusterResponse;
   onEdit: () => void; onDelete: () => void;
-  onSubmit: () => void; onApprove: () => void; onRejectClick: () => void;
+  onSubmit: () => void; onReview: () => void;
 }) {
   const { can, isAdmin } = useRole();
   const s = cluster.status;
@@ -105,8 +59,7 @@ function ClusterActions({
         {isAdmin     && <ActionBtn icon={Trash2}        title="Delete"            onClick={onDelete}  color="#ef4444" />}
       </>}
       {s === "PENDING_REVIEW" && <>
-        {can.approve && <ActionBtn icon={CheckCircle} title="Approve → Active" onClick={onApprove}    color="#059669" />}
-        {can.reject  && <ActionBtn icon={XCircle}     title="Reject"           onClick={onRejectClick} color="#dc2626" />}
+        {(can.approve || can.reject) && <ActionBtn icon={Eye} title="Review" onClick={onReview} color="#2563eb" />}
       </>}
       {(s === "ACTIVE" || s === "INACTIVE") && <>
         {isAdmin && <ActionBtn icon={Edit2}  title="Edit"   onClick={onEdit}   />}
@@ -168,7 +121,7 @@ function DeleteModal({
 
 export default function ManageCinemaClusterPage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
-  const { can } = useRole();
+  const { can, isAdmin } = useRole();
   const navigate = useNavigate();
 
   const [clusters, setClusters] = useState<ClusterResponse[]>([]);
@@ -180,7 +133,11 @@ export default function ManageCinemaClusterPage() {
   const [deleteTarget, setDeleteTarget] = useState<ClusterResponse | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const [rejectTarget, setRejectTarget] = useState<ClusterResponse | null>(null);
+  const [reviewTarget, setReviewTarget] = useState<ClusterResponse | null>(null);
+
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardMode, setWizardMode] = useState<"create" | "edit">("create");
+  const [wizardClusterId, setWizardClusterId] = useState<number | null>(null);
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
@@ -229,11 +186,17 @@ export default function ManageCinemaClusterPage() {
   const handleSubmitCluster = (id: number) =>
     doWorkflow(() => movieApi.submitCluster(id), id);
 
-  const handleApproveCluster = (id: number) =>
-    doWorkflow(() => movieApi.approveCluster(id), id);
+  // Approve/reject go through ClusterReviewModal, which shows its own toast on
+  // failure — these must throw (not swallow errors like doWorkflow) for that to work.
+  const handleApproveCluster = async (id: number) => {
+    const res = await movieApi.approveCluster(id);
+    setClusters((prev) => prev.map((c) => (c.clusterId === id ? res.result : c)));
+  };
 
-  const handleRejectCluster = (id: number, note: string) =>
-    doWorkflow(() => movieApi.rejectCluster(id, note), id);
+  const handleRejectCluster = async (id: number, note: string) => {
+    const res = await movieApi.rejectCluster(id, note);
+    setClusters((prev) => prev.map((c) => (c.clusterId === id ? res.result : c)));
+  };
 
   // ── Filtering & stats ─────────────────────────────────────────────────────
 
@@ -321,19 +284,6 @@ export default function ManageCinemaClusterPage() {
           )}
         </div>
 
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value as any)}
-          className="px-3.5 py-2.5 rounded-xl border outline-none transition-all"
-          style={{ ...inputStyle, minWidth: "150px" }}
-        >
-          <option value="ALL">All Status</option>
-          <option value="DRAFT">Draft</option>
-          <option value="PENDING_REVIEW">Pending Review</option>
-          <option value="ACTIVE">Active</option>
-          <option value="INACTIVE">Inactive</option>
-        </select>
-
         <button
           onClick={loadClusters} disabled={loading}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all hover:opacity-80 disabled:opacity-50"
@@ -345,7 +295,7 @@ export default function ManageCinemaClusterPage() {
 
         {can.edit && (
           <button
-            onClick={() => navigate("/admin/clusters/new")}
+            onClick={() => { setWizardMode("create"); setWizardClusterId(null); setWizardOpen(true); }}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all shadow-sm"
             style={{ fontSize: "14px", fontWeight: 500, background: isDarkMode ? "#3b82f6" : "#2563eb" }}
           >
@@ -353,6 +303,73 @@ export default function ManageCinemaClusterPage() {
           </button>
         )}
       </div>
+
+      {/* Status tabs */}
+      {(() => {
+        const counts: Record<ClusterStatus, number> = { DRAFT: 0, PENDING_REVIEW: 0, ACTIVE: 0, INACTIVE: 0 };
+        clusters.forEach((c) => { counts[c.status] = (counts[c.status] ?? 0) + 1; });
+        const pendingCount = counts.PENDING_REVIEW;
+
+        const statuses: ClusterStatus[] = ["DRAFT", "PENDING_REVIEW", "ACTIVE", "INACTIVE"];
+        const tabs = [
+          { value: "ALL" as const, label: "All", color: "var(--text-sub)" },
+          ...statuses.map((value) => ({
+            value,
+            label: STATUS_CONFIG[value].label,
+            color: STATUS_CONFIG[value].color,
+          })),
+        ];
+
+        return (
+          <div className="flex items-center gap-1 mb-5 overflow-x-auto" style={{ borderBottom: "1px solid var(--border-color)", paddingBottom: "0" }}>
+            {tabs.map(({ value, label, color }) => {
+              const count = value === "ALL" ? clusters.length : counts[value];
+              const isActive = filterStatus === value;
+              const isPending = value === "PENDING_REVIEW";
+              return (
+                <button
+                  key={value}
+                  onClick={() => setFilterStatus(value)}
+                  style={{
+                    padding: "8px 14px",
+                    fontSize: "13px",
+                    fontWeight: isActive ? 600 : 400,
+                    color: isActive ? color : "var(--text-sub)",
+                    background: "transparent",
+                    border: "none",
+                    borderBottom: isActive ? `2px solid ${color}` : "2px solid transparent",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    transition: "all 0.15s ease",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    marginBottom: "-1px",
+                  }}
+                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.color = "var(--text-main)"; }}
+                  onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.color = "var(--text-sub)"; }}
+                >
+                  {label}
+                  {count > 0 && (
+                    <span style={{
+                      minWidth: "18px", height: "18px", padding: "0 5px",
+                      borderRadius: "9px", fontSize: "10px", fontWeight: 700,
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      background: isActive
+                        ? color
+                        : (isPending && isAdmin && pendingCount > 0 ? "#ef4444" : "rgba(128,128,128,0.15)"),
+                      color: (isActive || (isPending && isAdmin && pendingCount > 0)) ? "#fff" : "var(--text-sub)",
+                      transition: "all 0.15s ease",
+                    }}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Table */}
       <div className="rounded-2xl border overflow-hidden" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
@@ -462,11 +479,10 @@ export default function ManageCinemaClusterPage() {
                     <td className="px-5 py-4" onClick={(e) => e.stopPropagation()}>
                       <ClusterActions
                         cluster={cluster}
-                        onEdit={() => navigate(`/admin/clusters/${cluster.clusterId}/edit`)}
+                        onEdit={() => { setWizardMode("edit"); setWizardClusterId(cluster.clusterId); setWizardOpen(true); }}
                         onDelete={() => setDeleteTarget(cluster)}
                         onSubmit={() => handleSubmitCluster(cluster.clusterId)}
-                        onApprove={() => handleApproveCluster(cluster.clusterId)}
-                        onRejectClick={() => setRejectTarget(cluster)}
+                        onReview={() => setReviewTarget(cluster)}
                       />
                     </td>
                   </tr>
@@ -487,6 +503,20 @@ export default function ManageCinemaClusterPage() {
       </div>
 
       {/* Modals */}
+      <ClusterWizardModal
+        open={wizardOpen}
+        mode={wizardMode}
+        clusterId={wizardClusterId}
+        onClose={() => setWizardOpen(false)}
+        onSaved={(saved) => {
+          setClusters((prev) => (
+            prev.some((c) => c.clusterId === saved.clusterId)
+              ? prev.map((c) => (c.clusterId === saved.clusterId ? saved : c))
+              : [...prev, saved]
+          ));
+        }}
+      />
+
       {deleteTarget && (
         <DeleteModal
           cluster={deleteTarget}
@@ -496,21 +526,13 @@ export default function ManageCinemaClusterPage() {
         />
       )}
 
-      {rejectTarget && (
-        <InputModal
-          title="Reject Cluster"
-          label="Rejection reason"
-          placeholder="Mô tả vấn đề cụ thể: địa chỉ không đúng, tên trùng, tọa độ sai…"
-          confirmLabel="Reject"
-          confirmColor="#dc2626"
-          icon={XCircle}
-          onConfirm={(note) => {
-            handleRejectCluster(rejectTarget.clusterId, note);
-            setRejectTarget(null);
-          }}
-          onCancel={() => setRejectTarget(null)}
-        />
-      )}
+      <ClusterReviewModal
+        open={!!reviewTarget}
+        cluster={reviewTarget}
+        onClose={() => setReviewTarget(null)}
+        onApprove={handleApproveCluster}
+        onReject={handleRejectCluster}
+      />
 
       <style>{`
         .cluster-row:hover { background-color: rgba(128,128,128,0.04); }

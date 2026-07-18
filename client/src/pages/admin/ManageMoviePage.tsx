@@ -99,7 +99,7 @@ export default function ManageMoviePage() {
 
   const handleDeleteMovie = async (id: number) => {
     try {
-      await movieApi.deleteMovie(id);
+      await movieApi.archiveMovie(id);
       await loadMovies();
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? "Archive failed.";

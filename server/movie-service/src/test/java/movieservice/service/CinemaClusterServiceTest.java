@@ -56,6 +56,7 @@ class CinemaClusterServiceTest {
         cinemaClusterService.createCluster(validRequest("Audit Cluster"), authentication("jwt.admin"));
 
         assertEquals("jwt.admin", cluster.getCreatedBy());
+        assertEquals(ClusterStatus.DRAFT, cluster.getStatus());
 
         ArgumentCaptor<ClusterAuditLog> auditCaptor = ArgumentCaptor.forClass(ClusterAuditLog.class);
         verify(clusterAuditLogRepository).save(auditCaptor.capture());
@@ -119,7 +120,6 @@ class CinemaClusterServiceTest {
                 .venueType(CinemaVenueType.MALL)
                 .countryCode("VN")
                 .province("TP. Hồ Chí Minh")
-                .district("Quận 1")
                 .address("123 Nguyen Hue Street")
                 .latitude(new BigDecimal("10.7769"))
                 .longitude(new BigDecimal("106.7009"))

@@ -99,7 +99,7 @@ export function MoviePreviewModal({ movie, onClose }: Props) {
 
   const title = movie.movieNameEnglish || movie.movieNameVn || "Untitled Movie";
   const year = releaseYear(movie);
-  const isComingSoon = movie.movieStatus === "COMING_SOON";
+  const isComingSoon = movie.displayStatus === "COMING_SOON";
   const embedSrc = vid
     ? `https://www.youtube.com/embed/${vid}?autoplay=1&mute=1&loop=1&playlist=${vid}&controls=0&modestbranding=1&rel=0&playsinline=1&enablejsapi=1`
     : null;

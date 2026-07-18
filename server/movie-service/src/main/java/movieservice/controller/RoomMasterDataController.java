@@ -108,12 +108,14 @@ public class RoomMasterDataController {
     private MasterDataItemResponse toItem(Resolution e) {
         return MasterDataItemResponse.builder()
                 .id(e.getResolutionId()).code(e.getResolutionCode()).name(e.getResolutionName())
+                .description(e.getDescription())
                 .build();
     }
 
     private MasterDataItemResponse toItem(AudioFormat e) {
         return MasterDataItemResponse.builder()
                 .id(e.getAudioFormatId()).code(e.getFormatCode()).name(e.getFormatName())
+                .description(e.getDescription())
                 .build();
     }
 

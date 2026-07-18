@@ -1,10 +1,9 @@
 import type { MovieStatus } from "../api/movieApi";
 
 /**
- * Content-review states shown by Movie Management.
- *
- * The backend still returns legacy exhibition states. They are normalized here
- * so the admin UI does not present cinema operations as Movie content states.
+ * Content-review states shown by Movie Management. MovieStatus already IS this
+ * exact 5-value union (MOV-LC-04) — this alias + toMovieContentStatus() exist
+ * only so callers don't need to special-case an unexpected/missing value.
  */
 export type MovieContentStatus =
   | "DRAFT"
@@ -52,18 +51,10 @@ export const MOVIE_CONTENT_STATUS_META: Record<
 export function toMovieContentStatus(status?: MovieStatus | string): MovieContentStatus {
   switch (status) {
     case "PENDING_REVIEW":
-      return "PENDING_REVIEW";
     case "APPROVED":
-    case "COMING_SOON":
-    case "NOW_SHOWING":
-    case "SUSPENDED":
-      return "APPROVED";
     case "CHANGES_REQUESTED":
-    case "REJECTED":
-      return "CHANGES_REQUESTED";
     case "ARCHIVED":
-    case "ENDED":
-      return "ARCHIVED";
+      return status;
     case "DRAFT":
     default:
       return "DRAFT";

@@ -47,10 +47,6 @@ import java.util.Optional;
 @Slf4j
 public class CinemaRoomService {
 
-    // Duoi truoc day tung ap len totalSeatCapacity truc tiep (@Min(10) tren field request);
-    // gio capacity la gia tri tinh (numberOfRows * seatsPerRow) nen kiem tra sau khi tinh.
-    private static final int MIN_SEAT_CAPACITY = 10;
-
     CinemaRoomRepository cinemaRoomRepository;
     CinemaRoomMaintenanceRepository maintenanceRepository;
     CinemaClusterRepository cinemaClusterRepository;
@@ -66,12 +62,12 @@ public class CinemaRoomService {
     RoomLayoutRepository roomLayoutRepository;
     RoomLayoutService roomLayoutService;
 
-    /** Overload preserved for existing callers/tests that don't carry an authenticated actor. */
-    @Transactional
-    public CinemaRoomResponse createCinemaRoom(CinemaRoomRequest request) {
-        return createCinemaRoom(request, "SYSTEM");
-    }
-
+    // Room creation always goes through the wizard: a DRAFT room is created here, then the
+    // real seat layout is authored via RoomLayoutController and only becomes bookable once a
+    // layout version is submitted, approved by an admin, and activated. There used to be a
+    // second "quick create" path (flat row/seat counts, straight to ACTIVE, no review) but it
+    // let anyone bypass the same approval flow that cinema clusters already enforce — removed
+    // so every room, like every cluster, is governed by one consistent maker-checker process.
     @Transactional
     public CinemaRoomResponse createCinemaRoom(CinemaRoomRequest request, String actor) {
         CinemaCluster cluster = cinemaClusterRepository.findById(request.getClusterId())
@@ -86,51 +82,7 @@ public class CinemaRoomService {
             throw new AppException(MovieErrorCode.CINEMA_ROOM_NAME_EXISTED);
         }
 
-        if (Boolean.TRUE.equals(request.getWizardMode())) {
-            return createWizardRoom(request, cluster, actor);
-        }
-
-        if (request.getNumberOfRows() > SeatService.MAX_ROWS) {
-            throw new AppException(MovieErrorCode.SEAT_ROW_LIMIT_EXCEEDED);
-        }
-
-        // totalSeatCapacity la gia tri tinh, khong nhan tu client — RoomType chi con dung
-        // de gioi han maxSeats (va cung cap gia tri mac dinh goi y o frontend).
-        int estimatedSeats = request.getNumberOfRows() * request.getSeatsPerRow();
-        int maxSeats = request.getRoomType().getMaxSeats();
-        if (estimatedSeats > maxSeats) {
-            throw new AppException(MovieErrorCode.SEAT_QUANTITY_EXCEEDS_LIMIT);
-        }
-        if (estimatedSeats < MIN_SEAT_CAPACITY) {
-            throw new AppException(MovieErrorCode.SEAT_QUANTITY_TOO_SMALL);
-        }
-
-        int allocatedRows = request.getStandardRowCount()
-                + request.getVipRowCount()
-                + request.getCoupleRowCount();
-        boolean hasAccessibleHostRow = request.getStandardRowCount() + request.getVipRowCount() > 0;
-        if (allocatedRows != request.getNumberOfRows() || !hasAccessibleHostRow) {
-            throw new AppException(MovieErrorCode.SEAT_ROW_ALLOCATION_INVALID);
-        }
-        if (request.getCoupleRowCount() > 0 && request.getSeatsPerRow() % 2 != 0) {
-            throw new AppException(MovieErrorCode.COUPLE_ROW_REQUIRES_EVEN_SEATS);
-        }
-
-        CinemaRoom room = movieMapper.toCinemaRoom(request);
-        room.setTotalSeatCapacity(estimatedSeats);
-        room.setCluster(cluster);
-        room.setStatus(CinemaRoomStatus.ACTIVE);
-        room.setCreatedBy(actor);
-        room.setUpdatedBy(actor);
-        room = cinemaRoomRepository.save(room);
-
-        seatService.generateSeatsForRoom(room, request.getDefaultPrice());
-
-        auditLogService.logAction("SYSTEM", "Admin",
-                "cinema_room:" + room.getCinemaRoomId(),
-                "Created cinema room: " + room.getCinemaRoomName());
-
-        return movieMapper.toCinemaRoomResponse(room);
+        return createWizardRoom(request, cluster, actor);
     }
 
     // ── Wizard creation (Step 1 of the room wizard) ─────────────────────────

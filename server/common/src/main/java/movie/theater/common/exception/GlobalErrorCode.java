@@ -17,6 +17,9 @@ public enum GlobalErrorCode implements BaseErrorCode {
     UNAUTHENTICATED(1008, "Unauthenticated!", HttpStatus.UNAUTHORIZED),
     UNAUTHORIZED(1009, "You do not have permission!", HttpStatus.FORBIDDEN),
     INVALID_AGE(2001, "Your age must be at least {min} years old!", HttpStatus.BAD_REQUEST),
+    CONCURRENT_MODIFICATION(1010,
+            "This record was modified by someone else in the meantime. Reload and try again.",
+            HttpStatus.CONFLICT),
     ;
 
     int code;
