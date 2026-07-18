@@ -15,6 +15,7 @@ import movieservice.service.CinemaRoomService;
 import movieservice.service.SeatService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -68,15 +69,12 @@ public class CinemaRoomController {
                 .build();
     }
 
-    /** Chỉ xóa được room chưa từng gắn showtime — nếu có rồi thì dùng {@code /status} để đóng (CLOSED). */
+    /** Hard delete is reserved for an unused DRAFT; operational rooms use retirement instead. */
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> deleteRoom(@PathVariable Long id) {
-        cinemaRoomService.deleteCinemaRoom(id);
-        return ApiResponse.<Void>builder()
-                .code(200)
-                .message("Deleted")
-                .build();
+    public ResponseEntity<Void> deleteRoom(@PathVariable Long id, Authentication authentication) {
+        cinemaRoomService.deleteCinemaRoom(id, authentication);
+        return ResponseEntity.noContent().build();
     }
 
     // ── Seats ─────────────────────────────────────────────────

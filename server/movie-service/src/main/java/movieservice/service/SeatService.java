@@ -188,12 +188,4 @@ public class SeatService {
         return movieMapper.toSeatResponse(seatRepository.save(seat));
     }
 
-    /**
-     * Xoa toan bo ghe cua 1 phong - dung khi xoa cung phong chua tung co showtime nao
-     * (xem CinemaRoomService.deleteCinemaRoom()).
-     */
-    @Transactional
-    public void deleteSeatsByRoom(Long roomId) {
-        seatRepository.deleteByCinemaRoomCinemaRoomId(roomId);
-    }
 }

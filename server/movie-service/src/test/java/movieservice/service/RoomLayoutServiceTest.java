@@ -34,6 +34,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
@@ -57,6 +58,8 @@ class RoomLayoutServiceTest {
 
         lenient().when(roomLayoutRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(positionRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(cinemaRoomRepository.findByIdForUpdate(anyLong()))
+                .thenAnswer(inv -> Optional.of(room(inv.getArgument(0))));
     }
 
     private CinemaRoom room(long roomId) {
@@ -244,6 +247,7 @@ class RoomLayoutServiceTest {
                 .roomLayoutId(1L).cinemaRoom(tinyRoom).version(1).status(LayoutStatus.DRAFT)
                 .build();
         when(roomLayoutRepository.findById(1L)).thenReturn(Optional.of(layout));
+        when(cinemaRoomRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(tinyRoom));
 
         List<RoomLayoutPosition> positions = new ArrayList<>();
         for (int row = 0; row < 10; row++) {

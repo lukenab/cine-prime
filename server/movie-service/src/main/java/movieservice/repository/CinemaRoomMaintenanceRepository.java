@@ -10,4 +10,5 @@ import java.util.List;
 public interface CinemaRoomMaintenanceRepository extends JpaRepository<CinemaRoomMaintenance, Long> {
     List<CinemaRoomMaintenance> findByCinemaRoom_CinemaRoomId(Long cinemaRoomId);
     List<CinemaRoomMaintenance> findByCinemaRoom_CinemaRoomIdAndResolvedFalse(Long cinemaRoomId);
+    boolean existsByCinemaRoom_CinemaRoomId(Long cinemaRoomId);
 }
