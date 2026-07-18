@@ -103,6 +103,9 @@ public class CinemaCluster {
     @OneToMany(mappedBy = "cluster", cascade = CascadeType.ALL, orphanRemoval = true)
     List<CinemaClusterOperatingHour> operatingHours = new ArrayList<>();
 
+    @OneToOne(mappedBy = "cluster", fetch = FetchType.LAZY)
+    CinemaClusterDemandProfile demandProfile;
+
     @PrePersist
     void prePersist() {
         createdAt = LocalDateTime.now();

@@ -124,6 +124,11 @@ public class CinemaRoom {
     @OneToMany(mappedBy = "cinemaRoom", fetch = FetchType.LAZY)
     List<ShowTime> showTimes;
 
+    // Capability is modelled as an entity because each room-format relation has
+    // its own enabled flag and audit fields. RoomType remains descriptive only.
+    @OneToMany(mappedBy = "cinemaRoom", fetch = FetchType.LAZY)
+    List<CinemaRoomFormat> formatCapabilities;
+
     @OneToMany(mappedBy = "cinemaRoom", cascade = CascadeType.ALL, orphanRemoval = true)
     List<CinemaRoomMaintenance> maintenanceHistory;
 
