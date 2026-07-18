@@ -38,7 +38,7 @@
 | ID | Layer | Vấn đề / Business Rule | Hiện trạng | Priority | Size |
 |---|---|---|---|---|---|
 | `SEC-01` | Infra/Backend | Secret và credential không nằm trong source code | Gap | P0 | S |
-| `DB-01` | Database/Backend | Migration phải tự động, có version và chạy được trên DB hiện hữu | Partial | P0 | M |
+| `DB-01` | Database/Backend | Migration phải tự động, có version và chạy được trên DB hiện hữu | Done | P0 | M |
 | `MOV-01` | Backend | Partial update không được ghi đè field không gửi thành `null` | Gap | P0 | S |
 | `MOV-02` | Backend/Frontend | Tách API catalog nội bộ và catalog public; không lộ DRAFT/REJECTED | Partial | P0 | M |
 | `MOV-03` | Backend | Readiness validation trước submit/approve/release | Gap | P0 | M |
@@ -87,16 +87,33 @@ Hiện cấu hình service có credential được đặt trực tiếp trong ap
 - [ ] Startup fail-fast với message rõ khi production thiếu secret bắt buộc.
 - [ ] CI secret scan không phát hiện credential mới.
 
-### `DB-01` — Versioned migration as source of truth (`P0`)
+### `DB-01` — Versioned migration as source of truth (`P0`) — **Done**
 
-`ddl-auto=none`, trong khi các script `V*.sql` hiện nằm trong `docs/`; database cũ không tự nhận cột mới.
+Flyway wired into `movie-service` (`server/movie-service/src/main/resources/db/migration/`,
+`spring.flyway.enabled=true`, `ddl-auto` stays `none`). `docs/database/movie-service/V*.sql`
+consolidated into one `V1__baseline_schema.sql` (DDL) + `R__seed_reference_data.sql`
+(idempotent reference data) — see `docs/database/movie-service/README.md` for why a single
+baseline was chosen over replaying 30+ historical files verbatim. The old files stay in
+place as historical/audit reference only.
 
-- [ ] Đưa migration vào Flyway/Liquibase runtime path hoặc có pipeline migration chính thức.
-- [ ] Áp dụng và kiểm tra tối thiểu V13/V14 trên database hiện hữu có room/seat data.
-- [ ] Migration forward-only; không sửa nội dung migration đã chạy trên môi trường dùng chung.
-- [ ] Có schema-history table và health check cho version hiện tại.
-- [ ] Fresh database và upgraded database đều chạy cùng một integration suite.
-- [ ] API trả lỗi vận hành rõ; frontend không biến HTTP 500 thành empty state.
+- [x] Đưa migration vào Flyway runtime path (`spring.flyway.*` in `application.yml`).
+- [x] Fresh database và upgraded/hand-migrated database đều chạy cùng integration suite
+      (`FlywayMigrationIntegrationTest` — Testcontainers, 2 scenarios, both green).
+- [x] Migration forward-only; `baseline-on-migrate` + `baseline-version: 1` lets the
+      shared dev database (already fully migrated by hand, no `flyway_schema_history`)
+      adopt Flyway without replaying DDL against tables that already exist.
+- [x] Schema-history table (`flyway_schema_history`) + fail-fast validation: Flyway
+      refuses app startup if the DB's applied migrations don't match what's on disk;
+      `/actuator/flyway` (authenticated) and `/actuator/health` (public) also exposed.
+- [x] Rollback policy documented (`docs/database/movie-service/ROLLBACK.md`) — forward-fix
+      only, no destructive auto-downgrade, backward-compatible app/schema deploy ordering.
+- [x] Bonus: adding Flyway surfaced a real latent bug — `no_overlapping_showtimes` (the
+      overlap-prevention EXCLUDE constraint) had never actually applied successfully to
+      any database (its `::text` cast wasn't IMMUTABLE, silently rejected). Fixed in `V2`
+      using `date + time` arithmetic instead, verified against live `show_time` data first
+      (zero overlapping rows) before applying.
+- [ ] API trả lỗi vận hành rõ; frontend không biến HTTP 500 thành empty state — **out of
+      scope for this item**, tracked separately under `CLU-02`.
 
 ---
 
@@ -494,7 +511,7 @@ Hiện `GET /showtimes/{id}/seats` có thể lazy-create `showtime_seat`, tức 
 ### Chưa thấy issue tương ứng trên board — nên tạo mới
 
 - [ ] `SEC-01` — Externalize/rotate source-controlled secrets.
-- [ ] `DB-01` — Flyway/Liquibase runtime migrations và upgrade test.
+- [x] `DB-01` — Flyway runtime migrations và upgrade test. Done.
 - [ ] `MOV-02` — Backend public visibility leak/direct-ID authorization.
 - [ ] `MOV-03` — Movie readiness validation trước submit/approve/release.
 - [ ] `MOV-07b` — Movie duplicate identity theo TMDB/title-year-language.

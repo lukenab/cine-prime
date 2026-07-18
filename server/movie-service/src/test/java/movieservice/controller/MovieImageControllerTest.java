@@ -1,11 +1,8 @@
 package movieservice.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import movieservice.entity.Movie;
-import movieservice.entity.MovieImage;
-import movieservice.mapper.MovieMapper;
-import movieservice.repository.MovieImageRepository;
-import movieservice.repository.MovieRepository;
+import movieservice.dto.request.MovieImageRequest;
+import movieservice.service.MovieImageService;
 import movie.theater.common.exception.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,9 +15,8 @@ import org.springframework.http.converter.json.MappingJackson2HttpMessageConvert
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import java.util.Optional;
-
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -41,19 +37,13 @@ public class MovieImageControllerTest {
     private MockMvc mockMvc;
 
     @Mock
-    private MovieRepository movieRepository;
-
-    @Mock
-    private MovieImageRepository movieImageRepository;
-
-    @Mock
-    private MovieMapper movieMapper;
+    private MovieImageService movieImageService;
 
     @InjectMocks
     private MovieImageController movieImageController;
 
     @Captor
-    private ArgumentCaptor<MovieImage> imageCaptor;
+    private ArgumentCaptor<MovieImageRequest> requestCaptor;
 
     @BeforeEach
     void setUp() {
@@ -61,16 +51,6 @@ public class MovieImageControllerTest {
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setMessageConverters(new MappingJackson2HttpMessageConverter(new ObjectMapper()))
                 .build();
-
-        Movie mockMovie = new Movie();
-        mockMovie.setMovieId(1L);
-        org.mockito.Mockito.lenient().when(movieRepository.findById(1L)).thenReturn(Optional.of(mockMovie));
-
-        org.mockito.Mockito.lenient().when(movieImageRepository.save(any(MovieImage.class))).thenAnswer(invocation -> {
-            MovieImage img = invocation.getArgument(0);
-            img.setImageId(100L);
-            return img;
-        });
     }
 
     @ParameterizedTest
@@ -91,7 +71,7 @@ public class MovieImageControllerTest {
                 .displayOrder(1)
                 .build();
 
-        when(movieMapper.toMovieImageResponse(any(MovieImage.class))).thenReturn(mockResponse);
+        when(movieImageService.addImage(eq(1L), any(MovieImageRequest.class))).thenReturn(mockResponse);
 
         mockMvc.perform(post("/api/movies/1/images")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -100,9 +80,8 @@ public class MovieImageControllerTest {
                 .andExpect(jsonPath("$.code").value(201))
                 .andExpect(jsonPath("$.result.imageType").value(type.name()));
 
-        verify(movieImageRepository).save(imageCaptor.capture());
-        MovieImage savedImage = imageCaptor.getValue();
-        assertEquals(type, savedImage.getImageType());
+        verify(movieImageService).addImage(eq(1L), requestCaptor.capture());
+        assertEquals(type, requestCaptor.getValue().getImageType());
     }
 
     @Test

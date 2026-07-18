@@ -1,7 +1,6 @@
 package movieservice.migration;
 
 import org.flywaydb.core.Flyway;
-import org.flywaydb.core.api.MigrationInfo;
 import org.flywaydb.core.api.output.MigrateResult;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -53,9 +52,9 @@ class FlywayMigrationIntegrationTest {
         MigrateResult result = flywayFor(FRESH_DB).migrate();
 
         assertTrue(result.success);
-        // V1, V2 (versioned) + R (repeatable seed) all actually executed — a
+        // V1, V2, V3 (versioned) + R (repeatable seed) all actually executed — a
         // fresh DB has no prior state for baselineOnMigrate to kick in on.
-        assertEquals(3, result.migrationsExecuted);
+        assertEquals(4, result.migrationsExecuted);
 
         try (Connection conn = DriverManager.getConnection(
                 FRESH_DB.getJdbcUrl(), FRESH_DB.getUsername(), FRESH_DB.getPassword());

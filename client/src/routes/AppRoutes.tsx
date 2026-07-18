@@ -21,6 +21,7 @@ import ProfilePage from "../pages/customer/ProfilePage";
 import AdminDashboard from "../pages/admin/AdminDashboardPage";
 import ManageUserPage from "../pages/admin/ManageUserPage";
 import ManageMoviePage from "../pages/admin/ManageMoviePage";
+import MovieEditorPage from "../pages/admin/MovieEditorPage";
 import ManageCinemaClusterPage from "../pages/admin/ManageCinemaClusterPage";
 import RoomDetailPage from "../pages/admin/RoomDetailPage";
 import ClusterDetailPage from "../pages/admin/ClusterDetailPage";
@@ -83,6 +84,8 @@ export default function AppRoutes() {
 
           {/* ADMIN + EMPLOYEE */}
           <Route path="movies"    element={<ManageMoviePage />} />
+          <Route path="movies/new" element={<MovieEditorPage />} />
+          <Route path="movies/:movieId/edit" element={<MovieEditorPage />} />
           <Route path="clusters"  element={<ManageCinemaClusterPage />} />
           <Route path="clusters/:id" element={<ClusterDetailPage />} />
           <Route path="clusters/:clusterId/rooms/new" element={<CinemaRoomEditorPage />} />

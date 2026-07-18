@@ -63,6 +63,11 @@ jwt:
 
 tmdb:
   api-key: 4cf6e7ff7b2095ae0d09da1cae2f1606
+  image:
+    # Max "still" candidates surfaced/importable per movie beyond the single recommended
+    # backdrop (TMDB has no dedicated "stills" endpoint for movies - these are additional
+    # backdrops). Posters and backdrops are always capped at 1 recommended each per import.
+    max-stills: ${TMDB_IMAGE_MAX_STILLS:10}
 
 movie:
   readiness:

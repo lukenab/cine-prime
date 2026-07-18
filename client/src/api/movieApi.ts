@@ -573,7 +573,7 @@ export type TmdbSearchItem = {
  * Issue #188 - external preview DTO cho production company trong TMDB details preview.
  * localCompanyId null/undefined nghia la company nay CHUA tung duoc import vao DB - KHONG
  * phai loi. Preview (GET /tmdb/{id}/details) chi "khop thu" read-only, khong duoc tao moi;
- * viec tao that su (neu can) chi xay ra luc admin bam Save (xem MovieModal.resolveCompanyId()).
+ * viec tao that su (neu can) chi xay ra luc admin bam Save (xem MovieEditorPage.resolveCompanyId()).
  */
 export type TmdbCompanyPreview = {
   tmdbId: number;
@@ -610,7 +610,11 @@ export type TmdbMovieDetails = {
   releaseDate?: string;
   country?: string;
   posterUrl?: string;
+  /** Explicit smaller CDN size derivative of the same recommended poster - never the same
+   *  string as posterUrl. Use this directly; don't copy posterUrl into a thumbnail field. */
+  thumbnailUrl?: string;
   overview?: string;
+  media?: MovieMediaPreview;
   companies?: TmdbCompanyPreview[];
   translations: TranslationResponse[];
   cast: TmdbCastPreview[];
@@ -666,19 +670,69 @@ export type PersonRequest = {
   tmdbId?: number;
 };
 
+export type MovieImageType = 'POSTER' | 'BACKDROP' | 'STILL' | 'PROMOTIONAL' | 'LOGO';
+
 export type MovieImageResponse = {
   imageId: number;
   imageUrl: string;
-  imageType: 'POSTER' | 'BACKDROP' | 'STILL' | 'PROMOTIONAL';
+  imageType: MovieImageType;
   displayOrder?: number;
   caption?: string;
+  /** 'TMDB' | 'MANUAL' | 'CLOUDINARY' - undefined for images added before this field existed. */
+  source?: string;
+  externalPath?: string;
+  languageCode?: string;
+  width?: number;
+  height?: number;
+  aspectRatio?: number;
+  isDefault?: boolean;
 };
 
 export type MovieImageRequest = {
   imageUrl: string;
-  imageType?: 'POSTER' | 'BACKDROP' | 'STILL' | 'PROMOTIONAL';
+  imageType?: MovieImageType;
   displayOrder?: number;
   caption?: string;
+};
+
+/** TMDB-FIX-05: one selectable poster/backdrop/still candidate from GET /tmdb/{tmdbId}/details .media. */
+export type MovieMediaCandidate = {
+  filePath: string;
+  url: string;
+  width?: number;
+  height?: number;
+  aspectRatio?: number;
+  languageCode?: string;
+  voteAverage?: number;
+  recommended: boolean;
+};
+
+export type MovieMediaPreview = {
+  recommendedPosterPath?: string;
+  recommendedBackdropPath?: string;
+  posters: MovieMediaCandidate[];
+  backdrops: MovieMediaCandidate[];
+  /** Our own domain concept - TMDB's movie /images has no "stills" category, these are
+   *  extra backdrops beyond the recommended one. */
+  stills: MovieMediaCandidate[];
+};
+
+export type TmdbImageSelection = {
+  filePath: string;
+  imageType: MovieImageType;
+  displayOrder?: number;
+};
+
+export type TmdbImageImportPayload = {
+  tmdbId: number;
+  selections: TmdbImageSelection[];
+};
+
+export type TmdbImageImportResult = {
+  importedCount: number;
+  skippedDuplicateCount: number;
+  images: MovieImageResponse[];
+  warnings: string[];
 };
 
 const toLegacyMovie = (movie: MovieV2): MovieApiResponse => {
@@ -896,6 +950,9 @@ export const movieApi = {
     axiosClient.post(`/api/movies/${movieId}/images`, payload) as Promise<ApiWrapper<MovieImageResponse>>,
   deleteMovieImage: (movieId: number, imageId: number) =>
     axiosClient.delete(`/api/movies/${movieId}/images/${imageId}`) as Promise<ApiWrapper<void>>,
+  /** TMDB-FIX-05: persists admin-selected posters/backdrops/stills from .media candidates. */
+  importTmdbImages: (movieId: number, payload: TmdbImageImportPayload) =>
+    axiosClient.post(`/api/movies/${movieId}/images/tmdb-import`, payload) as Promise<ApiWrapper<TmdbImageImportResult>>,
 
   // ── Content lifecycle commands (MOV-LC-04) — every command returns the
   // updated MovieV2, not void. See MOVIE_LIFECYCLE_CONTRACT.md.
