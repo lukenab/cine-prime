@@ -33,17 +33,6 @@ public interface MovieAvailabilityRepository extends JpaRepository<MovieAvailabi
 
     boolean existsByMovie_MovieIdAndStatusIn(Long movieId, List<AvailabilityStatus> statuses);
 
-    /** Public display derivation (MOV-LC-07): every availability at this cluster
-     *  that could plausibly be showing now or in the future. */
-    @Query("""
-            SELECT a FROM MovieAvailability a
-            WHERE a.cluster.clusterId = :clusterId
-              AND a.status IN (movieservice.enums.AvailabilityStatus.PLANNED, movieservice.enums.AvailabilityStatus.OPEN)
-              AND a.movie.status = movieservice.enums.MovieStatus.APPROVED
-              AND (a.showingEndDate IS NULL OR a.showingEndDate >= :today)
-            """)
-    List<MovieAvailability> findPubliclyRelevant(@Param("clusterId") Long clusterId, @Param("today") LocalDate today);
-
     /** Nightly scheduler: OPEN/PLANNED/SUSPENDED windows whose showing_end_date has passed. */
     List<MovieAvailability> findByStatusInAndShowingEndDateBefore(List<AvailabilityStatus> statuses, LocalDate date);
 }

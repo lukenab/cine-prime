@@ -47,6 +47,10 @@ public class MovieController {
                 .build();
     }
 
+    /** Internal catalog detail - exposes full workflow state (rejectionNote, audit fields via
+     *  MovieResponse) so it must never be reachable by guessing an ID as a customer/anonymous
+     *  caller. Public detail is the separate GET /api/movies/public/{id} below. */
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
     @GetMapping("/{id}")
     public ApiResponse<MovieResponse> findById(
             @PathVariable Long id,
@@ -57,6 +61,7 @@ public class MovieController {
                 .build();
     }
 
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
     @GetMapping
     public ApiResponse<Page<MovieResponse>> getPage(
             @RequestParam(defaultValue = "1") int page,
@@ -85,6 +90,19 @@ public class MovieController {
         return ApiResponse.<List<PublicMovieResponse>>builder()
                 .code(200)
                 .result(movieService.findAllPublic(clusterId))
+                .build();
+    }
+
+    /** Public detail - same visibility predicate as getPublic() (MovieService.isPubliclyVisible).
+     *  A DRAFT/PENDING_REVIEW/REJECTED/SUSPENDED/ENDED movie's ID returns the same
+     *  MOVIE_NOT_FOUND (404) a nonexistent ID would, never a response that reveals it exists. */
+    @GetMapping("/public/{id}")
+    public ApiResponse<PublicMovieResponse> getPublicById(
+            @PathVariable Long id,
+            @RequestParam(required = false) Long clusterId) {
+        return ApiResponse.<PublicMovieResponse>builder()
+                .code(200)
+                .result(movieService.getPublicMovieDetail(id, clusterId))
                 .build();
     }
 

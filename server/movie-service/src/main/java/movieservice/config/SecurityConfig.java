@@ -23,7 +23,12 @@ public class SecurityConfig extends JwtResourceServerSecuritySupport {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/actuator/health/**", "/actuator/info").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/movies/**").permitAll()
+                        // `[Backend] Separate public and internal movie catalog APIs`: only the
+                        // public catalog is open at the filter-chain level. Internal detail/list
+                        // (and TMDB search/import) rely on @PreAuthorize alone before this fix -
+                        // narrowing the matcher makes the security boundary explicit instead of
+                        // depending on every future endpoint under /api/movies remembering to add one.
+                        .requestMatchers(HttpMethod.GET, "/api/movies/public", "/api/movies/public/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/genres/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/cinema-rooms/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/cinema-room-master-data").permitAll()

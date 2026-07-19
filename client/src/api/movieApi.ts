@@ -855,6 +855,18 @@ export const movieApi = {
     } as ApiWrapper<MovieApiResponse[]>;
   },
 
+  /** `[Backend] Separate public and internal movie catalog APIs` - GET /api/movies/public/{id}.
+   *  Public, no auth required, same visibility rule as getPublicMovies() (a DRAFT/rejected/etc.
+   *  movie 404s here exactly like a nonexistent ID would). Use this instead of fetching the
+   *  whole public list and filtering client-side. */
+  getPublicMovieById: async (movieId: number, clusterId?: number) => {
+    const url = clusterId
+      ? `/api/movies/public/${movieId}?clusterId=${clusterId}`
+      : `/api/movies/public/${movieId}`;
+    const response = await axiosClient.get(url) as ApiWrapper<PublicMovieResponse>;
+    return { ...response, result: toLegacyPublicMovie(response.result) } as ApiWrapper<MovieApiResponse>;
+  },
+
   createMovie: (payload: CreateMoviePayload) =>
     axiosClient.post('/api/movies', payload) as Promise<ApiWrapper<MovieApiResponse>>,
 
