@@ -2,7 +2,7 @@ import {
   X, Film, Upload, Loader2, Search, GripVertical, Trash2,
   AlertCircle, Check, Tag, Globe, Users, Images, ArrowLeft,
 } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -37,6 +37,11 @@ import {
 } from "../../utils/tmdbWarnings";
 import { TmdbMediaPicker } from "../../layouts/TmdbMediaPicker";
 import { useRole } from "../../hooks/useRole";
+import MovieEditorWorkflow, {
+  MOVIE_EDITOR_SECTION_META,
+  movieEditorSectionDomId,
+  type MovieEditorSectionDefinition,
+} from "./movieEditor/MovieEditorWorkflow";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Local types (same shape as the previous MovieModal)
@@ -173,8 +178,8 @@ const SL: React.CSSProperties = {
  * surface — TMDB import, poster/gallery previews, genre/format chips, bilingual titles,
  * cast reordering — genuinely needs more room than a centered modal: dropdowns were getting
  * clipped, the TMDB search was a modal stacked on top of the modal, and image previews were
- * squeezed into a 2-column grid. Two-column layout mirrors the Cinema Room creation page:
- * form sections scroll on the left, poster/TMDB/gallery live in a docked right column.
+ * squeezed into a 2-column grid. Create and edit now share a guided, single-owner form shell;
+ * canonical sections are reordered visually without remounting their controlled field state.
  */
 export default function MovieEditorPage() {
   const navigate = useNavigate();
@@ -678,6 +683,21 @@ export default function MovieEditorPage() {
       ? "1px solid #f87171"
       : IS.border as string;
 
+  const workflowSections = useMemo<MovieEditorSectionDefinition[]>(() =>
+    MOVIE_EDITOR_SECTION_META.map(({ id, label, description }) => ({
+      id,
+      label,
+      description,
+      complete:
+        id === "overview" ? Boolean(form.originalTitle.trim() && form.originalLanguage)
+          : id === "classification-release" ? Boolean(form.durationMinutes > 0 && form.genreIds.length && form.formatIds.length)
+            : id === "media" ? Boolean(form.posterUrl)
+              : id === "credits" ? Boolean(form.selectedCompanies.length || form.cast.length)
+                : !hasBlockingTmdbIssues,
+    })),
+  [form.originalTitle, form.originalLanguage, form.durationMinutes, form.genreIds.length, form.formatIds.length,
+    form.posterUrl, form.selectedCompanies.length, form.cast.length, hasBlockingTmdbIssues]);
+
   if (loadingMovie || catalogApplying) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -750,15 +770,21 @@ export default function MovieEditorPage() {
         </div>
       )}
 
-      {/* ── Two-column layout ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 items-start">
+      <MovieEditorWorkflow sections={workflowSections}>
 
-        {/* ═══ LEFT COLUMN: form sections ═══ */}
-        <div className="space-y-5">
+        {/* Existing form fields keep a single state owner; CSS order groups them by workflow. */}
+        <div className="contents">
 
           {/* Basic Info */}
-          <section className="rounded-2xl border p-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-            <p style={SL}>Basic Info</p>
+          <section
+            id={movieEditorSectionDomId("overview")}
+            data-editor-section="overview"
+            tabIndex={-1}
+            aria-labelledby="movie-editor-overview-title"
+            className="order-1 scroll-mt-28 rounded-2xl border p-5 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
+          >
+            <p id="movie-editor-overview-title" style={SL}>Overview</p>
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
                 <label style={FL}>Original Title <span className="text-rose-500">*</span></label>
@@ -908,9 +934,17 @@ export default function MovieEditorPage() {
           </section>
 
           {/* Genres & Formats */}
-          <section className="rounded-2xl border p-5 space-y-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+          <section
+            id={movieEditorSectionDomId("classification-release")}
+            data-editor-section="classification-release"
+            tabIndex={-1}
+            aria-labelledby="movie-editor-classification-title"
+            className="order-2 scroll-mt-28 rounded-2xl border p-5 space-y-5 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
+          >
+            <p id="movie-editor-classification-title" style={SL}>Classification &amp; Release</p>
             <div>
-              <p style={SL}>Genres <span className="text-rose-500">*</span></p>
+              <p style={{ ...SL, marginBottom: "10px" }}>Genres <span className="text-rose-500">*</span></p>
               {genres.length === 0 ? (
                 <p style={{ fontSize: "13px", color: "var(--text-sub)" }}>Loading…</p>
               ) : (
@@ -960,7 +994,7 @@ export default function MovieEditorPage() {
           </section>
 
           {/* Languages */}
-          <section className="rounded-2xl border p-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+          <section className="order-1 rounded-2xl border p-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
             <p style={SL}>Multilingual Titles & Descriptions</p>
             <div className="inline-flex gap-1 p-1 rounded-lg mb-3" style={{ background: "var(--bg-main)" }}>
               {(["vi", "en"] as const).map((lang) => (
@@ -1014,8 +1048,15 @@ export default function MovieEditorPage() {
           </section>
 
           {/* Cast & Crew */}
-          <section className="rounded-2xl border p-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-            <p style={SL}>Cast & Crew</p>
+          <section
+            id={movieEditorSectionDomId("credits")}
+            data-editor-section="credits"
+            tabIndex={-1}
+            aria-labelledby="movie-editor-credits-title"
+            className="order-4 scroll-mt-28 rounded-2xl border p-5 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
+          >
+            <p id="movie-editor-credits-title" style={SL}>Credits</p>
             <div ref={personRef} className="relative mb-3">
               <label style={FL}>Search person</label>
               <div className="relative">
@@ -1094,14 +1135,38 @@ export default function MovieEditorPage() {
               </div>
             )}
           </section>
+
+          {!form.tmdbId && (
+            <section
+              id={movieEditorSectionDomId("review")}
+              data-editor-section="review"
+              tabIndex={-1}
+              aria-labelledby="movie-editor-review-title"
+              className="order-5 scroll-mt-28 rounded-2xl border p-5 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
+            >
+              <p id="movie-editor-review-title" style={SL}>Review</p>
+              <p className="mb-4" style={{ fontSize: "12px", color: "var(--text-sub)" }}>
+                Review draft readiness before saving. Manual drafts have no external catalog mappings to resolve.
+              </p>
+            </section>
+          )}
         </div>
 
-        {/* ═══ RIGHT COLUMN: poster preview, TMDB import, gallery ═══ */}
-        <div className="space-y-5 lg:sticky lg:top-6">
+        {/* Media and review content are part of the same full-width editor canvas. */}
+        <div className="contents">
 
           {/* Poster / thumbnail preview */}
-          <section className="rounded-2xl border p-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-            <p style={SL}>Poster</p>
+          <section
+            id={movieEditorSectionDomId("media")}
+            data-editor-section="media"
+            tabIndex={-1}
+            aria-labelledby="movie-editor-media-title"
+            className="order-3 scroll-mt-28 rounded-2xl border p-5 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
+          >
+            <p id="movie-editor-media-title" style={SL}>Media</p>
+            <p className="mb-3" style={{ fontSize: "12px", color: "var(--text-sub)" }}>Primary poster</p>
             {form.posterUrl ? (
               <div className="relative rounded-xl border overflow-hidden mb-3" style={{ borderColor: "var(--border-color)" }}>
                 <img src={form.posterUrl} alt="Poster" className="w-full object-cover" style={{ aspectRatio: "2 / 3" }} />
@@ -1132,8 +1197,16 @@ export default function MovieEditorPage() {
           </section>
 
           {/* Source provenance remains visible after the full-width catalog populates this draft. */}
-          {form.tmdbId && <section className="rounded-2xl border p-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-            <p style={SL}>Catalog source</p>
+          {form.tmdbId && <section
+            id={movieEditorSectionDomId("review")}
+            data-editor-section="review"
+            tabIndex={-1}
+            aria-labelledby="movie-editor-review-title"
+            className="order-5 scroll-mt-28 rounded-2xl border p-5 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
+          >
+            <p id="movie-editor-review-title" style={SL}>Review</p>
+            <p className="mb-2" style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-sub)" }}>Catalog source</p>
 
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 mb-3" style={{ width: "fit-content" }}>
               <div className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0"><Check size={10} className="text-white" /></div>
@@ -1141,6 +1214,7 @@ export default function MovieEditorPage() {
               <span style={{ fontSize: "12px", color: "#6b7280" }}>·</span>
               <a href={`https://www.themoviedb.org/movie/${form.tmdbId}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: "#059669", fontWeight: 500, textDecoration: "none" }}>#{form.tmdbId}</a>
             </div>
+
           </section>}
 
           {/* TMDB Import Review - grouped/severity-tagged warnings, genre-mapping resolution
@@ -1150,7 +1224,7 @@ export default function MovieEditorPage() {
               (disclosed out-of-scope, same as the multi-company and trailer-ingestion MRs). */}
           {form.tmdbId && (tmdbWarnings.length > 0 || tmdbUnmappedGenres.length > 0 || tmdbTrailer) && (
             <section
-              className="rounded-2xl border p-5 space-y-4"
+              className="order-5 rounded-2xl border p-5 space-y-4"
               style={{ background: "var(--bg-card)", borderColor: hasBlockingTmdbIssues ? "#f87171" : "var(--border-color)" }}
             >
               <div className="flex items-center gap-2">
@@ -1277,19 +1351,21 @@ export default function MovieEditorPage() {
 
           {/* TMDB media picker - only once a search result has been applied */}
           {tmdbMedia && form.tmdbId && (
-            <TmdbMediaPicker
-              tmdbId={form.tmdbId}
-              media={tmdbMedia}
-              movieId={activeMovieId}
-              onPendingSelectionChange={setPendingMediaSelections}
-              onImported={() => {
-                if (activeMovieId) movieApi.getMovieImages(activeMovieId).then((r) => setMovieImages(r.result ?? [])).catch(() => {});
-              }}
-            />
+            <div className="order-3">
+              <TmdbMediaPicker
+                tmdbId={form.tmdbId}
+                media={tmdbMedia}
+                movieId={activeMovieId}
+                onPendingSelectionChange={setPendingMediaSelections}
+                onImported={() => {
+                  if (activeMovieId) movieApi.getMovieImages(activeMovieId).then((r) => setMovieImages(r.result ?? [])).catch(() => {});
+                }}
+              />
+            </div>
           )}
 
           {/* Gallery */}
-          <section className="rounded-2xl border p-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+          <section className="order-3 rounded-2xl border p-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
             <p style={SL}>Photo Gallery</p>
             {!activeMovieId ? (
               <div className="flex flex-col items-center justify-center py-8 rounded-xl border-2 border-dashed" style={{ borderColor: "var(--border-color)" }}>
@@ -1369,7 +1445,7 @@ export default function MovieEditorPage() {
             )}
           </section>
         </div>
-      </div>
+      </MovieEditorWorkflow>
     </div>
   );
 }
