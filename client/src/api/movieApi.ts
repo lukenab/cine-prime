@@ -90,43 +90,6 @@ export type RoomApiResponse = {
   clusterName?: string;
 };
 
-export type ShowTimePayload = {
-  cinemaRoomId: number;
-  showDate: string;
-  startTime: string;
-};
-
-export type CreateMoviePayload = {
-  movieNameVn: string;
-  movieNameEnglish: string;
-  director: string;
-  actor: string;
-  duration: number;
-  content: string;
-  version: string;
-  status: boolean;
-  movieProductionCompany: string;
-  largeImage: string;
-  smallImage: string;
-  typeIds: number[];
-  showTimes: ShowTimePayload[];
-};
-
-export type UpdateMoviePayload = {
-  movieNameVn: string;
-  movieNameEnglish: string;
-  director: string;
-  actor: string;
-  duration: number;
-  content: string;
-  version: string;
-  status: boolean;
-  movieProductionCompany: string;
-  largeImage?: string;
-  smallImage?: string;
-  typeIds?: number[];
-};
-
 // ── Cinema Room creation wizard (layout versioning / approval workflow) ────────
 // See docs/CINEMA_ROOM_CREATION_FLOW.md. Room creation always goes through this
 // flow — the old flat quick-create endpoint (no review, straight to ACTIVE) was
@@ -889,9 +852,6 @@ export const movieApi = {
     return { ...response, result: toLegacyPublicMovie(response.result) } as ApiWrapper<MovieApiResponse>;
   },
 
-  createMovie: (payload: CreateMoviePayload) =>
-    axiosClient.post('/api/movies', payload) as Promise<ApiWrapper<MovieApiResponse>>,
-
   uploadImage: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -899,9 +859,6 @@ export const movieApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }) as Promise<ApiWrapper<ImageUploadResponse>>;
   },
-
-  updateMovie: (id: number, payload: UpdateMoviePayload) =>
-    axiosClient.put(`/api/movies/${id}`, payload) as Promise<ApiWrapper<MovieApiResponse>>,
 
   getRooms: async () => {
     const response = await axiosClient.get('/api/cinema-rooms') as ApiWrapper<RoomApiResponse[]>;
