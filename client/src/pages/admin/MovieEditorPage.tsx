@@ -22,6 +22,7 @@ import {
   type MovieImageType,
   type TmdbGenrePreview,
   type TmdbMovieDetails,
+  type TmdbImportPayload,
 } from "../../api/movieApi";
 import {
   MOVIE_CONTENT_STATUS_META,
@@ -225,15 +226,18 @@ export default function MovieEditorPage() {
   const [tmdbWarnings, setTmdbWarnings] = useState<ClassifiedWarning[]>([]);
   const [tmdbUnmappedGenres, setTmdbUnmappedGenres] = useState<TmdbGenrePreview[]>([]);
   const [genreResolutions, setGenreResolutions] = useState<
-    Record<number, { action: "mapped" | "created" | "ignored"; reason?: string }>
+    Record<number, { action: "mapped" | "created" | "ignored"; localGenreId?: number; reason?: string }>
   >({});
   const [ignoreReasonDraft, setIgnoreReasonDraft] = useState<Record<number, string>>({});
-  const [creatingGenreId, setCreatingGenreId] = useState<number | null>(null);
   const [tmdbTrailer, setTmdbTrailer] = useState<{ url: string; videoType?: string } | null>(null);
   const [tmdbUnverified, setTmdbUnverified] = useState<{ releaseDate: boolean; ageRatingId: boolean }>({
     releaseDate: false,
     ageRatingId: false,
   });
+  // TMDB gave no runtime for this title - the form still shows a value (its own default/prior
+  // value) so admin can edit it, but the real POST /api/movies/tmdb/import call will fail with
+  // MISSING_RUNTIME unless this value is sent as confirmedRuntimeMinutes.
+  const [tmdbMissingRuntime, setTmdbMissingRuntime] = useState(false);
 
   // TMDB-FIX-05: media candidates from the last applyTmdb(), and the admin's pending
   // poster/backdrop/still selections (imported right after save if the movie is new).
@@ -418,7 +422,9 @@ export default function MovieEditorPage() {
   const validateDraft = (): { ok: boolean; msg?: string } => {
     if (!form.originalTitle.trim()) return { ok: false, msg: "Please enter the original title." };
     if (!form.durationMinutes || form.durationMinutes < 1) return { ok: false, msg: "Duration must be ≥ 1 minute." };
-    if (form.genreIds.length === 0) return { ok: false, msg: "Select at least 1 genre." };
+    // A "Create new" genre resolution doesn't add a real genreId yet (it's created server-side
+    // as PENDING_REVIEW at import time - see resolveGenreCreateNew), so it must still count here.
+    if (form.genreIds.length === 0 && pendingCreatedGenreCount === 0) return { ok: false, msg: "Select at least 1 genre." };
     if (form.formatIds.length === 0) return { ok: false, msg: "Select at least 1 screening format." };
     return { ok: true };
   };
@@ -447,6 +453,32 @@ export default function MovieEditorPage() {
     }
   };
 
+  /** Converts the genre-resolution decisions already made in the TMDB Import Review panel
+   *  into POST /api/movies/tmdb/import's request shape. */
+  const buildTmdbImportPayload = (tmdbId: number): TmdbImportPayload => {
+    const selectedGenreMappings: Record<number, number> = {};
+    const createPendingGenres: number[] = [];
+    const ignoredGenres: Record<number, string> = {};
+    for (const [tmdbGenreIdStr, resolution] of Object.entries(genreResolutions)) {
+      const tmdbGenreId = Number(tmdbGenreIdStr);
+      if (resolution.action === "mapped" && resolution.localGenreId != null) {
+        selectedGenreMappings[tmdbGenreId] = resolution.localGenreId;
+      } else if (resolution.action === "created") {
+        createPendingGenres.push(tmdbGenreId);
+      } else if (resolution.action === "ignored") {
+        ignoredGenres[tmdbGenreId] = resolution.reason ?? "No reason given";
+      }
+    }
+    return {
+      tmdbId,
+      confirmedAgeRatingId: form.ageRatingId ?? undefined,
+      confirmedRuntimeMinutes: tmdbMissingRuntime ? form.durationMinutes : undefined,
+      selectedGenreMappings: Object.keys(selectedGenreMappings).length ? selectedGenreMappings : undefined,
+      createPendingGenres: createPendingGenres.length ? createPendingGenres : undefined,
+      ignoredGenres: Object.keys(ignoredGenres).length ? ignoredGenres : undefined,
+    };
+  };
+
   const persistCurrentDraft = async (): Promise<MovieResponse> => {
     setSubmitted(true);
     const { ok, msg } = validateDraft();
@@ -466,12 +498,35 @@ export default function MovieEditorPage() {
     };
     const payload = buildMoviePayload(resolvedForm, resolvedCompanyIds, resolvedCast);
     const wasNewDraft = activeMovieId == null;
-    const savedMovie = await persistMovieDraft<CreateMovieRequest, MovieResponse>({
-      movieId: activeMovieId,
-      payload,
-      createMovie: movieApi.createMovie,
-      updateMovie: movieApi.updateMovie,
-    });
+    // A brand-new movie that originated from a TMDB catalog pick goes through the real
+    // POST /api/movies/tmdb/import first (idempotency-by-tmdbId/imdbId, genre resolution,
+    // company/age-rating matching all run for real, not just client-side approximations of
+    // them) - then any further local edits on top of the raw TMDB draft are applied with a
+    // normal update. An existing movie (even one that has a tmdbId from a past import) always
+    // just updates, same as any other edit.
+    let savedMovie: MovieResponse;
+    if (wasNewDraft && form.tmdbId) {
+      const imported = await movieApi.tmdbImport(buildTmdbImportPayload(form.tmdbId));
+      if (imported.result.warnings.length) {
+        toast(`TMDB import: ${imported.result.warnings.join(", ")}`, { duration: 6000 });
+      }
+      // Genres attached by the import (mapped + newly-created PENDING_REVIEW ones) aren't known
+      // client-side yet - merge them into the follow-up update's genreIds instead of overwriting
+      // them, since UpdateMovieRequest.genreIds replaces the movie's whole genre list.
+      const importedMovie = await movieApi.getMovieById(imported.result.movieId);
+      const mergedGenreIds = Array.from(new Set([
+        ...(importedMovie.result.genres?.map((g) => g.genreId) ?? []),
+        ...(payload.genreIds ?? []),
+      ]));
+      savedMovie = (await movieApi.updateMovie(imported.result.movieId, { ...payload, genreIds: mergedGenreIds })).result;
+    } else {
+      savedMovie = await persistMovieDraft<CreateMovieRequest, MovieResponse>({
+        movieId: activeMovieId,
+        payload,
+        createMovie: movieApi.createMovie,
+        updateMovie: movieApi.updateMovie,
+      });
+    }
 
     setForm(resolvedForm);
     const mediaImported = await importPendingMediaInto(savedMovie.movieId);
@@ -624,6 +679,7 @@ export default function MovieEditorPage() {
         releaseDate: !!(details.releaseDate || item.releaseDate),
         ageRatingId: details.ageRatingId != null,
       });
+      setTmdbMissingRuntime(!details.durationMinutes);
 
     } catch (e: any) {
       setError(describeTmdbFetchError(e));
@@ -658,26 +714,19 @@ export default function MovieEditorPage() {
   // hasBlockingTmdbIssues below and its use in validate().
 
   const resolveGenreMapExisting = (tmdbGenreId: number, localGenreId: number) => {
-    setGenreResolutions((prev) => ({ ...prev, [tmdbGenreId]: { action: "mapped" } }));
+    setGenreResolutions((prev) => ({ ...prev, [tmdbGenreId]: { action: "mapped", localGenreId } }));
     setForm((p) => ({
       ...p,
       genreIds: p.genreIds.includes(localGenreId) ? p.genreIds : [...p.genreIds, localGenreId],
     }));
   };
 
-  const resolveGenreCreateNew = async (tmdbGenreId: number, name: string) => {
-    setCreatingGenreId(tmdbGenreId);
-    try {
-      const created = await movieApi.createGenre({ genreName: name });
-      setGenres((prev) => [...prev, created.result]);
-      setGenreResolutions((prev) => ({ ...prev, [tmdbGenreId]: { action: "created" } }));
-      setForm((p) => ({ ...p, genreIds: [...p.genreIds, created.result.genreId] }));
-      toast.success(`Genre "${name}" created.`);
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "Failed to create genre.");
-    } finally {
-      setCreatingGenreId(null);
-    }
+  /** Records the decision only - the actual genre row is created server-side as PENDING_REVIEW
+   *  by POST /api/movies/tmdb/import's createPendingGenres (see persistCurrentDraft()). This
+   *  used to call POST /api/genres directly here, which created it as ACTIVE immediately -
+   *  bypassing the genre-admin review the backend's readiness gate exists to enforce. */
+  const resolveGenreCreateNew = (tmdbGenreId: number) => {
+    setGenreResolutions((prev) => ({ ...prev, [tmdbGenreId]: { action: "created" } }));
   };
 
   const resolveGenreIgnore = (tmdbGenreId: number) => {
@@ -686,6 +735,7 @@ export default function MovieEditorPage() {
   };
 
   const unresolvedTmdbGenres = tmdbUnmappedGenres.filter((g) => !genreResolutions[g.tmdbGenreId]);
+  const pendingCreatedGenreCount = Object.values(genreResolutions).filter((r) => r.action === "created").length;
   const hasBlockingTmdbIssues = unresolvedTmdbGenres.length > 0;
   const groupedTmdbWarnings = groupWarnings(tmdbWarnings);
 
@@ -885,7 +935,14 @@ export default function MovieEditorPage() {
                 </select>
               </div>
               <div>
-                <label style={FL}>Duration (minutes) <span className="text-rose-500">*</span></label>
+                <label style={FL}>
+                  Duration (minutes) <span className="text-rose-500">*</span>
+                  {tmdbMissingRuntime && (
+                    <span className="ml-1.5 px-1.5 py-0.5 rounded" style={{ fontSize: "9.5px", fontWeight: 700, background: "#fef3c7", color: "#92400e" }}>
+                      TMDB HAD NO RUNTIME — CONFIRM
+                    </span>
+                  )}
+                </label>
                 <input
                   type="number" min="1" value={form.durationMinutes}
                   onChange={(e) => set("durationMinutes", parseInt(e.target.value) || 0)}
@@ -1361,7 +1418,7 @@ export default function MovieEditorPage() {
                             {resolution && (
                               <span style={{ fontSize: "11px", color: "#059669", flexShrink: 0 }}>
                                 {resolution.action === "mapped" && "✓ Mapped"}
-                                {resolution.action === "created" && "✓ Created"}
+                                {resolution.action === "created" && "Will create as Pending Review on save"}
                                 {resolution.action === "ignored" && `Ignored — ${resolution.reason}`}
                               </span>
                             )}
@@ -1378,12 +1435,12 @@ export default function MovieEditorPage() {
                               </select>
                               {isAdmin && (
                                 <button
-                                  type="button" disabled={creatingGenreId === g.tmdbGenreId}
-                                  onClick={() => resolveGenreCreateNew(g.tmdbGenreId, g.name)}
-                                  className="px-2 py-1 rounded border hover:bg-blue-50 disabled:opacity-50"
+                                  type="button"
+                                  onClick={() => resolveGenreCreateNew(g.tmdbGenreId)}
+                                  className="px-2 py-1 rounded border hover:bg-blue-50"
                                   style={{ fontSize: "12px", borderColor: "var(--border-color)", color: "var(--text-main)" }}
                                 >
-                                  {creatingGenreId === g.tmdbGenreId ? "Creating…" : "Create new"}
+                                  Create new
                                 </button>
                               )}
                               <input

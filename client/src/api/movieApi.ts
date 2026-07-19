@@ -614,6 +614,32 @@ export type TmdbMovieDetails = {
   warnings?: string[];
 };
 
+/** Body for POST /api/movies/tmdb/import (TmdbService.importMovie) - the real one-shot TMDB
+ *  import, as opposed to using a TMDB preview to prefill the manual editor. */
+export type TmdbImportPayload = {
+  tmdbId: number;
+  /** Overrides the auto-resolved (VN/US certification) age rating when present. */
+  confirmedAgeRatingId?: number;
+  /** Required only when TMDB provides no runtime for this title - import is blocked otherwise. */
+  confirmedRuntimeMinutes?: number;
+  /** tmdbGenreId -> local genreId, resolves an otherwise-UNMAPPED TMDB genre to an existing one. */
+  selectedGenreMappings?: Record<number, number>;
+  /** tmdbGenreIds to create as a new PENDING_REVIEW local genre. */
+  createPendingGenres?: number[];
+  /** tmdbGenreId -> reason, explicitly skip attaching this TMDB genre instead of blocking import. */
+  ignoredGenres?: Record<number, string>;
+};
+
+export type TmdbImportResult = {
+  movieId: number;
+  tmdbId: number;
+  originalTitle: string;
+  status: string;
+  importedCastCount: number;
+  importedCompanyCount: number;
+  warnings: string[];
+};
+
 export type TranslationRequest = {
   languageCode: string;
   title: string;
@@ -1024,8 +1050,8 @@ export const movieApi = {
   tmdbDetails: (tmdbId: number) =>
     axiosClient.get(`/api/movies/tmdb/${tmdbId}/details`) as Promise<ApiWrapper<TmdbMovieDetails>>,
 
-  tmdbImport: (tmdbId: number) =>
-    axiosClient.post('/api/movies/tmdb/import', { tmdbId }) as Promise<ApiWrapper<MovieResponse>>,
+  tmdbImport: (payload: TmdbImportPayload) =>
+    axiosClient.post('/api/movies/tmdb/import', payload) as Promise<ApiWrapper<TmdbImportResult>>,
 
   // Cinema Cluster APIs
   getClusters: () =>
