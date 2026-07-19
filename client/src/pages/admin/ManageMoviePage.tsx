@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Search, Plus, SlidersHorizontal, RefreshCw, AlertCircle } from "lucide-react";
 import { useRole } from "../../hooks/useRole";
-import { useOutletContext, useNavigate } from "react-router-dom";
+import { Outlet, useOutletContext, useNavigate } from "react-router-dom";
 
 import { MovieStatsCards } from "../../layouts/MovieStatsCards";
 import { MovieTable } from "../../layouts/MovieTable";
@@ -330,6 +330,10 @@ export default function ManageMoviePage() {
         onApprove={handleReviewApprove}
         onReject={handleReviewReject}
       />
+
+      {/* Route-aware creation modal. The movie list remains mounted underneath so filters,
+          loaded data and scroll context are preserved while /admin/movies/new is active. */}
+      <Outlet />
 
       <style>{`
         .hover-row:hover { background-color: rgba(128,128,128,0.04); }

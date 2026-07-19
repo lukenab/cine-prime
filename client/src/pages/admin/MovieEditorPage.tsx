@@ -15,7 +15,6 @@ import {
   type TmdbSearchItem,
   type CastRequest,
   type CreateMovieRequest,
-  type UpdateMovieRequest,
   type MovieV2,
   type MovieImageResponse,
   type MovieImageRequest,
@@ -37,11 +36,18 @@ import {
 } from "../../utils/tmdbWarnings";
 import { TmdbMediaPicker } from "../../layouts/TmdbMediaPicker";
 import { useRole } from "../../hooks/useRole";
+import { ConfirmDialog } from "../../components/shared/ConfirmDialog";
 import MovieEditorWorkflow, {
   MOVIE_EDITOR_SECTION_META,
   movieEditorSectionDomId,
   type MovieEditorSectionDefinition,
 } from "./movieEditor/MovieEditorWorkflow";
+import {
+  MovieEditorActionBar,
+  type MovieEditorActionStatus,
+  type MovieEditorOperation,
+} from "./movieEditor/MovieEditorActionBar";
+import { persistMovieDraft, saveDraftThenSubmit } from "./movieEditor/movieDraftActions";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Local types (same shape as the previous MovieModal)
@@ -109,6 +115,11 @@ const emptyForm: FormState = {
   en_tagline: "",
   cast: [],
 };
+
+const editorFingerprint = (
+  value: FormState,
+  pendingMedia: { filePath: string; imageType: MovieImageType }[],
+) => JSON.stringify({ form: value, pendingMedia });
 
 function movieToForm(mv: MovieV2): FormState {
   const vi = mv.translations?.find((t) => t.languageCode === "vi");
@@ -185,7 +196,7 @@ export default function MovieEditorPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { isAdmin } = useRole();
+  const { isAdmin, can } = useRole();
   const { movieId: movieIdParam } = useParams<{ movieId: string }>();
   const editMovieId = movieIdParam ? Number(movieIdParam) : null;
 
@@ -256,23 +267,57 @@ export default function MovieEditorPage() {
 
   const [localEditId, setLocalEditId] = useState<number | null>(null);
   const activeMovieId = localEditId ?? editMovieId;
+  const [savedFingerprint, setSavedFingerprint] = useState(() => editorFingerprint(emptyForm, []));
+  const [actionStatus, setActionStatus] = useState<MovieEditorActionStatus>("pristine");
+  const [operation, setOperation] = useState<MovieEditorOperation>("idle");
+  const [confirmExitOpen, setConfirmExitOpen] = useState(false);
+  const operationGuard = useRef(false);
+  const currentFingerprint = useMemo(
+    () => editorFingerprint(form, pendingMediaSelections),
+    [form, pendingMediaSelections],
+  );
+  const previousFingerprint = useRef(currentFingerprint);
+  const isDirty = currentFingerprint !== savedFingerprint;
+
+  useEffect(() => {
+    if (previousFingerprint.current === currentFingerprint) return;
+    previousFingerprint.current = currentFingerprint;
+    if (operation === "idle" && (actionStatus === "save-error" || actionStatus === "submit-error" || actionStatus === "saved")) {
+      setActionStatus("pristine");
+    }
+  }, [actionStatus, currentFingerprint, operation]);
+
+  useEffect(() => {
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!isDirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [isDirty]);
 
   // ── Load movie when editing ────────────────────────────────
   useEffect(() => {
-    if (!editMovieId) return;
+    if (!editMovieId || editMovieId === localEditId) return;
     setLoadingMovie(true);
     movieApi
       .getMovieById(editMovieId)
       .then((res) => {
         const mv = res.result;
+        const loadedForm = movieToForm(mv);
         setCurrentStatus(mv.status);
-        setForm(movieToForm(mv));
+        setForm(loadedForm);
+        setPendingMediaSelections([]);
+        previousFingerprint.current = editorFingerprint(loadedForm, []);
+        setSavedFingerprint(editorFingerprint(loadedForm, []));
+        setActionStatus("saved");
         if (mv.images?.length) setMovieImages(mv.images);
         else movieApi.getMovieImages(editMovieId).then((r) => setMovieImages(r.result ?? [])).catch(() => {});
       })
       .catch(() => setError("Failed to load movie."))
       .finally(() => setLoadingMovie(false));
-  }, [editMovieId]);
+  }, [editMovieId, localEditId]);
 
   useEffect(() => {
     movieApi.getGenres().then((r) => setGenres(r.result ?? [])).catch(() => {});
@@ -333,49 +378,50 @@ export default function MovieEditorPage() {
 
   const buildPayload = (
     resolvedCompanyIds: number[],
-    resolvedCast: CastRequest[]
+    resolvedCast: CastRequest[],
+    sourceForm: FormState = form,
   ): CreateMovieRequest => {
     const translations: { languageCode: string; title: string; synopsis?: string; tagline?: string }[] = [];
-    if (form.vi_title.trim())
+    if (sourceForm.vi_title.trim())
       translations.push({
-        languageCode: "vi", title: form.vi_title.trim(),
-        synopsis: form.vi_synopsis.trim() || undefined, tagline: form.vi_tagline.trim() || undefined,
+        languageCode: "vi", title: sourceForm.vi_title.trim(),
+        synopsis: sourceForm.vi_synopsis.trim() || undefined, tagline: sourceForm.vi_tagline.trim() || undefined,
       });
-    if (form.en_title.trim())
+    if (sourceForm.en_title.trim())
       translations.push({
-        languageCode: "en", title: form.en_title.trim(),
-        synopsis: form.en_synopsis.trim() || undefined, tagline: form.en_tagline.trim() || undefined,
+        languageCode: "en", title: sourceForm.en_title.trim(),
+        synopsis: sourceForm.en_synopsis.trim() || undefined, tagline: sourceForm.en_tagline.trim() || undefined,
       });
 
-    const canonicalSynopsis = form.originalLanguage.toLowerCase() === "vi"
-      ? form.vi_synopsis.trim() || form.en_synopsis.trim()
-      : form.en_synopsis.trim() || form.vi_synopsis.trim();
+    const canonicalSynopsis = sourceForm.originalLanguage.toLowerCase() === "vi"
+      ? sourceForm.vi_synopsis.trim() || sourceForm.en_synopsis.trim()
+      : sourceForm.en_synopsis.trim() || sourceForm.vi_synopsis.trim();
 
     // `[Backend] Add tagline field to Movie and MovieTranslation entities`: derived the same
     // way canonicalSynopsis is - no separate "original tagline" input, mirrors the existing
     // synopsis convention exactly.
-    const canonicalTagline = form.originalLanguage.toLowerCase() === "vi"
-      ? form.vi_tagline.trim() || form.en_tagline.trim()
-      : form.en_tagline.trim() || form.vi_tagline.trim();
+    const canonicalTagline = sourceForm.originalLanguage.toLowerCase() === "vi"
+      ? sourceForm.vi_tagline.trim() || sourceForm.en_tagline.trim()
+      : sourceForm.en_tagline.trim() || sourceForm.vi_tagline.trim();
 
     return {
-      originalTitle: form.originalTitle.trim(),
-      originalLanguage: form.originalLanguage,
-      durationMinutes: form.durationMinutes,
-      releaseDate: form.releaseDate || undefined,
-      endDate: form.endDate || undefined,
-      country: form.country.trim() || undefined,
-      ageRatingId: form.ageRatingId ?? undefined,
+      originalTitle: sourceForm.originalTitle.trim(),
+      originalLanguage: sourceForm.originalLanguage,
+      durationMinutes: sourceForm.durationMinutes,
+      releaseDate: sourceForm.releaseDate || undefined,
+      endDate: sourceForm.endDate || undefined,
+      country: sourceForm.country.trim() || undefined,
+      ageRatingId: sourceForm.ageRatingId ?? undefined,
       companyIds: resolvedCompanyIds,
-      genreIds: form.genreIds,
-      formatIds: form.formatIds,
-      posterUrl: form.posterUrl.trim() || undefined,
-      thumbnailUrl: form.thumbnailUrl.trim() || undefined,
-      trailerUrl: form.trailerUrl.trim() || undefined,
+      genreIds: sourceForm.genreIds,
+      formatIds: sourceForm.formatIds,
+      posterUrl: sourceForm.posterUrl.trim() || undefined,
+      thumbnailUrl: sourceForm.thumbnailUrl.trim() || undefined,
+      trailerUrl: sourceForm.trailerUrl.trim() || undefined,
       synopsis: canonicalSynopsis || undefined,
       tagline: canonicalTagline || undefined,
-      tmdbId: form.tmdbId,
-      imdbId: form.imdbId,
+      tmdbId: sourceForm.tmdbId,
+      imdbId: sourceForm.imdbId,
       translations: translations.length ? translations : undefined,
       cast: resolvedCast,
     };
@@ -419,68 +465,142 @@ export default function MovieEditorPage() {
     return resolved;
   };
 
-  const validate = (): { ok: boolean; msg?: string } => {
+  const validateDraft = (): { ok: boolean; msg?: string } => {
     if (!form.originalTitle.trim()) return { ok: false, msg: "Please enter the original title." };
     if (!form.durationMinutes || form.durationMinutes < 1) return { ok: false, msg: "Duration must be ≥ 1 minute." };
     if (form.genreIds.length === 0) return { ok: false, msg: "Select at least 1 genre." };
     if (form.formatIds.length === 0) return { ok: false, msg: "Select at least 1 screening format." };
+    return { ok: true };
+  };
+
+  const validateReviewReadiness = (): { ok: boolean; msg?: string } => {
     if (hasBlockingTmdbIssues) {
       return {
         ok: false,
-        msg: `Resolve ${unresolvedTmdbGenres.length} unmapped TMDB genre(s) below before saving.`,
+        msg: `Resolve ${unresolvedTmdbGenres.length} unmapped TMDB genre(s) before submitting for review.`,
       };
     }
     return { ok: true };
   };
 
-  const importPendingMediaInto = async (movieId: number) => {
-    if (!form.tmdbId || pendingMediaSelections.length === 0) return;
+  const importPendingMediaInto = async (movieId: number): Promise<boolean> => {
+    if (!form.tmdbId || pendingMediaSelections.length === 0) return true;
     try {
       const res = await movieApi.importTmdbImages(movieId, { tmdbId: form.tmdbId, selections: pendingMediaSelections });
       toast.success(`Imported ${res.result.importedCount} TMDB image(s).`);
       setMovieImages(res.result.images);
+      setPendingMediaSelections([]);
+      return true;
     } catch (e: any) {
       toast.error(e?.response?.data?.message ?? "Some TMDB images could not be imported.");
+      return false;
     }
   };
 
-  const handleSubmit = async () => {
+  const persistCurrentDraft = async (): Promise<MovieV2> => {
     setSubmitted(true);
-    const { ok, msg } = validate();
-    if (!ok) {
-      setError(msg ?? "Please review the form.");
-      return;
+    const { ok, msg } = validateDraft();
+    if (!ok) throw new Error(msg ?? "Please review the form.");
+
+    const [{ ids: resolvedCompanyIds, resolved: resolvedCompanies }, resolvedCast] = await Promise.all([
+      resolveCompanyIds(),
+      resolveCastPersonIds(),
+    ]);
+    const resolvedForm: FormState = {
+      ...form,
+      selectedCompanies: resolvedCompanies,
+      cast: form.cast.map((castMember, index) => ({
+        ...castMember,
+        personId: resolvedCast[index]?.personId ?? castMember.personId,
+      })),
+    };
+    const payload = buildPayload(resolvedCompanyIds, resolvedCast, resolvedForm);
+    const wasNewDraft = activeMovieId == null;
+    const savedMovie = await persistMovieDraft<CreateMovieRequest, MovieV2>({
+      movieId: activeMovieId,
+      payload,
+      createMovie: movieApi.createMovieV2,
+      updateMovie: movieApi.updateMovieV2,
+    });
+
+    setForm(resolvedForm);
+    const mediaImported = await importPendingMediaInto(savedMovie.movieId);
+    const persistedFingerprint = editorFingerprint(resolvedForm, []);
+    previousFingerprint.current = editorFingerprint(
+      resolvedForm,
+      mediaImported ? [] : pendingMediaSelections,
+    );
+    setSavedFingerprint(persistedFingerprint);
+    setCurrentStatus(savedMovie.status);
+
+    if (wasNewDraft) {
+      setLocalEditId(savedMovie.movieId);
+      const sectionHash = window.location.hash;
+      navigate(`/admin/movies/${savedMovie.movieId}/edit${sectionHash}`, { replace: true });
     }
+
+    return savedMovie;
+  };
+
+  const errorMessage = (e: any, fallback: string) =>
+    e?.response?.data?.message ?? e?.message ?? fallback;
+
+  const handleSaveDraft = async () => {
+    if (operationGuard.current) return;
+    operationGuard.current = true;
     setSubmitting(true);
+    setOperation("saving-draft");
     setError("");
     try {
-      const [{ ids: resolvedCompanyIds, resolved: resolvedCompanies }, resolvedCast] = await Promise.all([
-        resolveCompanyIds(),
-        resolveCastPersonIds(),
-      ]);
-      setForm((p) => ({
-        ...p,
-        selectedCompanies: resolvedCompanies,
-        cast: p.cast.map((c, i) => ({ ...c, personId: resolvedCast[i]?.personId ?? c.personId })),
-      }));
-
-      const payload = buildPayload(resolvedCompanyIds, resolvedCast);
-      if (editMovieId) {
-        await movieApi.updateMovieV2(editMovieId, payload);
-        await importPendingMediaInto(editMovieId);
-        toast.success("Movie updated.");
-        navigate("/admin/movies");
-      } else {
-        const created = await movieApi.createMovieV2(payload);
-        setLocalEditId(created.result.movieId);
-        await importPendingMediaInto(created.result.movieId);
-        toast.success(`"${created.result.originalTitle}" created as DRAFT.`);
-        navigate("/admin/movies");
-      }
+      const savedMovie = await persistCurrentDraft();
+      setActionStatus("saved");
+      toast.success(`"${savedMovie.originalTitle}" saved as DRAFT.`);
     } catch (e: any) {
-      setError(e?.response?.data?.message ?? e?.message ?? "Save failed, please try again.");
+      const message = errorMessage(e, "Save failed, please try again.");
+      setError(message);
+      setActionStatus("save-error");
     } finally {
       setSubmitting(false);
+      setOperation("idle");
+      operationGuard.current = false;
+    }
+  };
+
+  const handleSubmitForReview = async () => {
+    if (operationGuard.current) return;
+    operationGuard.current = true;
+    let draftSaved = false;
+    setSubmitting(true);
+    setOperation("saving-before-submit");
+    setError("");
+    try {
+      const reviewedMovie = await saveDraftThenSubmit<MovieV2>({
+        saveDraft: persistCurrentDraft,
+        onDraftSaved: () => {
+          draftSaved = true;
+          setActionStatus("saved");
+          setOperation("submitting");
+        },
+        submitForReview: (movieId) => {
+          const readiness = validateReviewReadiness();
+          if (!readiness.ok) throw new Error(readiness.msg ?? "Movie is not ready for review.");
+          return movieApi.submitForReview(movieId);
+        },
+      });
+      setCurrentStatus(reviewedMovie.status);
+      setActionStatus("submitted");
+      toast.success(`"${reviewedMovie.originalTitle}" submitted for review.`);
+    } catch (e: any) {
+      const message = errorMessage(
+        e,
+        draftSaved ? "Draft was saved, but submission failed." : "Could not save the draft before submission.",
+      );
+      setError(message);
+      setActionStatus(draftSaved ? "submit-error" : "save-error");
+    } finally {
+      setSubmitting(false);
+      setOperation("idle");
+      operationGuard.current = false;
     }
   };
 
@@ -698,6 +818,26 @@ export default function MovieEditorPage() {
   [form.originalTitle, form.originalLanguage, form.durationMinutes, form.genreIds.length, form.formatIds.length,
     form.posterUrl, form.selectedCompanies.length, form.cast.length, hasBlockingTmdbIssues]);
 
+  const editableDraft = currentContentStatus == null || currentContentStatus === "DRAFT";
+  const canSaveDraft = can.edit && editableDraft;
+  const canSubmitForReview = can.submit && editableDraft;
+  const displayedActionStatus: MovieEditorActionStatus =
+    operation === "idle"
+      && isDirty
+      && actionStatus !== "save-error"
+      && actionStatus !== "submit-error"
+      && actionStatus !== "submitted"
+      ? "dirty"
+      : actionStatus;
+  const exitDestination = editMovieId || activeMovieId ? "/admin/movies" : "/admin/movies/new";
+  const requestExit = () => {
+    if (isDirty) {
+      setConfirmExitOpen(true);
+      return;
+    }
+    navigate(exitDestination);
+  };
+
   if (loadingMovie || catalogApplying) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -713,7 +853,8 @@ export default function MovieEditorPage() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => navigate(editMovieId ? "/admin/movies" : "/admin/movies/new")}
+            onClick={requestExit}
+            aria-label="Back from movie editor"
             className="w-9 h-9 rounded-lg border flex items-center justify-center hover:opacity-80 transition-colors flex-shrink-0"
             style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}
           >
@@ -741,26 +882,6 @@ export default function MovieEditorPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate(editMovieId ? "/admin/movies" : "/admin/movies/new")}
-            disabled={submitting}
-            className="px-5 py-2.5 rounded-xl border transition-colors hover:opacity-80 disabled:opacity-50"
-            style={{ fontSize: "14px", borderColor: "var(--border-color)", color: "var(--text-main)" }}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="px-6 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-60"
-            style={{ fontSize: "14px", fontWeight: 500 }}
-          >
-            {submitting ? "Saving…" : editMovieId ? "Save Changes" : "Add Movie"}
-          </button>
-        </div>
       </div>
 
       {error && (
@@ -769,6 +890,16 @@ export default function MovieEditorPage() {
           <p className="text-xs text-rose-600 leading-relaxed">{error}</p>
         </div>
       )}
+
+      <MovieEditorActionBar
+        status={displayedActionStatus}
+        operation={operation}
+        canSave={canSaveDraft}
+        canSubmit={canSubmitForReview}
+        saveDisabled={!isDirty}
+        onSaveDraft={handleSaveDraft}
+        onSubmitForReview={handleSubmitForReview}
+      />
 
       <MovieEditorWorkflow sections={workflowSections}>
 
@@ -1446,6 +1577,19 @@ export default function MovieEditorPage() {
           </section>
         </div>
       </MovieEditorWorkflow>
+
+      {confirmExitOpen && (
+        <ConfirmDialog
+          title="Discard unsaved movie changes?"
+          body="Your latest edits have not been saved as a draft. Leaving now will permanently discard those changes."
+          confirmLabel="Discard changes"
+          cancelLabel="Keep editing"
+          danger
+          busy={submitting}
+          onCancel={() => setConfirmExitOpen(false)}
+          onConfirm={() => navigate(exitDestination)}
+        />
+      )}
     </div>
   );
 }

@@ -177,7 +177,7 @@ export default function MovieEditorWorkflow({ sections, children }: MovieEditorW
   return (
     <div>
       <div
-        className="sticky top-0 z-30 -mx-1 mb-5 border-y px-1 py-2 backdrop-blur lg:hidden"
+        className="sticky top-20 z-30 -mx-1 mb-5 border-y px-1 py-2 backdrop-blur lg:hidden"
         style={{ background: "color-mix(in srgb, var(--bg-main) 92%, transparent)", borderColor: "var(--border-color)" }}
       >
         <SectionNavigation activeSection={activeSection} sections={sections} onNavigate={navigateToSection} compact />
