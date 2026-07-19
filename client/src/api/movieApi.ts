@@ -41,7 +41,6 @@ export type MovieApiResponse = {
   backdrops?: string[];
   trailerUrl?: string;
   releaseDate?: string;
-  endDate?: string;
 };
 
 export type RoomType = "STANDARD" | "LARGE" | "IMAX";
@@ -497,7 +496,6 @@ export type MovieV2 = {
   originalLanguage: string;
   durationMinutes: number;
   releaseDate?: string;
-  endDate?: string;
   country?: string;
   status: MovieStatus;
   ageRating?: AgeRatingResponse;
@@ -669,7 +667,6 @@ export type CreateMovieRequest = {
   originalLanguage: string;
   durationMinutes: number;
   releaseDate?: string;
-  endDate?: string;
   country?: string;
   ageRatingId?: number;
   /** Issue #151: all valid IDs are linked, not just one. */
@@ -796,7 +793,6 @@ const toLegacyMovie = (movie: MovieV2): MovieApiResponse => {
     showTimes: [],
     createAt: movie.createdAt ?? '',
     releaseDate: movie.releaseDate,
-    endDate: movie.endDate,
   };
 };
 

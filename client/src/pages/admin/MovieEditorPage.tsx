@@ -73,7 +73,6 @@ type FormState = {
   originalLanguage: string;
   durationMinutes: number;
   releaseDate: string;
-  endDate: string;
   country: string;
   ageRatingId: number | null;
   selectedCompanies: SelectedCompany[];
@@ -98,7 +97,6 @@ const emptyForm: FormState = {
   originalLanguage: "en",
   durationMinutes: 120,
   releaseDate: "",
-  endDate: "",
   country: "",
   ageRatingId: null,
   selectedCompanies: [],
@@ -130,7 +128,6 @@ function movieToForm(mv: MovieV2): FormState {
     originalLanguage: mv.originalLanguage ?? "en",
     durationMinutes: mv.durationMinutes ?? 120,
     releaseDate: mv.releaseDate ?? "",
-    endDate: mv.endDate ?? "",
     country: mv.country ?? "",
     ageRatingId: mv.ageRating?.ratingId ?? null,
     selectedCompanies: mv.companies?.map((c) => ({
@@ -409,7 +406,6 @@ export default function MovieEditorPage() {
       originalLanguage: sourceForm.originalLanguage,
       durationMinutes: sourceForm.durationMinutes,
       releaseDate: sourceForm.releaseDate || undefined,
-      endDate: sourceForm.endDate || undefined,
       country: sourceForm.country.trim() || undefined,
       ageRatingId: sourceForm.ageRatingId ?? undefined,
       companyIds: resolvedCompanyIds,
@@ -963,13 +959,6 @@ export default function MovieEditorPage() {
                     setTmdbUnverified((p) => ({ ...p, releaseDate: false }));
                   }}
                   className={IC} style={IS}
-                />
-              </div>
-              <div>
-                <label style={FL}>End Date <span style={{ fontWeight: 400, color: "var(--text-sub)" }}>(auto-ends showing)</span></label>
-                <input
-                  type="date" value={form.endDate} min={form.releaseDate || undefined}
-                  onChange={(e) => set("endDate", e.target.value)} className={IC} style={IS}
                 />
               </div>
               <div>

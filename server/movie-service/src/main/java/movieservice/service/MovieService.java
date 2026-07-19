@@ -74,7 +74,6 @@ public class MovieService {
 
         Movie movie = movieMapper.toMovie(request);
         movie.setStatus(MovieStatus.DRAFT);
-        movieReadinessValidator.requireValidDateRange(movie.getReleaseDate(), movie.getEndDate());
 
         // Wire FK references
         if (request.getAgeRatingId() != null) {
@@ -333,7 +332,6 @@ public class MovieService {
 
         // 1) Scalar fields - null-safe qua @BeanMapping(IGNORE) tren mapper.
         movieMapper.updateMovieFromRequest(request, movie);
-        movieReadinessValidator.requireValidDateRange(movie.getReleaseDate(), movie.getEndDate());
 
         // [Backend] Fetch and select an official TMDB trailer: a manually-entered trailerUrl
         // is an arbitrary admin-supplied string, not a parsed YouTube key - clear the TMDB

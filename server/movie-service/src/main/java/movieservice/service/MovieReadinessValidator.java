@@ -41,13 +41,6 @@ public class MovieReadinessValidator {
         this.requireShowtimeForRelease = requireShowtimeForRelease;
     }
 
-    /** Enforced at create/update too, regardless of lifecycle status - an inverted range is never valid. */
-    public void requireValidDateRange(LocalDate releaseDate, LocalDate endDate) {
-        if (releaseDate != null && endDate != null && releaseDate.isAfter(endDate)) {
-            throw new AppException(MovieErrorCode.INVALID_MOVIE_DATE_RANGE);
-        }
-    }
-
     public void requireReadyForReview(Movie movie) {
         List<ReadinessViolation> violations = collectReviewViolations(movie);
         if (!violations.isEmpty()) {
@@ -91,10 +84,6 @@ public class MovieReadinessValidator {
         }
         if (movie.getFormats() == null || movie.getFormats().isEmpty()) {
             violations.add(violation("formats", "AT_LEAST_ONE_REQUIRED"));
-        }
-        if (movie.getReleaseDate() != null && movie.getEndDate() != null
-                && movie.getReleaseDate().isAfter(movie.getEndDate())) {
-            violations.add(violation("releaseDate", "MUST_BE_ON_OR_BEFORE_END_DATE"));
         }
         return violations;
     }
@@ -141,9 +130,6 @@ public class MovieReadinessValidator {
 
         if (movie.getReleaseDate() != null && today.isBefore(movie.getReleaseDate())) {
             violations.add(violation("releaseDate", "RELEASE_DATE_NOT_REACHED"));
-        }
-        if (movie.getEndDate() != null && today.isAfter(movie.getEndDate())) {
-            violations.add(violation("endDate", "ALREADY_PAST_END_DATE"));
         }
         if (requireShowtimeForRelease) {
             boolean hasFutureShowtime = showTimeRepository.existsByMovieMovieIdAndFutureNonCancelledShowTime(
