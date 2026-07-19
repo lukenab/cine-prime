@@ -1,0 +1,62 @@
+import { describe, expect, it } from "vitest";
+import { buildMoviePayload, type MoviePayloadFormFields } from "./buildMoviePayload";
+
+function baseForm(overrides: Partial<MoviePayloadFormFields> = {}): MoviePayloadFormFields {
+  return {
+    originalTitle: "Parasite",
+    originalLanguage: "en",
+    durationMinutes: 132,
+    releaseDate: "2019-05-30",
+    country: "South Korea",
+    ageRatingId: 3,
+    genreIds: [1],
+    formatIds: [1],
+    posterUrl: "",
+    thumbnailUrl: "",
+    trailerUrl: "",
+    vi_title: "",
+    vi_synopsis: "",
+    vi_tagline: "",
+    en_title: "",
+    en_synopsis: "",
+    en_tagline: "",
+    ...overrides,
+  };
+}
+
+describe("buildMoviePayload", () => {
+  it("never includes endDate in the payload, on create or update", () => {
+    const payload = buildMoviePayload(baseForm(), [], []);
+
+    expect(payload).not.toHaveProperty("endDate");
+    expect(JSON.stringify(payload)).not.toContain("endDate");
+  });
+
+  it("still sends releaseDate as theatrical/content metadata", () => {
+    const payload = buildMoviePayload(baseForm({ releaseDate: "2019-05-30" }), [], []);
+
+    expect(payload.releaseDate).toBe("2019-05-30");
+  });
+
+  it("omits releaseDate (rather than sending an empty string) when unset", () => {
+    const payload = buildMoviePayload(baseForm({ releaseDate: "" }), [], []);
+
+    expect(payload.releaseDate).toBeUndefined();
+  });
+
+  it("still builds translations, genres, formats and companies as before", () => {
+    const payload = buildMoviePayload(
+      baseForm({ en_title: "Parasite", en_synopsis: "A poor family schemes...", genreIds: [1, 2], formatIds: [1, 2] }),
+      [10, 20],
+      [{ personId: 1, roleType: "DIRECTOR" }],
+    );
+
+    expect(payload.translations).toEqual([
+      { languageCode: "en", title: "Parasite", synopsis: "A poor family schemes...", tagline: undefined },
+    ]);
+    expect(payload.companyIds).toEqual([10, 20]);
+    expect(payload.genreIds).toEqual([1, 2]);
+    expect(payload.formatIds).toEqual([1, 2]);
+    expect(payload.cast).toEqual([{ personId: 1, roleType: "DIRECTOR" }]);
+  });
+});
