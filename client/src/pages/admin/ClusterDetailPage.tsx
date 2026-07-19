@@ -3,7 +3,7 @@ import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import {
   ArrowLeft, MapPin, Phone, Building2, Armchair, RefreshCw, AlertCircle,
   Plus, Search, ChevronRight, CheckCircle, CheckCircle2, XCircle, Clock, SendHorizonal, Edit2, Trash2,
-  CalendarDays, Mail, Timer,
+  Mail, Timer, Copy,
 } from "lucide-react";
 import {
   movieApi,
@@ -76,6 +76,42 @@ function excelRowLabel(index: number): string {
   return label;
 }
 
+type ResourceError = {
+  message: string;
+  requestId?: string;
+};
+
+function firstString(...values: unknown[]): string | undefined {
+  return values.find((value): value is string => typeof value === "string" && value.trim().length > 0);
+}
+
+/** Normalizes the common API/gateway error shapes without coupling the page to Axios. */
+function toResourceError(error: unknown, fallbackMessage: string): ResourceError {
+  if (!error || typeof error !== "object") return { message: fallbackMessage };
+
+  const response = "response" in error && error.response && typeof error.response === "object"
+    ? error.response as Record<string, unknown>
+    : undefined;
+  const data = response?.data && typeof response.data === "object"
+    ? response.data as Record<string, unknown>
+    : undefined;
+  const headers = response?.headers && typeof response.headers === "object"
+    ? response.headers as Record<string, unknown>
+    : undefined;
+
+  return {
+    message: firstString(data?.message, data?.error, fallbackMessage) ?? fallbackMessage,
+    requestId: firstString(
+      data?.correlationId,
+      data?.requestId,
+      data?.traceId,
+      headers?.["x-correlation-id"],
+      headers?.["x-request-id"],
+      headers?.["x-trace-id"],
+    ),
+  };
+}
+
 // ── Toast (matches the pattern used in SettingsPage.tsx / CreateEmployeePage.tsx) ──
 
 function Toast({ type, message, onClose }: { type: "success" | "error"; message: string; onClose: () => void }) {
@@ -142,8 +178,10 @@ export default function ClusterDetailPage() {
 
   const [cluster, setCluster] = useState<ClusterResponse | null>(null);
   const [rooms, setRooms] = useState<RoomResponse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [clusterLoading, setClusterLoading] = useState(true);
+  const [roomsLoading, setRoomsLoading] = useState(true);
+  const [clusterError, setClusterError] = useState<ResourceError | null>(null);
+  const [roomsError, setRoomsError] = useState<ResourceError | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [workflowBusy, setWorkflowBusy] = useState(false);
   const [rejecting, setRejecting] = useState(false);
@@ -162,18 +200,43 @@ export default function ClusterDetailPage() {
 
   const load = useCallback(async () => {
     if (!clusterId) return;
-    setLoading(true);
-    setError(null);
+    setClusterLoading(true);
+    setRoomsLoading(true);
+    setClusterError(null);
+    setRoomsError(null);
+
+    const [clusterRes, roomsRes] = await Promise.allSettled([
+      movieApi.getClusterById(clusterId),
+      movieApi.getRoomsByCluster(clusterId),
+    ]);
+
+    if (clusterRes.status === "fulfilled") {
+      setCluster(clusterRes.value.result);
+    } else {
+      setClusterError(toResourceError(clusterRes.reason, "Failed to load cluster."));
+    }
+
+    if (roomsRes.status === "fulfilled") {
+      setRooms(roomsRes.value.result ?? []);
+    } else {
+      setRoomsError(toResourceError(roomsRes.reason, "The room service is temporarily unavailable."));
+    }
+
+    setClusterLoading(false);
+    setRoomsLoading(false);
+  }, [clusterId]);
+
+  const loadRooms = useCallback(async () => {
+    if (!clusterId) return;
+    setRoomsLoading(true);
+    setRoomsError(null);
     try {
-      const [clusterRes, roomsRes] = await Promise.allSettled([
-        movieApi.getClusterById(clusterId),
-        movieApi.getRoomsByCluster(clusterId),
-      ]);
-      if (clusterRes.status === "fulfilled") setCluster(clusterRes.value.result);
-      else setError("Failed to load cluster.");
-      if (roomsRes.status === "fulfilled") setRooms(roomsRes.value.result ?? []);
+      const response = await movieApi.getRoomsByCluster(clusterId);
+      setRooms(response.result ?? []);
+    } catch (roomRequestError) {
+      setRoomsError(toResourceError(roomRequestError, "The room service is temporarily unavailable."));
     } finally {
-      setLoading(false);
+      setRoomsLoading(false);
     }
   }, [clusterId]);
 
@@ -241,7 +304,7 @@ export default function ClusterDetailPage() {
     border: "1px solid var(--border-color)",
   };
 
-  if (loading && !cluster) {
+  if (clusterLoading && !cluster) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-3">
         <RefreshCw size={20} className="animate-spin" style={{ color: "var(--text-sub)" }} />
@@ -254,14 +317,23 @@ export default function ClusterDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-3">
         <AlertCircle size={22} style={{ color: "#ef4444" }} />
-        <p style={{ fontSize: "14px", color: "var(--text-sub)" }}>{error ?? "Cluster not found."}</p>
-        <button
-          onClick={() => navigate("/admin/clusters")}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl border transition-all hover:opacity-80"
-          style={{ fontSize: "13px", color: "var(--text-sub)", borderColor: "var(--border-color)", background: "var(--bg-card)" }}
-        >
-          <ArrowLeft size={15} /> Back to Clusters
-        </button>
+        <p style={{ fontSize: "14px", color: "var(--text-sub)" }}>{clusterError?.message ?? "Cluster not found."}</p>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={load}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border transition-all hover:opacity-80"
+            style={{ fontSize: "13px", color: "#2563eb", borderColor: "var(--border-color)", background: "var(--bg-card)" }}
+          >
+            <RefreshCw size={15} /> Retry
+          </button>
+          <button
+            onClick={() => navigate("/admin/clusters")}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border transition-all hover:opacity-80"
+            style={{ fontSize: "13px", color: "var(--text-sub)", borderColor: "var(--border-color)", background: "var(--bg-card)" }}
+          >
+            <ArrowLeft size={15} /> Back to Clusters
+          </button>
+        </div>
       </div>
     );
   }
@@ -414,11 +486,11 @@ export default function ClusterDetailPage() {
         </div>
       </section>
 
-      {/* Error */}
-      {error && (
+      {/* A refresh can fail after an earlier cluster response has already rendered. */}
+      {clusterError && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl mb-5 border border-rose-200 bg-rose-50">
           <AlertCircle size={16} className="text-rose-500 flex-shrink-0" />
-          <p style={{ fontSize: "14px", color: "#e11d48" }}>{error}</p>
+          <p style={{ fontSize: "14px", color: "#e11d48" }}>{clusterError.message}</p>
           <button onClick={load} className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 transition-colors text-rose-600" style={{ fontSize: "13px" }}>
             <RefreshCw size={13} /> Retry
           </button>
@@ -437,12 +509,12 @@ export default function ClusterDetailPage() {
           />
         </div>
         <button
-          onClick={load} disabled={loading}
+          onClick={load} disabled={clusterLoading || roomsLoading}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all hover:opacity-80 disabled:opacity-50"
           style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
         >
-          <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
-          {loading ? "Loading…" : "Refresh"}
+          <RefreshCw size={15} className={clusterLoading || roomsLoading ? "animate-spin" : ""} />
+          {clusterLoading || roomsLoading ? "Loading…" : "Refresh"}
         </button>
         {can.edit && cluster.status === "ACTIVE" && (
           <button
@@ -490,11 +562,52 @@ export default function ClusterDetailPage() {
             </tr>
           </thead>
           <tbody>
-            {loading && rooms.length === 0 ? (
+            {roomsLoading ? (
               <tr>
                 <td colSpan={6} className="px-5 py-16 text-center">
                   <RefreshCw size={18} className="animate-spin mx-auto mb-2" style={{ color: "var(--text-sub)" }} />
                   <p style={{ fontSize: "14px", color: "var(--text-sub)" }}>Loading rooms…</p>
+                </td>
+              </tr>
+            ) : roomsError ? (
+              <tr>
+                <td colSpan={6} className="px-5 py-12 text-center">
+                  <div role="alert" className="mx-auto flex max-w-lg flex-col items-center gap-2">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full" style={{ background: "rgba(239,68,68,0.10)" }}>
+                      <AlertCircle size={20} style={{ color: "#ef4444" }} />
+                    </div>
+                    <p style={{ color: "var(--text-main)", fontSize: "14px", fontWeight: 600 }}>Failed to load rooms</p>
+                    <p style={{ color: "var(--text-sub)", fontSize: "13px" }}>{roomsError.message}</p>
+                    {roomsError.requestId && (
+                      <div className="mt-1 flex items-center gap-2" style={{ color: "var(--text-sub)", fontSize: "12px" }}>
+                        <span>Request ID: <code style={{ color: "var(--text-main)" }}>{roomsError.requestId}</code></span>
+                        <button
+                          type="button"
+                          title="Copy request ID"
+                          aria-label="Copy request ID"
+                          className="rounded-md p-1 transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(roomsError.requestId!);
+                              showToast("success", "Request ID copied.");
+                            } catch {
+                              showToast("error", "Could not copy request ID.");
+                            }
+                          }}
+                        >
+                          <Copy size={13} />
+                        </button>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={loadRooms}
+                      className="mt-2 flex items-center gap-1.5 rounded-lg border px-3 py-2 transition-opacity hover:opacity-80"
+                      style={{ color: "#2563eb", borderColor: "var(--border-color)", background: "var(--bg-card)", fontSize: "13px", fontWeight: 600 }}
+                    >
+                      <RefreshCw size={13} /> Retry
+                    </button>
+                  </div>
                 </td>
               </tr>
             ) : filteredRooms.length === 0 ? (
@@ -575,7 +688,7 @@ export default function ClusterDetailPage() {
           </tbody>
         </table>
 
-        {filteredRooms.length > 0 && (
+        {!roomsLoading && !roomsError && filteredRooms.length > 0 && (
           <div className="px-5 py-3.5 border-t" style={{ borderColor: "var(--border-color)" }}>
             <p style={{ fontSize: "13px", color: "var(--text-sub)" }}>
               <span style={{ color: "var(--text-main)", fontWeight: 500 }}>{filteredRooms.length}</span> room{filteredRooms.length !== 1 ? "s" : ""} ·{" "}
