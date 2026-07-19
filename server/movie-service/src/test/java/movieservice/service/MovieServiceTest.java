@@ -82,7 +82,7 @@ class MovieServiceTest {
     void nullCollectionsAndNullFkDoNotTouchAnyRelationshipRepository() {
         UpdateMovieRequest request = UpdateMovieRequest.builder()
                 .originalTitle("Only scalar changed")
-                .build(); // ageRatingId, companyId, genreIds, formatIds, translations, cast: null
+                .build(); // ageRatingId, companyIds, genreIds, formatIds, translations, cast: null
 
         movieService.updateMovie(1L, request);
 
@@ -107,6 +107,48 @@ class MovieServiceTest {
 
         assertDoesNotThrow(() -> movieService.updateMovie(1L, request));
         assertEquals(List.of(genre1, genre2), movie.getGenres());
+    }
+
+    // ── Issue #151: multi-company partial-update semantics ──────────────────
+
+    @Test
+    void duplicateCompanyIdsInRequestAreNormalizedNotRejected() {
+        ProductionCompany c1 = ProductionCompany.builder().companyId(1L).name("Legendary").build();
+        ProductionCompany c2 = ProductionCompany.builder().companyId(2L).name("Warner Bros.").build();
+        when(productionCompanyRepository.findAllByCompanyIdIn(List.of(1L, 2L))).thenReturn(List.of(c1, c2));
+
+        UpdateMovieRequest request = UpdateMovieRequest.builder()
+                .companyIds(List.of(1L, 1L, 2L))
+                .build();
+
+        assertDoesNotThrow(() -> movieService.updateMovie(1L, request));
+        assertEquals(List.of(c1, c2), movie.getCompanies());
+    }
+
+    @Test
+    void emptyCompanyIdsListClearsAllCompanies() {
+        movie.setCompanies(List.of(ProductionCompany.builder().companyId(1L).name("Legendary").build()));
+
+        UpdateMovieRequest request = UpdateMovieRequest.builder()
+                .companyIds(List.of())
+                .build();
+
+        movieService.updateMovie(1L, request);
+
+        assertTrue(movie.getCompanies().isEmpty());
+        verifyNoInteractions(productionCompanyRepository);
+    }
+
+    @Test
+    void unknownCompanyIdIsRejected() {
+        when(productionCompanyRepository.findAllByCompanyIdIn(List.of(999L))).thenReturn(List.of());
+
+        UpdateMovieRequest request = UpdateMovieRequest.builder()
+                .companyIds(List.of(999L))
+                .build();
+
+        AppException ex = assertThrows(AppException.class, () -> movieService.updateMovie(1L, request));
+        assertEquals(MovieErrorCode.COMPANY_NOT_FOUND, ex.getErrorCode());
     }
 
     // ── Translation reconciliation ───────────────────────────────────────────

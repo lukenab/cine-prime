@@ -11,6 +11,7 @@ import lombok.experimental.FieldDefaults;
 public class ProductionCompanyResponse {
     Long companyId;
     String name;
+    Integer tmdbCompanyId;
     String country;
     String logoUrl;
     String websiteUrl;

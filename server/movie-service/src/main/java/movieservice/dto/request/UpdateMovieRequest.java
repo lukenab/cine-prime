@@ -32,7 +32,7 @@ public class UpdateMovieRequest {
     String country;
 
     Integer ageRatingId;
-    Long companyId;
+    List<Long> companyIds;
     List<Long> genreIds;
     List<Integer> formatIds;
 

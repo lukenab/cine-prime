@@ -82,10 +82,8 @@ public class MovieService {
                     .orElseThrow(() -> new AppException(MovieErrorCode.AGE_RATING_NOT_FOUND));
             movie.setAgeRating(ar);
         }
-        if (request.getCompanyId() != null) {
-            ProductionCompany company = productionCompanyRepository.findById(request.getCompanyId())
-                    .orElseThrow(() -> new AppException(MovieErrorCode.COMPANY_NOT_FOUND));
-            movie.setCompany(company);
+        if (request.getCompanyIds() != null) {
+            movie.setCompanies(resolveCompanies(request.getCompanyIds()));
         }
 
         // Genres
@@ -229,6 +227,18 @@ public class MovieService {
                 .build();
     }
 
+    /** Issue #151: distinct() first, same as genres/formats, so a request that repeats an ID
+     *  isn't falsely rejected as NOT_FOUND. Empty list clears all companies. */
+    private List<ProductionCompany> resolveCompanies(List<Long> companyIds) {
+        List<Long> distinctIds = companyIds.stream().distinct().collect(Collectors.toList());
+        if (distinctIds.isEmpty()) return new ArrayList<>();
+        List<ProductionCompany> companies = productionCompanyRepository.findAllByCompanyIdIn(distinctIds);
+        if (companies.size() != distinctIds.size()) {
+            throw new AppException(MovieErrorCode.COMPANY_NOT_FOUND);
+        }
+        return companies;
+    }
+
     private List<movieservice.dto.response.GenreResponse> mapGenres(Movie movie) {
         if (movie.getGenres() == null) return List.of();
         return movie.getGenres().stream().map(movieMapper::toGenreResponse).collect(Collectors.toList());
@@ -302,9 +312,8 @@ public class MovieService {
             movie.setAgeRating(ageRatingRepository.findById(request.getAgeRatingId())
                     .orElseThrow(() -> new AppException(MovieErrorCode.AGE_RATING_NOT_FOUND)));
         }
-        if (request.getCompanyId() != null) {
-            movie.setCompany(productionCompanyRepository.findById(request.getCompanyId())
-                    .orElseThrow(() -> new AppException(MovieErrorCode.COMPANY_NOT_FOUND)));
+        if (request.getCompanyIds() != null) {
+            movie.setCompanies(resolveCompanies(request.getCompanyIds()));
         }
 
         // 3) Genres / formats - distinct() truoc khi so sanh size, tranh false-NOT_FOUND khi

@@ -40,8 +40,8 @@ public class CreateMovieRequest {
     /** AgeRating.ratingId */
     Integer ageRatingId;
 
-    /** ProductionCompany.companyId */
-    Long companyId;
+    /** ProductionCompany.companyId - all valid IDs are linked, no single-company limit */
+    List<Long> companyIds;
 
     /** Genre IDs — min 1 required */
     @NotEmpty

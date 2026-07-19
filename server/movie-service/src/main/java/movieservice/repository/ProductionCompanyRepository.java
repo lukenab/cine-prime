@@ -11,4 +11,6 @@ import java.util.Optional;
 public interface ProductionCompanyRepository extends JpaRepository<ProductionCompany, Long> {
     Optional<ProductionCompany> findByName(String name);
     List<ProductionCompany> findByNameContainingIgnoreCase(String keyword);
+    Optional<ProductionCompany> findByTmdbCompanyId(Integer tmdbCompanyId);
+    List<ProductionCompany> findAllByCompanyIdIn(List<Long> companyIds);
 }

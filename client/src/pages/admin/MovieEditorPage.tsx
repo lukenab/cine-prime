@@ -42,6 +42,11 @@ type CastRow = {
   characterName: string;
 };
 
+/** Issue #151: a movie can link several production companies. companyId is null for a
+ *  company picked up from a TMDB preview that hasn't been created locally yet - resolved to a
+ *  real ID (via movieApi.createCompany) right before submit, same as the old single-company flow. */
+type SelectedCompany = { companyId: number | null; name: string; country?: string; logoUrl?: string };
+
 type FormState = {
   originalTitle: string;
   originalLanguage: string;
@@ -50,8 +55,7 @@ type FormState = {
   endDate: string;
   country: string;
   ageRatingId: number | null;
-  companyId: number | null;
-  companyName: string;
+  selectedCompanies: SelectedCompany[];
   genreIds: number[];
   formatIds: number[];
   posterUrl: string;
@@ -74,8 +78,7 @@ const emptyForm: FormState = {
   endDate: "",
   country: "",
   ageRatingId: null,
-  companyId: null,
-  companyName: "",
+  selectedCompanies: [],
   genreIds: [],
   formatIds: [],
   posterUrl: "",
@@ -100,8 +103,9 @@ function movieToForm(mv: MovieV2): FormState {
     endDate: mv.endDate ?? "",
     country: mv.country ?? "",
     ageRatingId: mv.ageRating?.ratingId ?? null,
-    companyId: null,
-    companyName: mv.companyName ?? "",
+    selectedCompanies: mv.companies?.map((c) => ({
+      companyId: c.companyId, name: c.name, country: c.country, logoUrl: c.logoUrl,
+    })) ?? [],
     genreIds: mv.genres?.map((g) => g.genreId) ?? [],
     formatIds: mv.formats?.map((f) => f.formatId) ?? [],
     posterUrl: mv.posterUrl ?? "",
@@ -201,9 +205,6 @@ export default function MovieEditorPage() {
   const [companyLoading, setCompanyLoading] = useState(false);
   const companyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const companyRef = useRef<HTMLDivElement>(null);
-  const [pendingCompany, setPendingCompany] = useState<
-    { name: string; country?: string; logoUrl?: string } | null
-  >(null);
 
   const [personQ, setPersonQ] = useState("");
   const [personResults, setPersonResults] = useState<PersonResponse[]>([]);
@@ -236,15 +237,6 @@ export default function MovieEditorPage() {
         setForm(movieToForm(mv));
         if (mv.images?.length) setMovieImages(mv.images);
         else movieApi.getMovieImages(editMovieId).then((r) => setMovieImages(r.result ?? [])).catch(() => {});
-        if (mv.companyName) {
-          movieApi
-            .searchCompanies(mv.companyName)
-            .then((cr) => {
-              const found = cr.result.find((c) => c.name === mv.companyName);
-              if (found) setForm((prev) => ({ ...prev, companyId: found.companyId }));
-            })
-            .catch(() => {});
-        }
       })
       .catch(() => setError("Failed to load movie."))
       .finally(() => setLoadingMovie(false));
@@ -331,7 +323,7 @@ export default function MovieEditorPage() {
   };
 
   const buildPayload = (
-    resolvedCompanyId: number | undefined,
+    resolvedCompanyIds: number[],
     resolvedCast: CastRequest[]
   ): CreateMovieRequest => {
     const translations: { languageCode: string; title: string; synopsis?: string }[] = [];
@@ -352,7 +344,7 @@ export default function MovieEditorPage() {
       endDate: form.endDate || undefined,
       country: form.country.trim() || undefined,
       ageRatingId: form.ageRatingId ?? undefined,
-      companyId: resolvedCompanyId,
+      companyIds: resolvedCompanyIds,
       genreIds: form.genreIds,
       formatIds: form.formatIds,
       posterUrl: form.posterUrl.trim() || undefined,
@@ -366,15 +358,19 @@ export default function MovieEditorPage() {
     };
   };
 
-  const resolveCompanyId = async (): Promise<number | undefined> => {
-    if (form.companyId) return form.companyId;
-    if (!pendingCompany) return undefined;
-    const created = await movieApi.createCompany({
-      name: pendingCompany.name,
-      country: pendingCompany.country,
-      logoUrl: pendingCompany.logoUrl,
-    });
-    return created.result.companyId;
+  /** Creates a local ProductionCompany row for each TMDB-sourced pick that has no companyId
+   *  yet, and returns the final list of resolved IDs. Existing companies pass straight through. */
+  const resolveCompanyIds = async (): Promise<{ ids: number[]; resolved: SelectedCompany[] }> => {
+    const resolved: SelectedCompany[] = [];
+    for (const c of form.selectedCompanies) {
+      if (c.companyId != null) {
+        resolved.push(c);
+        continue;
+      }
+      const created = await movieApi.createCompany({ name: c.name, country: c.country, logoUrl: c.logoUrl });
+      resolved.push({ ...c, companyId: created.result.companyId });
+    }
+    return { ids: resolved.map((c) => c.companyId!), resolved };
   };
 
   const resolveCastPersonIds = async (): Promise<CastRequest[]> => {
@@ -429,18 +425,17 @@ export default function MovieEditorPage() {
     setSubmitting(true);
     setError("");
     try {
-      const [resolvedCompanyId, resolvedCast] = await Promise.all([
-        resolveCompanyId(),
+      const [{ ids: resolvedCompanyIds, resolved: resolvedCompanies }, resolvedCast] = await Promise.all([
+        resolveCompanyIds(),
         resolveCastPersonIds(),
       ]);
       setForm((p) => ({
         ...p,
-        companyId: resolvedCompanyId ?? p.companyId,
+        selectedCompanies: resolvedCompanies,
         cast: p.cast.map((c, i) => ({ ...c, personId: resolvedCast[i]?.personId ?? c.personId })),
       }));
-      setPendingCompany(null);
 
-      const payload = buildPayload(resolvedCompanyId, resolvedCast);
+      const payload = buildPayload(resolvedCompanyIds, resolvedCast);
       if (editMovieId) {
         await movieApi.updateMovieV2(editMovieId, payload);
         await importPendingMediaInto(editMovieId);
@@ -473,14 +468,12 @@ export default function MovieEditorPage() {
         : (details.genreIds ?? []);
       const unresolvedGenres = details.genres?.filter((genre) => genre.localGenreId == null) ?? [];
 
-      const primaryCompany = details.companies?.[0];
-      if (primaryCompany) {
-        setPendingCompany(
-          primaryCompany.localCompanyId
-            ? null
-            : { name: primaryCompany.name, country: primaryCompany.country, logoUrl: primaryCompany.logoUrl }
-        );
-      }
+      // Issue #151: all TMDB-listed companies replace the form's selection, not just the
+      // first one. Ones never imported locally (localCompanyId == null) are created on submit
+      // via resolveCompanyIds(), same pattern the old single-company flow used.
+      const tmdbCompanies: SelectedCompany[] | null = details.companies?.map((c) => ({
+        companyId: c.localCompanyId ?? null, name: c.name, country: c.country, logoUrl: c.logoUrl,
+      })) ?? null;
 
       setForm((p) => ({
         ...p,
@@ -489,8 +482,7 @@ export default function MovieEditorPage() {
         durationMinutes: details.durationMinutes || p.durationMinutes,
         releaseDate: details.releaseDate || item.releaseDate || p.releaseDate,
         country: details.country || p.country,
-        companyId: primaryCompany ? (primaryCompany.localCompanyId ?? null) : p.companyId,
-        companyName: primaryCompany ? primaryCompany.name : p.companyName,
+        selectedCompanies: tmdbCompanies ?? p.selectedCompanies,
         // TMDB-FIX-05: thumbnailUrl is a genuinely smaller CDN derivative computed server-side,
         // never a straight copy of posterUrl.
         posterUrl: details.posterUrl || item.posterUrl || p.posterUrl,
@@ -734,27 +726,55 @@ export default function MovieEditorPage() {
             </div>
 
             <div ref={companyRef} className="relative mt-3">
-              <label style={FL}>Production Company</label>
+              <label style={FL}>Production Companies</label>
+              {form.selectedCompanies.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {form.selectedCompanies.map((c, i) => (
+                    <span
+                      key={`${c.companyId ?? "pending"}-${c.name}-${i}`}
+                      className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-full border"
+                      style={{ background: "var(--bg-main)", borderColor: "var(--border-color)", fontSize: "12.5px", color: "var(--text-main)" }}
+                    >
+                      {c.name}
+                      {c.companyId == null && (
+                        <span style={{ fontSize: "10px", color: "var(--text-sub)" }}>(new)</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => set("selectedCompanies", form.selectedCompanies.filter((_, j) => j !== i))}
+                        className="rounded-full hover:bg-red-50 hover:text-red-600 p-0.5"
+                      >
+                        <X size={11} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
               <div className="relative">
                 <input
-                  type="text" placeholder="Type company name to search…" value={form.companyName}
-                  onFocus={() => { setCompanyQ(form.companyName); if (form.companyName) setShowCompanyDrop(true); }}
-                  onChange={(e) => { set("companyName", e.target.value); set("companyId", null); setCompanyQ(e.target.value); setShowCompanyDrop(true); }}
+                  type="text" placeholder="Type company name to search and add…" value={companyQ}
+                  onFocus={() => { if (companyQ) setShowCompanyDrop(true); }}
+                  onChange={(e) => { setCompanyQ(e.target.value); setShowCompanyDrop(true); }}
                   className={IC} style={IS}
                 />
-                {companyLoading ? (
+                {companyLoading && (
                   <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-blue-500" />
-                ) : form.companyId ? (
-                  <Check size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500" />
-                ) : null}
+                )}
               </div>
               {showCompanyDrop && companies.length > 0 && (
                 <div className="absolute z-20 w-full mt-1 rounded-xl border shadow-lg overflow-hidden" style={{ background: "var(--bg-main)", borderColor: "var(--border-color)" }}>
-                  {companies.map((c) => (
+                  {companies
+                    .filter((c) => !form.selectedCompanies.some((sc) => sc.companyId === c.companyId))
+                    .map((c) => (
                     <button
                       key={c.companyId} type="button"
                       className="w-full text-left px-4 py-2.5 hover:bg-blue-50 transition-colors"
-                      onClick={() => { set("companyId", c.companyId); set("companyName", c.name); setShowCompanyDrop(false); }}
+                      onClick={() => {
+                        set("selectedCompanies", [...form.selectedCompanies,
+                          { companyId: c.companyId, name: c.name, country: c.country, logoUrl: c.logoUrl }]);
+                        setCompanyQ("");
+                        setShowCompanyDrop(false);
+                      }}
                     >
                       <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-main)" }}>{c.name}</span>
                       {c.country && <span style={{ fontSize: "12px", color: "var(--text-sub)", marginLeft: "8px" }}>{c.country}</span>}
