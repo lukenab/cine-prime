@@ -451,7 +451,7 @@ export type CastResponse = {
   billingOrder: number;
 };
 
-export type MovieV2 = {
+export type MovieResponse = {
   movieId: number;
   tmdbId?: number;
   imdbId?: string;
@@ -461,6 +461,9 @@ export type MovieV2 = {
   releaseDate?: string;
   country?: string;
   status: MovieStatus;
+  /** Set when an ADMIN requests changes (PENDING_REVIEW -> CHANGES_REQUESTED) — read this to
+   *  know what to fix before resubmitting. */
+  rejectionNote?: string;
   ageRating?: AgeRatingResponse;
   /** Issue #151: a movie can have several production companies (TMDB import brings them
    *  all in), so this replaced the previous single companyName string field. */
@@ -724,7 +727,7 @@ export type TmdbImageImportResult = {
   warnings: string[];
 };
 
-const toLegacyMovie = (movie: MovieV2): MovieApiResponse => {
+const toLegacyMovie = (movie: MovieResponse): MovieApiResponse => {
   const english = movie.translations?.find((item) => item.languageCode === 'en');
   const vietnamese = movie.translations?.find((item) => item.languageCode === 'vi');
   const directors = movie.cast
@@ -815,7 +818,7 @@ export const movieApi = {
   /** ADMIN/EMPLOYEE only (@PreAuthorize on the backend) — returns movies of every
    *  status (DRAFT/PENDING_REVIEW/...). Use only from authenticated admin pages. */
   getAllMovies: async () => {
-    const response = await axiosClient.get('/api/movies/all') as ApiWrapper<MovieV2[]>;
+    const response = await axiosClient.get('/api/movies/all') as ApiWrapper<MovieResponse[]>;
     return {
       ...response,
       result: (response.result ?? []).map(toLegacyMovie),
@@ -870,18 +873,18 @@ export const movieApi = {
   updateSeat: (seatId: number, payload: UpdateSeatPayload) =>
     axiosClient.put(`/api/seats/${seatId}`, payload) as Promise<ApiWrapper<SeatResponse>>,
 
-  // ── V2 Movie APIs ─────────────────────────────────────────────────────────
+  // ── Movie APIs ────────────────────────────────────────────────────────────
 
   getMovieById: (id: number, lang?: string) => {
     const url = lang ? `/api/movies/${id}?lang=${lang}` : `/api/movies/${id}`;
-    return axiosClient.get(url) as Promise<ApiWrapper<MovieV2>>;
+    return axiosClient.get(url) as Promise<ApiWrapper<MovieResponse>>;
   },
 
-  createMovieV2: (payload: CreateMovieRequest) =>
-    axiosClient.post('/api/movies', payload) as Promise<ApiWrapper<MovieV2>>,
+  createMovie: (payload: CreateMovieRequest) =>
+    axiosClient.post('/api/movies', payload) as Promise<ApiWrapper<MovieResponse>>,
 
-  updateMovieV2: (id: number, payload: UpdateMovieRequest) =>
-    axiosClient.put(`/api/movies/${id}`, payload) as Promise<ApiWrapper<MovieV2>>,
+  updateMovie: (id: number, payload: UpdateMovieRequest) =>
+    axiosClient.put(`/api/movies/${id}`, payload) as Promise<ApiWrapper<MovieResponse>>,
 
   // Lookup APIs
   getGenres: () =>
@@ -951,27 +954,27 @@ export const movieApi = {
     axiosClient.post(`/api/movies/${movieId}/images/tmdb-import`, payload) as Promise<ApiWrapper<TmdbImageImportResult>>,
 
   // ── Content lifecycle commands (MOV-LC-04) — every command returns the
-  // updated MovieV2, not void. See MOVIE_LIFECYCLE_CONTRACT.md.
+  // updated MovieResponse, not void. See MOVIE_LIFECYCLE_CONTRACT.md.
 
   /** DRAFT → PENDING_REVIEW */
   submitForReview: (id: number) =>
-    axiosClient.post(`/api/movies/${id}/submit`) as Promise<ApiWrapper<MovieV2>>,
+    axiosClient.post(`/api/movies/${id}/submit`) as Promise<ApiWrapper<MovieResponse>>,
 
   /** PENDING_REVIEW → APPROVED. Content-only — does not publish or open sales anywhere. */
   approveMovie: (id: number) =>
-    axiosClient.post(`/api/movies/${id}/approve`) as Promise<ApiWrapper<MovieV2>>,
+    axiosClient.post(`/api/movies/${id}/approve`) as Promise<ApiWrapper<MovieResponse>>,
 
   /** PENDING_REVIEW → CHANGES_REQUESTED */
   requestMovieChanges: (id: number, note: string) =>
-    axiosClient.post(`/api/movies/${id}/request-changes`, { note }) as Promise<ApiWrapper<MovieV2>>,
+    axiosClient.post(`/api/movies/${id}/request-changes`, { note }) as Promise<ApiWrapper<MovieResponse>>,
 
   /** CHANGES_REQUESTED → DRAFT */
   startMovieRevision: (id: number) =>
-    axiosClient.post(`/api/movies/${id}/start-revision`) as Promise<ApiWrapper<MovieV2>>,
+    axiosClient.post(`/api/movies/${id}/start-revision`) as Promise<ApiWrapper<MovieResponse>>,
 
   /** APPROVED → ARCHIVED. Blocked while any availability window is PLANNED/OPEN. */
   archiveMovie: (id: number) =>
-    axiosClient.post(`/api/movies/${id}/archive`) as Promise<ApiWrapper<MovieV2>>,
+    axiosClient.post(`/api/movies/${id}/archive`) as Promise<ApiWrapper<MovieResponse>>,
 
   // ── Movie availability — per-cluster exhibition/release plan (MOV-LC-06) ──
 
@@ -1022,7 +1025,7 @@ export const movieApi = {
     axiosClient.get(`/api/movies/tmdb/${tmdbId}/details`) as Promise<ApiWrapper<TmdbMovieDetails>>,
 
   tmdbImport: (tmdbId: number) =>
-    axiosClient.post('/api/movies/tmdb/import', { tmdbId }) as Promise<ApiWrapper<MovieV2>>,
+    axiosClient.post('/api/movies/tmdb/import', { tmdbId }) as Promise<ApiWrapper<MovieResponse>>,
 
   // Cinema Cluster APIs
   getClusters: () =>

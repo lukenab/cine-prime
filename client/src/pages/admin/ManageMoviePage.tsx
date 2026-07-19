@@ -11,7 +11,7 @@ import {
   movieApi,
   type MovieApiResponse,
   type GenreResponse,
-  type MovieV2,
+  type MovieResponse,
 } from "../../api/movieApi";
 import {
   MOVIE_CONTENT_STATUS_META,
@@ -37,9 +37,9 @@ export default function ManageMoviePage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
-  const [detailMovie, setDetailMovie] = useState<MovieV2 | null>(null);
+  const [detailMovie, setDetailMovie] = useState<MovieResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [reviewMovie, setReviewMovie] = useState<MovieV2 | null>(null);
+  const [reviewMovie, setReviewMovie] = useState<MovieResponse | null>(null);
   const [reviewLoading, setReviewLoading] = useState(false);
 
   // ── Load movies from API ──────────────────────────────────────────────────

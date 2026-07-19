@@ -3,7 +3,7 @@ import {
   Building2, ExternalLink, Play, ShieldCheck, Images, Loader2,
 } from "lucide-react";
 import { useState } from "react";
-import type { MovieV2 } from "../api/movieApi";
+import type { MovieResponse } from "../api/movieApi";
 import {
   MOVIE_CONTENT_STATUS_META,
   toMovieContentStatus,
@@ -12,7 +12,7 @@ import { MovieAvailabilityPanel } from "./MovieAvailabilityPanel";
 
 type Props = {
   open: boolean;
-  movie: MovieV2 | null;
+  movie: MovieResponse | null;
   loading?: boolean;
   onClose: () => void;
 };
@@ -199,6 +199,15 @@ export function MovieDetailModal({ open, movie, loading, onClose }: Props) {
                   </p>
                 )}
               </div>
+
+              {/* Changes requested reason — the employee reads this to know what to fix
+                  before resubmitting. Mirrors ClusterDetailPage's rejectionNote panel. */}
+              {contentStatus === "CHANGES_REQUESTED" && movie.rejectionNote && (
+                <div className="rounded-xl border p-3" style={{ borderColor: "#fecaca", background: "#fef2f2" }}>
+                  <p style={{ ...FL, color: "#b91c1c" }}>Changes requested</p>
+                  <p style={{ fontSize: "13px", color: "#7f1d1d", lineHeight: 1.6 }}>{movie.rejectionNote}</p>
+                </div>
+              )}
 
               {/* Quick stats row */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

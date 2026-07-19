@@ -25,6 +25,9 @@ public class MovieResponse {
     LocalDate releaseDate;
     String country;
     String status;
+    /** Set when an ADMIN requests changes (PENDING_REVIEW -> CHANGES_REQUESTED). The employee
+     *  reads this to know what to fix before resubmitting. */
+    String rejectionNote;
 
     AgeRatingResponse ageRating;
 
