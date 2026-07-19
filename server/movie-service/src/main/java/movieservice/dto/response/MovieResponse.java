@@ -33,6 +33,8 @@ public class MovieResponse {
     String posterUrl;
     String thumbnailUrl;
     String trailerUrl;
+    /** TMDB = auto-selected on import; MANUAL = admin-entered/edited. */
+    String trailerSource;
     String synopsis;
 
     List<GenreResponse> genres;

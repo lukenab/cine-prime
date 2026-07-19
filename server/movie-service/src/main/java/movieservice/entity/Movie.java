@@ -68,6 +68,30 @@ public class Movie {
     @Column(name = "trailer_url", length = 500)
     String trailerUrl;
 
+    // Provenance for trailerUrl - see V5__add_movie_trailer_provenance.sql. Populated when
+    // TmdbService selects a trailer from /movie/{id}/videos; trailerSource distinguishes an
+    // auto-selected TMDB trailer from a manual admin override so a future re-sync can leave
+    // manual overrides alone.
+    @Column(name = "trailer_provider", length = 20)
+    String trailerProvider;
+
+    @Column(name = "trailer_external_key", length = 50)
+    String trailerExternalKey;
+
+    @Column(name = "trailer_language_code", length = 10)
+    String trailerLanguageCode;
+
+    @Column(name = "trailer_video_type", length = 20)
+    String trailerVideoType;
+
+    @Column(name = "trailer_official")
+    Boolean trailerOfficial;
+
+    @Builder.Default
+    @Column(name = "trailer_source", nullable = false, length = 20)
+    @org.hibernate.annotations.ColumnDefault("'MANUAL'")
+    String trailerSource = "MANUAL";
+
     @Column(name = "synopsis", columnDefinition = "TEXT")
     String synopsis;
 

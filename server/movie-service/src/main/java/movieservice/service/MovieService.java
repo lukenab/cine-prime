@@ -284,6 +284,19 @@ public class MovieService {
         movieMapper.updateMovieFromRequest(request, movie);
         movieReadinessValidator.requireValidDateRange(movie.getReleaseDate(), movie.getEndDate());
 
+        // [Backend] Fetch and select an official TMDB trailer: a manually-entered trailerUrl
+        // is an arbitrary admin-supplied string, not a parsed YouTube key - clear the TMDB
+        // provenance fields and mark the source MANUAL so a future TMDB re-sync knows not to
+        // overwrite this admin's choice.
+        if (request.getTrailerUrl() != null) {
+            movie.setTrailerSource("MANUAL");
+            movie.setTrailerProvider(null);
+            movie.setTrailerExternalKey(null);
+            movie.setTrailerLanguageCode(null);
+            movie.setTrailerVideoType(null);
+            movie.setTrailerOfficial(null);
+        }
+
         // 2) FK don le - null nghia la khong doi (giu nguyen quan he hien tai).
         if (request.getAgeRatingId() != null) {
             movie.setAgeRating(ageRatingRepository.findById(request.getAgeRatingId())

@@ -26,6 +26,7 @@ import movieservice.dto.tmdb.TmdbMovieDraft;
 import movieservice.dto.tmdb.TmdbReleaseDatesResponse;
 import movieservice.dto.tmdb.TmdbSearchResponse;
 import movieservice.dto.tmdb.TmdbTranslationsResponse;
+import movieservice.dto.tmdb.TmdbVideosResponse;
 import movieservice.dto.tmdb.TranslationDraft;
 import movieservice.entity.*;
 import movieservice.enums.GenreStatus;
@@ -85,6 +86,15 @@ public class TmdbService {
     private static final String PREFERRED_POSTER_SIZE = "w780";
     private static final String PREFERRED_THUMBNAIL_SIZE = "w342";
     private static final String PREFERRED_BACKDROP_SIZE = "w1280";
+
+    // [Backend] Fetch and select an official TMDB trailer: only YouTube-hosted videos are
+    // eligible (the only provider trailerUrl is ever built for), Trailer type is preferred
+    // over Teaser, and vi/en locales are preferred over any other language.
+    private static final String TRAILER_SITE = "YouTube";
+    private static final String TRAILER_TYPE = "Trailer";
+    private static final String TEASER_TYPE = "Teaser";
+    private static final String TRAILER_PROVIDER = "YOUTUBE";
+    private static final List<String> TRAILER_LANGUAGE_PRIORITY = List.of("vi", "en");
 
     /** Fetched once and cached - TMDB's image configuration (base URL, available size profiles)
      *  is effectively static for the lifetime of the app. */
@@ -285,6 +295,8 @@ public class TmdbService {
             warnings.add("POSTER_NOT_AVAILABLE");
         }
 
+        TrailerSelection trailer = selectTrailer(bundle.videos(), warnings);
+
         return TmdbMovieDetailsResponse.builder()
                 .tmdbId(tmdbId)
                 .imdbId(draft.getImdbId())
@@ -297,6 +309,12 @@ public class TmdbService {
                 .thumbnailUrl(posterMedia.thumbnailUrl())
                 .overview(draft.getOverview())
                 .media(posterMedia.media())
+                .trailerUrl(trailer != null ? trailer.url() : null)
+                .trailerProvider(trailer != null ? trailer.provider() : null)
+                .trailerExternalKey(trailer != null ? trailer.externalKey() : null)
+                .trailerLanguageCode(trailer != null ? trailer.languageCode() : null)
+                .trailerVideoType(trailer != null ? trailer.videoType() : null)
+                .trailerOfficial(trailer != null ? trailer.official() : null)
                 .companies(companies)
                 .translations(toTranslationResponses(draft.getTranslations()))
                 .cast(cast)
@@ -385,6 +403,9 @@ public class TmdbService {
         // straight copy of the same URL into both fields.
         PosterMedia posterMedia = resolvePosterMedia(tmdbId, draft.getPosterUrl());
 
+        // 7c. Trailer - same selection policy as preview; never blocks import if absent.
+        TrailerSelection trailer = selectTrailer(bundle.videos(), warnings);
+
         // 8. Build & save movie - DRAFT only, never auto-published
         Movie movie = Movie.builder()
                 .tmdbId(tmdbId)
@@ -396,6 +417,13 @@ public class TmdbService {
                 .country(draft.getCountry())
                 .posterUrl(posterMedia.posterUrl())
                 .thumbnailUrl(posterMedia.thumbnailUrl())
+                .trailerUrl(trailer != null ? trailer.url() : null)
+                .trailerProvider(trailer != null ? trailer.provider() : null)
+                .trailerExternalKey(trailer != null ? trailer.externalKey() : null)
+                .trailerLanguageCode(trailer != null ? trailer.languageCode() : null)
+                .trailerVideoType(trailer != null ? trailer.videoType() : null)
+                .trailerOfficial(trailer != null ? trailer.official() : null)
+                .trailerSource(trailer != null ? "TMDB" : "MANUAL")
                 .synopsis(draft.getOverview())
                 .status(MovieStatus.DRAFT)
                 .company(companies.isEmpty() ? null : companies.get(0))
@@ -468,16 +496,18 @@ public class TmdbService {
             TmdbMovieDetail detail,
             TmdbCreditsResponse credits,
             TmdbTranslationsResponse translations,
-            TmdbReleaseDatesResponse releaseDates) {
+            TmdbReleaseDatesResponse releaseDates,
+            TmdbVideosResponse videos) {
     }
 
-    /** Groups the 4 HTTP calls behind getDetails()/importMovie() so both call the exact same fetch step. */
+    /** Groups the 5 HTTP calls behind getDetails()/importMovie() so both call the exact same fetch step. */
     private TmdbFetchBundle fetchAll(Integer tmdbId) {
         return new TmdbFetchBundle(
                 fetchMovieDetail(tmdbId),
                 fetchCredits(tmdbId),
                 fetchTranslations(tmdbId),
-                fetchReleaseDates(tmdbId));
+                fetchReleaseDates(tmdbId),
+                fetchVideos(tmdbId));
     }
 
     private TmdbMovieDetail fetchMovieDetail(Integer tmdbId) {
@@ -546,6 +576,20 @@ public class TmdbService {
         } catch (RestClientException e) {
             log.warn("TMDB fetchImages failed for tmdbId={}: {}", tmdbId, e.getMessage());
             return new TmdbImagesResponse();
+        }
+    }
+
+    /** [Backend] Fetch and select an official TMDB trailer - GET /movie/{id}/videos. */
+    TmdbVideosResponse fetchVideos(Integer tmdbId) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(TMDB_BASE + "/movie/" + tmdbId + "/videos")
+                .queryParam("api_key", apiKey)
+                .build().toUri();
+        try {
+            TmdbVideosResponse r = restTemplate.getForObject(uri, TmdbVideosResponse.class);
+            return r != null ? r : new TmdbVideosResponse();
+        } catch (RestClientException e) {
+            log.warn("TMDB fetchVideos failed for tmdbId={}: {}", tmdbId, e.getMessage());
+            return new TmdbVideosResponse();
         }
     }
 
@@ -704,6 +748,68 @@ public class TmdbService {
                                 .recommended(true).build()
                         : c)
                 .collect(Collectors.toList());
+    }
+
+    // ── Trailer selection ──────────────────────────────────────
+
+    private record TrailerSelection(
+            String provider, String externalKey, String languageCode,
+            String videoType, boolean official, String url) {
+    }
+
+    /**
+     * [Backend] Fetch and select an official TMDB trailer. Only YouTube-hosted videos are
+     * eligible. Ranks by (1) official flag, (2) vi/en locale priority, then picks the first
+     * Trailer-type candidate; falls back to a Teaser only if no Trailer exists at all, and
+     * always records a warning when it does (never silently substitutes a teaser). Returns
+     * null (with a TRAILER_NOT_FOUND warning) if TMDB has no eligible YouTube video at all -
+     * this never blocks import, only the warning list is affected.
+     */
+    private TrailerSelection selectTrailer(TmdbVideosResponse videos, List<String> warnings) {
+        List<TmdbVideosResponse.TmdbVideoItem> candidates = videos.getResults() == null
+                ? List.of()
+                : videos.getResults().stream()
+                        .filter(v -> v.getKey() != null && !v.getKey().isBlank())
+                        .filter(v -> TRAILER_SITE.equalsIgnoreCase(v.getSite()))
+                        .collect(Collectors.toList());
+
+        Comparator<TmdbVideosResponse.TmdbVideoItem> rank = Comparator
+                .comparing((TmdbVideosResponse.TmdbVideoItem v) -> !Boolean.TRUE.equals(v.getOfficial()))
+                .thenComparingInt(v -> trailerLanguageRank(v.getIso6391()));
+
+        TmdbVideosResponse.TmdbVideoItem best = candidates.stream()
+                .filter(v -> TRAILER_TYPE.equalsIgnoreCase(v.getType()))
+                .min(rank)
+                .orElse(null);
+
+        boolean isTeaserFallback = false;
+        if (best == null) {
+            best = candidates.stream()
+                    .filter(v -> TEASER_TYPE.equalsIgnoreCase(v.getType()))
+                    .min(rank)
+                    .orElse(null);
+            isTeaserFallback = best != null;
+        }
+
+        if (best == null) {
+            warnings.add("TRAILER_NOT_FOUND");
+            return null;
+        }
+
+        if (isTeaserFallback) {
+            warnings.add("TRAILER_FALLBACK_TEASER:" + best.getKey());
+        }
+
+        String url = "https://www.youtube.com/watch?v=" + best.getKey();
+        String videoType = TEASER_TYPE.equalsIgnoreCase(best.getType()) ? "TEASER" : "TRAILER";
+        return new TrailerSelection(
+                TRAILER_PROVIDER, best.getKey(), best.getIso6391(),
+                videoType, Boolean.TRUE.equals(best.getOfficial()), url);
+    }
+
+    private int trailerLanguageRank(String iso6391) {
+        int rank = TRAILER_LANGUAGE_PRIORITY.indexOf(normalizeLanguage(iso6391));
+        return rank >= 0 ? rank : TRAILER_LANGUAGE_PRIORITY.size();
     }
 
     // ── Company / person resolution ───────────────────────────
