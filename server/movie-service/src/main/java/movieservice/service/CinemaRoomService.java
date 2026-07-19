@@ -163,9 +163,14 @@ public class CinemaRoomService {
 
     // ── Read / update (wizard step 1/2) ─────────────────────────────────────
 
-    public CinemaRoomResponse getRoomDetail(Long roomId) {
+    /** Same DRAFT/PENDING_APPROVAL visibility split as getAllRooms() - a non-staff caller
+     *  guessing a room ID gets the same CINEMA_ROOM_NOT_FOUND a nonexistent one would. */
+    public CinemaRoomResponse getRoomDetail(Long roomId, Authentication authentication) {
         CinemaRoom room = cinemaRoomRepository.findById(roomId)
                 .orElseThrow(() -> new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND));
+        if (!isStaff(authentication) && !isPubliclyVisible(room.getStatus())) {
+            throw new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND);
+        }
         return toDetailResponse(room);
     }
 
@@ -302,11 +307,28 @@ public class CinemaRoomService {
         return cinemaRoomRepository.findByCinemaRoomId(cinemaId);
     }
 
-    public List<CinemaRoomResponse> getAllRooms(Long clusterId) {
+    /**
+     * `[Backend] Enforce movie-service endpoint authorization matrix`: DRAFT/PENDING_APPROVAL
+     * rooms are an in-progress wizard workflow with nothing bookable yet - hidden from
+     * non-staff callers, same visibility split already used for cinema clusters. Every other
+     * status (APPROVED onward) is legitimate operational info a customer may reasonably see.
+     */
+    public List<CinemaRoomResponse> getAllRooms(Long clusterId, Authentication authentication) {
         List<CinemaRoom> rooms = (clusterId != null)
                 ? cinemaRoomRepository.findByCluster_ClusterId(clusterId)
                 : cinemaRoomRepository.findAll();
+        if (!isStaff(authentication)) {
+            rooms = rooms.stream().filter(r -> isPubliclyVisible(r.getStatus())).toList();
+        }
         return rooms.stream().map(this::toDetailResponse).toList();
+    }
+
+    private boolean isStaff(Authentication authentication) {
+        return hasRole(authentication, "ROLE_ADMIN") || hasRole(authentication, "ROLE_EMPLOYEE");
+    }
+
+    private boolean isPubliclyVisible(CinemaRoomStatus status) {
+        return status != CinemaRoomStatus.DRAFT && status != CinemaRoomStatus.PENDING_APPROVAL;
     }
 
     // ── Maintenance ───────────────────────────────────────────

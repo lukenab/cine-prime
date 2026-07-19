@@ -1,9 +1,11 @@
 package movieservice.controller;
 
+import movie.theater.common.exception.AppException;
 import movieservice.dto.request.RejectRequest;
 import movieservice.dto.response.CinemaClusterResponse;
 import movieservice.entity.CinemaCluster;
 import movieservice.enums.ClusterStatus;
+import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.ClusterAuditLogRepository;
@@ -21,6 +23,8 @@ import org.springframework.http.HttpStatus;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -72,6 +76,47 @@ class CinemaClusterControllerTest {
 
         assertEquals(HttpStatus.NO_CONTENT, controller.delete(1L, authentication).getStatusCode());
         verify(cinemaClusterService).deleteUnusedDraft(1L, authentication);
+    }
+
+    // ── `[Backend] Enforce movie-service endpoint authorization matrix` ──────
+    // getById() must apply the same ACTIVE-only visibility non-staff callers get from
+    // getAll() - a DRAFT/PENDING_REVIEW/REJECTED cluster's ID must not be enumerable.
+
+    @Test
+    void getByIdHidesNonActiveClusterFromAnonymousCaller() {
+        CinemaCluster draft = CinemaCluster.builder().clusterId(1L).status(ClusterStatus.DRAFT).build();
+        when(clusterRepository.findById(1L)).thenReturn(Optional.of(draft));
+
+        AppException ex = assertThrows(AppException.class, () -> controller.getById(1L, null));
+        assertEquals(MovieErrorCode.CLUSTER_NOT_FOUND, ex.getErrorCode());
+    }
+
+    @Test
+    void getByIdHidesNonActiveClusterFromCustomerCaller() {
+        CinemaCluster pendingReview = CinemaCluster.builder().clusterId(1L).status(ClusterStatus.PENDING_REVIEW).build();
+        when(clusterRepository.findById(1L)).thenReturn(Optional.of(pendingReview));
+        Authentication customer = new TestingAuthenticationToken("customer.a", null, "ROLE_MEMBER");
+
+        AppException ex = assertThrows(AppException.class, () -> controller.getById(1L, customer));
+        assertEquals(MovieErrorCode.CLUSTER_NOT_FOUND, ex.getErrorCode());
+    }
+
+    @Test
+    void getByIdAllowsStaffToSeeANonActiveCluster() {
+        CinemaCluster draft = CinemaCluster.builder().clusterId(1L).status(ClusterStatus.DRAFT).build();
+        when(clusterRepository.findById(1L)).thenReturn(Optional.of(draft));
+        when(movieMapper.toCinemaClusterResponse(draft)).thenReturn(new CinemaClusterResponse());
+
+        assertEquals(200, controller.getById(1L, employee("employee.a")).getCode());
+    }
+
+    @Test
+    void getByIdAllowsAnyoneToSeeAnActiveCluster() {
+        CinemaCluster active = CinemaCluster.builder().clusterId(1L).status(ClusterStatus.ACTIVE).build();
+        when(clusterRepository.findById(1L)).thenReturn(Optional.of(active));
+        when(movieMapper.toCinemaClusterResponse(active)).thenReturn(new CinemaClusterResponse());
+
+        assertEquals(200, controller.getById(1L, null).getCode());
     }
 
     private Authentication employee(String username) {

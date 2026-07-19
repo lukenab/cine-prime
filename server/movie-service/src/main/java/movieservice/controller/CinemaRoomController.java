@@ -31,10 +31,10 @@ public class CinemaRoomController {
 
     @GetMapping
     public ApiResponse<List<CinemaRoomResponse>> getAllRooms(
-            @RequestParam(required = false) Long clusterId) {
+            @RequestParam(required = false) Long clusterId, Authentication authentication) {
         return ApiResponse.<List<CinemaRoomResponse>>builder()
                 .code(200)
-                .result(cinemaRoomService.getAllRooms(clusterId))
+                .result(cinemaRoomService.getAllRooms(clusterId, authentication))
                 .build();
     }
 
@@ -49,10 +49,10 @@ public class CinemaRoomController {
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<CinemaRoomResponse> getRoomDetail(@PathVariable Long id) {
+    public ApiResponse<CinemaRoomResponse> getRoomDetail(@PathVariable Long id, Authentication authentication) {
         return ApiResponse.<CinemaRoomResponse>builder()
                 .code(200)
-                .result(cinemaRoomService.getRoomDetail(id))
+                .result(cinemaRoomService.getRoomDetail(id, authentication))
                 .build();
     }
 
@@ -89,44 +89,52 @@ public class CinemaRoomController {
 
     // ── Maintenance ───────────────────────────────────────────
 
-    /** Báo sự cố → phòng tự động chuyển TEMPORARILY_UNAVAILABLE */
+    /**
+     * Báo sự cố → phòng tự động chuyển TEMPORARILY_UNAVAILABLE.
+     * `[Backend] Enforce movie-service endpoint authorization matrix`: actor now comes from
+     * the verified JWT (Authentication), never a client-supplied X-User-Name header - a caller
+     * could previously set that header to any name (including the "unknown" default) and forge
+     * who reported the maintenance.
+     */
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @PostMapping("/{id}/maintenance")
     public ApiResponse<Void> reportMaintenance(
             @PathVariable Long id,
             @Valid @RequestBody MaintenanceRequest request,
-            @RequestHeader(value = "X-User-Name", defaultValue = "unknown") String createdBy) {
-        cinemaRoomService.reportMaintenance(id, request, createdBy);
+            Authentication authentication) {
+        cinemaRoomService.reportMaintenance(id, request, actor(authentication));
         return ApiResponse.<Void>builder()
                 .code(200)
                 .message("Maintenance reported. Room set to TEMPORARILY_UNAVAILABLE.")
                 .build();
     }
 
-    /** Resolve maintenance → phòng tự động trở về ACTIVE nếu không còn sự cố mở */
+    /** Resolve maintenance → phòng tự động trở về ACTIVE nếu không còn sự cố mở. Actor from
+     *  verified JWT, same reasoning as reportMaintenance() above. */
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @PostMapping("/maintenance/{maintenanceId}/resolve")
     public ApiResponse<Void> resolveMaintenance(
             @PathVariable Long maintenanceId,
             @RequestParam(required = false) String resolutionNote,
-            @RequestHeader(value = "X-User-Name", defaultValue = "unknown") String resolvedBy) {
-        cinemaRoomService.resolveMaintenance(maintenanceId, resolutionNote, resolvedBy);
+            Authentication authentication) {
+        cinemaRoomService.resolveMaintenance(maintenanceId, resolutionNote, actor(authentication));
         return ApiResponse.<Void>builder()
                 .code(200)
                 .message("Maintenance resolved.")
                 .build();
     }
 
-    /** Đặt thủ công trạng thái phòng (ACTIVE, CLOSED, MAINTENANCE...) */
+    /** Đặt thủ công trạng thái phòng (ACTIVE, CLOSED, MAINTENANCE...). Actor from verified JWT,
+     *  same reasoning as reportMaintenance() above. */
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @PatchMapping("/{id}/status")
     public ApiResponse<CinemaRoomResponse> setRoomStatus(
             @PathVariable Long id,
             @RequestParam CinemaRoomStatus status,
-            @RequestHeader(value = "X-User-Name", defaultValue = "unknown") String updatedBy) {
+            Authentication authentication) {
         return ApiResponse.<CinemaRoomResponse>builder()
                 .code(200)
-                .result(cinemaRoomService.setRoomStatus(id, status, updatedBy))
+                .result(cinemaRoomService.setRoomStatus(id, status, actor(authentication)))
                 .build();
     }
 
