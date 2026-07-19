@@ -238,43 +238,28 @@ Current limit:
 - Accepted MIME types: JPEG/JPG/PNG/WebP.
 - Max upload size: 5 MB.
 
-### MOV-P1-009 - Exhibition End Date Is An Availability/Showtime Decision, Not Editorial Metadata
+### MOV-P1-009 - Movie Has No Standalone End Date
 
-Business reason: `release_date` is theatrical/content metadata (when the title originally
-released) and belongs to the content editor. `end_date` is an operational decision about when a
-cinema stops exhibiting the movie - it is set and changed through the availability/showtime
-workflow (opening/suspending/closing an exhibition window per cluster), not by whoever is
-editing the movie's title, synopsis, or cast. Letting a content operator edit `end_date` from
-the same form as unrelated metadata risks accidentally ending a movie's exhibition window while
-only intending to fix a typo elsewhere.
+Business reason: A movie's exhibition window is per cinema cluster, not a single global date on
+the movie itself. `Movie.endDate` was a vestigial field left over from a pre-refactor lifecycle
+and was never the authoritative source for when a movie stops showing. An earlier change removed
+it from the Movie Editor's UI/payload only, deliberately keeping the DB column in place
+short-term (see `client/src/pages/admin/movieEditor/buildMoviePayload.ts`); a follow-up change
+finished the job by dropping the column itself.
 
 Rules:
 
-- `Movie.releaseDate` is edited from the Movie Editor as content metadata; keep its label
-  explicit that it is the theatrical release date, not an exhibition window boundary.
-- `Movie.endDate` (DB column retained) must not be exposed as an editable field in the Movie
-  Editor's create/update form.
-- A create/update payload from the Movie Editor must omit `endDate` entirely - never send it as
-  `null`/empty, since a partial-update payload that omits a field must leave the existing
-  backend value untouched.
-- Whichever screen owns availability/scheduling (see `#173`) is the only place `end_date` may be
-  set or changed.
+- `movie.end_date` does not exist; the movie entity only carries `releaseDate`.
+- The actual exhibition window (when a cluster stops showing a movie) is tracked per cluster on
+  `MovieAvailability.showingEndDate`.
+- Neither the Movie Editor UI nor the create/update APIs accept an end date for a movie.
 
 Current code reference:
 
-- `Movie.endDate` (entity/DB column, unchanged)
-- `client/src/pages/admin/movieEditor/buildMoviePayload.ts` (Movie Editor's payload builder -
-  has no `endDate` field at all)
-- `MovieAvailability` / availability-and-showtime workflow (intended long-term owner of the
-  exhibition window, see `#173`)
-
-Implementation notes:
-
-- This rule is deliberately UI/payload-scoped for now - the `movie.end_date` column itself was
-  not removed or migrated in the change that introduced this rule, per that issue's own
-  constraint ("Không xóa cột database trong issue frontend này").
-- `MovieTable`'s read-only "ends {date}" display is unaffected; only the editor's write path
-  changed.
+- `Movie` (no `endDate` field)
+- `MovieAvailability.showingEndDate`
+- `client/src/pages/admin/movieEditor/buildMoviePayload.ts` (Movie Editor's payload builder - has
+  no `endDate` field at all)
 
 ## TMDB Import Rules
 

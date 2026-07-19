@@ -67,7 +67,6 @@ class MovieReadinessValidatorTest {
                 .originalLanguage("en")
                 .durationMinutes(166)
                 .releaseDate(TODAY.minusDays(1))
-                .endDate(TODAY.plusDays(30))
                 .genres(List.of(activeGenre()))
                 .formats(List.of(format()))
                 .ageRating(activeRating("T13"))
@@ -78,24 +77,6 @@ class MovieReadinessValidatorTest {
                 .build();
     }
 
-    // ── requireValidDateRange ──────────────────────────────────
-
-    @Test
-    void requireValidDateRangeThrowsWhenReleaseAfterEnd() {
-        MovieReadinessValidator v = validator(false);
-        AppException ex = assertThrows(AppException.class,
-                () -> v.requireValidDateRange(TODAY.plusDays(5), TODAY));
-        assertEquals(MovieErrorCode.INVALID_MOVIE_DATE_RANGE, ex.getErrorCode());
-    }
-
-    @Test
-    void requireValidDateRangePassesWhenOneOrBothDatesMissingOrValid() {
-        MovieReadinessValidator v = validator(false);
-        assertDoesNotThrow(() -> v.requireValidDateRange(null, null));
-        assertDoesNotThrow(() -> v.requireValidDateRange(TODAY, null));
-        assertDoesNotThrow(() -> v.requireValidDateRange(null, TODAY));
-        assertDoesNotThrow(() -> v.requireValidDateRange(TODAY, TODAY.plusDays(1)));
-    }
 
     // ── Submit / review gate ───────────────────────────────────
 
@@ -127,17 +108,6 @@ class MovieReadinessValidatorTest {
         assertTrue(fields.contains("formats"));
         // All violations reported together, not fail-fast on the first one.
         assertEquals(5, fields.size());
-    }
-
-    @Test
-    void reviewGateBlocksOnInvertedDateRange() {
-        Movie movie = completeMovie();
-        movie.setReleaseDate(TODAY.plusDays(10));
-        movie.setEndDate(TODAY.plusDays(5));
-
-        MovieReadinessException ex = assertThrows(MovieReadinessException.class,
-                () -> validator(false).requireReadyForReview(movie));
-        assertTrue(ex.getViolations().stream().anyMatch(v -> "releaseDate".equals(v.getField())));
     }
 
     // ── Approve gate ───────────────────────────────────────────
@@ -220,17 +190,6 @@ class MovieReadinessValidatorTest {
         assertEquals(MovieErrorCode.MOVIE_NOT_READY_FOR_RELEASE, ex.getErrorCode());
         assertTrue(ex.getViolations().stream()
                 .anyMatch(v -> "releaseDate".equals(v.getField()) && "RELEASE_DATE_NOT_REACHED".equals(v.getRule())));
-    }
-
-    @Test
-    void releaseGateBlocksWhenAlreadyPastEndDate() {
-        Movie movie = completeMovie();
-        movie.setEndDate(TODAY.minusDays(1));
-
-        MovieReadinessException ex = assertThrows(MovieReadinessException.class,
-                () -> validator(false).requireReadyForRelease(movie));
-        assertTrue(ex.getViolations().stream()
-                .anyMatch(v -> "endDate".equals(v.getField()) && "ALREADY_PAST_END_DATE".equals(v.getRule())));
     }
 
     @Test

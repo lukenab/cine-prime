@@ -259,14 +259,6 @@ export function MovieTable({
                             <span style={{ fontSize: "10.5px", color: "#dc2626" }}>Revision required</span>
                           </div>
                         )}
-                        {/* End date hint */}
-                        {movie.endDate && (
-                          <div className="flex items-center gap-1 mt-1">
-                            <span style={{ fontSize: "10.5px", color: "var(--text-sub)" }}>
-                              ends {movie.endDate}
-                            </span>
-                          </div>
-                        )}
                       </td>
 
                       {/* Added date */}

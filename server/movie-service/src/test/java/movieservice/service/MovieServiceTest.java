@@ -528,53 +528,6 @@ class MovieServiceTest {
     // ── MOV-03: readiness gates wired into create/update/submit/approve/release ──
 
     @Test
-    void createMoviePropagatesInvalidDateRangeAndNeverSaves() {
-        CreateMovieRequest request = CreateMovieRequest.builder()
-                .originalTitle("New Movie")
-                .originalLanguage("en")
-                .durationMinutes(100)
-                .releaseDate(LocalDate.of(2026, 8, 10))
-                .endDate(LocalDate.of(2026, 8, 1))
-                .genreIds(List.of(1L))
-                .formatIds(List.of(1))
-                .build();
-        Movie mapped = Movie.builder().originalTitle("New Movie")
-                .releaseDate(request.getReleaseDate()).endDate(request.getEndDate()).build();
-        when(movieRepository.existsByOriginalTitleIgnoreCase("New Movie")).thenReturn(false);
-        when(movieMapper.toMovie(request)).thenReturn(mapped);
-        doThrow(new AppException(MovieErrorCode.INVALID_MOVIE_DATE_RANGE))
-                .when(movieReadinessValidator)
-                .requireValidDateRange(request.getReleaseDate(), request.getEndDate());
-
-        AppException ex = assertThrows(AppException.class, () -> movieService.createMovie(request));
-
-        assertEquals(MovieErrorCode.INVALID_MOVIE_DATE_RANGE, ex.getErrorCode());
-        verify(movieRepository, never()).save(any(Movie.class));
-    }
-
-    @Test
-    void updateMoviePropagatesInvalidDateRangeAfterMergingRequestOntoEntity() {
-        movie.setReleaseDate(LocalDate.of(2026, 1, 1));
-        movie.setEndDate(LocalDate.of(2026, 12, 31));
-        // Request only changes releaseDate (partial update) - merged state now has an inverted range.
-        UpdateMovieRequest request = UpdateMovieRequest.builder()
-                .releaseDate(LocalDate.of(2027, 1, 1))
-                .build();
-        doAnswer(inv -> {
-            movie.setReleaseDate(request.getReleaseDate());
-            return null;
-        }).when(movieMapper).updateMovieFromRequest(request, movie);
-        doThrow(new AppException(MovieErrorCode.INVALID_MOVIE_DATE_RANGE))
-                .when(movieReadinessValidator)
-                .requireValidDateRange(LocalDate.of(2027, 1, 1), LocalDate.of(2026, 12, 31));
-
-        AppException ex = assertThrows(AppException.class, () -> movieService.updateMovie(1L, request));
-
-        assertEquals(MovieErrorCode.INVALID_MOVIE_DATE_RANGE, ex.getErrorCode());
-        verify(movieRepository, never()).save(any(Movie.class));
-    }
-
-    @Test
     void submitForReviewPropagatesReadinessViolationAndNeverSaves() {
         movie.setStatus(MovieStatus.DRAFT);
         movie.setGenres(List.of());

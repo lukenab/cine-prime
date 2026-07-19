@@ -44,9 +44,6 @@ public class Movie {
     @Column(name = "release_date")
     LocalDate releaseDate;
 
-    @Column(name = "end_date")
-    LocalDate endDate;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "age_rating_id")
     AgeRating ageRating;
