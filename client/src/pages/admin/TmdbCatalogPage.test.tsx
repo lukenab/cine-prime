@@ -9,8 +9,8 @@ const mocks = vi.hoisted(() => ({
   tmdbSearch: vi.fn(),
   tmdbDetails: vi.fn(),
   tmdbImport: vi.fn(),
-  createMovieV2: vi.fn(),
-  updateMovieV2: vi.fn(),
+  createMovie: vi.fn(),
+  updateMovie: vi.fn(),
 }));
 
 vi.mock("react-router-dom", async (importOriginal) => {
@@ -29,8 +29,8 @@ vi.mock("../../api/movieApi", async (importOriginal) => {
       tmdbSearch: mocks.tmdbSearch,
       tmdbDetails: mocks.tmdbDetails,
       tmdbImport: mocks.tmdbImport,
-      createMovieV2: mocks.createMovieV2,
-      updateMovieV2: mocks.updateMovieV2,
+      createMovie: mocks.createMovie,
+      updateMovie: mocks.updateMovie,
     },
   };
 });
@@ -74,8 +74,8 @@ describe("TmdbCatalogPage", () => {
     expect(await screen.findByText("A read-only catalog preview.")).toBeInTheDocument();
     expect(mocks.tmdbDetails).toHaveBeenCalledWith(42);
     expect(mocks.tmdbImport).not.toHaveBeenCalled();
-    expect(mocks.createMovieV2).not.toHaveBeenCalled();
-    expect(mocks.updateMovieV2).not.toHaveBeenCalled();
+    expect(mocks.createMovie).not.toHaveBeenCalled();
+    expect(mocks.updateMovie).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: /Use this movie/i }));
     expect(mocks.navigate).toHaveBeenCalledWith(

@@ -15,7 +15,7 @@ import {
   type TmdbSearchItem,
   type CastRequest,
   type CreateMovieRequest,
-  type MovieV2,
+  type MovieResponse,
   type MovieImageResponse,
   type MovieImageRequest,
   type MovieMediaPreview,
@@ -120,7 +120,7 @@ const editorFingerprint = (
   pendingMedia: { filePath: string; imageType: MovieImageType }[],
 ) => JSON.stringify({ form: value, pendingMedia });
 
-function movieToForm(mv: MovieV2): FormState {
+function movieToForm(mv: MovieResponse): FormState {
   const vi = mv.translations?.find((t) => t.languageCode === "vi");
   const en = mv.translations?.find((t) => t.languageCode === "en");
   const originalIsVietnamese = mv.originalLanguage?.toLowerCase() === "vi";
@@ -447,7 +447,7 @@ export default function MovieEditorPage() {
     }
   };
 
-  const persistCurrentDraft = async (): Promise<MovieV2> => {
+  const persistCurrentDraft = async (): Promise<MovieResponse> => {
     setSubmitted(true);
     const { ok, msg } = validateDraft();
     if (!ok) throw new Error(msg ?? "Please review the form.");
@@ -466,11 +466,11 @@ export default function MovieEditorPage() {
     };
     const payload = buildMoviePayload(resolvedForm, resolvedCompanyIds, resolvedCast);
     const wasNewDraft = activeMovieId == null;
-    const savedMovie = await persistMovieDraft<CreateMovieRequest, MovieV2>({
+    const savedMovie = await persistMovieDraft<CreateMovieRequest, MovieResponse>({
       movieId: activeMovieId,
       payload,
-      createMovie: movieApi.createMovieV2,
-      updateMovie: movieApi.updateMovieV2,
+      createMovie: movieApi.createMovie,
+      updateMovie: movieApi.updateMovie,
     });
 
     setForm(resolvedForm);
@@ -524,7 +524,7 @@ export default function MovieEditorPage() {
     setOperation("saving-before-submit");
     setError("");
     try {
-      const reviewedMovie = await saveDraftThenSubmit<MovieV2>({
+      const reviewedMovie = await saveDraftThenSubmit<MovieResponse>({
         saveDraft: persistCurrentDraft,
         onDraftSaved: () => {
           draftSaved = true;
