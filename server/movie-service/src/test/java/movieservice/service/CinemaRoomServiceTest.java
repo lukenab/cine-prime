@@ -7,7 +7,10 @@ import movieservice.entity.AuditoriumClass;
 import movieservice.entity.CinemaCluster;
 import movieservice.entity.CinemaRoom;
 import movieservice.enums.ClusterStatus;
+import movieservice.enums.CinemaRoomStatus;
 import movieservice.enums.PresentationSystem;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.AudioFormatRepository;
@@ -26,8 +29,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
@@ -61,7 +66,10 @@ class CinemaRoomServiceTest {
                 .clusterId(1L)
                 .status(ClusterStatus.ACTIVE)
                 .build();
-        when(cinemaClusterRepository.findById(1L)).thenReturn(Optional.of(cluster));
+        // lenient(): the new visibility tests below don't touch cluster lookup at all -
+        // without lenient() Mockito's strict stubbing would flag this shared fixture as
+        // unnecessary for those specific tests.
+        org.mockito.Mockito.lenient().when(cinemaClusterRepository.findById(1L)).thenReturn(Optional.of(cluster));
     }
 
     private CinemaRoomRequest.CinemaRoomRequestBuilder wizardRequest() {
@@ -168,4 +176,76 @@ class CinemaRoomServiceTest {
         assertEquals(PresentationSystem.SCREENX, captor.getValue().getPresentationSystem());
     }
 
+    // ── `[Backend] Enforce movie-service endpoint authorization matrix` ──────
+    // DRAFT/PENDING_APPROVAL rooms are an in-progress wizard workflow with nothing bookable
+    // yet - must be hidden from non-staff callers, same as getRoomDetail()/getAllRooms().
+
+    private Authentication customer() {
+        return new TestingAuthenticationToken("customer.a", null, "ROLE_MEMBER");
+    }
+
+    private Authentication employee() {
+        return new TestingAuthenticationToken("employee.a", null, "ROLE_EMPLOYEE");
+    }
+
+    @Test
+    void getRoomDetail_hidesDraftRoomFromAnonymousCaller() {
+        CinemaRoom draft = CinemaRoom.builder().cinemaRoomId(5L).status(CinemaRoomStatus.DRAFT).build();
+        when(cinemaRoomRepository.findById(5L)).thenReturn(Optional.of(draft));
+
+        AppException ex = assertThrows(AppException.class, () -> cinemaRoomService.getRoomDetail(5L, null));
+        assertEquals(MovieErrorCode.CINEMA_ROOM_NOT_FOUND, ex.getErrorCode());
+    }
+
+    @Test
+    void getRoomDetail_hidesPendingApprovalRoomFromCustomer() {
+        CinemaRoom pending = CinemaRoom.builder().cinemaRoomId(5L).status(CinemaRoomStatus.PENDING_APPROVAL).build();
+        when(cinemaRoomRepository.findById(5L)).thenReturn(Optional.of(pending));
+
+        AppException ex = assertThrows(AppException.class, () -> cinemaRoomService.getRoomDetail(5L, customer()));
+        assertEquals(MovieErrorCode.CINEMA_ROOM_NOT_FOUND, ex.getErrorCode());
+    }
+
+    @Test
+    void getRoomDetail_allowsStaffToSeeADraftRoom() {
+        CinemaRoom draft = CinemaRoom.builder().cinemaRoomId(5L).status(CinemaRoomStatus.DRAFT).build();
+        when(cinemaRoomRepository.findById(5L)).thenReturn(Optional.of(draft));
+        when(movieMapper.toCinemaRoomResponse(draft)).thenReturn(new CinemaRoomResponse());
+
+        assertDoesNotThrow(() -> cinemaRoomService.getRoomDetail(5L, employee()));
+    }
+
+    @Test
+    void getRoomDetail_allowsAnyoneToSeeAnApprovedRoom() {
+        CinemaRoom approved = CinemaRoom.builder().cinemaRoomId(5L).status(CinemaRoomStatus.APPROVED).build();
+        when(cinemaRoomRepository.findById(5L)).thenReturn(Optional.of(approved));
+        when(movieMapper.toCinemaRoomResponse(approved)).thenReturn(new CinemaRoomResponse());
+
+        assertDoesNotThrow(() -> cinemaRoomService.getRoomDetail(5L, null));
+    }
+
+    @Test
+    void getAllRooms_filtersOutDraftAndPendingApprovalForNonStaff() {
+        CinemaRoom draft = CinemaRoom.builder().cinemaRoomId(1L).status(CinemaRoomStatus.DRAFT).build();
+        CinemaRoom pending = CinemaRoom.builder().cinemaRoomId(2L).status(CinemaRoomStatus.PENDING_APPROVAL).build();
+        CinemaRoom approved = CinemaRoom.builder().cinemaRoomId(3L).status(CinemaRoomStatus.APPROVED).build();
+        when(cinemaRoomRepository.findAll()).thenReturn(List.of(draft, pending, approved));
+        when(movieMapper.toCinemaRoomResponse(approved)).thenReturn(new CinemaRoomResponse());
+
+        var result = cinemaRoomService.getAllRooms(null, customer());
+
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void getAllRooms_returnsEverythingForStaff() {
+        CinemaRoom draft = CinemaRoom.builder().cinemaRoomId(1L).status(CinemaRoomStatus.DRAFT).build();
+        CinemaRoom approved = CinemaRoom.builder().cinemaRoomId(3L).status(CinemaRoomStatus.APPROVED).build();
+        when(cinemaRoomRepository.findAll()).thenReturn(List.of(draft, approved));
+        when(movieMapper.toCinemaRoomResponse(any(CinemaRoom.class))).thenReturn(new CinemaRoomResponse());
+
+        var result = cinemaRoomService.getAllRooms(null, employee());
+
+        assertEquals(2, result.size());
+    }
 }

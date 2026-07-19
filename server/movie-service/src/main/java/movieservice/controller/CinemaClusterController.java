@@ -82,11 +82,19 @@ public class CinemaClusterController {
     }
 
     // ── GET by id ─────────────────────────────────────────────────────────────
+    // `[Backend] Enforce movie-service endpoint authorization matrix`: getAll() already
+    // hid non-ACTIVE clusters from non-staff callers, but getById() didn't - an
+    // anonymous/customer caller could enumerate cluster IDs and read a DRAFT/PENDING_REVIEW/
+    // REJECTED cluster's full detail. Same visibility rule as getAll(), and the same
+    // CLUSTER_NOT_FOUND a nonexistent ID gets, so a hidden cluster's existence isn't leaked.
 
     @GetMapping("/{id}")
-    public ApiResponse<CinemaClusterResponse> getById(@PathVariable Long id) {
+    public ApiResponse<CinemaClusterResponse> getById(@PathVariable Long id, Authentication authentication) {
         CinemaCluster cluster = clusterRepository.findById(id)
                 .orElseThrow(() -> new AppException(MovieErrorCode.CLUSTER_NOT_FOUND));
+        if (cluster.getStatus() != ClusterStatus.ACTIVE && !isStaff(authentication)) {
+            throw new AppException(MovieErrorCode.CLUSTER_NOT_FOUND);
+        }
         return ApiResponse.<CinemaClusterResponse>builder()
                 .code(200).result(toResponseWithStats(cluster)).build();
     }
