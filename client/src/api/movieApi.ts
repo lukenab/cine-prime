@@ -63,6 +63,8 @@ export type RoomResponse = {
   standardRowCount: number;
   vipRowCount: number;
   coupleRowCount: number;
+  status?: string;
+  createdBy?: string;
   clusterId: number;
   clusterName?: string;
 };
@@ -83,6 +85,7 @@ export type RoomApiResponse = {
   coupleRowCount: number;
   status?: string;
   maintenanceNote?: string;
+  createdBy?: string;
   clusterId: number;
   clusterName?: string;
 };
@@ -817,6 +820,8 @@ const toLegacyRoom = (room: RoomApiResponse): RoomResponse => ({
   standardRowCount: room.standardRowCount,
   vipRowCount: room.vipRowCount,
   coupleRowCount: room.coupleRowCount,
+  status: room.status,
+  createdBy: room.createdBy,
   clusterId: room.clusterId,
   clusterName: room.clusterName,
 });

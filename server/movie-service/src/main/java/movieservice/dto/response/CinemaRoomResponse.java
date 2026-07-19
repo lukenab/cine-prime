@@ -25,6 +25,7 @@ public class CinemaRoomResponse {
     Integer coupleRowCount;
     CinemaRoomStatus status;
     String maintenanceNote;
+    String createdBy;
     Long clusterId;
     String clusterName;
 

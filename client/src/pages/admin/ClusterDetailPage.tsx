@@ -16,6 +16,7 @@ import {
 import { useRole } from "../../hooks/useRole";
 import { RoomCreationMethodDialog } from "./cinemaRoomEditor/RoomCreationMethodDialog";
 import { ClusterWizardModal } from "./ClusterWizardModal";
+import { ConfirmDialog } from "../../components/shared/ConfirmDialog";
 
 // ── Status config (small local copy — kept in sync with ManageCinemaClusterPage.tsx) ──
 
@@ -135,7 +136,7 @@ export default function ClusterDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
-  const { can, isAdmin } = useRole();
+  const { can, isAdmin, username } = useRole();
 
   const clusterId = Number(id);
 
@@ -148,6 +149,8 @@ export default function ClusterDetailPage() {
   const [rejecting, setRejecting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deletingRoomId, setDeletingRoomId] = useState<number | null>(null);
+  const [deleteRoomTarget, setDeleteRoomTarget] = useState<RoomResponse | null>(null);
+  const [confirmClusterDelete, setConfirmClusterDelete] = useState(false);
   const [choosingRoomCreationMethod, setChoosingRoomCreationMethod] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -176,9 +179,14 @@ export default function ClusterDetailPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleDeleteRoom = async (room: RoomResponse, e: React.MouseEvent) => {
+  const requestDeleteRoom = (room: RoomResponse, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm(`Delete room "${room.cinemaRoomName}"? This cannot be undone.`)) return;
+    setDeleteRoomTarget(room);
+  };
+
+  const handleDeleteRoom = async () => {
+    if (!deleteRoomTarget) return;
+    const room = deleteRoomTarget;
     setDeletingRoomId(room.cinemaRoomId);
     try {
       await movieApi.deleteRoom(room.cinemaRoomId);
@@ -186,8 +194,10 @@ export default function ClusterDetailPage() {
       showToast("success", `Room "${room.cinemaRoomName}" deleted.`);
       const clusterRes = await movieApi.getClusterById(clusterId);
       setCluster(clusterRes.result);
+      setDeleteRoomTarget(null);
     } catch (err: any) {
-      showToast("error", err?.response?.data?.message ?? "Delete failed — room may already have showtimes.");
+      showToast("error", err?.response?.data?.message ?? "Unable to delete this room draft.");
+      setDeleteRoomTarget(null);
     } finally {
       setDeletingRoomId(null);
     }
@@ -207,13 +217,13 @@ export default function ClusterDetailPage() {
 
   const handleDelete = async () => {
     if (!cluster) return;
-    if (!window.confirm(`Delete cluster "${cluster.clusterName}"? This cannot be undone.`)) return;
     setDeleting(true);
     try {
       await movieApi.deleteCluster(cluster.clusterId);
       navigate("/admin/clusters");
     } catch (err: any) {
-      showToast("error", err?.response?.data?.message ?? "Delete failed — cluster may still have rooms.");
+      showToast("error", err?.response?.data?.message ?? "Unable to delete this cluster draft.");
+      setConfirmClusterDelete(false);
     } finally {
       setDeleting(false);
     }
@@ -342,10 +352,10 @@ export default function ClusterDetailPage() {
               <Edit2 size={14} /> Edit
             </button>
           )}
-          {isAdmin && (
+          {isAdmin && cluster.status === "DRAFT" && (
             <button
               disabled={deleting}
-              onClick={handleDelete}
+              onClick={() => setConfirmClusterDelete(true)}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl border hover:opacity-80 disabled:opacity-50"
               style={{ fontSize: "13px", color: "#ef4444", borderColor: "var(--border-color)", background: "var(--bg-card)" }}
             >
@@ -544,10 +554,10 @@ export default function ClusterDetailPage() {
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3 justify-end">
-                        {can.edit && (
+                        {room.status === "DRAFT" && (isAdmin || room.createdBy?.toLowerCase() === username.toLowerCase()) && (
                           <button
                             disabled={deletingRoomId === room.cinemaRoomId}
-                            onClick={(e) => handleDeleteRoom(room, e)}
+                            onClick={(e) => requestDeleteRoom(room, e)}
                             className="p-1.5 rounded-lg hover:opacity-80 disabled:opacity-50"
                             style={{ color: "#ef4444" }}
                             title="Delete room"
@@ -574,6 +584,42 @@ export default function ClusterDetailPage() {
           </div>
         )}
       </div>
+
+      {deleteRoomTarget && (
+        <ConfirmDialog
+          title="Delete unused room draft?"
+          body={
+            <p className="text-center">
+              <strong style={{ color: "var(--text-main)" }}>{deleteRoomTarget.cinemaRoomName}</strong> and
+              its draft layout will be permanently deleted. Rooms with submitted layouts, seats, showtimes,
+              or operational history cannot be hard-deleted.
+            </p>
+          }
+          confirmLabel={deletingRoomId ? "Deleting..." : "Delete draft"}
+          danger
+          busy={deletingRoomId !== null}
+          onConfirm={handleDeleteRoom}
+          onCancel={() => { if (deletingRoomId === null) setDeleteRoomTarget(null); }}
+        />
+      )}
+
+      {confirmClusterDelete && (
+        <ConfirmDialog
+          title="Delete unused cluster draft?"
+          body={
+            <p className="text-center">
+              <strong style={{ color: "var(--text-main)" }}>{cluster.clusterName}</strong> will be permanently
+              deleted. A cluster that has rooms, availability records, or review/operational history cannot be
+              hard-deleted.
+            </p>
+          }
+          confirmLabel={deleting ? "Deleting..." : "Delete draft"}
+          danger
+          busy={deleting}
+          onConfirm={handleDelete}
+          onCancel={() => { if (!deleting) setConfirmClusterDelete(false); }}
+        />
+      )}
 
       {rejecting && (
         <RejectModal

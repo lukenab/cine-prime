@@ -1,10 +1,9 @@
 package movieservice.controller;
 
-import movie.theater.common.exception.AppException;
 import movieservice.dto.request.RejectRequest;
+import movieservice.dto.response.CinemaClusterResponse;
 import movieservice.entity.CinemaCluster;
 import movieservice.enums.ClusterStatus;
-import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.ClusterAuditLogRepository;
@@ -17,12 +16,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.http.HttpStatus;
 
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -36,89 +35,43 @@ class CinemaClusterControllerTest {
     @InjectMocks CinemaClusterController controller;
 
     @Test
-    void submitRejectsWhenActorIsNeitherCreatorNorAdmin() {
-        CinemaCluster cluster = draftCluster("employee.a");
-        when(clusterRepository.findById(1L)).thenReturn(Optional.of(cluster));
+    void submitDelegatesToTransactionalService() {
+        Authentication authentication = employee("employee.a");
+        CinemaClusterResponse response = new CinemaClusterResponse();
+        when(cinemaClusterService.submitCluster(1L, authentication)).thenReturn(response);
 
-        AppException ex = assertThrows(AppException.class,
-                () -> controller.submit(1L, employee("employee.b")));
-
-        assertEquals(MovieErrorCode.CLUSTER_NOT_OWNER, ex.getErrorCode());
+        assertEquals(response, controller.submit(1L, authentication).getResult());
+        verify(cinemaClusterService).submitCluster(1L, authentication);
     }
 
     @Test
-    void submitAllowsTheCreatingEmployee() {
-        CinemaCluster cluster = draftCluster("employee.a");
-        when(clusterRepository.findById(1L)).thenReturn(Optional.of(cluster));
-        when(clusterRepository.save(cluster)).thenReturn(cluster);
-        stubResponseMapping(cluster);
+    void approveDelegatesToTransactionalService() {
+        Authentication authentication = admin("admin.x");
+        CinemaClusterResponse response = new CinemaClusterResponse();
+        when(cinemaClusterService.approveCluster(1L, authentication)).thenReturn(response);
 
-        controller.submit(1L, employee("employee.a"));
-
-        assertEquals(ClusterStatus.PENDING_REVIEW, cluster.getStatus());
+        assertEquals(response, controller.approve(1L, authentication).getResult());
+        verify(cinemaClusterService).approveCluster(1L, authentication);
     }
 
     @Test
-    void submitAllowsAdminEvenWhenNotTheCreator() {
-        CinemaCluster cluster = draftCluster("employee.a");
-        when(clusterRepository.findById(1L)).thenReturn(Optional.of(cluster));
-        when(clusterRepository.save(cluster)).thenReturn(cluster);
-        stubResponseMapping(cluster);
+    void rejectDelegatesValidatedNoteToTransactionalService() {
+        Authentication authentication = admin("admin.x");
+        RejectRequest request = new RejectRequest();
+        ReflectionTestUtils.setField(request, "note", "Address looks wrong");
+        CinemaClusterResponse response = new CinemaClusterResponse();
+        when(cinemaClusterService.rejectCluster(1L, "Address looks wrong", authentication)).thenReturn(response);
 
-        controller.submit(1L, admin("admin.x"));
-
-        assertEquals(ClusterStatus.PENDING_REVIEW, cluster.getStatus());
+        assertEquals(response, controller.reject(1L, request, authentication).getResult());
+        verify(cinemaClusterService).rejectCluster(1L, "Address looks wrong", authentication);
     }
 
     @Test
-    void approveRejectsSelfApprovalByTheCreatingAdmin() {
-        CinemaCluster cluster = pendingReviewCluster("admin.x");
-        when(clusterRepository.findById(1L)).thenReturn(Optional.of(cluster));
+    void deleteReturnsNoContentAndDelegatesVerifiedAuthentication() {
+        Authentication authentication = admin("admin.x");
 
-        AppException ex = assertThrows(AppException.class,
-                () -> controller.approve(1L, admin("admin.x")));
-
-        assertEquals(MovieErrorCode.CLUSTER_SELF_APPROVAL_FORBIDDEN, ex.getErrorCode());
-    }
-
-    @Test
-    void approveAllowsADifferentAdminThanTheCreator() {
-        CinemaCluster cluster = pendingReviewCluster("employee.a");
-        when(clusterRepository.findById(1L)).thenReturn(Optional.of(cluster));
-        when(clusterRepository.save(cluster)).thenReturn(cluster);
-        stubResponseMapping(cluster);
-
-        controller.approve(1L, admin("admin.x"));
-
-        assertEquals(ClusterStatus.ACTIVE, cluster.getStatus());
-    }
-
-    @Test
-    void rejectRejectsSelfReviewByTheCreatingAdmin() {
-        CinemaCluster cluster = pendingReviewCluster("admin.x");
-        when(clusterRepository.findById(1L)).thenReturn(Optional.of(cluster));
-        RejectRequest req = new RejectRequest();
-        ReflectionTestUtils.setField(req, "note", "Address looks wrong");
-
-        AppException ex = assertThrows(AppException.class,
-                () -> controller.reject(1L, req, admin("admin.x")));
-
-        assertEquals(MovieErrorCode.CLUSTER_SELF_APPROVAL_FORBIDDEN, ex.getErrorCode());
-    }
-
-    private CinemaCluster draftCluster(String createdBy) {
-        return CinemaCluster.builder().clusterId(1L).status(ClusterStatus.DRAFT).createdBy(createdBy).build();
-    }
-
-    private CinemaCluster pendingReviewCluster(String createdBy) {
-        return CinemaCluster.builder().clusterId(1L).status(ClusterStatus.PENDING_REVIEW).createdBy(createdBy).build();
-    }
-
-    private void stubResponseMapping(CinemaCluster cluster) {
-        when(movieMapper.toCinemaClusterResponse(cluster))
-                .thenReturn(movieservice.dto.response.CinemaClusterResponse.builder().build());
-        when(clusterRepository.countRoomsByClusterId(any())).thenReturn(0);
-        when(clusterRepository.countSeatsByClusterId(any())).thenReturn(0);
+        assertEquals(HttpStatus.NO_CONTENT, controller.delete(1L, authentication).getStatusCode());
+        verify(cinemaClusterService).deleteUnusedDraft(1L, authentication);
     }
 
     private Authentication employee(String username) {

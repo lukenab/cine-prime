@@ -16,6 +16,7 @@ export function useRole() {
 
   return {
     role,
+    username: user?.username ?? "",
     isAdmin,
     isEmployee,
     isMember,

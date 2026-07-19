@@ -213,7 +213,17 @@ public enum MovieErrorCode implements BaseErrorCode {
         MOVIE_IMAGE_TYPE_LIMIT_EXCEEDED(2086,
                         "At most 1 poster and 1 backdrop can be imported per request; stills are capped by the configured maximum.",
                         HttpStatus.BAD_REQUEST),
-        MOVIE_IMAGE_NOT_FOUND(2087, "Movie image not found.", HttpStatus.NOT_FOUND);
+        MOVIE_IMAGE_NOT_FOUND(2087, "Movie image not found.", HttpStatus.NOT_FOUND),
+
+        CLUSTER_DELETE_NOT_ALLOWED(2088,
+                        "Only an unused DRAFT cinema cluster that has never entered review or operation can be permanently deleted.",
+                        HttpStatus.CONFLICT),
+        CLUSTER_DELETE_FORBIDDEN(2089,
+                        "Only an ADMIN can permanently delete an unused cinema cluster draft.",
+                        HttpStatus.FORBIDDEN),
+        CLUSTER_HAS_MOVIE_AVAILABILITY(2090,
+                        "Cannot permanently delete a cinema cluster referenced by movie availability history.",
+                        HttpStatus.CONFLICT);
 
         int code;
         String message;

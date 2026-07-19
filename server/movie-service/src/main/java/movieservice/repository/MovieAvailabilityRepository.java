@@ -17,6 +17,8 @@ public interface MovieAvailabilityRepository extends JpaRepository<MovieAvailabi
 
     List<MovieAvailability> findByCluster_ClusterId(Long clusterId);
 
+    boolean existsByCluster_ClusterId(Long clusterId);
+
     @Query("""
             SELECT a FROM MovieAvailability a
             WHERE (:movieId IS NULL OR a.movie.movieId = :movieId)

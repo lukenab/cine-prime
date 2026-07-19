@@ -11,6 +11,7 @@ type ConfirmDialogProps = {
    *  guidance that destructive actions must never be selected automatically —
    *  moves the initial focus to Cancel instead of Confirm. */
   danger?: boolean;
+  busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -21,7 +22,7 @@ const FOCUSABLE_SELECTOR = 'button, [href], input, select, textarea, [tabindex]:
  *  visual pattern (overlay + centered card), but parameterized so the resize
  *  data-loss and template-overwrite confirmations can both reuse it instead of
  *  each needing a bespoke modal. Adds a focus trap and Escape-to-close. */
-export function ConfirmDialog({ title, body, confirmLabel = "Confirm", cancelLabel = "Cancel", danger, onConfirm, onCancel }: ConfirmDialogProps) {
+export function ConfirmDialog({ title, body, confirmLabel = "Confirm", cancelLabel = "Cancel", danger, busy = false, onConfirm, onCancel }: ConfirmDialogProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
@@ -93,7 +94,8 @@ export function ConfirmDialog({ title, body, confirmLabel = "Confirm", cancelLab
           <button
             ref={cancelRef}
             onClick={onCancel}
-            className="flex-1 py-2.5 rounded-xl border text-sm font-medium hover:opacity-80"
+            disabled={busy}
+            className="flex-1 py-2.5 rounded-xl border text-sm font-medium hover:opacity-80 disabled:opacity-50"
             style={{ color: "var(--text-main)", borderColor: "var(--border-color)", background: "transparent" }}
           >
             {cancelLabel}
@@ -101,7 +103,8 @@ export function ConfirmDialog({ title, body, confirmLabel = "Confirm", cancelLab
           <button
             ref={confirmRef}
             onClick={onConfirm}
-            className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white hover:opacity-90"
+            disabled={busy}
+            className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
             style={{ background: accentColor }}
           >
             {confirmLabel}
