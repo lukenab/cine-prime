@@ -48,6 +48,7 @@ import {
   type MovieEditorOperation,
 } from "./movieEditor/MovieEditorActionBar";
 import { persistMovieDraft, saveDraftThenSubmit } from "./movieEditor/movieDraftActions";
+import { buildMoviePayload } from "./movieEditor/buildMoviePayload";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Local types (same shape as the previous MovieModal)
@@ -373,55 +374,8 @@ export default function MovieEditorPage() {
     return h > 0 ? `${h}h ${min}m` : `${min}m`;
   };
 
-  const buildPayload = (
-    resolvedCompanyIds: number[],
-    resolvedCast: CastRequest[],
-    sourceForm: FormState = form,
-  ): CreateMovieRequest => {
-    const translations: { languageCode: string; title: string; synopsis?: string; tagline?: string }[] = [];
-    if (sourceForm.vi_title.trim())
-      translations.push({
-        languageCode: "vi", title: sourceForm.vi_title.trim(),
-        synopsis: sourceForm.vi_synopsis.trim() || undefined, tagline: sourceForm.vi_tagline.trim() || undefined,
-      });
-    if (sourceForm.en_title.trim())
-      translations.push({
-        languageCode: "en", title: sourceForm.en_title.trim(),
-        synopsis: sourceForm.en_synopsis.trim() || undefined, tagline: sourceForm.en_tagline.trim() || undefined,
-      });
-
-    const canonicalSynopsis = sourceForm.originalLanguage.toLowerCase() === "vi"
-      ? sourceForm.vi_synopsis.trim() || sourceForm.en_synopsis.trim()
-      : sourceForm.en_synopsis.trim() || sourceForm.vi_synopsis.trim();
-
-    // `[Backend] Add tagline field to Movie and MovieTranslation entities`: derived the same
-    // way canonicalSynopsis is - no separate "original tagline" input, mirrors the existing
-    // synopsis convention exactly.
-    const canonicalTagline = sourceForm.originalLanguage.toLowerCase() === "vi"
-      ? sourceForm.vi_tagline.trim() || sourceForm.en_tagline.trim()
-      : sourceForm.en_tagline.trim() || sourceForm.vi_tagline.trim();
-
-    return {
-      originalTitle: sourceForm.originalTitle.trim(),
-      originalLanguage: sourceForm.originalLanguage,
-      durationMinutes: sourceForm.durationMinutes,
-      releaseDate: sourceForm.releaseDate || undefined,
-      country: sourceForm.country.trim() || undefined,
-      ageRatingId: sourceForm.ageRatingId ?? undefined,
-      companyIds: resolvedCompanyIds,
-      genreIds: sourceForm.genreIds,
-      formatIds: sourceForm.formatIds,
-      posterUrl: sourceForm.posterUrl.trim() || undefined,
-      thumbnailUrl: sourceForm.thumbnailUrl.trim() || undefined,
-      trailerUrl: sourceForm.trailerUrl.trim() || undefined,
-      synopsis: canonicalSynopsis || undefined,
-      tagline: canonicalTagline || undefined,
-      tmdbId: sourceForm.tmdbId,
-      imdbId: sourceForm.imdbId,
-      translations: translations.length ? translations : undefined,
-      cast: resolvedCast,
-    };
-  };
+  // buildMoviePayload() is extracted to ./movieEditor/buildMoviePayload.ts (pure, unit-tested) -
+  // notably, it never includes `endDate` at all (see that file's docstring).
 
   /** Creates a local ProductionCompany row for each TMDB-sourced pick that has no companyId
    *  yet, and returns the final list of resolved IDs. Existing companies pass straight through. */
@@ -510,7 +464,7 @@ export default function MovieEditorPage() {
         personId: resolvedCast[index]?.personId ?? castMember.personId,
       })),
     };
-    const payload = buildPayload(resolvedCompanyIds, resolvedCast, resolvedForm);
+    const payload = buildMoviePayload(resolvedForm, resolvedCompanyIds, resolvedCast);
     const wasNewDraft = activeMovieId == null;
     const savedMovie = await persistMovieDraft<CreateMovieRequest, MovieV2>({
       movieId: activeMovieId,
@@ -843,7 +797,7 @@ export default function MovieEditorPage() {
   }
 
   return (
-    <div>
+    <div className="mx-auto w-full max-w-[1520px]">
       {/* ── Header ── */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -945,7 +899,7 @@ export default function MovieEditorPage() {
               </div>
               <div>
                 <label style={FL}>
-                  Release Date
+                  Release Date <span style={{ fontWeight: 400, color: "var(--text-sub)" }}>(theatrical release — content metadata, not an exhibition window)</span>
                   {tmdbUnverified.releaseDate && (
                     <span className="ml-1.5 px-1.5 py-0.5 rounded" style={{ fontSize: "9.5px", fontWeight: 700, background: "#e0f2fe", color: "#0369a1" }}>
                       TMDB · UNVERIFIED
@@ -961,6 +915,11 @@ export default function MovieEditorPage() {
                   className={IC} style={IS}
                 />
               </div>
+              {/* `[Frontend] Remove exhibition end date from Movie Editor`: end date is an
+                  exhibition/scheduling decision, managed via the availability/showtime workflow
+                  (see docs/MOVIE_SERVICE_BUSINESS_RULES.md) - never edited here, so a content
+                  operator can't accidentally end a movie's exhibition window while just editing
+                  its metadata. */}
               <div>
                 <label style={FL}>Country</label>
                 <input type="text" placeholder="e.g. South Korea" value={form.country} onChange={(e) => set("country", e.target.value)} className={IC} style={IS} />

@@ -25,7 +25,7 @@ Related Issue: Follow-up của `[Frontend] Remove exhibition end date from Movie
 - `client/src/pages/admin/MovieEditorPage.tsx` — xoá ô input "End Date" còn sót trong form chính (label, state field, `emptyForm`, `movieToForm()`, payload builder) — MR trước chỉ tách/dọn `buildMoviePayload.ts` dùng bởi `MovieEditorWorkflow.tsx`, không phải form chính này, nên field vẫn còn hiển thị (không hoạt động thật vì payload gửi lên đã bị backend bỏ qua) cho tới MR này.
 
 **Database / JPA / Migration:**
-- **`V8__drop_movie_end_date.sql`** — `ALTER TABLE movie DROP COLUMN IF EXISTS end_date;`
+- **`V9__drop_movie_end_date.sql`** — `ALTER TABLE movie DROP COLUMN IF EXISTS end_date;` (đổi từ `V8` sau khi rebase lên `develop` — `V8` đã bị branch `fix/drop-legacy-movie-columns` chiếm khi merge trước).
 
 **Exception Handling / Error Codes:**
 - Xoá `INVALID_MOVIE_DATE_RANGE` (2036).
@@ -46,8 +46,8 @@ Related Issue: Follow-up của `[Frontend] Remove exhibition end date from Movie
 - **Branch riêng, tách khỏi MR Movie Editor trước đó.** MR trước đã merge/pushed như một thay đổi frontend-only, độc lập và tự đầy đủ. Việc xoá cột DB là một quyết định vận hành riêng biệt (không thể revert dễ dàng), nên được tách thành branch/MR của chính nó thay vì gộp chung hoặc amend lại MR đã pushed.
 - **Xoá toàn bộ chuỗi phụ thuộc, không chỉ cột DB.** Không thể chỉ chạy migration `DROP COLUMN` trong khi Java entity vẫn map `@Column(name = "end_date")` — sẽ vỡ ngay khi Hibernate query. Nên MR này đi từ trong ra ngoài: entity → DTOs → validator → error code → tests, rồi mới tới migration.
 - **`collectReleaseOnlyViolations()` (dead code) vẫn được sửa, không xoá luôn.** Đã xác nhận qua grep rằng `requireReadyForRelease()` không được gọi từ `MovieService` (tàn dư từ lifecycle cũ có `COMING_SOON`/`NOW_SHOWING`) — nhưng xoá cả cụm release-gate là một cleanup lớn hơn, không thuộc phạm vi issue này, nên chỉ sửa đủ để compile.
-- **Cập nhật `docs/MOVIE_SERVICE_BUSINESS_RULES.md` với `MOV-P1-009` mới** (branch này không có rule `MOV-P1-009` cũ từ MR trước, vì được tạo từ `develop` trước khi MR đó merge) — ghi rõ `Movie.endDate` không còn tồn tại và exhibition window nằm ở `MovieAvailability.showingEndDate`. Khi 2 branch merge vào `develop`, có thể cần đối chiếu lại nếu cả hai đều thêm rule cùng ID.
-- **Sửa `FlywayMigrationIntegrationTest`** — test này assert cứng số lượng migration chạy trên DB rỗng (`8` → `9` sau khi thêm `V8`).
+- **Cập nhật `docs/MOVIE_SERVICE_BUSINESS_RULES.md` với `MOV-P1-009` mới** — ghi rõ `Movie.endDate` không còn tồn tại và exhibition window nằm ở `MovieAvailability.showingEndDate`. MR `fix/remove-movie-editor-end-date` đã merge trước với 1 rule `MOV-P1-009` khác nói cột "retained" — đã resolve conflict khi rebase, giữ bản mới (cột đã bị xoá thật) và bổ sung ghi chú lịch sử 2 bước (UI/payload trước, DB column sau).
+- **Sửa `FlywayMigrationIntegrationTest`** — test này assert cứng số lượng migration chạy trên DB rỗng, cập nhật `10` sau khi rebase (V1-V9 + R; `V8` đã bị chiếm bởi migration khác đã merge trước).
 
 ---
 
@@ -68,7 +68,7 @@ Related Issue: Follow-up của `[Frontend] Remove exhibition end date from Movie
 - [x] Code compile được (Maven `test-compile` + `tsc --noEmit`)
 
 **Backend**
-- [x] Migration `V8` idempotent (`DROP COLUMN IF EXISTS`)
+- [x] Migration `V9` idempotent (`DROP COLUMN IF EXISTS`)
 - [x] Test suite cập nhật, không còn tham chiếu `endDate`/`requireValidDateRange`
 - [x] Đã xác minh lỗi test còn lại là tiền tồn tại, không do MR này gây ra
 
@@ -81,6 +81,6 @@ Related Issue: Follow-up của `[Frontend] Remove exhibition end date from Movie
 
 ## Reviewer Notes
 
-- **Đây là follow-up của một MR đã pushed trước đó**, không phải amend — cả 2 MR có thể merge độc lập, nhưng MR này nên merge sau (hoặc sau khi review xác nhận) MR Movie Editor kia, để tránh 2 MR cùng sửa `docs/MOVIE_SERVICE_BUSINESS_RULES.md` gây conflict khó đọc.
-- **`MovieEditorWorkflow.tsx` có 1 thay đổi nhỏ khác đang dở dang trong working tree (không thuộc MR này)** — đã kiểm tra kỹ và KHÔNG đưa vào commit, tránh lẫn với công việc song song khác (sticky actions).
-- File migration đặt tên `V8` — nếu có migration khác đã được thêm song song trên branch khác chưa merge, cần đổi số version trước khi merge để tránh trùng.
+- **Đây là follow-up của một MR đã pushed trước đó**, không phải amend — cả 2 MR có thể merge độc lập.
+- **Branch đã được rebase lên `develop` mới nhất** để giải quyết trước 3 merge đã xảy ra song song: `fix/remove-movie-editor-end-date`, `fix/drop-legacy-movie-columns`, và `chore/remove-dead-movie-payload-types`. Đã resolve 2 conflict thật (`MovieEditorPage.tsx`, `docs/MOVIE_SERVICE_BUSINESS_RULES.md`) và 1 collision ngầm (`V8` bị trùng version với `fix/drop-legacy-movie-columns` đã merge trước — đổi thành `V9`).
+- **`MovieEditorPage.tsx`**: sau rebase, form chính giờ dùng `buildMoviePayload()` (module tách riêng từ `fix/remove-movie-editor-end-date`) thay vì hàm `buildPayload` inline cũ — hàm inline đã bị xoá, chỉ giữ lại phần xoá field "End Date" trong JSX của MR này.

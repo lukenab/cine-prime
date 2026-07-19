@@ -240,18 +240,26 @@ Current limit:
 
 ### MOV-P1-009 - Movie Has No Standalone End Date
 
-Business reason: A movie's exhibition window is per cinema cluster, not a single global date on the movie itself. `Movie.endDate` was a vestigial field left over from a pre-refactor lifecycle and was never the authoritative source for when a movie stops showing.
+Business reason: A movie's exhibition window is per cinema cluster, not a single global date on
+the movie itself. `Movie.endDate` was a vestigial field left over from a pre-refactor lifecycle
+and was never the authoritative source for when a movie stops showing. An earlier change removed
+it from the Movie Editor's UI/payload only, deliberately keeping the DB column in place
+short-term (see `client/src/pages/admin/movieEditor/buildMoviePayload.ts`); a follow-up change
+finished the job by dropping the column itself.
 
 Rules:
 
 - `movie.end_date` does not exist; the movie entity only carries `releaseDate`.
-- The actual exhibition window (when a cluster stops showing a movie) is tracked per cluster on `MovieAvailability.showingEndDate`.
+- The actual exhibition window (when a cluster stops showing a movie) is tracked per cluster on
+  `MovieAvailability.showingEndDate`.
 - Neither the Movie Editor UI nor the create/update APIs accept an end date for a movie.
 
 Current code reference:
 
 - `Movie` (no `endDate` field)
 - `MovieAvailability.showingEndDate`
+- `client/src/pages/admin/movieEditor/buildMoviePayload.ts` (Movie Editor's payload builder - has
+  no `endDate` field at all)
 
 ## TMDB Import Rules
 
