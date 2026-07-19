@@ -42,9 +42,17 @@ public interface MovieRepository extends JpaRepository<Movie, Long> {
 
     boolean existsByImdbId(String imdbId);
 
-    /** Dung boi TmdbService de danh dau alreadyImported trong browse/search list (bulk, tranh N+1) */
-    @Query("SELECT m.tmdbId FROM Movie m WHERE m.tmdbId IN :tmdbIds")
-    List<Integer> findExistingTmdbIds(@Param("tmdbIds") List<Integer> tmdbIds);
+    /**
+     * Dung boi TmdbService de danh dau alreadyImported (va localMovieId cho View/Sync action)
+     * trong browse/search list - bulk, tranh N+1 goi existsByTmdbId() tung item mot.
+     */
+    @Query("SELECT m.tmdbId AS tmdbId, m.movieId AS movieId FROM Movie m WHERE m.tmdbId IN :tmdbIds")
+    List<TmdbIdAndMovieId> findExistingTmdbIdsWithMovieId(@Param("tmdbIds") List<Integer> tmdbIds);
+
+    interface TmdbIdAndMovieId {
+        Integer getTmdbId();
+        Long getMovieId();
+    }
 
     // Lifecycle transitions go through MovieService's load → mutate → save()
     // instead of @Modifying bulk JPQL updates — bulk updates bypass @Version
