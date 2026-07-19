@@ -6,11 +6,14 @@ import movieservice.dto.request.ClusterOperatingHourRequest;
 import movieservice.entity.CinemaCluster;
 import movieservice.entity.ClusterAuditLog;
 import movieservice.enums.ClusterStatus;
+import movieservice.enums.ClusterAction;
 import movieservice.enums.CinemaVenueType;
+import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movie.theater.common.exception.AppException;
 import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.ClusterAuditLogRepository;
+import movieservice.repository.MovieAvailabilityRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -24,12 +27,14 @@ import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalTime;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -37,9 +42,139 @@ class CinemaClusterServiceTest {
 
     @Mock CinemaClusterRepository cinemaClusterRepository;
     @Mock ClusterAuditLogRepository clusterAuditLogRepository;
+    @Mock MovieAvailabilityRepository movieAvailabilityRepository;
     @Mock MovieMapper movieMapper;
 
     @InjectMocks CinemaClusterService cinemaClusterService;
+
+    @Test
+    void submitUsesTheSameLockedAggregateAsDeleteAndAllowsCreator() {
+        CinemaCluster cluster = CinemaCluster.builder()
+                .clusterId(7L)
+                .status(ClusterStatus.DRAFT)
+                .createdBy("employee.one")
+                .build();
+        when(cinemaClusterRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(cluster));
+        when(cinemaClusterRepository.save(cluster)).thenReturn(cluster);
+        when(movieMapper.toCinemaClusterResponse(cluster)).thenReturn(new CinemaClusterResponse());
+
+        cinemaClusterService.submitCluster(7L, employeeAuthentication("employee.one"));
+
+        assertEquals(ClusterStatus.PENDING_REVIEW, cluster.getStatus());
+        verify(cinemaClusterRepository).findByIdForUpdate(7L);
+    }
+
+    @Test
+    void submitRejectsEmployeeWhoDoesNotOwnDraft() {
+        CinemaCluster cluster = CinemaCluster.builder()
+                .clusterId(7L)
+                .status(ClusterStatus.DRAFT)
+                .createdBy("employee.one")
+                .build();
+        when(cinemaClusterRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(cluster));
+
+        AppException exception = assertThrows(AppException.class,
+                () -> cinemaClusterService.submitCluster(7L, employeeAuthentication("employee.two")));
+
+        assertEquals(MovieErrorCode.CLUSTER_NOT_OWNER, exception.getErrorCode());
+    }
+
+    @Test
+    void approveRejectsSelfReview() {
+        CinemaCluster cluster = CinemaCluster.builder()
+                .clusterId(7L)
+                .status(ClusterStatus.PENDING_REVIEW)
+                .createdBy("admin.one")
+                .build();
+        when(cinemaClusterRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(cluster));
+
+        AppException exception = assertThrows(AppException.class,
+                () -> cinemaClusterService.approveCluster(7L, adminAuthentication("admin.one")));
+
+        assertEquals(MovieErrorCode.CLUSTER_SELF_APPROVAL_FORBIDDEN, exception.getErrorCode());
+    }
+
+    @Test
+    void deleteUnusedDraftPersistsTombstoneAndDeletesCluster() {
+        CinemaCluster cluster = CinemaCluster.builder()
+                .clusterId(7L)
+                .clusterCode("CP-007")
+                .status(ClusterStatus.DRAFT)
+                .build();
+        when(cinemaClusterRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(cluster));
+
+        cinemaClusterService.deleteUnusedDraft(7L, adminAuthentication("admin.one"));
+
+        ArgumentCaptor<ClusterAuditLog> auditCaptor = ArgumentCaptor.forClass(ClusterAuditLog.class);
+        verify(clusterAuditLogRepository).save(auditCaptor.capture());
+        assertEquals(ClusterAction.DELETE, auditCaptor.getValue().getAction());
+        assertEquals("admin.one", auditCaptor.getValue().getPerformedBy());
+        assertEquals(true, auditCaptor.getValue().getNote().contains("CP-007"));
+        verify(cinemaClusterRepository).delete(cluster);
+    }
+
+    @Test
+    void deleteUnusedDraftRejectsNonAdminAtServiceBoundary() {
+        AppException exception = assertThrows(AppException.class,
+                () -> cinemaClusterService.deleteUnusedDraft(7L, employeeAuthentication("employee.one")));
+
+        assertEquals(MovieErrorCode.CLUSTER_DELETE_FORBIDDEN, exception.getErrorCode());
+        verify(cinemaClusterRepository, never()).findByIdForUpdate(7L);
+    }
+
+    @Test
+    void deleteUnusedDraftRejectsNonDraftClusterEvenWithoutRooms() {
+        CinemaCluster cluster = CinemaCluster.builder()
+                .clusterId(7L)
+                .status(ClusterStatus.ACTIVE)
+                .build();
+        when(cinemaClusterRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(cluster));
+
+        AppException exception = assertThrows(AppException.class,
+                () -> cinemaClusterService.deleteUnusedDraft(7L, adminAuthentication("admin.one")));
+
+        assertEquals(MovieErrorCode.CLUSTER_DELETE_NOT_ALLOWED, exception.getErrorCode());
+        verify(cinemaClusterRepository, never()).delete(cluster);
+    }
+
+    @Test
+    void deleteUnusedDraftRejectsDraftThatPreviouslyEnteredReview() {
+        CinemaCluster cluster = CinemaCluster.builder()
+                .clusterId(7L)
+                .status(ClusterStatus.DRAFT)
+                .build();
+        when(cinemaClusterRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(cluster));
+        when(clusterAuditLogRepository.existsByClusterIdAndActionIn(7L, List.of(
+                ClusterAction.SUBMIT,
+                ClusterAction.APPROVE,
+                ClusterAction.DEACTIVATE,
+                ClusterAction.REACTIVATE))).thenReturn(true);
+
+        AppException exception = assertThrows(AppException.class,
+                () -> cinemaClusterService.deleteUnusedDraft(7L, adminAuthentication("admin.one")));
+
+        assertEquals(MovieErrorCode.CLUSTER_DELETE_NOT_ALLOWED, exception.getErrorCode());
+        verify(cinemaClusterRepository, never()).delete(cluster);
+    }
+
+    @Test
+    void deleteUnusedDraftRejectsRoomAndAvailabilityDependencies() {
+        CinemaCluster withRoom = CinemaCluster.builder().clusterId(7L).status(ClusterStatus.DRAFT).build();
+        when(cinemaClusterRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(withRoom));
+        when(cinemaClusterRepository.countRoomsByClusterId(7L)).thenReturn(1);
+
+        AppException roomException = assertThrows(AppException.class,
+                () -> cinemaClusterService.deleteUnusedDraft(7L, adminAuthentication("admin.one")));
+        assertEquals(MovieErrorCode.CLUSTER_HAS_ROOMS, roomException.getErrorCode());
+
+        CinemaCluster withAvailability = CinemaCluster.builder().clusterId(8L).status(ClusterStatus.DRAFT).build();
+        when(cinemaClusterRepository.findByIdForUpdate(8L)).thenReturn(Optional.of(withAvailability));
+        when(movieAvailabilityRepository.existsByCluster_ClusterId(8L)).thenReturn(true);
+
+        AppException availabilityException = assertThrows(AppException.class,
+                () -> cinemaClusterService.deleteUnusedDraft(8L, adminAuthentication("admin.one")));
+        assertEquals(MovieErrorCode.CLUSTER_HAS_MOVIE_AVAILABILITY, availabilityException.getErrorCode());
+    }
 
     @Test
     void createClusterUsesAuthenticatedPrincipalForClusterAndAuditLog() {
@@ -136,5 +271,13 @@ class CinemaClusterServiceTest {
 
     private Authentication authentication(String username) {
         return new TestingAuthenticationToken(username, null, "ROLE_ADMIN");
+    }
+
+    private Authentication adminAuthentication(String username) {
+        return new TestingAuthenticationToken(username, null, "ROLE_ADMIN");
+    }
+
+    private Authentication employeeAuthentication(String username) {
+        return new TestingAuthenticationToken(username, null, "ROLE_EMPLOYEE");
     }
 }

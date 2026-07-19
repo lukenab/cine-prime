@@ -13,6 +13,8 @@ import {
 import { useRole } from "../../hooks/useRole";
 import { ClusterWizardModal } from "./ClusterWizardModal";
 import { ClusterReviewModal } from "../../layouts/ClusterReviewModal";
+import { ConfirmDialog } from "../../components/shared/ConfirmDialog";
+import { toast } from "sonner";
 
 // ── Status config ─────────────────────────────────────────────────────────────
 
@@ -63,59 +65,12 @@ function ClusterActions({
       </>}
       {(s === "ACTIVE" || s === "INACTIVE") && <>
         {isAdmin && <ActionBtn icon={Edit2}  title="Edit"   onClick={onEdit}   />}
-        {isAdmin && <ActionBtn icon={Trash2} title="Delete" onClick={onDelete} color="#ef4444" />}
       </>}
     </div>
   );
 }
 
 // ── Delete Confirm Modal ──────────────────────────────────────────────────────
-
-function DeleteModal({
-  cluster, onConfirm, onCancel, submitting,
-}: {
-  cluster: ClusterResponse;
-  onConfirm: () => void;
-  onCancel: () => void;
-  submitting: boolean;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onCancel} />
-      <div
-        className="relative w-full max-w-sm mx-4 rounded-2xl shadow-2xl p-6"
-        style={{ background: "var(--bg-main)" }}
-      >
-        <div className="w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center mx-auto mb-4">
-          <Trash2 size={20} className="text-rose-500" />
-        </div>
-        <h3 className="text-center font-semibold mb-1" style={{ color: "var(--text-main)", fontSize: "16px" }}>
-          Delete Cluster?
-        </h3>
-        <p className="text-center mb-5" style={{ color: "var(--text-sub)", fontSize: "13px" }}>
-          <strong style={{ color: "var(--text-main)" }}>{cluster.clusterName}</strong> and all associated
-          rooms will be permanently removed.
-        </p>
-        <div className="flex gap-3">
-          <button
-            onClick={onCancel} disabled={submitting}
-            className="flex-1 px-4 py-2.5 rounded-xl border transition-colors hover:opacity-80 disabled:opacity-50"
-            style={{ fontSize: "14px", borderColor: "var(--border-color)", color: "var(--text-main)" }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm} disabled={submitting}
-            className="flex-1 px-4 py-2.5 rounded-xl bg-rose-500 text-white hover:bg-rose-600 transition-colors disabled:opacity-60"
-            style={{ fontSize: "14px", fontWeight: 500 }}
-          >
-            {submitting ? "Deleting…" : "Delete"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
@@ -164,9 +119,10 @@ export default function ManageCinemaClusterPage() {
     try {
       await movieApi.deleteCluster(deleteTarget.clusterId);
       setClusters((prev) => prev.filter((c) => c.clusterId !== deleteTarget.clusterId));
+      toast.success(`Draft cluster "${deleteTarget.clusterName}" deleted.`);
       setDeleteTarget(null);
     } catch (err: any) {
-      alert(`Error: ${err?.response?.data?.message ?? "Delete failed."}`);
+      toast.error(err?.response?.data?.message ?? "Unable to delete this cluster draft.");
     } finally {
       setDeleting(false);
     }
@@ -179,7 +135,7 @@ export default function ManageCinemaClusterPage() {
       const res = await fn();
       setClusters((prev) => prev.map((c) => (c.clusterId === id ? res.result : c)));
     } catch (err: any) {
-      alert(`Error: ${err?.response?.data?.message ?? "Action failed."}`);
+      toast.error(err?.response?.data?.message ?? "Action failed.");
     }
   };
 
@@ -518,11 +474,20 @@ export default function ManageCinemaClusterPage() {
       />
 
       {deleteTarget && (
-        <DeleteModal
-          cluster={deleteTarget}
-         onConfirm={handleDelete}
-          onCancel={() => setDeleteTarget(null)}
-          submitting={deleting}
+        <ConfirmDialog
+          title="Delete unused cluster draft?"
+          body={
+            <p className="text-center">
+              <strong style={{ color: "var(--text-main)" }}>{deleteTarget.clusterName}</strong> will be
+              permanently deleted. This is allowed only while the cluster is an unused draft and has never
+              entered review or operation.
+            </p>
+          }
+          confirmLabel={deleting ? "Deleting..." : "Delete draft"}
+          danger
+          busy={deleting}
+          onConfirm={handleDelete}
+          onCancel={() => { if (!deleting) setDeleteTarget(null); }}
         />
       )}
 

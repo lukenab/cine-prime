@@ -310,7 +310,7 @@ export default function RoomDetailPage() {
       );
       setEditingSeat(null);
     } catch (err: any) {
-      alert(err?.response?.data?.message ?? "Update failed.");
+      showToast("error", err?.response?.data?.message ?? "Update failed.");
     } finally {
       setSaving(false);
     }

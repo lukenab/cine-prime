@@ -16,6 +16,7 @@ import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.ClusterAuditLogRepository;
+import movieservice.repository.MovieAvailabilityRepository;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,7 +39,14 @@ public class CinemaClusterService {
 
     CinemaClusterRepository cinemaClusterRepository;
     ClusterAuditLogRepository clusterAuditLogRepository;
+    MovieAvailabilityRepository movieAvailabilityRepository;
     MovieMapper movieMapper;
+
+    private static final List<ClusterAction> NON_DELETABLE_HISTORY = List.of(
+            ClusterAction.SUBMIT,
+            ClusterAction.APPROVE,
+            ClusterAction.DEACTIVATE,
+            ClusterAction.REACTIVATE);
 
     @Transactional
     public CinemaClusterResponse createCluster(CinemaClusterRequest req, Authentication authentication) {
@@ -148,6 +156,106 @@ public class CinemaClusterService {
                 oldStatus, saved.getStatus(), null);
 
         return toResponseWithStats(saved);
+    }
+
+    /**
+     * Permanently removes only a never-used cluster draft. Operational clusters
+     * remain addressable and must use the suspension/retirement lifecycle.
+     */
+    @Transactional
+    public void deleteUnusedDraft(Long id, Authentication authentication) {
+        if (!isAdminRole(authentication)) {
+            throw new AppException(MovieErrorCode.CLUSTER_DELETE_FORBIDDEN);
+        }
+
+        CinemaCluster cluster = cinemaClusterRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new AppException(MovieErrorCode.CLUSTER_NOT_FOUND));
+
+        if (cluster.getStatus() != ClusterStatus.DRAFT
+                || (cluster.getRejectionNote() != null && !cluster.getRejectionNote().isBlank())
+                || clusterAuditLogRepository.existsByClusterIdAndActionIn(id, NON_DELETABLE_HISTORY)) {
+            throw new AppException(MovieErrorCode.CLUSTER_DELETE_NOT_ALLOWED);
+        }
+
+        if (cinemaClusterRepository.countRoomsByClusterId(id) > 0) {
+            throw new AppException(MovieErrorCode.CLUSTER_HAS_ROOMS);
+        }
+
+        if (movieAvailabilityRepository.existsByCluster_ClusterId(id)) {
+            throw new AppException(MovieErrorCode.CLUSTER_HAS_MOVIE_AVAILABILITY);
+        }
+
+        String actor = getActor(authentication);
+        logAction(id, ClusterAction.DELETE, actor, ClusterStatus.DRAFT, null,
+                "Permanently deleted unused draft cinema cluster [code=" + cluster.getClusterCode() + "]");
+        cinemaClusterRepository.delete(cluster);
+    }
+
+    @Transactional
+    public CinemaClusterResponse submitCluster(Long id, Authentication authentication) {
+        CinemaCluster cluster = lockCluster(id);
+        if (cluster.getStatus() != ClusterStatus.DRAFT) {
+            throw new AppException(MovieErrorCode.CLUSTER_INVALID_TRANSITION);
+        }
+
+        String actor = getActor(authentication);
+        if (!isAdminRole(authentication) && !actor.equals(cluster.getCreatedBy())) {
+            throw new AppException(MovieErrorCode.CLUSTER_NOT_OWNER);
+        }
+
+        cluster.setStatus(ClusterStatus.PENDING_REVIEW);
+        cluster.setRejectionNote(null);
+        cluster.setUpdatedBy(actor);
+        CinemaCluster saved = cinemaClusterRepository.save(cluster);
+        logAction(id, ClusterAction.SUBMIT, actor,
+                ClusterStatus.DRAFT, ClusterStatus.PENDING_REVIEW, null);
+        return toResponseWithStats(saved);
+    }
+
+    @Transactional
+    public CinemaClusterResponse approveCluster(Long id, Authentication authentication) {
+        CinemaCluster cluster = lockCluster(id);
+        if (cluster.getStatus() != ClusterStatus.PENDING_REVIEW) {
+            throw new AppException(MovieErrorCode.CLUSTER_INVALID_TRANSITION);
+        }
+
+        String actor = getActor(authentication);
+        if (actor.equals(cluster.getCreatedBy())) {
+            throw new AppException(MovieErrorCode.CLUSTER_SELF_APPROVAL_FORBIDDEN);
+        }
+
+        cluster.setStatus(ClusterStatus.ACTIVE);
+        cluster.setUpdatedBy(actor);
+        CinemaCluster saved = cinemaClusterRepository.save(cluster);
+        logAction(id, ClusterAction.APPROVE, actor,
+                ClusterStatus.PENDING_REVIEW, ClusterStatus.ACTIVE, null);
+        return toResponseWithStats(saved);
+    }
+
+    @Transactional
+    public CinemaClusterResponse rejectCluster(Long id, String note, Authentication authentication) {
+        CinemaCluster cluster = lockCluster(id);
+        if (cluster.getStatus() != ClusterStatus.PENDING_REVIEW) {
+            throw new AppException(MovieErrorCode.CLUSTER_INVALID_TRANSITION);
+        }
+
+        String actor = getActor(authentication);
+        if (actor.equals(cluster.getCreatedBy())) {
+            throw new AppException(MovieErrorCode.CLUSTER_SELF_APPROVAL_FORBIDDEN);
+        }
+
+        cluster.setStatus(ClusterStatus.DRAFT);
+        cluster.setRejectionNote(note);
+        cluster.setUpdatedBy(actor);
+        CinemaCluster saved = cinemaClusterRepository.save(cluster);
+        logAction(id, ClusterAction.REJECT, actor,
+                ClusterStatus.PENDING_REVIEW, ClusterStatus.DRAFT, note);
+        return toResponseWithStats(saved);
+    }
+
+    private CinemaCluster lockCluster(Long id) {
+        return cinemaClusterRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new AppException(MovieErrorCode.CLUSTER_NOT_FOUND));
     }
 
     private void applyClusterDetails(CinemaCluster cluster, CinemaClusterRequest req) {
