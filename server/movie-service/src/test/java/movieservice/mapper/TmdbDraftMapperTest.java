@@ -131,6 +131,67 @@ class TmdbDraftMapperTest {
         assertEquals(1, draft.getCast().get(1).getBillingOrder());
     }
 
+    // ── `[Backend] Add tagline field to Movie and MovieTranslation entities` ────────
+
+    @Test
+    void taglineIsCopiedFromDetailToTheDraft() {
+        TmdbMovieDetail detail = baseDetail();
+        detail.setTagline("Fear is a choice.");
+
+        TmdbMovieDraft draft = TmdbDraftMapper.toDraft(detail, new TmdbCreditsResponse(), new TmdbTranslationsResponse());
+
+        assertEquals("Fear is a choice.", draft.getTagline());
+    }
+
+    @Test
+    void blankTaglineIsNormalizedToNullNotStoredAsEmptyString() {
+        TmdbMovieDetail detail = baseDetail();
+        detail.setTagline("   ");
+
+        TmdbMovieDraft draft = TmdbDraftMapper.toDraft(detail, new TmdbCreditsResponse(), new TmdbTranslationsResponse());
+
+        assertNull(draft.getTagline());
+    }
+
+    @Test
+    void englishTranslationTaglineFallsBackToDetailTaglineWhenTmdbHasNoEnTranslation() {
+        TmdbMovieDetail detail = baseDetail();
+        detail.setTagline("Fear is a choice.");
+
+        TmdbMovieDraft draft = TmdbDraftMapper.toDraft(detail, new TmdbCreditsResponse(), new TmdbTranslationsResponse());
+
+        assertEquals("Fear is a choice.", draft.getTranslations().get(0).getTagline());
+    }
+
+    @Test
+    void vietnameseTranslationTaglineOnlyIncludedWhenTmdbProvidesIt() {
+        TmdbMovieDetail detail = baseDetail();
+        TmdbTranslationsResponse translations = new TmdbTranslationsResponse();
+        TmdbTranslationsResponse.Translation vi = new TmdbTranslationsResponse.Translation();
+        vi.setIso6391("vi");
+        TmdbTranslationsResponse.TranslationData data = new TmdbTranslationsResponse.TranslationData();
+        data.setTitle("Hành Tinh Cát: Phần Hai");
+        data.setOverview("Tóm tắt tiếng Việt");
+        data.setTagline("Nỗi sợ là một lựa chọn.");
+        vi.setData(data);
+        translations.setTranslations(List.of(vi));
+
+        TmdbMovieDraft draft = TmdbDraftMapper.toDraft(detail, new TmdbCreditsResponse(), translations);
+
+        assertEquals("Nỗi sợ là một lựa chọn.", draft.getTranslations().get(1).getTagline());
+    }
+
+    @Test
+    void missingTaglineNeverAddsAWarningOrBlocksMapping() {
+        TmdbMovieDetail detail = baseDetail();
+        detail.setTagline(null);
+
+        TmdbMovieDraft draft = TmdbDraftMapper.toDraft(detail, new TmdbCreditsResponse(), new TmdbTranslationsResponse());
+
+        assertNull(draft.getTagline());
+        assertTrue(draft.getWarnings().stream().noneMatch(w -> w.toLowerCase().contains("tagline")));
+    }
+
     @Test
     void genresAreExtractedAsRawTmdbIdAndNameWithoutAnyLocalResolution() {
         TmdbMovieDetail detail = baseDetail();

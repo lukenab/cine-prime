@@ -477,6 +477,7 @@ export type TranslationResponse = {
   languageCode: string;
   title: string;
   synopsis: string;
+  tagline?: string;
 };
 
 export type CastResponse = {
@@ -507,6 +508,10 @@ export type MovieV2 = {
   thumbnailUrl?: string;
   trailerUrl?: string;
   synopsis?: string;
+  tagline?: string;
+  /** `[Backend] Add tagline field to Movie and MovieTranslation entities`:
+   *  TMDB = auto-imported; MANUAL = admin-entered/edited. */
+  taglineSource?: string;
   genres: GenreResponse[];
   formats: ScreeningFormatResponse[];
   translations: TranslationResponse[];
@@ -623,6 +628,9 @@ export type TmdbMovieDetails = {
    *  string as posterUrl. Use this directly; don't copy posterUrl into a thumbnail field. */
   thumbnailUrl?: string;
   overview?: string;
+  /** `[Backend] Add tagline field to Movie and MovieTranslation entities` - original-language
+   *  tagline; per-locale ones are in each entry of `translations` below. */
+  tagline?: string;
   media?: MovieMediaPreview;
   // `[Backend] Fetch and select an official TMDB trailer` - built server-side from an
   // allow-listed provider ("YOUTUBE") + external video key, never a raw TMDB payload URL.
@@ -646,6 +654,7 @@ export type TranslationRequest = {
   languageCode: string;
   title: string;
   synopsis?: string;
+  tagline?: string;
 };
 
 export type CastRequest = {
@@ -671,6 +680,8 @@ export type CreateMovieRequest = {
   thumbnailUrl?: string;
   trailerUrl?: string;
   synopsis?: string;
+  /** Original-language tagline - mirrors synopsis. Localized ones live on each translation. */
+  tagline?: string;
   tmdbId?: number;
   imdbId?: string;
   translations?: TranslationRequest[];

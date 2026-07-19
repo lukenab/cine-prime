@@ -36,6 +36,9 @@ public class MovieResponse {
     /** TMDB = auto-selected on import; MANUAL = admin-entered/edited. */
     String trailerSource;
     String synopsis;
+    String tagline;
+    /** TMDB = auto-imported on import; MANUAL = admin-entered/edited. */
+    String taglineSource;
 
     List<GenreResponse> genres;
     List<ScreeningFormatResponse> formats;

@@ -63,6 +63,10 @@ public class CreateMovieRequest {
 
     String synopsis;
 
+    /** Original-language tagline - mirrors synopsis. Localized ones live on each translation. */
+    @Size(max = 500)
+    String tagline;
+
     // ── External IDs (optional, from TMDB import) ─────────────
     Integer tmdbId;
 

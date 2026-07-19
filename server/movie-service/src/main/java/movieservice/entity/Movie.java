@@ -101,6 +101,17 @@ public class Movie {
     @Column(name = "synopsis", columnDefinition = "TEXT")
     String synopsis;
 
+    // [Backend] Add tagline field to Movie and MovieTranslation entities - original-language
+    // tagline (mirrors synopsis). taglineSource follows the same TMDB/MANUAL provenance
+    // pattern as trailerSource above, see V7__add_movie_tagline.sql.
+    @Column(name = "tagline", length = 500)
+    String tagline;
+
+    @Builder.Default
+    @Column(name = "tagline_source", nullable = false, length = 20)
+    @org.hibernate.annotations.ColumnDefault("'MANUAL'")
+    String taglineSource = "MANUAL";
+
     // ── Status / lifecycle ────────────────────────────────────
     // Content-review status only — see MovieAvailability for per-cluster
     // exhibition state. See docs/api-specs/movie-service/MOVIE_LIFECYCLE_CONTRACT.md.

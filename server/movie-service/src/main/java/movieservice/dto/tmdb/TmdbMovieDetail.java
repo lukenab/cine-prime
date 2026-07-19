@@ -33,6 +33,7 @@ public class TmdbMovieDetail {
     String imdbId;
 
     String overview;
+    String tagline;
 
     @JsonProperty("production_countries")
     List<TmdbCountry> productionCountries;

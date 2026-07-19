@@ -22,4 +22,7 @@ public class TranslationRequest {
     String title;
 
     String synopsis;
+
+    @Size(max = 500)
+    String tagline;
 }

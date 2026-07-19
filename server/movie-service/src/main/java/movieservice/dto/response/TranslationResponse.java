@@ -12,4 +12,5 @@ public class TranslationResponse {
     String languageCode;
     String title;
     String synopsis;
+    String tagline;
 }
