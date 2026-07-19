@@ -91,6 +91,34 @@ class MovieServiceTest {
                 movieCastRepository, movieTranslationRepository, personRepository);
     }
 
+    // ── `[Backend] Add tagline field to Movie and MovieTranslation entities` ────────
+
+    @Test
+    void updatingTaglineMarksSourceAsManualSoAFutureResyncWontOverwriteIt() {
+        movie.setTagline("Old TMDB tagline");
+        movie.setTaglineSource("TMDB");
+        UpdateMovieRequest request = UpdateMovieRequest.builder()
+                .tagline("Admin's own tagline")
+                .build();
+
+        movieService.updateMovie(1L, request);
+
+        assertEquals("MANUAL", movie.getTaglineSource());
+    }
+
+    @Test
+    void leavingTaglineUnsetInTheRequestDoesNotTouchTaglineSource() {
+        movie.setTagline("Existing tagline");
+        movie.setTaglineSource("TMDB");
+        UpdateMovieRequest request = UpdateMovieRequest.builder()
+                .originalTitle("Only title changed")
+                .build();
+
+        movieService.updateMovie(1L, request);
+
+        assertEquals("TMDB", movie.getTaglineSource());
+    }
+
     // ── Genre / format duplicate-ID normalization ────────────────────────────
 
     @Test

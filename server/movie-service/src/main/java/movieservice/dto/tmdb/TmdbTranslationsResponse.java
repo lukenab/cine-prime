@@ -31,5 +31,6 @@ public class TmdbTranslationsResponse {
     public static class TranslationData {
         String title;
         String overview;
+        String tagline;
     }
 }

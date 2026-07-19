@@ -63,6 +63,7 @@ public final class TmdbDraftMapper {
                 .country(country)
                 .posterUrl(buildPosterUrl(detail.getPosterPath()))
                 .overview(detail.getOverview())
+                .tagline(blankToNull(detail.getTagline()))
                 .companies(buildCompanies(detail))
                 .cast(buildCast(credits))
                 .translations(buildTranslations(detail, translations))
@@ -114,12 +115,13 @@ public final class TmdbDraftMapper {
 
         List<TranslationDraft> result = new ArrayList<>();
 
-        // English: fallback to originalTitle/overview if TMDB has no en translation.
+        // English: fallback to originalTitle/overview/tagline if TMDB has no en translation.
         TmdbTranslationsResponse.TranslationData en = byLang.get("en");
         result.add(TranslationDraft.builder()
                 .languageCode("en")
                 .title(en != null ? en.getTitle() : detail.getOriginalTitle())
                 .synopsis(en != null ? en.getOverview() : detail.getOverview())
+                .tagline(en != null ? blankToNull(en.getTagline()) : blankToNull(detail.getTagline()))
                 .build());
 
         // Vietnamese: only if TMDB has it.
@@ -129,9 +131,16 @@ public final class TmdbDraftMapper {
                     .languageCode("vi")
                     .title(vi.getTitle())
                     .synopsis(vi.getOverview())
+                    .tagline(blankToNull(vi.getTagline()))
                     .build());
         }
         return result;
+    }
+
+    /** TMDB returns "" rather than omitting the field when a movie/translation has no tagline -
+     *  never store that as a real value. */
+    private static String blankToNull(String value) {
+        return (value == null || value.isBlank()) ? null : value;
     }
 
     private static List<TmdbCastDraft> buildCast(TmdbCreditsResponse credits) {

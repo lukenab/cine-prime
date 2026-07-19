@@ -46,6 +46,10 @@ public class UpdateMovieRequest {
     String trailerUrl;
     String synopsis;
 
+    /** Original-language tagline - mirrors synopsis. Localized ones live on each translation. */
+    @Size(max = 500)
+    String tagline;
+
     @Valid
     List<TranslationRequest> translations;
     @Valid

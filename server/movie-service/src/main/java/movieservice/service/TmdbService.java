@@ -312,6 +312,7 @@ public class TmdbService {
                 .posterUrl(posterMedia.posterUrl())
                 .thumbnailUrl(posterMedia.thumbnailUrl())
                 .overview(draft.getOverview())
+                .tagline(draft.getTagline())
                 .media(posterMedia.media())
                 .trailerUrl(trailer != null ? trailer.url() : null)
                 .trailerProvider(trailer != null ? trailer.provider() : null)
@@ -435,6 +436,8 @@ public class TmdbService {
                 .trailerOfficial(trailer != null ? trailer.official() : null)
                 .trailerSource(trailer != null ? "TMDB" : "MANUAL")
                 .synopsis(draft.getOverview())
+                .tagline(draft.getTagline())
+                .taglineSource(draft.getTagline() != null ? "TMDB" : "MANUAL")
                 .status(MovieStatus.DRAFT)
                 .companies(companies)
                 .formats(new ArrayList<>())
@@ -932,21 +935,23 @@ public class TmdbService {
                         .languageCode(t.getLanguageCode())
                         .title(t.getTitle())
                         .synopsis(t.getSynopsis())
+                        .tagline(t.getTagline())
                         .build())
                 .collect(Collectors.toList());
     }
 
     private void saveTranslations(Movie movie, List<TranslationDraft> translations) {
         for (TranslationDraft t : translations) {
-            saveOneTranslation(movie, t.getLanguageCode(), t.getTitle(), t.getSynopsis());
+            saveOneTranslation(movie, t.getLanguageCode(), t.getTitle(), t.getSynopsis(), t.getTagline());
         }
     }
 
-    private void saveOneTranslation(Movie movie, String langCode, String title, String synopsis) {
+    private void saveOneTranslation(Movie movie, String langCode, String title, String synopsis, String tagline) {
         MovieTranslationId id = new MovieTranslationId(movie.getMovieId(), langCode);
         MovieTranslation t = new MovieTranslation();
         t.setId(id);
         t.setMovie(movie);
+        t.setTagline(tagline);
         t.setTitle(title != null ? title : movie.getOriginalTitle());
         t.setSynopsis(synopsis);
         movieTranslationRepository.save(t);

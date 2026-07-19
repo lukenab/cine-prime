@@ -348,6 +348,13 @@ public class MovieService {
             movie.setTrailerOfficial(null);
         }
 
+        // `[Backend] Add tagline field to Movie and MovieTranslation entities`: same
+        // TMDB/MANUAL provenance guard as trailerUrl above - a manually-edited tagline must
+        // never be silently overwritten by a future TMDB re-sync.
+        if (request.getTagline() != null) {
+            movie.setTaglineSource("MANUAL");
+        }
+
         // 2) FK don le - null nghia la khong doi (giu nguyen quan he hien tai).
         if (request.getAgeRatingId() != null) {
             movie.setAgeRating(ageRatingRepository.findById(request.getAgeRatingId())
@@ -427,12 +434,14 @@ public class MovieService {
                 // Update tai cho - giu nguyen composite key va createdAt.
                 translation.setTitle(tr.getTitle());
                 translation.setSynopsis(tr.getSynopsis());
+                translation.setTagline(tr.getTagline());
             } else {
                 translation = new MovieTranslation();
                 translation.setId(new MovieTranslationId(movie.getMovieId(), lang));
                 translation.setMovie(movie);
                 translation.setTitle(tr.getTitle());
                 translation.setSynopsis(tr.getSynopsis());
+                translation.setTagline(tr.getTagline());
             }
             result.add(movieTranslationRepository.save(translation));
         }
@@ -639,6 +648,7 @@ public class MovieService {
             t.setMovie(movie);
             t.setTitle(tr.getTitle());
             t.setSynopsis(tr.getSynopsis());
+            t.setTagline(tr.getTagline());
             result.add(movieTranslationRepository.save(t));
         }
         return result;

@@ -74,8 +74,10 @@ type FormState = {
   imdbId?: string;
   vi_title: string;
   vi_synopsis: string;
+  vi_tagline: string;
   en_title: string;
   en_synopsis: string;
+  en_tagline: string;
   cast: CastRow[];
 };
 
@@ -95,8 +97,10 @@ const emptyForm: FormState = {
   trailerUrl: "",
   vi_title: "",
   vi_synopsis: "",
+  vi_tagline: "",
   en_title: "",
   en_synopsis: "",
+  en_tagline: "",
   cast: [],
 };
 
@@ -124,8 +128,10 @@ function movieToForm(mv: MovieV2): FormState {
     imdbId: mv.imdbId,
     vi_title: vi?.title ?? "",
     vi_synopsis: vi?.synopsis ?? (originalIsVietnamese ? mv.synopsis : "") ?? "",
+    vi_tagline: vi?.tagline ?? (originalIsVietnamese ? mv.tagline : "") ?? "",
     en_title: en?.title ?? "",
     en_synopsis: en?.synopsis ?? (!originalIsVietnamese ? mv.synopsis : "") ?? "",
+    en_tagline: en?.tagline ?? (!originalIsVietnamese ? mv.tagline : "") ?? "",
     cast:
       mv.cast?.map((c, i) => ({
         _key: `${c.personId}-${i}`,
@@ -367,15 +373,28 @@ export default function MovieEditorPage() {
     resolvedCompanyIds: number[],
     resolvedCast: CastRequest[]
   ): CreateMovieRequest => {
-    const translations: { languageCode: string; title: string; synopsis?: string }[] = [];
+    const translations: { languageCode: string; title: string; synopsis?: string; tagline?: string }[] = [];
     if (form.vi_title.trim())
-      translations.push({ languageCode: "vi", title: form.vi_title.trim(), synopsis: form.vi_synopsis.trim() || undefined });
+      translations.push({
+        languageCode: "vi", title: form.vi_title.trim(),
+        synopsis: form.vi_synopsis.trim() || undefined, tagline: form.vi_tagline.trim() || undefined,
+      });
     if (form.en_title.trim())
-      translations.push({ languageCode: "en", title: form.en_title.trim(), synopsis: form.en_synopsis.trim() || undefined });
+      translations.push({
+        languageCode: "en", title: form.en_title.trim(),
+        synopsis: form.en_synopsis.trim() || undefined, tagline: form.en_tagline.trim() || undefined,
+      });
 
     const canonicalSynopsis = form.originalLanguage.toLowerCase() === "vi"
       ? form.vi_synopsis.trim() || form.en_synopsis.trim()
       : form.en_synopsis.trim() || form.vi_synopsis.trim();
+
+    // `[Backend] Add tagline field to Movie and MovieTranslation entities`: derived the same
+    // way canonicalSynopsis is - no separate "original tagline" input, mirrors the existing
+    // synopsis convention exactly.
+    const canonicalTagline = form.originalLanguage.toLowerCase() === "vi"
+      ? form.vi_tagline.trim() || form.en_tagline.trim()
+      : form.en_tagline.trim() || form.vi_tagline.trim();
 
     return {
       originalTitle: form.originalTitle.trim(),
@@ -392,6 +411,7 @@ export default function MovieEditorPage() {
       thumbnailUrl: form.thumbnailUrl.trim() || undefined,
       trailerUrl: form.trailerUrl.trim() || undefined,
       synopsis: canonicalSynopsis || undefined,
+      tagline: canonicalTagline || undefined,
       tmdbId: form.tmdbId,
       imdbId: form.imdbId,
       translations: translations.length ? translations : undefined,
@@ -541,8 +561,13 @@ export default function MovieEditorPage() {
         ageRatingId: details.ageRatingId ?? p.ageRatingId,
         vi_title: vietnamese?.title ?? p.vi_title,
         vi_synopsis: vietnamese?.synopsis ?? p.vi_synopsis,
+        vi_tagline: vietnamese?.tagline ?? p.vi_tagline,
         en_title: english?.title ?? details.originalTitle ?? p.en_title,
         en_synopsis: english?.synopsis ?? details.overview ?? p.en_synopsis,
+        // `[Backend] Add tagline field to Movie and MovieTranslation entities`: the "en"
+        // translation entry already falls back to details.tagline server-side (same pattern
+        // as originalTitle/overview above), so no separate details.tagline reference needed.
+        en_tagline: english?.tagline ?? p.en_tagline,
         cast: (details.cast ?? []).map((member, index) => ({
           _key: `${member.tmdbId}-${member.roleType}-${index}`,
           personId: member.localPersonId ?? null,
@@ -987,6 +1012,10 @@ export default function MovieEditorPage() {
                   <input type="text" placeholder="e.g. Ký Sinh Trùng" value={form.vi_title} onChange={(e) => set("vi_title", e.target.value)} className={IC} style={IS} />
                 </div>
                 <div>
+                  <label style={FL}>Tagline (Vietnamese) <span style={{ fontWeight: 400, color: "var(--text-sub)" }}>— short catchphrase, not a synopsis</span></label>
+                  <input type="text" placeholder="e.g. Một gia đình, hai thế giới." value={form.vi_tagline} onChange={(e) => set("vi_tagline", e.target.value)} className={IC} style={IS} />
+                </div>
+                <div>
                   <label style={FL}>Synopsis (Vietnamese)</label>
                   <textarea rows={5} placeholder="Brief synopsis in Vietnamese…" value={form.vi_synopsis} onChange={(e) => set("vi_synopsis", e.target.value)} className={IC + " resize-none"} style={IS} />
                 </div>
@@ -997,6 +1026,10 @@ export default function MovieEditorPage() {
                 <div>
                   <label style={FL}>Movie Title (English)</label>
                   <input type="text" placeholder="e.g. Parasite" value={form.en_title} onChange={(e) => set("en_title", e.target.value)} className={IC} style={IS} />
+                </div>
+                <div>
+                  <label style={FL}>Tagline (English) <span style={{ fontWeight: 400, color: "var(--text-sub)" }}>— short catchphrase, not a synopsis</span></label>
+                  <input type="text" placeholder="e.g. Fear is a choice." value={form.en_tagline} onChange={(e) => set("en_tagline", e.target.value)} className={IC} style={IS} />
                 </div>
                 <div>
                   <label style={FL}>Synopsis (English)</label>

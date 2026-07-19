@@ -30,6 +30,10 @@ public class MovieTranslation {
     @Column(name = "synopsis", columnDefinition = "TEXT")
     String synopsis;
 
+    // [Backend] Add tagline field to Movie and MovieTranslation entities - localized tagline.
+    @Column(name = "tagline", length = 500)
+    String tagline;
+
     @Column(name = "created_at", updatable = false)
     LocalDateTime createdAt;
 

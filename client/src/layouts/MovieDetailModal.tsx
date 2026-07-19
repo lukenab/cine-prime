@@ -264,6 +264,14 @@ export function MovieDetailModal({ open, movie, loading, onClose }: Props) {
                 )}
               </div>
 
+              {/* Tagline - `[Backend] Add tagline field to Movie and MovieTranslation entities`:
+                  a short catchphrase, deliberately not shown as/instead of the synopsis below. */}
+              {(vi?.tagline || en?.tagline || movie.tagline) && (
+                <p style={{ fontSize: "13px", fontStyle: "italic", color: "var(--text-sub)" }}>
+                  “{synopsisLang === "vi" ? (vi?.tagline ?? en?.tagline ?? movie.tagline) : (en?.tagline ?? vi?.tagline ?? movie.tagline)}”
+                </p>
+              )}
+
               {/* Synopsis */}
               {(vi?.synopsis || en?.synopsis) && (
                 <div>

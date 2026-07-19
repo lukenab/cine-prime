@@ -9,4 +9,5 @@ public class TranslationDraft {
     String languageCode;
     String title;
     String synopsis;
+    String tagline;
 }
