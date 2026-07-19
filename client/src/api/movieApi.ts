@@ -573,6 +573,9 @@ export type TmdbSearchItem = {
   overview?: string;
   /** true neu phim nay da co trong DB (theo tmdbId) - dung de disable/badge o browse list */
   alreadyImported?: boolean;
+  /** Local movieId when alreadyImported is true - lets the browse list offer a real View/Sync
+   *  action instead of just disabling the item with no explanation. */
+  localMovieId?: number;
 };
 
 /**
@@ -621,6 +624,14 @@ export type TmdbMovieDetails = {
   thumbnailUrl?: string;
   overview?: string;
   media?: MovieMediaPreview;
+  // `[Backend] Fetch and select an official TMDB trailer` - built server-side from an
+  // allow-listed provider ("YOUTUBE") + external video key, never a raw TMDB payload URL.
+  trailerUrl?: string;
+  trailerProvider?: string;
+  trailerExternalKey?: string;
+  trailerLanguageCode?: string;
+  trailerVideoType?: "TRAILER" | "TEASER";
+  trailerOfficial?: boolean;
   companies?: TmdbCompanyPreview[];
   translations: TranslationResponse[];
   cast: TmdbCastPreview[];

@@ -242,9 +242,12 @@ public class TmdbService {
                 .map(TmdbSearchResponse.MovieItem::getId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
-        Set<Integer> existingIds = tmdbIds.isEmpty()
-                ? Set.of()
-                : new HashSet<>(movieRepository.findExistingTmdbIds(tmdbIds));
+        Map<Integer, Long> localMovieIdByTmdbId = tmdbIds.isEmpty()
+                ? Map.of()
+                : movieRepository.findExistingTmdbIdsWithMovieId(tmdbIds).stream()
+                        .collect(Collectors.toMap(
+                                MovieRepository.TmdbIdAndMovieId::getTmdbId,
+                                MovieRepository.TmdbIdAndMovieId::getMovieId));
         return items.stream()
                 .map(item -> TmdbSearchResultItem.builder()
                         .tmdbId(item.getId())
@@ -253,7 +256,8 @@ public class TmdbService {
                         .releaseDate(item.getReleaseDate())
                         .posterUrl(item.getPosterPath() != null ? TmdbDraftMapper.POSTER_BASE + item.getPosterPath() : null)
                         .overview(item.getOverview())
-                        .alreadyImported(item.getId() != null && existingIds.contains(item.getId()))
+                        .alreadyImported(item.getId() != null && localMovieIdByTmdbId.containsKey(item.getId()))
+                        .localMovieId(item.getId() != null ? localMovieIdByTmdbId.get(item.getId()) : null)
                         .build())
                 .collect(Collectors.toList());
     }
