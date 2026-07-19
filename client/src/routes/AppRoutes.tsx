@@ -85,8 +85,9 @@ export default function AppRoutes() {
           <Route index element={<AdminDashboard />} />
 
           {/* ADMIN + EMPLOYEE */}
-          <Route path="movies"    element={<ManageMoviePage />} />
-          <Route path="movies/new" element={<MovieCreationStartPage />} />
+          <Route path="movies" element={<ManageMoviePage />}>
+            <Route path="new" element={<MovieCreationStartPage />} />
+          </Route>
           <Route path="movies/new/catalog" element={<TmdbCatalogPage />} />
           <Route path="movies/new/manual" element={<MovieEditorPage />} />
           <Route path="movies/:movieId/edit" element={<MovieEditorPage />} />
