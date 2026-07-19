@@ -22,6 +22,8 @@ import AdminDashboard from "../pages/admin/AdminDashboardPage";
 import ManageUserPage from "../pages/admin/ManageUserPage";
 import ManageMoviePage from "../pages/admin/ManageMoviePage";
 import MovieEditorPage from "../pages/admin/MovieEditorPage";
+import MovieCreationStartPage from "../pages/admin/MovieCreationStartPage";
+import TmdbCatalogPage from "../pages/admin/TmdbCatalogPage";
 import ManageCinemaClusterPage from "../pages/admin/ManageCinemaClusterPage";
 import RoomDetailPage from "../pages/admin/RoomDetailPage";
 import ClusterDetailPage from "../pages/admin/ClusterDetailPage";
@@ -84,7 +86,9 @@ export default function AppRoutes() {
 
           {/* ADMIN + EMPLOYEE */}
           <Route path="movies"    element={<ManageMoviePage />} />
-          <Route path="movies/new" element={<MovieEditorPage />} />
+          <Route path="movies/new" element={<MovieCreationStartPage />} />
+          <Route path="movies/new/catalog" element={<TmdbCatalogPage />} />
+          <Route path="movies/new/manual" element={<MovieEditorPage />} />
           <Route path="movies/:movieId/edit" element={<MovieEditorPage />} />
           <Route path="clusters"  element={<ManageCinemaClusterPage />} />
           <Route path="clusters/:id" element={<ClusterDetailPage />} />

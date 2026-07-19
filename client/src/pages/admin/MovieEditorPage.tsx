@@ -1,9 +1,9 @@
 import {
   X, Film, Upload, Loader2, Search, GripVertical, Trash2,
-  AlertCircle, Check, Tag, Globe, Users, Images, Clock, ArrowLeft,
+  AlertCircle, Check, Tag, Globe, Users, Images, ArrowLeft,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   movieApi,
@@ -22,6 +22,7 @@ import {
   type MovieMediaPreview,
   type MovieImageType,
   type TmdbGenrePreview,
+  type TmdbMovieDetails,
 } from "../../api/movieApi";
 import {
   MOVIE_CONTENT_STATUS_META,
@@ -177,6 +178,8 @@ const SL: React.CSSProperties = {
  */
 export default function MovieEditorPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { isAdmin } = useRole();
   const { movieId: movieIdParam } = useParams<{ movieId: string }>();
   const editMovieId = movieIdParam ? Number(movieIdParam) : null;
@@ -196,22 +199,9 @@ export default function MovieEditorPage() {
   const [uploadingImg, setUploadingImg] = useState<"posterUrl" | "thumbnailUrl" | null>(null);
   const [uploadError, setUploadError] = useState("");
 
-  // ── TMDB inline panel (docked in the right column, not an overlay) ────────
-  const [showTmdb, setShowTmdb] = useState(!editMovieId);
-  const [tmdbTab, setTmdbTab] = useState<"now_playing" | "upcoming" | "search">("now_playing");
-  const [tmdbQ, setTmdbQ] = useState("");
-  const [tmdbResults, setTmdbResults] = useState<TmdbSearchItem[]>([]);
-  const [tmdbLoading, setTmdbLoading] = useState(false);
-  const [nowPlaying, setNowPlaying] = useState<TmdbSearchItem[]>([]);
-  const [nowPlayingLoading, setNowPlayingLoading] = useState(false);
-  const [nowPlayingLoaded, setNowPlayingLoaded] = useState(false);
-  const [nowPlayingError, setNowPlayingError] = useState("");
-  const [upcoming, setUpcoming] = useState<TmdbSearchItem[]>([]);
-  const [upcomingLoading, setUpcomingLoading] = useState(false);
-  const [upcomingLoaded, setUpcomingLoaded] = useState(false);
-  const [upcomingError, setUpcomingError] = useState("");
-  const [tmdbSearchError, setTmdbSearchError] = useState("");
-  const tmdbTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // TMDB catalog hand-off: browsing happens on a dedicated full-width page.
+  const [catalogApplying, setCatalogApplying] = useState(false);
+  const catalogImportStarted = useRef<number | null>(null);
 
   // ── `[Frontend] Show TMDB import warnings/mappings/media preview` ─────────
   // Review surface shown after applying a TMDB result - grouped/severity-tagged warnings,
@@ -291,39 +281,6 @@ export default function MovieEditorPage() {
     e?.response?.status === 429
       ? "TMDB rate limit reached — please wait a moment and try again."
       : e?.response?.data?.message ?? "Couldn't reach TMDB. Please try again.";
-
-  useEffect(() => {
-    if (tmdbTimer.current) clearTimeout(tmdbTimer.current);
-    if (!tmdbQ.trim()) { setTmdbResults([]); setTmdbSearchError(""); return; }
-    tmdbTimer.current = setTimeout(() => {
-      setTmdbLoading(true);
-      setTmdbSearchError("");
-      movieApi.tmdbSearch(tmdbQ)
-        .then((r) => setTmdbResults(r.result ?? []))
-        .catch((e) => setTmdbSearchError(describeTmdbFetchError(e)))
-        .finally(() => setTmdbLoading(false));
-    }, 400);
-  }, [tmdbQ]);
-
-  useEffect(() => {
-    if (!showTmdb || tmdbTab !== "now_playing" || nowPlayingLoaded) return;
-    setNowPlayingLoading(true);
-    setNowPlayingError("");
-    movieApi.tmdbNowPlaying("VN", 1)
-      .then((r) => setNowPlaying(r.result ?? []))
-      .catch((e) => setNowPlayingError(describeTmdbFetchError(e)))
-      .finally(() => { setNowPlayingLoading(false); setNowPlayingLoaded(true); });
-  }, [showTmdb, tmdbTab, nowPlayingLoaded]);
-
-  useEffect(() => {
-    if (!showTmdb || tmdbTab !== "upcoming" || upcomingLoaded) return;
-    setUpcomingLoading(true);
-    setUpcomingError("");
-    movieApi.tmdbUpcoming("VN", 1)
-      .then((r) => setUpcoming(r.result ?? []))
-      .catch((e) => setUpcomingError(describeTmdbFetchError(e)))
-      .finally(() => { setUpcomingLoading(false); setUpcomingLoaded(true); });
-  }, [showTmdb, tmdbTab, upcomingLoaded]);
 
   useEffect(() => {
     if (companyTimer.current) clearTimeout(companyTimer.current);
@@ -522,12 +479,11 @@ export default function MovieEditorPage() {
     }
   };
 
-  const applyTmdb = async (item: TmdbSearchItem) => {
-    setTmdbLoading(true);
+  const applyTmdb = async (item: TmdbSearchItem, prefetchedDetails?: TmdbMovieDetails) => {
+    setCatalogApplying(true);
     setError("");
     try {
-      const response = await movieApi.tmdbDetails(item.tmdbId);
-      const details = response.result;
+      const details = prefetchedDetails ?? (await movieApi.tmdbDetails(item.tmdbId)).result;
       const vietnamese = details.translations?.find((translation) => translation.languageCode === "vi");
       const english = details.translations?.find((translation) => translation.languageCode === "en");
       const resolvedGenreIds = details.genres
@@ -594,15 +550,33 @@ export default function MovieEditorPage() {
         ageRatingId: details.ageRatingId != null,
       });
 
-      setShowTmdb(false);
-      setTmdbQ("");
-      setTmdbResults([]);
     } catch (e: any) {
       setError(describeTmdbFetchError(e));
     } finally {
-      setTmdbLoading(false);
+      setCatalogApplying(false);
     }
   };
+
+  useEffect(() => {
+    if (editMovieId) return;
+    const tmdbId = Number(searchParams.get("tmdbId"));
+    if (!Number.isFinite(tmdbId) || tmdbId <= 0 || catalogImportStarted.current === tmdbId) return;
+
+    const navigationState = location.state as {
+      tmdbItem?: TmdbSearchItem;
+      tmdbDetails?: TmdbMovieDetails;
+    } | null;
+    const stateItem = navigationState?.tmdbItem;
+    const item: TmdbSearchItem = stateItem?.tmdbId === tmdbId
+      ? stateItem
+      : { tmdbId, title: `TMDB #${tmdbId}`, originalTitle: `TMDB #${tmdbId}` };
+    const details = navigationState?.tmdbDetails?.tmdbId === tmdbId
+      ? navigationState.tmdbDetails
+      : undefined;
+
+    catalogImportStarted.current = tmdbId;
+    void applyTmdb(item, details);
+  }, [editMovieId, location.state, searchParams]);
 
   // ── TMDB genre-mapping resolution (map existing / create new / ignore with reason) ────
   // Each unmapped TMDB genre blocks Save until resolved one of these three ways - see
@@ -704,7 +678,7 @@ export default function MovieEditorPage() {
       ? "1px solid #f87171"
       : IS.border as string;
 
-  if (loadingMovie) {
+  if (loadingMovie || catalogApplying) {
     return (
       <div className="flex items-center justify-center py-24">
         <Loader2 size={28} className="animate-spin text-blue-500" />
@@ -719,7 +693,7 @@ export default function MovieEditorPage() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => navigate("/admin/movies")}
+            onClick={() => navigate(editMovieId ? "/admin/movies" : "/admin/movies/new")}
             className="w-9 h-9 rounded-lg border flex items-center justify-center hover:opacity-80 transition-colors flex-shrink-0"
             style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}
           >
@@ -750,7 +724,7 @@ export default function MovieEditorPage() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => navigate("/admin/movies")}
+            onClick={() => navigate(editMovieId ? "/admin/movies" : "/admin/movies/new")}
             disabled={submitting}
             className="px-5 py-2.5 rounded-xl border transition-colors hover:opacity-80 disabled:opacity-50"
             style={{ fontSize: "14px", borderColor: "var(--border-color)", color: "var(--text-main)" }}
@@ -1157,134 +1131,17 @@ export default function MovieEditorPage() {
             )}
           </section>
 
-          {/* TMDB import */}
-          <section className="rounded-2xl border p-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-            <div className="flex items-center justify-between mb-3">
-              <p style={{ ...SL, marginBottom: 0 }}>TMDB Import</p>
-              <button
-                type="button" onClick={() => setShowTmdb((v) => !v)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600"
-                style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}
-              >
-                <Search size={12} /> {showTmdb ? "Hide" : "Browse"}
-              </button>
+          {/* Source provenance remains visible after the full-width catalog populates this draft. */}
+          {form.tmdbId && <section className="rounded-2xl border p-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+            <p style={SL}>Catalog source</p>
+
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 mb-3" style={{ width: "fit-content" }}>
+              <div className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0"><Check size={10} className="text-white" /></div>
+              <span style={{ fontSize: "12px", color: "#065f46", fontWeight: 500 }}>TMDB</span>
+              <span style={{ fontSize: "12px", color: "#6b7280" }}>·</span>
+              <a href={`https://www.themoviedb.org/movie/${form.tmdbId}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: "#059669", fontWeight: 500, textDecoration: "none" }}>#{form.tmdbId}</a>
             </div>
-
-            {form.tmdbId && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 mb-3" style={{ width: "fit-content" }}>
-                <div className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0"><Check size={10} className="text-white" /></div>
-                <span style={{ fontSize: "12px", color: "#065f46", fontWeight: 500 }}>TMDB</span>
-                <span style={{ fontSize: "12px", color: "#6b7280" }}>·</span>
-                <a href={`https://www.themoviedb.org/movie/${form.tmdbId}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: "#059669", fontWeight: 500, textDecoration: "none" }}>#{form.tmdbId}</a>
-              </div>
-            )}
-
-            {showTmdb && (
-              <div className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--border-color)" }}>
-                <div className="flex items-center gap-1 px-2 pt-2">
-                  {([
-                    { id: "now_playing" as const, label: "Now Showing", Icon: Film },
-                    { id: "upcoming" as const, label: "Upcoming", Icon: Clock },
-                    { id: "search" as const, label: "Search", Icon: Search },
-                  ]).map(({ id, label, Icon }) => (
-                    <button
-                      key={id} type="button" onClick={() => setTmdbTab(id)}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                      style={{ background: tmdbTab === id ? "#eff6ff" : "transparent", color: tmdbTab === id ? "#2563eb" : "var(--text-sub)" }}
-                    >
-                      <Icon size={12} /> {label}
-                    </button>
-                  ))}
-                </div>
-
-                {tmdbTab === "search" && (
-                  <div className="px-3 py-2.5 border-b" style={{ borderColor: "var(--border-color)" }}>
-                    <div className="relative">
-                      <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-sub)" }} />
-                      <input
-                        type="text" placeholder="Movie title…" value={tmdbQ} onChange={(e) => setTmdbQ(e.target.value)}
-                        className="w-full pl-8 pr-3 py-2 rounded-lg border outline-none focus:border-blue-400"
-                        style={{ ...IS, fontSize: "13px" }}
-                      />
-                      {tmdbLoading && <Loader2 size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 animate-spin text-blue-500" />}
-                    </div>
-                  </div>
-                )}
-
-                <div className="overflow-y-auto" style={{ maxHeight: "320px" }}>
-                  {(() => {
-                    const listLoading = tmdbTab === "search" ? tmdbLoading : tmdbTab === "now_playing" ? nowPlayingLoading : upcomingLoading;
-                    const listError = tmdbTab === "search" ? tmdbSearchError : tmdbTab === "now_playing" ? nowPlayingError : upcomingError;
-                    const list = tmdbTab === "search" ? tmdbResults : tmdbTab === "now_playing" ? nowPlaying : upcoming;
-                    const retry = () => {
-                      if (tmdbTab === "now_playing") setNowPlayingLoaded(false);
-                      else if (tmdbTab === "upcoming") setUpcomingLoaded(false);
-                      else setTmdbQ((q) => q); // re-trigger the debounced search effect isn't needed - error clears on next keystroke
-                    };
-
-                    if (listLoading && list.length === 0) {
-                      return (
-                        <div className="flex items-center justify-center gap-2 py-8" style={{ fontSize: "12px", color: "var(--text-sub)" }}>
-                          <Loader2 size={14} className="animate-spin" /> Loading…
-                        </div>
-                      );
-                    }
-                    if (listError) {
-                      return (
-                        <div className="flex flex-col items-center gap-2 py-8 px-4 text-center">
-                          <AlertCircle size={16} className="text-amber-500" />
-                          <p style={{ fontSize: "12px", color: "var(--text-sub)" }}>{listError}</p>
-                          {tmdbTab !== "search" && (
-                            <button type="button" onClick={retry} className="px-3 py-1 rounded-lg border text-xs hover:bg-blue-50" style={{ borderColor: "var(--border-color)" }}>
-                              Retry
-                            </button>
-                          )}
-                        </div>
-                      );
-                    }
-                    if (tmdbTab === "search" && !tmdbQ) {
-                      return <p className="text-center py-6" style={{ fontSize: "12px", color: "var(--text-sub)" }}>Type a movie title to search.</p>;
-                    }
-                    if (list.length === 0) {
-                      return <p className="text-center py-6" style={{ fontSize: "12px", color: "var(--text-sub)" }}>No results.</p>;
-                    }
-                    return list.map((item) => (
-                      <button
-                        key={item.tmdbId} type="button"
-                        onClick={() => {
-                          if (item.alreadyImported) {
-                            if (item.localMovieId) navigate(`/admin/movies/${item.localMovieId}/edit`);
-                            return;
-                          }
-                          applyTmdb(item);
-                        }}
-                        className={`w-full flex items-start gap-2.5 px-3 py-2.5 transition-colors text-left ${item.alreadyImported ? "hover:bg-amber-50" : "hover:bg-blue-50"}`}
-                      >
-                        {item.posterUrl ? (
-                          <img src={item.posterUrl} alt={item.title} className="w-9 h-12 rounded object-cover flex-shrink-0" />
-                        ) : (
-                          <div className="w-9 h-12 rounded bg-gray-200 flex-shrink-0" />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-main)" }}>{item.title}</p>
-                          {item.releaseDate && <p style={{ fontSize: "10.5px", color: "#3b82f6" }}>{item.releaseDate.substring(0, 4)}</p>}
-                        </div>
-                        {item.alreadyImported && (
-                          <span
-                            className="flex-shrink-0 self-center px-2 py-1 rounded"
-                            style={{ fontSize: "10px", fontWeight: 700, background: "#fef3c7", color: "#92400e" }}
-                            title={item.localMovieId ? "Open this already-imported movie" : "Already imported"}
-                          >
-                            {item.localMovieId ? "View" : "Imported"}
-                          </span>
-                        )}
-                      </button>
-                    ));
-                  })()}
-                </div>
-              </div>
-            )}
-          </section>
+          </section>}
 
           {/* TMDB Import Review - grouped/severity-tagged warnings, genre-mapping resolution
               (map existing / create new / ignore with reason), and the suggested trailer.
