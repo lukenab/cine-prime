@@ -291,12 +291,13 @@ export default function ShowtimePage() {
 
     const fallback = () => mockMovies.find((m) => m.movieId === Number(movieId)) ?? null;
 
-    movieApi.getPublicMovies()
+    movieApi.getPublicMovieById(Number(movieId))
       .then((res) => {
-        const found = res.result?.find((m) => m.movieId === Number(movieId));
-        setMovie(found ? enrich(found) : fallback());
+        setMovie(res.result ? enrich(res.result) : fallback());
       })
       .catch((err) => {
+        // 404 here means either a nonexistent ID or a movie that isn't publicly visible
+        // (DRAFT/PENDING_REVIEW/rejected/ended) — same response either way, by design.
         console.error(err);
         setMovie(fallback()); // backend unavailable — use mock
       })

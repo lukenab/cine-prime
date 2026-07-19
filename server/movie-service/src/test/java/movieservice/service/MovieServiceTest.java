@@ -151,6 +151,90 @@ class MovieServiceTest {
         assertEquals(MovieErrorCode.COMPANY_NOT_FOUND, ex.getErrorCode());
     }
 
+    // ── `[Backend] Separate public and internal movie catalog APIs` ─────────
+    // getPublicMovieDetail() must apply the exact same visibility predicate as the public
+    // list: a movie that wouldn't appear in GET /api/movies/public must 404 (not a different
+    // error) when its ID is guessed directly at GET /api/movies/public/{id}.
+
+    private MovieAvailability availabilityFor(Movie movie, AvailabilityStatus status, LocalDate showingEndDate) {
+        return MovieAvailability.builder()
+                .availabilityId(1L)
+                .movie(movie)
+                .cluster(CinemaCluster.builder().clusterId(10L).clusterName("Downtown").build())
+                .status(status)
+                .showingStartDate(LocalDate.now().minusDays(1))
+                .showingEndDate(showingEndDate)
+                .build();
+    }
+
+    @Test
+    void publicDetailReturnsMovieWithAnOpenApprovedAvailability() {
+        Movie approved = Movie.builder().movieId(2L).originalTitle("Visible").status(MovieStatus.APPROVED).build();
+        when(movieRepository.findById(2L)).thenReturn(java.util.Optional.of(approved));
+        when(movieAvailabilityRepository.findByMovie_MovieId(2L))
+                .thenReturn(List.of(availabilityFor(approved, AvailabilityStatus.OPEN, null)));
+        lenient().when(showTimeService.findNextSaleableShowTime(any(), any(), any(), any()))
+                .thenReturn(java.util.Optional.empty());
+
+        var response = movieService.getPublicMovieDetail(2L, null);
+
+        assertEquals(2L, response.getMovieId());
+    }
+
+    @Test
+    void publicDetailRejectsDraftMovieWithMovieNotFoundNotADifferentError() {
+        Movie draft = Movie.builder().movieId(3L).originalTitle("Still Draft").status(MovieStatus.DRAFT).build();
+        when(movieRepository.findById(3L)).thenReturn(java.util.Optional.of(draft));
+        when(movieAvailabilityRepository.findByMovie_MovieId(3L)).thenReturn(List.of());
+
+        AppException ex = assertThrows(AppException.class, () -> movieService.getPublicMovieDetail(3L, null));
+        assertEquals(MovieErrorCode.MOVIE_NOT_FOUND, ex.getErrorCode());
+    }
+
+    @Test
+    void publicDetailRejectsApprovedMovieWithNoOpenOrPlannedAvailability() {
+        // Approved content, but every availability window is SUSPENDED/CLOSED - must still 404.
+        Movie approved = Movie.builder().movieId(4L).originalTitle("Approved But Suspended").status(MovieStatus.APPROVED).build();
+        when(movieRepository.findById(4L)).thenReturn(java.util.Optional.of(approved));
+        when(movieAvailabilityRepository.findByMovie_MovieId(4L))
+                .thenReturn(List.of(availabilityFor(approved, AvailabilityStatus.SUSPENDED, null)));
+
+        AppException ex = assertThrows(AppException.class, () -> movieService.getPublicMovieDetail(4L, null));
+        assertEquals(MovieErrorCode.MOVIE_NOT_FOUND, ex.getErrorCode());
+    }
+
+    @Test
+    void publicDetailRejectsAvailabilityWhoseShowingEndDateHasPassed() {
+        Movie approved = Movie.builder().movieId(5L).originalTitle("Ended Run").status(MovieStatus.APPROVED).build();
+        when(movieRepository.findById(5L)).thenReturn(java.util.Optional.of(approved));
+        when(movieAvailabilityRepository.findByMovie_MovieId(5L))
+                .thenReturn(List.of(availabilityFor(approved, AvailabilityStatus.OPEN, LocalDate.now().minusDays(1))));
+
+        AppException ex = assertThrows(AppException.class, () -> movieService.getPublicMovieDetail(5L, null));
+        assertEquals(MovieErrorCode.MOVIE_NOT_FOUND, ex.getErrorCode());
+    }
+
+    @Test
+    void publicDetailRejectsWhenAvailabilityExistsOnlyAtADifferentCluster() {
+        Movie approved = Movie.builder().movieId(6L).originalTitle("Other Cluster Only").status(MovieStatus.APPROVED).build();
+        when(movieRepository.findById(6L)).thenReturn(java.util.Optional.of(approved));
+        // availabilityFor() always builds a window at clusterId=10L
+        when(movieAvailabilityRepository.findByMovie_MovieId(6L))
+                .thenReturn(List.of(availabilityFor(approved, AvailabilityStatus.OPEN, null)));
+
+        AppException ex = assertThrows(AppException.class, () -> movieService.getPublicMovieDetail(6L, 999L));
+        assertEquals(MovieErrorCode.MOVIE_NOT_FOUND, ex.getErrorCode());
+    }
+
+    @Test
+    void publicDetailOfATrulyNonexistentIdIsAlsoMovieNotFound() {
+        when(movieRepository.findById(404L)).thenReturn(java.util.Optional.empty());
+
+        AppException ex = assertThrows(AppException.class, () -> movieService.getPublicMovieDetail(404L, null));
+        assertEquals(MovieErrorCode.MOVIE_NOT_FOUND, ex.getErrorCode());
+        verifyNoInteractions(movieAvailabilityRepository);
+    }
+
     // ── Translation reconciliation ───────────────────────────────────────────
 
     @Test

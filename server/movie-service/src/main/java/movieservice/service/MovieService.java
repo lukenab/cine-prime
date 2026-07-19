@@ -166,15 +166,14 @@ public class MovieService {
         LocalTime now = LocalTime.now();
 
         if (clusterId != null) {
-            return movieAvailabilityRepository.findPubliclyRelevant(clusterId, today).stream()
+            return movieAvailabilityRepository.findByCluster_ClusterId(clusterId).stream()
+                    .filter(a -> isPubliclyVisible(a, today))
                     .map(availability -> toPublicMovieResponse(availability.getMovie(), clusterId, availability, today, now))
                     .collect(Collectors.toList());
         }
 
         List<MovieAvailability> relevant = movieAvailabilityRepository.search(null, null, null).stream()
-                .filter(a -> a.getMovie().getStatus() == MovieStatus.APPROVED)
-                .filter(a -> a.getStatus() == AvailabilityStatus.PLANNED || a.getStatus() == AvailabilityStatus.OPEN)
-                .filter(a -> a.getShowingEndDate() == null || !a.getShowingEndDate().isBefore(today))
+                .filter(a -> isPubliclyVisible(a, today))
                 .collect(Collectors.toList());
 
         Map<Long, Movie> movieById = new LinkedHashMap<>();
@@ -188,6 +187,48 @@ public class MovieService {
         return movieById.values().stream()
                 .map(movie -> toPublicMovieResponse(movie, Boolean.TRUE.equals(anyOpenByMovie.get(movie.getMovieId()))))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * `[Backend] Separate public and internal movie catalog APIs`: GET /api/movies/public/{id}
+     * uses the exact same visibility predicate as the list (isPubliclyVisible), so a movie that
+     * wouldn't appear in the public list can never be fetched directly by guessing its ID either.
+     * Not visible at all (wrong status, no open/planned availability anywhere, or not shown at
+     * the requested cluster) always surfaces as the same MOVIE_NOT_FOUND a truly-missing ID
+     * would - never a different error that would let a client distinguish "exists but hidden"
+     * from "doesn't exist".
+     */
+    @Transactional
+    public PublicMovieResponse getPublicMovieDetail(Long movieId, Long clusterId) {
+        LocalDate today = LocalDate.now();
+        LocalTime now = LocalTime.now();
+
+        Movie movie = movieRepository.findById(movieId)
+                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+
+        List<MovieAvailability> visible = movieAvailabilityRepository.findByMovie_MovieId(movieId).stream()
+                .filter(a -> clusterId == null || clusterId.equals(a.getCluster().getClusterId()))
+                .filter(a -> isPubliclyVisible(a, today))
+                .collect(Collectors.toList());
+
+        if (visible.isEmpty()) {
+            throw new AppException(MovieErrorCode.MOVIE_NOT_FOUND);
+        }
+
+        if (clusterId != null) {
+            return toPublicMovieResponse(movie, clusterId, visible.get(0), today, now);
+        }
+        boolean anyOpen = visible.stream().anyMatch(a -> a.getStatus() == AvailabilityStatus.OPEN);
+        return toPublicMovieResponse(movie, anyOpen);
+    }
+
+    /** Single source of truth for "can an anonymous/customer request see this availability
+     *  window at all" - shared by findAllPublic() (list) and getPublicMovieDetail() (direct
+     *  ID) so the two can never silently drift apart. */
+    private static boolean isPubliclyVisible(MovieAvailability availability, LocalDate today) {
+        return availability.getMovie().getStatus() == MovieStatus.APPROVED
+                && (availability.getStatus() == AvailabilityStatus.PLANNED || availability.getStatus() == AvailabilityStatus.OPEN)
+                && (availability.getShowingEndDate() == null || !availability.getShowingEndDate().isBefore(today));
     }
 
     private PublicMovieResponse toPublicMovieResponse(Movie movie, Long clusterId, MovieAvailability availability, LocalDate today, LocalTime now) {
