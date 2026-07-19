@@ -51,9 +51,15 @@ public class Movie {
     @JoinColumn(name = "age_rating_id")
     AgeRating ageRating;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "company_id")
-    ProductionCompany company;
+    // Issue #151: multi-company support - TMDB returns several production companies per
+    // title, previously only the first was ever kept.
+    @ManyToMany
+    @JoinTable(
+            name = "movie_production_company",
+            joinColumns = @JoinColumn(name = "movie_id"),
+            inverseJoinColumns = @JoinColumn(name = "company_id")
+    )
+    List<ProductionCompany> companies;
 
     @Column(name = "country", length = 100)
     String country;

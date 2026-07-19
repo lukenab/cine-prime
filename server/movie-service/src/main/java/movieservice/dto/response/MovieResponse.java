@@ -29,7 +29,7 @@ public class MovieResponse {
 
     AgeRatingResponse ageRating;
 
-    String companyName;
+    List<ProductionCompanyResponse> companies;
     String posterUrl;
     String thumbnailUrl;
     String trailerUrl;

@@ -363,12 +363,14 @@ export function MovieDetailModal({ open, movie, loading, onClose }: Props) {
                 </div>
               )}
 
-              {/* Production Company */}
-              {movie.companyName && (
+              {/* Production Companies */}
+              {movie.companies && movie.companies.length > 0 && (
                 <div className="flex items-center gap-2">
                   <Building2 size={12} style={{ color: "var(--text-sub)" }} />
                   <p style={FL}>Production</p>
-                  <p style={{ fontSize: "13px", color: "var(--text-main)", fontWeight: 500 }}>{movie.companyName}</p>
+                  <p style={{ fontSize: "13px", color: "var(--text-main)", fontWeight: 500 }}>
+                    {movie.companies.map((c) => c.name).join(", ")}
+                  </p>
                 </div>
               )}
 

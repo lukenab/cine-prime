@@ -381,11 +381,17 @@ public class TmdbService {
         List<Genre> resolvedGenres = resolveGenresForImport(
                 resolveGenreMatches(draft.getGenres()), request, warnings);
 
-        // 5. Companies (upsert - unchanged pre-existing limitation: Movie keeps only 1 company, see Update #151)
-        List<ProductionCompany> companies = new ArrayList<>();
+        // 5. Companies - issue #151: all TMDB-listed companies are linked, not just the first.
+        // ProductionCompany has no @EqualsAndHashCode, so a LinkedHashSet dedupes by reference
+        // identity - correct here because upsertCompany() returns the SAME managed instance for
+        // repeated matches within this persistence context (JPA first-level cache), while two
+        // genuinely distinct new companies (both with a null, not-yet-assigned companyId) are
+        // never mistaken for one another. Preserves TMDB's original ordering.
+        Set<ProductionCompany> uniqueCompanies = new LinkedHashSet<>();
         for (TmdbCompanyDraft c : draft.getCompanies()) {
-            companies.add(upsertCompany(c));
+            uniqueCompanies.add(upsertCompany(c));
         }
+        List<ProductionCompany> companies = new ArrayList<>(uniqueCompanies);
 
         // 6. Age rating - admin confirmation overrides auto-resolution
         AgeRating resolvedRating;
@@ -426,7 +432,7 @@ public class TmdbService {
                 .trailerSource(trailer != null ? "TMDB" : "MANUAL")
                 .synopsis(draft.getOverview())
                 .status(MovieStatus.DRAFT)
-                .company(companies.isEmpty() ? null : companies.get(0))
+                .companies(companies)
                 .formats(new ArrayList<>())
                 .genres(resolvedGenres)
                 .ageRating(resolvedRating)
@@ -814,24 +820,66 @@ public class TmdbService {
 
     // ── Company / person resolution ───────────────────────────
 
-    /** Real upsert - only ever called from importMovie(), never from preview. */
+    /**
+     * Issue #151: real upsert, only ever called from importMovie(), never from preview.
+     * Matches primarily by the stable tmdbCompanyId - falls back to exact name only for
+     * companies created before this field existed (migration-era rows) or manually via the
+     * admin UI with no TMDB id yet. An existing row is enriched, never overwritten with nulls:
+     * TMDB not providing a field (e.g. logoUrl) must never erase a locally-curated value.
+     */
     private ProductionCompany upsertCompany(TmdbCompanyDraft company) {
-        return productionCompanyRepository.findByName(company.getName())
-                .orElseGet(() -> {
-                    ProductionCompany c = new ProductionCompany();
-                    c.setName(company.getName());
-                    c.setCountry(company.getCountry());
-                    if (company.getLogoUrl() != null) {
-                        c.setLogoUrl(company.getLogoUrl());
-                    }
-                    c.setCreatedAt(LocalDateTime.now());
-                    return productionCompanyRepository.save(c);
-                });
+        ProductionCompany existing = findExistingCompany(company);
+        if (existing != null) {
+            enrichCompany(existing, company);
+            return productionCompanyRepository.save(existing);
+        }
+
+        ProductionCompany created = ProductionCompany.builder()
+                .name(company.getName())
+                .country(company.getCountry())
+                .logoUrl(company.getLogoUrl())
+                .tmdbCompanyId(company.getTmdbId())
+                .createdAt(LocalDateTime.now())
+                .build();
+        try {
+            return productionCompanyRepository.save(created);
+        } catch (DataIntegrityViolationException e) {
+            // Concurrent import created the same TMDB company (or same name) first - reuse it.
+            ProductionCompany raced = findExistingCompany(company);
+            if (raced == null) throw e;
+            return raced;
+        }
     }
 
-    /** Issue #188: preview-only, read-only - KHONG duoc goi productionCompanyRepository.save(). */
+    private ProductionCompany findExistingCompany(TmdbCompanyDraft company) {
+        if (company.getTmdbId() != null) {
+            ProductionCompany byTmdbId = productionCompanyRepository.findByTmdbCompanyId(company.getTmdbId()).orElse(null);
+            if (byTmdbId != null) return byTmdbId;
+        }
+        return company.getName() != null
+                ? productionCompanyRepository.findByName(company.getName()).orElse(null)
+                : null;
+    }
+
+    /** Never nulls out an existing local value just because TMDB didn't provide one this time. */
+    private void enrichCompany(ProductionCompany existing, TmdbCompanyDraft draft) {
+        if (existing.getTmdbCompanyId() == null && draft.getTmdbId() != null) {
+            existing.setTmdbCompanyId(draft.getTmdbId());
+        }
+        if (draft.getCountry() != null && !draft.getCountry().isBlank()) {
+            existing.setCountry(draft.getCountry());
+        }
+        if (draft.getLogoUrl() != null && !draft.getLogoUrl().isBlank()) {
+            existing.setLogoUrl(draft.getLogoUrl());
+        }
+    }
+
+    /**
+     * Issue #188: preview-only, read-only - KHONG duoc goi productionCompanyRepository.save().
+     * Matching priority mirrors upsertCompany(): tmdbCompanyId first, exact name fallback.
+     */
     private TmdbCompanyPreview previewCompany(TmdbCompanyDraft company) {
-        ProductionCompany existing = productionCompanyRepository.findByName(company.getName()).orElse(null);
+        ProductionCompany existing = findExistingCompany(company);
         return TmdbCompanyPreview.builder()
                 .tmdbId(company.getTmdbId())
                 .name(company.getName())

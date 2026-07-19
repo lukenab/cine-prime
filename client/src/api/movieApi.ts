@@ -437,6 +437,7 @@ export type ScreeningFormatResponse = {
 export type ProductionCompanyResponse = {
   companyId: number;
   name: string;
+  tmdbCompanyId?: number;
   country: string;
   logoUrl: string;
   websiteUrl?: string;
@@ -499,7 +500,9 @@ export type MovieV2 = {
   country?: string;
   status: MovieStatus;
   ageRating?: AgeRatingResponse;
-  companyName?: string;
+  /** Issue #151: a movie can have several production companies (TMDB import brings them
+   *  all in), so this replaced the previous single companyName string field. */
+  companies?: ProductionCompanyResponse[];
   posterUrl?: string;
   thumbnailUrl?: string;
   trailerUrl?: string;
@@ -649,7 +652,8 @@ export type CreateMovieRequest = {
   endDate?: string;
   country?: string;
   ageRatingId?: number;
-  companyId?: number;
+  /** Issue #151: all valid IDs are linked, not just one. */
+  companyIds?: number[];
   genreIds: number[];
   formatIds: number[];
   posterUrl?: string;
@@ -763,7 +767,7 @@ const toLegacyMovie = (movie: MovieV2): MovieApiResponse => {
     // rather than removed, since some legacy admin UI still reads this field.
     status: false,
     movieStatus: movie.status,
-    movieProductionCompany: movie.companyName ?? '',
+    movieProductionCompany: movie.companies?.map((c) => c.name).join(', ') ?? '',
     largeImage: movie.posterUrl ?? '',
     smallImage: movie.thumbnailUrl ?? movie.posterUrl ?? '',
     movieType: movie.genres?.map((item) => item.genreName) ?? [],

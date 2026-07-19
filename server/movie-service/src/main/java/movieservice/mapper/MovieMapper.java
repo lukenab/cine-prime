@@ -26,7 +26,7 @@ public interface MovieMapper {
     @Mapping(target = "cast", ignore = true)
     @Mapping(target = "translations", ignore = true)
     @Mapping(target = "ageRating", ignore = true)
-    @Mapping(target = "company", ignore = true)
+    @Mapping(target = "companies", ignore = true)
     Movie toMovie(CreateMovieRequest request);
 
     // NullValuePropertyMappingStrategy.IGNORE: field khong xuat hien hoac gui null trong
@@ -42,11 +42,11 @@ public interface MovieMapper {
     @Mapping(target = "cast", ignore = true)
     @Mapping(target = "translations", ignore = true)
     @Mapping(target = "ageRating", ignore = true)
-    @Mapping(target = "company", ignore = true)
+    @Mapping(target = "companies", ignore = true)
     void updateMovieFromRequest(UpdateMovieRequest request, @MappingTarget Movie movie);
 
     @Mapping(target = "status", expression = "java(movie.getStatus() != null ? movie.getStatus().name() : null)")
-    @Mapping(target = "companyName", source = "company.name")
+    @Mapping(target = "companies", source = "companies")
     @Mapping(target = "ageRating", source = "ageRating")
     @Mapping(target = "genres", source = "genres")
     @Mapping(target = "formats", source = "formats")

@@ -24,6 +24,12 @@ public class ProductionCompany {
     @Column(name = "name", nullable = false, unique = true, length = 255)
     String name;
 
+    // Stable external identity for upsert (issue #151) - preferred over the previous
+    // exact/case-sensitive name match, which could silently create duplicate rows for the same
+    // real-world company. Null for companies created manually with no known TMDB equivalent.
+    @Column(name = "tmdb_company_id", unique = true)
+    Integer tmdbCompanyId;
+
     @Column(name = "country", length = 100)
     String country;
 
