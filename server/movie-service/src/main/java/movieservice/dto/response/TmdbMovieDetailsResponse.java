@@ -21,6 +21,14 @@ public class TmdbMovieDetailsResponse {
     String thumbnailUrl;
     String overview;
     MovieMediaPreviewResponse media;
+    // Built server-side from an allow-listed provider ("YOUTUBE") + external video key -
+    // never a raw URL taken straight out of TMDB's payload.
+    String trailerUrl;
+    String trailerProvider;
+    String trailerExternalKey;
+    String trailerLanguageCode;
+    String trailerVideoType;
+    Boolean trailerOfficial;
     List<TmdbCompanyPreview> companies;
     List<TranslationResponse> translations;
     List<TmdbCastPreview> cast;

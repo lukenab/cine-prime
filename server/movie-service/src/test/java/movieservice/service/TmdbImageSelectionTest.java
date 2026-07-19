@@ -83,6 +83,8 @@ class TmdbImageSelectionTest {
                 .thenReturn(new TmdbReleaseDatesResponse());
         when(restTemplate.getForObject(any(URI.class), eq(TmdbConfigurationResponse.class)))
                 .thenReturn(null); // forces the built-in fallback config (still exercises that path)
+        when(restTemplate.getForObject(any(URI.class), eq(movieservice.dto.tmdb.TmdbVideosResponse.class)))
+                .thenReturn(new movieservice.dto.tmdb.TmdbVideosResponse());
     }
 
     private TmdbImagesResponse.TmdbImageItem poster(String path, String lang, double vote, int width, int height) {
