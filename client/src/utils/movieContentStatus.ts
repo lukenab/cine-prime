@@ -48,6 +48,20 @@ export const MOVIE_CONTENT_STATUS_META: Record<
   },
 };
 
+/**
+ * Compatibility adapter (MOV-LC-08): the backend's current MovieStatus enum only ever emits
+ * the 5 canonical content-review values, but this must keep tolerating whatever a not-yet-fully
+ * migrated response (or stale cached data) might still send, without special-casing it as an
+ * unhandled/unknown value. Legacy exhibition-flavored statuses map to the closest canonical
+ * content state they imply, never silently to DRAFT:
+ *  - COMING_SOON / NOW_SHOWING / SUSPENDED: content was already approved (exhibition-only
+ *    concepts, layered on top of an APPROVED movie) -> APPROVED.
+ *  - REJECTED: the old single-step rejection -> CHANGES_REQUESTED (the closest canonical
+ *    equivalent - the movie is back with the operator to revise).
+ *  - ENDED: legacy backend overloaded this for both "finished its run" and soft-delete -> ARCHIVED.
+ *    Not a canonical model - MOV-LC-05 must classify this correctly at the data layer.
+ * Only a genuinely missing/unrecognized value falls back to DRAFT.
+ */
 export function toMovieContentStatus(status?: MovieStatus | string): MovieContentStatus {
   switch (status) {
     case "PENDING_REVIEW":
@@ -55,6 +69,14 @@ export function toMovieContentStatus(status?: MovieStatus | string): MovieConten
     case "CHANGES_REQUESTED":
     case "ARCHIVED":
       return status;
+    case "COMING_SOON":
+    case "NOW_SHOWING":
+    case "SUSPENDED":
+      return "APPROVED";
+    case "REJECTED":
+      return "CHANGES_REQUESTED";
+    case "ENDED":
+      return "ARCHIVED";
     case "DRAFT":
     default:
       return "DRAFT";
