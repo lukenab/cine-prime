@@ -50,11 +50,24 @@ public class ProductionCompanyController {
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public ApiResponse<ProductionCompanyResponse> create(@Valid @RequestBody ProductionCompanyRequest req) {
+        // If this exact TMDB company was already created (e.g. a concurrent save, or the same
+        // TMDB pick added on two different movies before either had a companyId yet), reuse the
+        // existing row instead of hitting the unique constraint on tmdb_company_id.
+        if (req.getTmdbCompanyId() != null) {
+            ProductionCompany existing = productionCompanyRepository.findByTmdbCompanyId(req.getTmdbCompanyId()).orElse(null);
+            if (existing != null) {
+                return ApiResponse.<ProductionCompanyResponse>builder()
+                        .code(201)
+                        .result(movieMapper.toProductionCompanyResponse(existing))
+                        .build();
+            }
+        }
         ProductionCompany entity = ProductionCompany.builder()
                 .name(req.getName().trim())
                 .country(req.getCountry())
                 .logoUrl(req.getLogoUrl())
                 .websiteUrl(req.getWebsiteUrl())
+                .tmdbCompanyId(req.getTmdbCompanyId())
                 .createdAt(LocalDateTime.now())
                 .build();
         return ApiResponse.<ProductionCompanyResponse>builder()

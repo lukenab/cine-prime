@@ -427,6 +427,7 @@ export type ProductionCompanyRequest = {
   country?: string;
   logoUrl?: string;
   websiteUrl?: string;
+  tmdbCompanyId?: number;
 };
 
 export type PersonResponse = {
