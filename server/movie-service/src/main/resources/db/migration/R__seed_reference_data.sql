@@ -122,6 +122,19 @@ SET peak_demand_weight = EXCLUDED.peak_demand_weight,
     updated_by = EXCLUDED.updated_by;
 
 -- ── genre ────────────────────────────────────────────────────────────────────
+INSERT INTO showtime_allocation_format_priority
+    (policy_id, format_id, allocation_priority, created_by, updated_by)
+SELECT policy.policy_id, format.format_id, seed.allocation_priority,
+       'migration:R', 'migration:R'
+FROM (
+    VALUES ('IMAX', 100), ('4DX', 90), ('SCREENX', 80), ('3D', 70), ('2D', 10)
+) AS seed(format_code, allocation_priority)
+JOIN showtime_allocation_policy policy ON policy.policy_code = 'DEFAULT'
+JOIN screening_format format ON format.format_code = seed.format_code
+ON CONFLICT (policy_id, format_id) DO UPDATE
+SET allocation_priority = EXCLUDED.allocation_priority,
+    updated_by = EXCLUDED.updated_by;
+
 INSERT INTO genre (genre_name, genre_code) VALUES
     ('Action',          'action'),
     ('Adventure',       'adventure'),

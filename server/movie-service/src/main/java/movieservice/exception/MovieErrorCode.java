@@ -230,7 +230,25 @@ public enum MovieErrorCode implements BaseErrorCode {
                         HttpStatus.CONFLICT),
         PERSON_STILL_REFERENCED(2093,
                         "Cannot delete a person who is still credited as cast/crew on one or more movies.",
-                        HttpStatus.CONFLICT);
+                        HttpStatus.CONFLICT),
+
+        AUTO_SHOWTIME_POLICY_NOT_FOUND(2094,
+                        "No active showtime allocation policy was found.", HttpStatus.NOT_FOUND),
+        INVALID_GENERATION_RANGE(2095,
+                        "The requested date range is outside the configured scheduling horizon.", HttpStatus.BAD_REQUEST),
+        GENERATION_RUN_NOT_FOUND(2096,
+                        "Auto showtime generation run was not found.", HttpStatus.NOT_FOUND),
+        AUTO_SHOWTIME_MOVIE_NOT_APPROVED(2097,
+                        "Auto showtime generation requires every selected movie to be APPROVED.", HttpStatus.CONFLICT),
+        AUTO_SHOWTIME_NO_SCHEDULABLE_AVAILABILITY(2098,
+                        "No selected movie has an OPEN or PLANNED availability window for the selected cluster and date range.",
+                        HttpStatus.BAD_REQUEST),
+        AUTO_SHOWTIME_NO_ELIGIBLE_CANDIDATE(2099,
+                        "No eligible showtime candidate exists. Check cluster operating hours, active rooms, and room format capabilities.",
+                        HttpStatus.BAD_REQUEST),
+        AUTO_SHOWTIME_SELECTED_MOVIE_NOT_ELIGIBLE(2100,
+                        "Every selected movie must have at least one eligible showtime candidate.",
+                        HttpStatus.BAD_REQUEST);
 
         int code;
         String message;

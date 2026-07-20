@@ -1,0 +1,9 @@
+package movieservice.enums;
+
+public enum GenerationReason {
+    MINIMUM_DAILY_COVERAGE,
+    PREMIUM_FORMAT_PRIORITY,
+    HIGH_DEMAND_PEAK_SLOT,
+    HIGH_DEMAND_OFF_PEAK_SLOT,
+    DEMAND_QUOTA_ALLOCATION
+}

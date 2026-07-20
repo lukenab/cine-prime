@@ -173,6 +173,9 @@ public class Movie {
     @Column(name = "updated_by", length = 100)
     String updatedBy;
 
+    @OneToOne(mappedBy = "movie", fetch = FetchType.LAZY)
+    MovieSchedulingProfile schedulingProfile;
+
     // ── Lifecycle hooks ───────────────────────────────────────
     @PrePersist
     void prePersist() {

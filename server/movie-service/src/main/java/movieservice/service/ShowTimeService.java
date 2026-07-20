@@ -58,8 +58,6 @@ import movieservice.repository.SeatRepository;
 @Slf4j
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ShowTimeService {
-    private static final BigDecimal DEFAULT_SEAT_PRICE = new BigDecimal("85000.00");
-
     ShowTimeRepository showTimeRepository;
     ShowtimeSeatRepository showtimeSeatRepository;
     SeatRepository seatRepository;
@@ -660,7 +658,7 @@ public class ShowTimeService {
         if (showTime.getBasePrice() != null) {
             return showTime.getBasePrice();
         }
-        return seat.getPrice() != null ? seat.getPrice() : DEFAULT_SEAT_PRICE;
+        return seat.getPrice() != null ? seat.getPrice() : ShowtimePricingDefaults.DEFAULT_SEAT_PRICE;
     }
 
     private void synchronizeUnbookedSeatPrices(ShowTime showTime) {

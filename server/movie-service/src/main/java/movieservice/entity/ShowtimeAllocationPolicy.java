@@ -1,13 +1,6 @@
 package movieservice.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,6 +11,8 @@ import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.List;
 
 @Entity
 @Table(name = "showtime_allocation_policy")
@@ -62,6 +57,34 @@ public class ShowtimeAllocationPolicy {
     BigDecimal maximumRoomShare;
 
     @Builder.Default
+    @Column(name = "planning_horizon_start_days", nullable = false)
+    Integer planningHorizonStartDays = 3;
+
+    @Builder.Default
+    @Column(name = "planning_horizon_end_days", nullable = false)
+    Integer planningHorizonEndDays = 9;
+
+    @Builder.Default
+    @Column(name = "cleanup_buffer_minutes", nullable = false)
+    Integer cleanupBufferMinutes = 15;
+
+    @Builder.Default
+    @Column(name = "time_slot_interval_minutes", nullable = false)
+    Integer timeSlotIntervalMinutes = 15;
+
+    @Builder.Default
+    @Column(name = "business_timezone", nullable = false, length = 50)
+    String businessTimezone = "Asia/Ho_Chi_Minh";
+
+    @Builder.Default
+    @Column(name = "peak_start_time", nullable = false)
+    LocalTime peakStartTime = LocalTime.of(18, 0);
+
+    @Builder.Default
+    @Column(name = "peak_end_time", nullable = false)
+    LocalTime peakEndTime = LocalTime.of(22, 0);
+
+    @Builder.Default
     @Column(nullable = false)
     Boolean active = true;
 
@@ -76,6 +99,9 @@ public class ShowtimeAllocationPolicy {
 
     @Column(name = "updated_by", length = 100)
     String updatedBy;
+
+    @OneToMany(mappedBy = "policy", fetch = FetchType.LAZY)
+    List<ShowtimeAllocationFormatPriority> formatPriorities;
 
     @PrePersist
     void prePersist() {
