@@ -39,8 +39,11 @@ class PersonControllerTest {
     }
 
     @Test
-    void create_DuplicateName_ThrowsAndDoesNotSave() {
-        when(personRepository.existsByFullNameIgnoreCase("Christopher Nolan")).thenReturn(true);
+    void create_DuplicateNameNoTmdbId_ThrowsAndDoesNotSave() {
+        Person existing = new Person();
+        existing.setPersonId(PERSON_ID);
+        existing.setFullName("Christopher Nolan");
+        when(personRepository.findByFullNameIgnoreCase("Christopher Nolan")).thenReturn(Optional.of(existing));
 
         AppException ex = assertThrows(AppException.class,
                 () -> personController.create(requestWithName("Christopher Nolan")));
@@ -50,8 +53,39 @@ class PersonControllerTest {
     }
 
     @Test
+    void create_DuplicateNameConflictingTmdbId_ThrowsAndDoesNotSave() {
+        Person existing = new Person();
+        existing.setPersonId(PERSON_ID);
+        existing.setFullName("Christopher Nolan");
+        existing.setTmdbId(525);
+        when(personRepository.findByFullNameIgnoreCase("Christopher Nolan")).thenReturn(Optional.of(existing));
+
+        PersonRequest request = PersonRequest.builder().fullName("Christopher Nolan").tmdbId(999).build();
+        AppException ex = assertThrows(AppException.class, () -> personController.create(request));
+
+        assertEquals(MovieErrorCode.PERSON_NAME_ALREADY_EXISTS, ex.getErrorCode());
+        verify(personRepository, never()).save(any());
+    }
+
+    @Test
+    void create_DuplicateNameUnlinkedTmdbId_BackfillsAndReusesExisting() {
+        Person existing = new Person();
+        existing.setPersonId(PERSON_ID);
+        existing.setFullName("Christopher Nolan");
+        existing.setTmdbId(null);
+        when(personRepository.findByFullNameIgnoreCase("Christopher Nolan")).thenReturn(Optional.of(existing));
+        when(personRepository.save(any(Person.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        PersonRequest request = PersonRequest.builder().fullName("Christopher Nolan").tmdbId(525).build();
+        personController.create(request);
+
+        assertEquals(525, existing.getTmdbId());
+        verify(personRepository).save(existing);
+    }
+
+    @Test
     void create_UniqueName_Saves() {
-        when(personRepository.existsByFullNameIgnoreCase("New Person")).thenReturn(false);
+        when(personRepository.findByFullNameIgnoreCase("New Person")).thenReturn(Optional.empty());
         when(personRepository.save(any(Person.class))).thenAnswer(inv -> inv.getArgument(0));
 
         personController.create(requestWithName("New Person"));

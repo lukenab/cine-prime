@@ -71,7 +71,29 @@ public class PersonController {
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<PersonResponse> create(@Valid @RequestBody PersonRequest request) {
         String fullName = request.getFullName().trim();
-        if (personRepository.existsByFullNameIgnoreCase(fullName)) {
+        Person existing = personRepository.findByFullNameIgnoreCase(fullName).orElse(null);
+        if (existing != null) {
+            // A TMDB-sourced cast pick (resolveCastPersonIds() in MovieEditorPage) whose tmdbId
+            // doesn't match anyone locally yet still collides on name here whenever the real
+            // person already exists without a tmdb_id - one of the legacy hand-seeded rows
+            // V12__merge_duplicate_person_records.sql didn't cover, or simply never linked. Same
+            // real person re-surfacing, not a genuine duplicate name, so backfill their tmdb_id
+            // and reuse them instead of blocking the movie save. Only block when the existing
+            // row's tmdb_id is already set to something else - that's a real ambiguity (two
+            // different people sharing this exact name) this can't safely auto-resolve.
+            boolean sameOrUnlinkedTmdbId = existing.getTmdbId() == null
+                    || existing.getTmdbId().equals(request.getTmdbId());
+            if (request.getTmdbId() != null && sameOrUnlinkedTmdbId) {
+                if (existing.getTmdbId() == null) {
+                    existing.setTmdbId(request.getTmdbId());
+                    existing.setUpdatedAt(LocalDateTime.now());
+                    existing = personRepository.save(existing);
+                }
+                return ApiResponse.<PersonResponse>builder()
+                        .code(201)
+                        .result(movieMapper.toPersonResponse(existing))
+                        .build();
+            }
             throw new AppException(MovieErrorCode.PERSON_NAME_ALREADY_EXISTS);
         }
         Person person = Person.builder()
