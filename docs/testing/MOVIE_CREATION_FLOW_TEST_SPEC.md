@@ -6,15 +6,15 @@
 |---|---|
 | Tên tài liệu | Movie Creation Flow — Specification & Test Plan |
 | Module | `movie-service` (backend) + Movie Editor / TMDB catalog / Movie Management (frontend) |
-| Phiên bản | 1.0 |
-| Ngày kiểm tra | 2026-07-20 |
-| Branch hiện tại | `docs/movie-creation-flow-test-spec` (tạo từ `develop`) |
-| Commit hiện tại | `83a83c5` — "Merge branch 'fix/drop-movie-end-date-column' into 'develop'" |
+| Phiên bản | 3.0 |
+| Ngày kiểm tra | 2026-07-20 (audit gốc); cập nhật lần 2: 2026-07-20; cập nhật lần 3: 2026-07-21 |
+| Branch hiện tại | `docs/update-movie-creation-flow-spec` (tạo từ `develop`) |
+| Commit hiện tại | `8184664` — "Merge branch 'feat/movie-editor-media-section' into 'develop'" |
 | Người dùng mục tiêu | Developer (backend/frontend), Tester/QA, Reviewer (MR review), Product/Business (đọc phần Executive Summary + Gaps) |
-| Phạm vi | Toàn bộ vòng đời tạo/lưu/cập nhật/xét duyệt phim: manual creation, TMDB-assisted creation, review/approval, request-changes/revision, media, authorization, business rules liên quan |
-| Ngoài phạm vi | Movie Availability (per-cluster exhibition lifecycle — `movie_availability`, `MovieAvailabilityController`), Showtime/booking, Cinema Cluster/Room, Seat layout. Các module này chỉ được nhắc tới khi cần thiết để phân biệt ranh giới với Movie content lifecycle. |
+| Phạm vi | Toàn bộ vòng đời tạo/lưu/cập nhật/xét duyệt phim: manual creation, TMDB-assisted creation, review/approval, request-changes/revision, media, authorization, business rules liên quan. **Kể từ v3.0**: mở rộng thêm Movie Availability (vòng đời khai thác/chiếu theo từng cụm rạp) — xem Mục 23. |
+| Ngoài phạm vi | Showtime/booking (lịch chiếu cụ thể, ghế, đặt vé), Cinema Cluster/Room CRUD, Seat layout. Các module này chỉ được nhắc tới khi cần thiết để phân biệt ranh giới với Movie content/availability lifecycle. |
 
-> **Cập nhật sau khi phát hành tài liệu:** Gap #1 (P1 — TMDB one-shot import không có UI trigger) và Gap #2 (P0 — `rejectionNote` không hiển thị) đã được xử lý — xem `fix/movie-rejection-note-visibility` và `feat/tmdb-import-ui`. Mục 2/9/19/20 bên dưới vẫn giữ nguyên mô tả tại thời điểm audit ban đầu (commit `83a83c5`) làm hồ sơ; Flow B (Mục 7) chưa được viết lại đầy đủ theo hành vi mới, đây là việc cần làm tiếp theo (tài liệu hoá lại luồng "Use this movie" nay thực sự gọi `POST /api/movies/tmdb/import` qua `MovieEditorPage.persistCurrentDraft()`, kèm resolve genre/runtime/age-rating thật thay vì tạo genre `ACTIVE` phía client).
+> **Lịch sử cập nhật:** Bản audit gốc (v1.0, commit `83a83c5`) phát hiện 2 gap ảnh hưởng cốt lõi — Gap #1 (P1, TMDB one-shot import không có UI trigger) và Gap #2 (P0, `rejectionNote` không hiển thị cho EMPLOYEE) — cả hai đã được xử lý (`fix/movie-rejection-note-visibility`, `feat/tmdb-import-ui`, merge vào `develop`). Sau đó, `feat/movie-editor-media-section` (MOV-EDITOR-05) đã tổ chức lại Media section thành 1 khối duy nhất (Poster/Backdrop/Trailer/Gallery). Bản v2.0 (commit `8184664`) đã viết lại các mục liên quan (Flow B, Business Rules, API Catalogue, UI Scenarios, Traceability, Gaps) để khớp với code hiện tại. **Bản v3.0** mở rộng phạm vi tài liệu, thêm Mục 23 (Movie Availability) — trước đây bị loại khỏi phạm vi, nay được viết đầy đủ cùng mức độ chi tiết với phần Movie content lifecycle, vì đây là phần trực tiếp quyết định phim có thật sự "lên sóng" hay không (mà phần Executive Summary/Flow A-E trước đó luôn phải nhắc tới rồi lại nói "ngoài phạm vi").
 
 **Nguyên tắc đọc tài liệu:** mọi khẳng định trong tài liệu này đều bắt nguồn từ source code tại commit nêu trên. Khi một chi tiết không thể xác minh chắc chắn từ code đã đọc, tài liệu ghi rõ **"Chưa xác minh từ implementation"** kèm file cần kiểm tra thêm, thay vì suy đoán.
 
@@ -22,16 +22,18 @@
 
 ## 2. Executive Summary
 
-**Có 2 cách tạo phim, nhưng chỉ 1 con đường ghi dữ liệu thật:**
+**Có 2 cách tạo phim, và (kể từ `feat/tmdb-import-ui`) cả hai đều ghi dữ liệu qua đúng con đường được thiết kế cho nó:**
 
 1. **Manual creation** — `MovieEditorPage` (route `/admin/movies/new/manual`) → `POST /api/movies` (`createMovie`, dùng `CreateMovieRequest`).
-2. **"TMDB-assisted" creation** — `TmdbCatalogPage` (route `/admin/movies/new/catalog`) cho phép browse/preview dữ liệu TMDB (đọc-only, không ghi DB), sau đó bấm "Use this movie" sẽ **điều hướng sang chính `MovieEditorPage`** (route `/admin/movies/new/manual?tmdbId=...`) với dữ liệu TMDB được truyền qua `router state` để prefill form. Việc lưu thật sự **vẫn đi qua `POST /api/movies` (`createMovie`) giống hệt manual creation** — **không** gọi endpoint `POST /api/movies/tmdb/import` (`TmdbService.importMovie`).
+2. **TMDB-assisted creation** — `TmdbCatalogPage` (route `/admin/movies/new/catalog`) cho phép browse/preview dữ liệu TMDB (đọc-only, không ghi DB). Bấm "Use this movie" **vẫn chỉ điều hướng** sang `MovieEditorPage` (route `/admin/movies/new/manual?tmdbId=...`, prefill qua `router state`) — bản thân cú click này **không gọi API**. Nhưng khi bấm **"Save Draft" lần đầu** cho 1 draft có `tmdbId` (chưa từng có `movieId`), `MovieEditorPage.persistCurrentDraft()` giờ gọi thật `POST /api/movies/tmdb/import` (`TmdbService.importMovie`) — dùng đúng resolution genre (map/create-pending/ignore) mà operator đã chọn trong panel "TMDB Import Review" — rồi gọi tiếp `PUT /api/movies/{id}` để áp mọi chỉnh sửa thủ công khác lên trên draft TMDB vừa import. Xem Flow B (Mục 7) để có chi tiết từng bước.
 
-Điều này được xác nhận bằng chính test của repo: `TmdbCatalogPage.test.tsx` có assertion `expect(mocks.tmdbImport).not.toHaveBeenCalled()` — đây là **thiết kế có chủ đích**, không phải bug bị bỏ sót.
+Việc này được xác nhận bằng chính test của repo: `TmdbCatalogPage.test.tsx` vẫn còn assertion `expect(mocks.tmdbImport).not.toHaveBeenCalled()` — **vẫn đúng**, vì lời gọi `/tmdb/import` xảy ra ở `MovieEditorPage` lúc Save, không phải ở `TmdbCatalogPage` lúc "Use this movie".
 
-Hệ quả quan trọng: backend có sẵn một endpoint `POST /api/movies/tmdb/import` được implement rất đầy đủ (duplicate-check theo `tmdbId`/`imdbId`, resolve runtime/genre/age-rating/company/trailer/poster, tạo genre `PENDING_REVIEW` khi cần, ...) và có unit test riêng (`TmdbServiceTest`, `TmdbCompanyResolutionTest`, `TmdbTrailerSelectionTest`, `TmdbImageSelectionTest`) — nhưng **không có UI nào gọi tới nó**. Nó chỉ test được qua Postman/API trực tiếp, không qua UI. Xem Gap #1 ở Mục 20.
+Tác dụng phụ đáng chú ý của việc wire endpoint thật: resolve "Create new" cho 1 genre TMDB chưa map **không còn** gọi thẳng `POST /api/genres` (tạo `ACTIVE` ngay lập tức, bỏ qua review) — genre giờ được tạo đúng ở trạng thái `PENDING_REVIEW` qua `createPendingGenres` của `/tmdb/import`, khớp với thiết kế backend từ đầu.
 
-Ngược lại, **TMDB media import ở cấp độ ảnh** (`POST /api/movies/{id}/images/tmdb-import`, chọn poster/backdrop/still cụ thể) **có** được UI gọi thật (từ `TmdbMediaPicker` bên trong `MovieEditorPage`, sau khi movie đã được lưu).
+**TMDB media import ở cấp độ ảnh** (`POST /api/movies/{id}/images/tmdb-import`, chọn poster/backdrop/still cụ thể qua `TmdbMediaPicker`) không đổi — vẫn chỉ import sau khi movie đã tồn tại.
+
+**Media section đã được tổ chức lại** (`feat/movie-editor-media-section`, MOV-EDITOR-05): Poster, Backdrop, Official Trailer và Gallery giờ nằm trong đúng 1 `<section>` (trước đây Trailer nằm ở Overview, Gallery/TmdbMediaPicker chỉ "trông giống" cùng chỗ nhờ CSS). Mỗi nhóm hiển thị source/provenance và trạng thái imported/pending/manual; ảnh vỡ có fallback rõ ràng thay vì icon vỡ mặc định của trình duyệt. Xem Mục 5.5 và Mục 14 (UI-MEDIA-*).
 
 **Ai được tạo/sửa/submit/approve:**
 
@@ -45,18 +47,23 @@ Ngược lại, **TMDB media import ở cấp độ ảnh** (`POST /api/movies/{
 - Submit → Approve / Request Changes → Start Revision (state machine đơn giản, rõ ràng, có readiness gate 2 tầng qua `MovieReadinessValidator`).
 - Authorization ở tầng `@PreAuthorize` đã được audit riêng (`docs/api-specs/movie-service/AUTHORIZATION_MATRIX.md`) và không có gap mới phát hiện trong lần rà soát này.
 - Reconcile translations/cast theo composite key (không xoá-làm-lại toàn bộ) — tránh mất dữ liệu khi partial update.
+- **Request Changes → EMPLOYEE đọc lại lý do**: `rejectionNote` nay có trong `MovieResponse` và hiển thị trong `MovieDetailModal` khi movie `CHANGES_REQUESTED` (Gap #2 cũ, đã fix).
+- **TMDB-assisted creation giờ đi qua đúng `/tmdb/import`** (Gap #1 cũ, đã fix) — xem chi tiết ở trên.
+- **Media section hợp nhất, có provenance/status rõ ràng** (MOV-EDITOR-05, đã làm — không phải gap được audit ban đầu nhưng là cải thiện đáng kể cho information architecture).
 
 **Flow nào còn thiếu / có rủi ro (chi tiết ở Mục 20):**
 
-- **Rejection note (`rejectionNote`) không bao giờ được trả về hoặc hiển thị cho EMPLOYEE** — bị set ở backend (`Movie.rejectionNote`) nhưng `MovieResponse` DTO và `MovieMapper` không map field này ra ngoài, và không UI nào (kể cả `PendingReviewModal`, `ManageMoviePage`) hiển thị nó. EMPLOYEE biết movie bị "Changes Requested" nhưng không biết lý do qua hệ thống.
-- **TMDB one-shot import endpoint (`POST /api/movies/tmdb/import`) không được UI nào gọi** — toàn bộ logic resolve genre/company/age-rating/runtime của nó chỉ test được qua Postman.
 - **`requireReadyForRelease()` trong `MovieReadinessValidator` là dead code** — không có method nào trong `MovieService` gọi nó (tàn dư từ lifecycle cũ có `COMING_SOON`/`NOW_SHOWING`).
+- **Không có endpoint đọc `movie_status_history`/`movie_action_log`** — audit trail được ghi đầy đủ nhưng không thể xây UI "audit history" cho Movie (Gap #7, P1, chưa xử lý).
 - **`MOVIE_LIFECYCLE_CONTRACT.md` ghi sai tên error code cho optimistic-lock conflict** — tài liệu nói `409 MOVIE_CONCURRENT_MODIFICATION`, nhưng thực tế `OptimisticLockingFailureException` được xử lý bởi `GlobalExceptionHandler` (dùng chung toàn hệ thống) trả về `GlobalErrorCode.CONCURRENT_MODIFICATION` (code `1010`), không có `MOVIE_CONCURRENT_MODIFICATION` nào tồn tại trong `MovieErrorCode`.
 - Không có endpoint xoá phim (`DELETE /api/movies/{id}`) — đã bị loại bỏ có chủ đích, thay bằng `archive`. Một số tài liệu cũ (`docs/MOVIE_SERVICE_BUSINESS_RULES.md` MOV-P0-002) vẫn còn nhắc `MovieService.deleteMovie` — **không còn tồn tại trong code hiện tại**, đây là tài liệu-code mismatch cần cập nhật riêng.
+- **Chưa có QA trình duyệt thật** cho cả 3 thay đổi (`fix/movie-rejection-note-visibility`, `feat/tmdb-import-ui`, `feat/movie-editor-media-section`) — môi trường audit không có Playwright/chromium-cli. Chỉ xác minh được qua `tsc`, unit test và `npm run build`.
+- **[Mục 23 — mới ở v3.0] `MovieScheduler.autoCloseExpiredAvailability()` tự động đóng availability window (`PLANNED`/`OPEN`/`SUSPENDED` → `CLOSED`) mỗi đêm 00:05 khi `showing_end_date` đã qua, nhưng KHÔNG ghi `movie_availability_history`** — audit trail có lỗ hổng cho transition loại này (Gap #11, xem Mục 23.9).
+- **[Mục 23 — mới ở v3.0] UI (`MovieAvailabilityPanel.tsx`) hạn chế việc tạo release plan chỉ cho ADMIN, dù backend cho phép cả EMPLOYEE** (`@PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")` trên `POST /api/movie-availabilities`) — chiều ngược lại với Gap #2 cũ (lần này UI chặt hơn backend, không phải lỏng hơn). Xem Gap #12, Mục 23.9.
 
-**Đánh giá mức độ sẵn sàng: `Academic-ready`.**
+**Đánh giá mức độ sẵn sàng: `Academic-ready`** (giữ nguyên, chưa nâng lên `Production-oriented`).
 
-Bằng chứng: state machine, validation 2 tầng (DTO `@Valid` + `MovieReadinessValidator`), authorization, và test coverage cho phần lõi (create/update/transition) đều có và được test khá kỹ (`MovieServiceTest`, `MovieReadinessValidatorTest`, `MovieMapperTest`, `TmdbServiceTest`...). Tuy nhiên tài liệu này tìm thấy 1 gap ảnh hưởng trực tiếp trải nghiệm nghiệp vụ cốt lõi (EMPLOYEE không thấy lý do bị từ chối), và 1 tính năng lớn (TMDB one-shot import) tồn tại ở backend nhưng không thể demo qua UI — hai điểm này đủ để chưa gọi là "Production-ready" hay thậm chí "Production-oriented" cho đến khi được xử lý.
+Bằng chứng: state machine, validation 2 tầng (DTO `@Valid` + `MovieReadinessValidator`), authorization, và test coverage cho phần lõi (create/update/transition) đều có và được test khá kỹ (`MovieServiceTest`, `MovieReadinessValidatorTest`, `MovieMapperTest`, `TmdbServiceTest`...). Cả 2 gap cốt lõi ban đầu (rejectionNote, TMDB import không wired) đã được xử lý và Media section đã hợp nhất, nhưng **chưa có bằng chứng QA trình duyệt thật** cho những thay đổi này — theo đúng nguyên tắc của tài liệu ("không khẳng định production-ready khi chưa có bằng chứng kiểm thử"), mức đánh giá giữ nguyên `Academic-ready` cho tới khi có QA thủ công xác nhận, và cho tới khi Gap #7 (audit history) được xử lý. Mục Availability mới thêm ở v3.0 có state machine + unit test riêng khá tốt (`MovieAvailabilityServiceTest`, 12 test case bao phủ đủ 4 transition + 3 validation ở `create`), nhưng **không có test authorization ở tầng controller** (không tìm thấy file `MovieAvailabilityControllerTest`) và có 2 gap mới (audit trail thiếu cho auto-close, UI hẹp hơn backend) — xem Mục 23.9.
 
 ---
 
@@ -66,11 +73,12 @@ Bằng chứng: state machine, validation 2 tầng (DTO `@Valid` + `MovieReadine
 |---|---|---|
 | Movie Draft | Bản nháp phim | `Movie.status = DRAFT`. Trạng thái duy nhất có thể sửa trực tiếp qua `PUT /api/movies/{id}`. |
 | Content Approval | Phê duyệt nội dung | Chuyển `PENDING_REVIEW → APPROVED` qua `POST /api/movies/{id}/approve`. Chỉ là quyết định biên tập, **không** làm phim lên sóng/mở bán ở đâu cả. |
-| Exhibition Lifecycle | Vòng đời khai thác/chiếu phim | Thuộc về `MovieAvailability` (bảng `movie_availability`, ngoài phạm vi tài liệu này) — theo từng cụm rạp (`cluster`), tách biệt hoàn toàn khỏi `Movie.status`. |
+| Exhibition Lifecycle | Vòng đời khai thác/chiếu phim | Thuộc về `MovieAvailability` (bảng `movie_availability`) — theo từng cụm rạp (`cluster`), tách biệt hoàn toàn khỏi `Movie.status`. **Kể từ v3.0, trong phạm vi tài liệu này** — xem Mục 23. |
+| Release Plan / Availability Window | Kế hoạch chiếu | 1 dòng `movie_availability` = 1 quyết định "phim X được phép khai thác ở cụm rạp Y, từ ngày A (đến ngày B nếu có)". Không tự động kéo theo suất chiếu hay mở bán — xem Mục 23.2. |
 | Readiness Gate | Điều kiện sẵn sàng | `MovieReadinessValidator` — tập hợp rule phải thoả trước khi submit/approve, thu thập **tất cả** vi phạm cùng lúc thay vì dừng ở lỗi đầu tiên. |
 | Display Status | Trạng thái hiển thị | `NOW_SHOWING`/`COMING_SOON` — tính toán tại thời điểm đọc (không lưu DB), dựa trên `Movie.status = APPROVED` + `MovieAvailability` + showtime. |
 | TMDB Preview | Bản xem trước dữ liệu TMDB | `GET /api/movies/tmdb/{tmdbId}/details` — đọc thuần, không ghi DB, không gọi `save()` ở bất kỳ repository nào. |
-| Import (TMDB) | Nhập dữ liệu | Có 2 nghĩa khác nhau cần phân biệt rõ: (a) endpoint `POST /api/movies/tmdb/import` — tạo movie trực tiếp từ TMDB, **hiện không có UI gọi**; (b) hành vi UI thật — dùng TMDB preview để **prefill** form Manual Editor rồi lưu qua `createMovie` như bình thường. |
+| Import (TMDB) | Nhập dữ liệu | `POST /api/movies/tmdb/import` (`TmdbService.importMovie`) — hiện **được gọi thật** từ `MovieEditorPage.persistCurrentDraft()` khi lưu lần đầu 1 draft nguồn gốc TMDB (sau khi "Use this movie" đã prefill form). Khác với hành vi cũ (trước `feat/tmdb-import-ui`): trước đây bấm "Save Draft" luôn gọi `createMovie` thường, bỏ qua toàn bộ logic resolve genre/company/age-rating chuyên biệt của endpoint import. |
 | Re-sync | Đồng bộ lại | Không có endpoint re-sync tự động trong code hiện tại. `trailerSource`/`taglineSource` (`TMDB`/`MANUAL`) tồn tại để một cơ chế re-sync trong tương lai biết trường nào là do TMDB đặt (có thể ghi đè an toàn) và trường nào do admin sửa tay (không được ghi đè) — nhưng bản thân job re-sync **chưa được implement**. |
 | Provenance | Nguồn gốc dữ liệu | `trailerSource`, `taglineSource` (`Movie` entity) — `TMDB` = tự động lấy lúc import/prefill, `MANUAL` = admin nhập/sửa tay. |
 | Readiness Violation | Vi phạm điều kiện sẵn sàng | `ReadinessViolation{field, rule}` — 1 phần tử trong mảng `result.violations` khi submit/approve thất bại. |
@@ -99,6 +107,9 @@ Nguồn: `@PreAuthorize` trên `MovieController`, `TmdbController`, `MovieImageC
 | Quản lý movie image (list/add/delete/tmdb-import ảnh) | Allow | Allow | Deny | Deny | `MovieImageController` — tất cả `hasAnyRole('ADMIN','EMPLOYEE')` |
 | Upload ảnh (Cloudinary) | Allow | Allow | Deny | Deny | `POST /api/movies/images` |
 | Xem audit log của 1 movie | — | — | — | — | **Không có endpoint đọc `movie_action_log`/`movie_status_history` qua API.** Chưa xác minh từ implementation liệu có endpoint nào khác expose 2 bảng này — grep trong `movieservice/controller` không thấy repository nào cho 2 bảng này được expose qua REST. |
+| Tạo/sửa release plan (Availability) | Allow | Allow | Deny | Deny | `POST`/`PUT /api/movie-availabilities` — `@PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")`. **Nhưng UI (`MovieAvailabilityPanel.tsx`) chỉ hiện nút "New release plan" khi `isAdmin`** — EMPLOYEE có quyền API nhưng không có đường vào UI (xem Mục 23.3 để biết đây là gap gì) |
+| Xem release plan (Availability) | Allow | Allow | Deny | Deny | `GET /api/movie-availabilities` |
+| Open / Suspend / Resume / Close (Availability) | Allow | Deny | Deny | Deny | `POST /api/movie-availabilities/{id}/{open|suspend|resume|close}` — `@PreAuthorize("hasRole('ADMIN')")`, UI cũng gate đúng bằng `isAdmin` |
 
 Ghi chú:
 - Không có khái niệm "own draft only" ở tầng `@PreAuthorize` cho Movie (khác với Cinema Cluster/Room, nơi có ownership check trong service) — bất kỳ EMPLOYEE nào cũng sửa được draft của EMPLOYEE khác. **Chưa xác minh** đây có phải hành vi mong muốn hay là gap — không thấy rule nghiệp vụ nào trong `docs/MOVIE_SERVICE_BUSINESS_RULES.md` nói về ownership cho Movie draft.
@@ -187,12 +198,23 @@ Giới hạn khi import từ TMDB (`MovieImageService.enforcePerTypeLimits`): t�
 
 **Official trailer selection logic** (`TmdbService.selectTrailer`): chỉ xét video từ YouTube; ưu tiên `official=true`, sau đó ngôn ngữ `vi > en`; ưu tiên type `Trailer`, chỉ fallback `Teaser` nếu không có `Trailer` nào (luôn kèm warning `TRAILER_FALLBACK_TEASER:<key>`); không có video nào phù hợp → trả `null` + warning `TRAILER_NOT_FOUND`, **không chặn** preview/import.
 
+**Media section trên UI** (`MovieEditorPage.tsx`, kể từ `feat/movie-editor-media-section` — MOV-EDITOR-05): 4 nhóm nằm trong đúng 1 `<section data-editor-section="media">`, theo thứ tự:
+
+| Nhóm | Asset "đang chọn" được xác định thế nào | Provenance/status hiển thị |
+|---|---|---|
+| Primary Poster | `form.posterUrl` (scalar field trên `Movie`) | Badge nguồn (`TMDB`/`Manual`/hoặc `source` của `movie_image` khớp URL) + trạng thái (`Imported`/`Pending import`/`Manual`/`Not selected`) |
+| Backdrop | **Không có scalar field riêng** — suy ra từ `movie_image` có `imageType=BACKDROP && isDefault=true` (fallback: dòng `BACKDROP` đầu tiên), hoặc candidate đang `pending` (đã chọn trong `TmdbMediaPicker`, chưa Save) | Badge tương tự Poster |
+| Official Trailer | `form.trailerUrl` | Badge nguồn dựa trên state `trailerSource` (`TMDB` lúc prefill, tự đổi `MANUAL` ngay khi gõ tay — khớp rule backend `MovieService.updateMovie()`); cảnh báo nhẹ nếu URL không giống link YouTube phát được |
+| Gallery | Toàn bộ `movie_image` của movie (thêm/xoá thủ công qua form trong section này) | Badge `imageType` + `source` (nếu có) hiện trực tiếp trên mỗi thumbnail |
+
+`TmdbMediaPicker` (chọn poster/backdrop/still candidate từ TMDB, cơ chế "chỉ import khi Save" — xem 7.B bước 8) được nhúng ngay trong Media section, không còn là khối UI tách rời "trông giống" cùng chỗ nhờ CSS `order-3` như trước. Ảnh vỡ/thiếu (poster/backdrop/gallery) có fallback rõ ràng ("No … selected yet" / "Preview unavailable") qua component `MediaThumbnail`, thay vì icon vỡ mặc định của trình duyệt.
+
 ### 5.6 Lifecycle and Audit
 
 | Field | Ghi chú |
 |---|---|
 | `status` | Enum 5 giá trị, xem Mục 6 |
-| `rejectionNote` | Set khi `request-changes`. **Không xuất hiện trong `MovieResponse` DTO** (xem Gap #2, Mục 20) |
+| `rejectionNote` | Set khi `request-changes`. Có trong `MovieResponse` DTO (thêm ở `fix/movie-rejection-note-visibility`) và hiển thị trong `MovieDetailModal` khi movie `CHANGES_REQUESTED` — Gap #2 cũ đã fix |
 | `version` | `@Version` optimistic lock — conflict → `409`, `GlobalErrorCode.CONCURRENT_MODIFICATION` (1010), dùng chung toàn hệ thống, không phải mã riêng của movie-service |
 | `createdAt`/`updatedAt`/`createdBy`/`updatedBy` | Audit chuẩn. `createdBy`/`updatedBy` **không được set ở `MovieService`** khi tạo/sửa — chỉ được set trong `transitionTo()` (`movie.setUpdatedBy(actor)`) khi chuyển trạng thái. **Chưa xác minh** liệu `createMovie`/`updateMovie` có set `createdBy`/`updatedBy` ở đâu khác (không thấy trong `MovieService.java`) — nhiều khả năng 2 field này luôn `null` sau khi tạo/sửa thường, chỉ có giá trị sau lần transition đầu tiên. |
 | `movie_status_history` | 1 dòng/lần chuyển trạng thái: `fromStatus`, `toStatus`, `actor`, `reason`, `createdAt`. Không có endpoint đọc bảng này qua API (xem Mục 4). |
@@ -253,12 +275,12 @@ stateDiagram-v2
 | 8 | ADMIN/EMPLOYEE | Bấm "Submit for Review" | `saveDraftThenSubmit()`: `PUT`/`POST` lưu trước, rồi `POST /api/movies/{id}/submit` | `200`, `status=PENDING_REVIEW` | Insert 1 dòng `movie_status_history` (`DRAFT→PENDING_REVIEW`) | `400 MOVIE_NOT_READY_FOR_REVIEW` (kèm `violations[]`) — draft **vẫn được lưu** dù submit thất bại (2 bước tách rời) |
 | 9 | ADMIN | Vào Movie Management, thấy badge "Pending Review", bấm review | `GET /api/movies/{id}` (load full detail cho `PendingReviewModal`) | `200` | — | — |
 | 10 | ADMIN | Bấm "Approve" hoặc "Reject" (UI label; backend gọi là request-changes) | `POST /api/movies/{id}/approve` hoặc `POST /api/movies/{id}/request-changes` (`{note}`, tối thiểu 10 ký tự ở tầng UI — `MIN_NOTE_LENGTH`) | `200` | `movie_status_history` +1 dòng; nếu reject: `movie.rejection_note` được set | `400 MOVIE_NOT_READY_FOR_APPROVAL` (kèm `violations[]`, UI dịch field name qua `READINESS_FIELD_LABELS`) |
-| 11 | EMPLOYEE | Nếu bị Request Changes: thấy badge "Changes Requested" trên Movie Management | Không có API nào trả `rejectionNote` về | — | — | **Gap**: EMPLOYEE không thấy được lý do bị từ chối qua UI (xem Mục 20) |
+| 11 | EMPLOYEE | Nếu bị Request Changes: thấy badge "Changes Requested" trên Movie Management, bấm "View" mở `MovieDetailModal` | `GET /api/movies/{id}` — `result.rejectionNote` nay có trong response | — | — | Đã fix (`fix/movie-rejection-note-visibility`) — `MovieDetailModal` hiển thị `rejectionNote` trong khung cảnh báo ngay dưới tiêu đề khi `contentStatus === "CHANGES_REQUESTED"` |
 | 12 | EMPLOYEE | Bấm "Start Revision" | `POST /api/movies/{id}/start-revision` | `200`, `status=DRAFT` | `movie_status_history` +1 dòng (`CHANGES_REQUESTED→DRAFT`) | `400 INVALID_STATUS_TRANSITION` nếu không đúng status |
 | 13 | EMPLOYEE | Sửa lại, submit lại | (lặp lại bước 7-8) | | | |
 | 14 | Trạng thái cuối | — | — | `APPROVED` (nếu được duyệt) | — | Phim vẫn **không public** cho tới khi có `MovieAvailability` — ngoài phạm vi tài liệu này |
 
-### Flow B — TMDB-assisted Movie Creation (đúng như implementation, KHÔNG như mô tả "one-shot import" truyền thống)
+### Flow B — TMDB-assisted Movie Creation (cập nhật theo `feat/tmdb-import-ui` — nay gọi thật `/tmdb/import`)
 
 | Bước | Actor | UI Action | API Call | Expected Status | Database Effect | Failure Handling |
 |---|---|---|---|---|---|---|
@@ -266,25 +288,27 @@ stateDiagram-v2
 | 2 | ADMIN/EMPLOYEE | Chọn tab Now Playing / Upcoming / Search | `GET /api/movies/tmdb/now-playing?region=VN&page=N`, `/upcoming`, hoặc `/search?q=...` | `200`, `result: TmdbSearchItem[]` (kèm `alreadyImported`, `localMovieId` nếu đã có trong DB) | Không ghi DB | `502 TMDB_API_ERROR` nếu TMDB lỗi; UI hiện thông báo riêng khi HTTP 429 (rate limit) |
 | 3 | ADMIN/EMPLOYEE | Click 1 phim trong danh sách | `GET /api/movies/tmdb/{tmdbId}/details` | `200`, `result: TmdbMovieDetails` (đầy đủ metadata + `media` (poster/backdrop/still candidates) + `warnings[]`) | **Read-only tuyệt đối** — `TmdbService.getDetails()` không gọi `save()` ở bất kỳ repository nào | `502 TMDB_API_ERROR` |
 | 4 | ADMIN/EMPLOYEE | Xem preview (title, overview, genres với mapping status, companies, cast, warnings) | — | — | — | Nếu phim đã có trong DB (`item.alreadyImported`), nút chuyển thành "View existing movie" → điều hướng `/admin/movies/{localMovieId}/edit` thay vì tạo mới |
-| 5 | ADMIN/EMPLOYEE | Bấm "Use this movie" | **Không gọi API nào** — điều hướng `/admin/movies/new/manual?tmdbId={tmdbId}`, truyền `{tmdbItem, tmdbDetails}` qua `router state` | — | — | — |
-| 6 | Hệ thống | `MovieEditorPage` nhận `location.state`/`searchParams`, prefill `FormState` từ `TmdbMovieDetails` | — | — | — | **Chưa xác minh chi tiết** cơ chế prefill (đoạn code đọc `useLocation()`/`useSearchParams()` để dựng `FormState` ban đầu chưa được đọc đầy đủ trong lần rà soát này — cần kiểm tra `MovieEditorPage.tsx` phần `useEffect` load theo `tmdbId`) |
-| 7 | ADMIN/EMPLOYEE | Xem warnings đã phân loại (`classifyWarnings`/`groupWarnings` từ `utils/tmdbWarnings.ts`), resolve genre chưa map **thủ công trong form** (không qua API `selectedGenreMappings` như backend hỗ trợ) | — | — | — | **Chưa xác minh** — cần đọc `utils/tmdbWarnings.ts` và phần JSX xử lý genre-unmapped trong `MovieEditorPage.tsx` để khẳng định chính xác cơ chế; nhiều khả năng UI tự thêm 1 genre mới qua `POST /api/genres` (`createGenre`) chứ không qua flow `selectedGenreMappings`/`createPendingGenres`/`ignoredGenres` của `TmdbImportRequest` (endpoint đó không được gọi) |
-| 8 | ADMIN/EMPLOYEE | Chọn poster/backdrop/still qua `TmdbMediaPicker` (candidates lấy từ `details.media`) | Chưa gọi API — chỉ lưu `pendingMediaSelections` cục bộ | — | — | — |
-| 9 | ADMIN/EMPLOYEE | Bấm "Save Draft" | `POST /api/movies` (`createMovie`, **cùng hàm/endpoint với Flow A**, `tmdbId` được gửi kèm như 1 field scalar bình thường trong `CreateMovieRequest`) | `200` | Insert `movie` (có `tmdbId`) — **không** đi qua `TmdbService.importMovie()`, nên **không** có duplicate-check theo `tmdbId`/`imdbId` ở tầng TMDB-specific — chỉ có `UNIQUE` constraint DB-level (`movie.tmdb_id`) làm lưới an toàn cuối cùng | `409` (translated từ `DataIntegrityViolationException` → `DATA_INTEGRITY_VIOLATION`, **không phải** `TMDB_MOVIE_ALREADY_EXISTS`) nếu 2 người cùng prefill 1 tmdbId và cùng save gần như đồng thời |
-| 10 | Hệ thống | Ngay sau khi save thành công, nếu có `pendingMediaSelections` | `POST /api/movies/{movieId}/images/tmdb-import` (`importTmdbImages`) | `200`, `result.images[]` | Insert `movie_image` (source=`TMDB`) | `409 TMDB_IMAGE_ALREADY_IMPORTED`, `400 TMDB_IMAGE_NOT_FOUND`/`MOVIE_IMAGE_TYPE_LIMIT_EXCEEDED` |
-| 11-13 | — | Submit for Review / Review / Approve | Giống hệt Flow A từ bước 8 trở đi | | | |
+| 5 | ADMIN/EMPLOYEE | Bấm "Use this movie" | **Vẫn không gọi API nào** — điều hướng `/admin/movies/new/manual?tmdbId={tmdbId}`, truyền `{tmdbItem, tmdbDetails}` qua `router state` (hành vi này không đổi — chỉ thời điểm gọi `/tmdb/import` thay đổi, xem bước 9) | — | — | — |
+| 6 | Hệ thống | `MovieEditorPage` (`applyTmdb()`) prefill `FormState` từ `TmdbMovieDetails`: genres đã map thẳng vào `form.genreIds`, genres chưa map đưa vào `tmdbUnmappedGenres`, poster/trailer/company/cast set thẳng vào form, `tmdbMissingRuntime` set nếu TMDB không có runtime | — | — | — | |
+| 7 | ADMIN/EMPLOYEE | Xem warnings đã phân loại (`classifyWarnings`/`groupWarnings`), resolve từng genre chưa map trong panel **"TMDB Import Review"** (nay nằm ở Review section): **Map to existing** (chọn genreId có sẵn), **Create new** (chỉ ghi nhận cục bộ, KHÔNG còn gọi `POST /api/genres` ngay), hoặc **Ignore** (kèm lý do) | Chưa gọi API — chỉ cập nhật state `genreResolutions` cục bộ | — | — | Save bị chặn (`hasBlockingTmdbIssues`) cho tới khi mọi genre chưa map được resolve 1 trong 3 cách trên |
+| 8 | ADMIN/EMPLOYEE | Chọn poster/backdrop/still qua `TmdbMediaPicker` (nay nhúng trong Media section, xem Mục 5.5) | Chưa gọi API — chỉ lưu `pendingMediaSelections` cục bộ | — | — | — |
+| 9 | ADMIN/EMPLOYEE | Bấm "Save Draft" (lần đầu, draft có `form.tmdbId`) | `POST /api/movies/tmdb/import` (`tmdbImport()`, body build từ `genreResolutions` → `selectedGenreMappings`/`createPendingGenres`/`ignoredGenres`, kèm `confirmedRuntimeMinutes` nếu `tmdbMissingRuntime`, `confirmedAgeRatingId` = `form.ageRatingId`) | `200`, `result: TmdbImportResult{movieId, tmdbId, originalTitle, status:"DRAFT", importedCastCount, importedCompanyCount, warnings[]}` | Insert `movie` (draft TMDB gốc — chưa có chỉnh sửa thủ công của admin), insert `movie_translation`/`movie_cast`/`movie_production_company`; genre "Create new" được tạo ở đây, đúng `PENDING_REVIEW` | `409 TMDB_MOVIE_ALREADY_EXISTS` (race — hiếm vì `TmdbCatalogPage` đã chặn `alreadyImported`); `400 MISSING_RUNTIME` nếu `confirmedRuntimeMinutes` thiếu; `400 UNRESOLVED_GENRE_MAPPING` không nên xảy ra vì UI đã chặn save trước (bước 7) |
+| 10 | Hệ thống | Ngay sau import thành công | `GET /api/movies/{movieId}` (lấy đúng danh sách genre thật đã được import gắn vào, để hợp nhất với `form.genreIds` trước khi update — tránh `updateMovie()` ghi đè mất genre vừa tạo) | `200` | Không ghi | — |
+| 11 | Hệ thống | Áp mọi chỉnh sửa thủ công admin đã làm trên form (title/synopsis/cast/poster/trailer đã sửa sau khi prefill) lên trên draft TMDB vừa tạo | `PUT /api/movies/{movieId}` (`updateMovie`, `genreIds` = hợp nhất giữa genre vừa import và `form.genreIds`) | `200`, `result: MovieResponse` | Update `movie`, reconcile translations/cast theo composite key | Cùng failure mode như Flow A bước 7 |
+| 12 | Hệ thống | Nếu có `pendingMediaSelections` | `POST /api/movies/{movieId}/images/tmdb-import` (`importTmdbImages`) | `200`, `result.images[]` | Insert `movie_image` (source=`TMDB`) | `409 TMDB_IMAGE_ALREADY_IMPORTED`, `400 TMDB_IMAGE_NOT_FOUND`/`MOVIE_IMAGE_TYPE_LIMIT_EXCEEDED` |
+| 13-15 | — | Submit for Review / Review / Approve | Giống hệt Flow A từ bước 8 trở đi | | | |
 
 Trả lời trực tiếp các câu hỏi bắt buộc của Mục 7 (Flow B) trong đề bài gốc:
 
 - **Preview có side effect không?** Không. `getDetails()` không `save()` bất kỳ đâu (comment trong code khẳng định rõ, và có unit test riêng đảm bảo hành vi read-only cho company/person: `previewCompany()`/`previewCastMember()` không gọi `upsertCompany()`/`upsertPerson()`).
-- **API nào chỉ fetch, API nào ghi DB?** Chỉ fetch: toàn bộ `TmdbController` (`search`, `now-playing`, `upcoming`, `{id}/details`, `genres/sync`). Ghi DB: `POST /api/movies/tmdb/import` (**không được UI gọi**) và `POST /api/movies/{id}/images/tmdb-import` (được UI gọi thật).
-- **Khi nào genre mới được tạo, status gì?** Chỉ trong `TmdbService.resolveGenresForImport()` — tức chỉ khi đi qua endpoint `/tmdb/import` (hiện không được gọi từ UI). Genre tạo mới luôn ở `PENDING_REVIEW`. Nếu UI thực tế đang tự gọi `POST /api/genres` khi user "tạo genre mới" trong form thường (route không đi qua TMDB-specific logic) thì genre đó được tạo ở trạng thái gì phụ thuộc vào `GenreController`/`GenreService` — **ngoài phạm vi rà soát sâu của tài liệu này, cần kiểm tra `GenreService.java` nếu cần chính xác tuyệt đối**.
-- **Khi nào movie record được tạo?** Chỉ khi user bấm "Save Draft" trên `MovieEditorPage` (`createMovie`) — không phải ngay khi "Use this movie".
-- **Dữ liệu TMDB nào được lưu/bỏ qua?** Lưu: title/originalLanguage/duration/releaseDate/country/poster/thumbnail/trailer(qua selection)/synopsis/tagline/translations/cast — tất cả đi qua form nên **có thể bị admin sửa trước khi lưu** (khác với import qua endpoint TMDB thật, nơi dữ liệu được lưu ngay từ draft TMDB). Screening format **không bao giờ** được suy ra từ TMDB (kể cả ở endpoint `/tmdb/import` thật — luôn thêm warning `SCREENING_FORMAT_NOT_SET`).
+- **API nào chỉ fetch, API nào ghi DB?** Chỉ fetch: toàn bộ `TmdbController` (`search`, `now-playing`, `upcoming`, `{id}/details`, `genres/sync`). Ghi DB: `POST /api/movies/tmdb/import` (**nay được UI gọi thật**, xem bước 9), `PUT /api/movies/{id}` (bước 11), và `POST /api/movies/{id}/images/tmdb-import` (bước 12).
+- **Khi nào genre mới được tạo, status gì?** Trong `TmdbService.resolveGenresForImport()`, chạy khi bước 9 (`/tmdb/import`) thực thi — tức chỉ khi admin đã chọn "Create new" cho genre đó ở bước 7 và bấm Save. Genre tạo mới luôn ở `PENDING_REVIEW`, không bao giờ `ACTIVE` (khác hành vi cũ trước `feat/tmdb-import-ui`, nơi `resolveGenreCreateNew()` gọi thẳng `POST /api/genres` tạo `ACTIVE` ngay khi bấm nút, bỏ qua review — đã fix cùng lúc với việc wire endpoint thật).
+- **Khi nào movie record được tạo?** Khi user bấm "Save Draft" lần đầu trên `MovieEditorPage` (bước 9, `tmdbImport()`) — không phải ngay khi "Use this movie" (bước 5).
+- **Dữ liệu TMDB nào được lưu/bỏ qua?** Bước 9 lưu đúng draft TMDB gốc (title/language/duration/releaseDate/country/poster/thumbnail/trailer/synopsis/tagline/translations/cast/companies/genre đã resolve) — **không** áp bất kỳ chỉnh sửa thủ công nào của admin (vì `TmdbImportRequest` không nhận field tự do). Chỉnh sửa thủ công chỉ được áp ở bước 11 (`updateMovie`), sau khi đã có `movieId`. Screening format **không bao giờ** được suy ra từ TMDB (kể cả ở bước 9 — luôn thêm warning `SCREENING_FORMAT_NOT_SET`).
 - **Cơ chế re-sync hiện tại?** Không có. `trailerSource`/`taglineSource` tồn tại nhưng không có job/endpoint re-sync nào gọi tới.
-- **Cách tránh null overwrite?** `UpdateMovieRequest` dùng `NullValuePropertyMappingStrategy.IGNORE` — field không gửi/`null` không ghi đè giá trị hiện có. Riêng với luồng TMDB-assisted hiện tại (đi qua `createMovie` thường), toàn bộ field trong `CreateMovieRequest` được set 1 lần lúc tạo — không có khái niệm "null overwrite" cho creation.
-- **Media import failure ảnh hưởng draft thế nào?** Nếu `importTmdbImages` thất bại sau khi movie đã được tạo thành công, movie **vẫn tồn tại** ở DB (2 lời gọi API tách rời, không có transaction bao trùm cả 2). **Chưa xác minh** UI xử lý lỗi này ra sao (rollback local state, thông báo gì) — cần đọc tiếp đoạn `handleSave` đầy đủ trong `MovieEditorPage.tsx`.
-- **Duplicate TMDB movie xử lý ra sao?** Ở luồng UI thật (không qua `/tmdb/import`): `TmdbCatalogPage` disable việc tạo mới nếu `item.alreadyImported=true` (dựa vào `movieRepository.findExistingTmdbIdsWithMovieId` — kiểm tra hàng loạt theo `tmdbId`, không N+1) và chuyển hướng sang "View existing movie". Nếu 2 người dùng cùng prefill từ 1 `tmdbId` gần như đồng thời (race), chỉ có `UNIQUE` constraint DB-level bắt lỗi, trả về generic `409 DATA_INTEGRITY_VIOLATION` — không thân thiện bằng `409 TMDB_MOVIE_ALREADY_EXISTS` mà endpoint `/tmdb/import` thật sự có.
+- **Cách tránh null overwrite?** Bước 11 (`updateMovie`) dùng `UpdateMovieRequest`/`NullValuePropertyMappingStrategy.IGNORE` như Flow A — field không gửi/`null` không ghi đè giá trị hiện có. Riêng `genreIds` được tính bằng cách hợp nhất (union) với danh sách genre thật đã import ở bước 10, không phải gửi thẳng `form.genreIds` — để tránh xoá mất genre `PENDING_REVIEW` vừa được import gắn vào.
+- **Media import failure ảnh hưởng draft thế nào?** Nếu `importTmdbImages` (bước 12) thất bại, movie **vẫn tồn tại** ở DB (đã qua bước 9 + 11 thành công, đây là lời gọi API tách rời thứ 3, không có transaction bao trùm). **Chưa xác minh** UI xử lý lỗi này ra sao ngoài toast lỗi chung.
+- **Duplicate TMDB movie xử lý ra sao?** `TmdbCatalogPage` disable việc tạo mới nếu `item.alreadyImported=true` (dựa vào `movieRepository.findExistingTmdbIdsWithMovieId` — kiểm tra hàng loạt theo `tmdbId`, không N+1) và chuyển hướng sang "View existing movie". Nếu 2 người dùng cùng prefill từ 1 `tmdbId` gần như đồng thời (race), bước 9 (`/tmdb/import`) bắt đúng bằng pre-check `existsByTmdbId`/`existsByImdbId` **và** `DataIntegrityViolationException` catch, trả `409 TMDB_MOVIE_ALREADY_EXISTS` — thân thiện hơn hẳn hành vi cũ (generic `409 DATA_INTEGRITY_VIOLATION` khi còn đi qua `createMovie` thường).
 
 ### Flow C — Edit Existing Draft
 
@@ -304,7 +328,7 @@ Trả lời trực tiếp các câu hỏi bắt buộc của Mục 7 (Flow B) tr
 |---|---|
 | Admin request changes | `PendingReviewModal` bắt buộc `note` ≥ 10 ký tự (UI-side `MIN_NOTE_LENGTH`); backend chỉ bắt buộc `@NotBlank` (≥ 1 ký tự không-blank) — **UI strict hơn backend** |
 | Reason bắt buộc | Có, ở cả 2 tầng (UI 10 ký tự, backend not-blank) |
-| Employee xem reason | **Không xem được qua API/UI nào** — xem Gap #2 |
+| Employee xem reason | Xem được qua `MovieDetailModal` (`GET /api/movies/{id}` → `result.rejectionNote`) — đã fix, xem Gap #2 (Mục 20) |
 | Start revision | `POST /api/movies/{id}/start-revision`, không cần payload |
 | Update rồi resubmit | Giống Flow A bước 7-8 |
 | Audit history | Ghi vào `movie_status_history` (có `reason`) nhưng **không expose qua API nào** |
@@ -339,14 +363,14 @@ Trả lời trực tiếp các câu hỏi bắt buộc của Mục 7 (Flow B) tr
 | MOV-REVIEW-02 | Submit yêu cầu title/ngôn ngữ/duration/genre/format hợp lệ | `MovieReadinessValidator` | `MOVIE_NOT_READY_FOR_REVIEW` (2041) | Implemented |
 | MOV-REVIEW-03 | Approve yêu cầu thêm ageRating hợp lệ (≠ `C`), poster, synopsis, ít nhất 1 bản dịch có title, không còn genre pending | `MovieReadinessValidator` | `MOVIE_NOT_READY_FOR_APPROVAL` (2042) | Implemented |
 | MOV-REVIEW-04 | Request-changes bắt buộc `note` không rỗng | DTO `@NotBlank` | Validation lỗi generic | Implemented |
-| MOV-REVIEW-05 | `rejectionNote` phải được EMPLOYEE đọc lại để sửa | — | — | **Not Implemented** — field không có trong `MovieResponse`, không UI nào hiển thị (xem Gap #2) |
+| MOV-REVIEW-05 | `rejectionNote` phải được EMPLOYEE đọc lại để sửa | `MovieMapper` (auto-map) + `MovieDetailModal` | — | **Implemented** (`fix/movie-rejection-note-visibility`) — field có trong `MovieResponse`, hiển thị trong `MovieDetailModal` khi `CHANGES_REQUESTED` |
 | MOV-REVIEW-06 | Release gate (release date đã tới, showtime tương lai nếu bật config) | `MovieReadinessValidator.requireReadyForRelease` | `MOVIE_NOT_READY_FOR_RELEASE` (2043) | **Blocked by Existing Bug / Dead Code** — không có caller trong `MovieService` |
-| MOV-TMDB-01 | Import (endpoint `/tmdb/import`) phải idempotent theo `tmdbId`/`imdbId` | Service | `TMDB_MOVIE_ALREADY_EXISTS` (2021) | Implemented **nhưng không có UI trigger** |
-| MOV-TMDB-02 | Genre TMDB chưa map không được tự tạo `ACTIVE`, không được âm thầm bỏ qua | Service | `UNRESOLVED_GENRE_MAPPING` (2039) | Implemented ở endpoint `/tmdb/import` (không có UI trigger); hành vi tương đương ở UI thật (form thường) **chưa xác minh** |
-| MOV-TMDB-03 | Runtime bắt buộc; nếu TMDB không có phải được admin xác nhận | Service | `MISSING_RUNTIME` (2038) | Implemented (endpoint `/tmdb/import` only) — ở UI thật, `durationMinutes` bắt buộc ngay từ `CreateMovieRequest.@NotNull @Min(1)` nên hiệu ứng tương đương đạt được gián tiếp |
+| MOV-TMDB-01 | Import (endpoint `/tmdb/import`) phải idempotent theo `tmdbId`/`imdbId` | Service + `MovieEditorPage.persistCurrentDraft()` | `TMDB_MOVIE_ALREADY_EXISTS` (2021) | **Implemented và có UI trigger** (`feat/tmdb-import-ui`) — gọi khi Save Draft lần đầu 1 draft nguồn gốc TMDB |
+| MOV-TMDB-02 | Genre TMDB chưa map không được tự tạo `ACTIVE`, không được âm thầm bỏ qua | Service + panel "TMDB Import Review" | `UNRESOLVED_GENRE_MAPPING` (2039) | **Implemented và có UI trigger** — UI thu thập `selectedGenreMappings`/`createPendingGenres`/`ignoredGenres` từ resolution của operator rồi gửi thật trong `tmdbImport()`; "Create new" không còn tự tạo `ACTIVE` qua `POST /api/genres` (bug đã fix cùng đợt) |
+| MOV-TMDB-03 | Runtime bắt buộc; nếu TMDB không có phải được admin xác nhận | Service + badge "TMDB HAD NO RUNTIME" | `MISSING_RUNTIME` (2038) | **Implemented và có UI trigger** — `tmdbMissingRuntime` flag hiện badge cạnh Duration, `form.durationMinutes` được gửi làm `confirmedRuntimeMinutes` khi cần |
 | MOV-TMDB-04 | Poster/thumbnail không bao giờ là cùng 1 URL copy 2 lần | Service (`resolvePosterMedia`, dùng chung preview + import) | — | Implemented |
 | MOV-TMDB-05 | Trailer chỉ chọn từ YouTube, ưu tiên official + vi/en + Trailer > Teaser | Service (`selectTrailer`) | — | Implemented, có test riêng |
-| MOV-TMDB-06 | Company TMDB upsert theo `tmdbCompanyId` trước, tên chính xác sau; không ghi đè field local bằng `null` | Service (`upsertCompany`/`enrichCompany`) | — | Implemented (chỉ ở endpoint `/tmdb/import`) |
+| MOV-TMDB-06 | Company TMDB upsert theo `tmdbCompanyId` trước, tên chính xác sau; không ghi đè field local bằng `null` | Service (`upsertCompany`/`enrichCompany`), chạy trong `tmdbImport()` | — | **Implemented và có UI trigger** |
 | MOV-MEDIA-01 | Tối đa 1 poster, 1 backdrop mỗi lần import ảnh từ TMDB; stills giới hạn theo config | Service | `MOVIE_IMAGE_TYPE_LIMIT_EXCEEDED` (2086) | Implemented |
 | MOV-MEDIA-02 | Không import trùng ảnh TMDB đã có (theo `source + external_path`) | Service + DB unique index | `TMDB_IMAGE_ALREADY_IMPORTED` (2085) (race) hoặc skip êm kèm warning `DUPLICATE_IMAGES_SKIPPED:n` | Implemented |
 | MOV-MEDIA-03 | Upload ảnh thủ công giới hạn 5MB, JPEG/PNG/WebP | Service | `INVALID_IMAGE_FILE` (5002) | Implemented |
@@ -394,7 +418,7 @@ Trả lời trực tiếp các câu hỏi bắt buộc của Mục 7 (Flow B) tr
 | TMDB-API-02 | GET | `/api/movies/tmdb/now-playing?region&page` | ADMIN, EMPLOYEE | Đang chiếu rạp (TMDB) | Không | Có |
 | TMDB-API-03 | GET | `/api/movies/tmdb/upcoming?region&page` | ADMIN, EMPLOYEE | Sắp ra mắt (TMDB) | Không | Có |
 | TMDB-API-04 | GET | `/api/movies/tmdb/{tmdbId}/details` | ADMIN, EMPLOYEE | Preview chi tiết | Không | Có |
-| TMDB-API-05 | POST | `/api/movies/tmdb/import` | ADMIN, EMPLOYEE | Import trực tiếp thành `Movie` mới | Insert `movie`+translations+cast+companies | **Không** — chỉ test được qua Postman |
+| TMDB-API-05 | POST | `/api/movies/tmdb/import` | ADMIN, EMPLOYEE | Import trực tiếp thành `Movie` mới | Insert `movie`+translations+cast+companies | **Có** — `MovieEditorPage.persistCurrentDraft()` gọi khi Save Draft lần đầu 1 draft có `tmdbId` (xem Flow B bước 9) |
 | TMDB-API-06 | POST | `/api/movies/tmdb/genres/sync` | ADMIN | Báo cáo genre TMDB chưa map | Không | **Chưa xác minh** — không thấy lời gọi trong các file frontend đã đọc |
 
 **Movie Image:**
@@ -801,7 +825,7 @@ Nếu phim có genre TMDB chưa từng map và không gửi `selectedGenreMappin
 
 ### API-MOV-011 — Archive blocked by active availability
 
-**Chưa xác minh đầy đủ từ tài liệu này** (tạo `MovieAvailability` ngoài phạm vi) — nếu môi trường có sẵn 1 `movie_availability` `PLANNED`/`OPEN` cho movie này:
+**Preconditions:** Movie đã `APPROVED`, và đã tạo 1 `movie_availability` `PLANNED`/`OPEN` cho movie này — xem API-AVAIL-001 (Mục 23.7) để tạo.
 
 **Request:** `POST {{baseUrl}}/api/movies/{{movieId}}/archive`
 
@@ -1190,6 +1214,71 @@ pm.test("Submit failed but draft update already persisted", function () {
 **Chưa xác minh:** không test được bằng cách đọc code tĩnh — cần chạy UI thật trên nhiều kích thước màn hình và cả 2 theme (component dùng CSS variable `var(--bg-main)`, `var(--text-main)` v.v. nên về nguyên tắc đã hỗ trợ dark/light, nhưng cần xác nhận bằng mắt).
 ```
 
+### Media Section (MOV-EDITOR-05, `feat/movie-editor-media-section`)
+
+```markdown
+### UI-MEDIA-001 — Bốn nhóm nằm trong một Media section
+
+**Actor:** EMPLOYEE
+
+**Steps:**
+1. Mở `/admin/movies/new/manual` hoặc 1 movie edit sẵn có.
+2. Cuộn tới/click mục điều hướng "Media".
+
+**Expected UI:** đúng 1 khối duy nhất (`data-editor-section="media"`) chứa theo thứ tự: Primary Poster → Backdrop → Official Trailer → (TmdbMediaPicker nếu có `tmdbId`) → Gallery. Trailer **không còn** xuất hiện ở section Overview.
+
+**Failure Variants:** không còn khối UI nào khác ngoài Media section hiển thị poster/gallery — nếu thấy trùng lặp, đó là regression.
+```
+
+```markdown
+### UI-MEDIA-002 — Provenance/status badge cập nhật theo thời gian thực
+
+**Actor:** EMPLOYEE
+
+**Steps:**
+1. Prefill từ TMDB (có poster/trailer từ TMDB).
+2. Quan sát badge nguồn/trạng thái ở nhóm Poster và Trailer.
+3. Gõ tay đè lên Trailer URL.
+4. Nếu có `tmdbMedia`, chọn 1 backdrop candidate trong `TmdbMediaPicker` (chưa Save).
+
+**Expected UI:**
+- Bước 2: badge Poster/Trailer hiện "Source: TMDB" + "Imported"/"Manual" tuỳ ngữ cảnh.
+- Bước 3: badge Trailer đổi ngay sang "Source: Manual" (không cần đợi Save).
+- Bước 4: nhóm Backdrop (phía trên `TmdbMediaPicker`) hiện ngay badge "Pending import" kèm đúng ảnh candidate vừa chọn, dù chưa Save.
+```
+
+```markdown
+### UI-MEDIA-003 — Empty state và broken-preview fallback
+
+**Actor:** EMPLOYEE
+
+**Steps:**
+1. Mở draft rỗng (chưa có poster/backdrop).
+2. Dán 1 poster URL trả về 404 (ảnh không tồn tại).
+
+**Expected UI:**
+- Bước 1: nhóm Poster hiện khung placeholder "No poster selected yet" (không phải icon vỡ mặc định của trình duyệt); nhóm Backdrop hiện "No backdrop selected yet".
+- Bước 2: sau khi ảnh load lỗi, khung đổi sang "Preview unavailable" (kèm icon), không phải icon vỡ mặc định.
+
+**Failure Variants:** đổi lại URL thành 1 ảnh hợp lệ → preview phải load lại bình thường (không bị kẹt ở trạng thái lỗi cũ — xem `MediaThumbnail.test.tsx`).
+```
+
+```markdown
+### UI-MEDIA-004 — Gallery vẫn hoạt động trong Media section hợp nhất
+
+**Actor:** EMPLOYEE
+
+**Preconditions:** Movie đã có `movieId`.
+
+**Steps:**
+1. Trong Gallery (cuối Media section), thêm 1 ảnh thủ công (Image URL + Image Type).
+2. Xoá 1 ảnh vừa thêm.
+
+**Expected Network:** `POST /api/movies/{movieId}/images` rồi `DELETE /api/movies/{movieId}/images/{imageId}` — không đổi so với trước khi hợp nhất Media section.
+
+**Expected UI:** ảnh mới hiện ngay trong grid Gallery kèm badge `imageType`/`source`.
+```
+
 ### TMDB Flow
 
 ```markdown
@@ -1229,7 +1318,7 @@ pm.test("Submit failed but draft update already persisted", function () {
 
 **Expected UI:** điều hướng `/admin/movies/new/manual?tmdbId={id}`, `MovieEditorPage` mở với dữ liệu prefill từ TMDB.
 
-**Expected Network:** **không có API call nào tại thời điểm bấm nút này** (đây là điểm quan trọng nhất cần test, vì trực giác thường nghĩ nó sẽ gọi import — cần khẳng định KHÔNG gọi `/api/movies/tmdb/import`).
+**Expected Network:** **không có API call nào tại thời điểm bấm nút này** — vẫn đúng sau `feat/tmdb-import-ui` (`expect(mocks.tmdbImport).not.toHaveBeenCalled()` trong `TmdbCatalogPage.test.tsx` không đổi). Điểm cần test chính xác hơn: `POST /api/movies/tmdb/import` **có** được gọi, nhưng ở bước sau — lúc bấm "Save Draft" trong `MovieEditorPage` (xem UI-TMDB-009).
 ```
 
 ```markdown
@@ -1257,12 +1346,33 @@ pm.test("Submit failed but draft update already persisted", function () {
 **Actor:** EMPLOYEE
 
 **Steps:**
-1. Trong editor (đã prefill từ TMDB), mở `TmdbMediaPicker`, chọn 1 poster + 1 backdrop.
+1. Trong editor (đã prefill từ TMDB), ở Media section, mở `TmdbMediaPicker` (nhúng ngay dưới nhóm Official Trailer), chọn 1 poster + 1 backdrop.
 2. Save Draft.
 
-**Expected Network:** `POST /api/movies` (tạo movie) rồi ngay sau đó `POST /api/movies/{movieId}/images/tmdb-import` (chỉ khi `form.tmdbId` có giá trị và có `pendingMediaSelections`).
+**Expected Network:** `POST /api/movies/tmdb/import` (tạo movie qua import thật) → `GET /api/movies/{movieId}` → `PUT /api/movies/{movieId}` → ngay sau đó `POST /api/movies/{movieId}/images/tmdb-import` (chỉ khi `form.tmdbId` có giá trị và có `pendingMediaSelections`) — 4 lời gọi tuần tự, xem Flow B bước 9-12.
 
 **Expected Database/State:** `movie_image` có thêm dòng `source=TMDB`.
+
+**Expected UI:** ngay sau khi chọn backdrop candidate (trước khi Save), nhóm Backdrop ở phía trên `TmdbMediaPicker` hiện badge "Pending import" kèm đúng ảnh vừa chọn (xem UI-MEDIA-002).
+```
+
+```markdown
+### UI-TMDB-009 — Genre resolution "Create new" không còn tạo ACTIVE ngay lập tức
+
+**Actor:** ADMIN (nút "Create new" chỉ hiện với `isAdmin`)
+
+**Preconditions:** Chọn 1 phim TMDB có ≥1 genre chưa map trong hệ thống.
+
+**Steps:**
+1. Trong panel "TMDB Import Review", với 1 genre chưa map, bấm "Create new".
+2. Quan sát: **không có API call nào** ngay lúc này (khác hành vi cũ trước `feat/tmdb-import-ui`, vốn gọi `POST /api/genres` ngay khi bấm).
+3. Bấm "Save Draft".
+
+**Expected Network:** bước 3 gọi `POST /api/movies/tmdb/import` với `createPendingGenres: [<tmdbGenreId>]`.
+
+**Expected Database/State:** genre mới được tạo ở `genre.status = 'PENDING_REVIEW'`, không phải `ACTIVE`.
+
+**Failure Variants:** nếu 1 admin khác đã tạo cùng `tmdbGenreId` này thành `PENDING_REVIEW` giữa lúc UI mở và lúc Save (race), backend tự tìm lại genre đã tồn tại thay vì tạo trùng (`createPendingReviewGenre()` catch `DataIntegrityViolationException`).
 ```
 
 ```markdown
@@ -1392,6 +1502,24 @@ pm.test("Submit failed but draft update already persisted", function () {
 **Chưa xác minh — nhiều khả năng Not Implemented:** không tìm thấy component nào hiển thị `movie_status_history` qua UI, và không có endpoint đọc bảng này (xem Mục 4). Test này nên được coi là "expected to fail / feature missing" cho tới khi có endpoint.
 ```
 
+```markdown
+### UI-REVIEW-007 — Employee đọc lại rejectionNote (đã fix, `fix/movie-rejection-note-visibility`)
+
+**Actor:** EMPLOYEE
+
+**Preconditions:** 1 movie đã bị ADMIN "Request Changes" kèm 1 note cụ thể.
+
+**Steps:**
+1. EMPLOYEE vào Movie Management, thấy badge "Changes Requested" trên movie đó.
+2. Bấm "View" để mở `MovieDetailModal`.
+
+**Expected Network:** `GET /api/movies/{id}` — `result.rejectionNote` có giá trị.
+
+**Expected UI:** khung cảnh báo nền đỏ nhạt ngay dưới khối tiêu đề, hiện đúng nội dung `rejectionNote` — chỉ hiện khi `contentStatus === "CHANGES_REQUESTED"` và có note.
+
+**Failure Variants:** movie ở status khác (`DRAFT`/`APPROVED`/...) → khung này không hiện dù `rejectionNote` cũ (từ vòng review trước) vẫn còn trong DB.
+```
+
 ---
 
 ## 15. UI-to-API Traceability Matrix
@@ -1407,9 +1535,12 @@ pm.test("Submit failed but draft update already persisted", function () {
 | Browse TMDB catalog | `TmdbCatalogPage` | `GET /tmdb/now-playing`\|`/upcoming`\|`/search` | 200 / 502 | — | UI-TMDB-001 |
 | Preview TMDB movie | `TmdbCatalogPage` | `GET /tmdb/{id}/details` | 200 / 502 | — | UI-TMDB-002 |
 | Use this movie | `TmdbCatalogPage` | *(không gọi API)* | — | — | UI-TMDB-003 |
-| Chọn media TMDB rồi save | `MovieEditorPage` + `TmdbMediaPicker` | `POST /api/movies` rồi `POST /images/tmdb-import` | 200 | MOV-MEDIA-01/02 | UI-TMDB-006 |
+| Save Draft lần đầu, draft có tmdbId | `MovieEditorPage.persistCurrentDraft()` | `POST /tmdb/import` → `GET /{id}` → `PUT /{id}` | 200 | MOV-TMDB-01/02/03 | UI-TMDB-009 |
+| Chọn media TMDB rồi save | `MovieEditorPage` + `TmdbMediaPicker` (nay trong Media section) | `POST /tmdb/import` (hoặc `POST /api/movies` nếu không phải lần đầu) rồi `POST /images/tmdb-import` | 200 | MOV-MEDIA-01/02 | UI-TMDB-006, UI-MEDIA-002 |
+| Xem asset Media section | `MovieEditorPage` (Poster/Backdrop/Trailer/Gallery) | — (chỉ đọc `movieImages`/`pendingMediaSelections` cục bộ) | — | — | UI-MEDIA-001..004 |
 | Approve | `PendingReviewModal` | `POST /api/movies/{id}/approve` | 200 / 400 | MOV-REVIEW-03 | UI-REVIEW-003 |
 | Reject/Request Changes | `PendingReviewModal` | `POST /api/movies/{id}/request-changes` | 200 / 400 | MOV-REVIEW-04 | UI-REVIEW-004 |
+| Xem rejectionNote | `MovieDetailModal` | `GET /api/movies/{id}` | 200 | MOV-REVIEW-05 | UI-REVIEW-007 |
 | Start Revision | `ManageMoviePage` (`handleRework`) | `POST /api/movies/{id}/start-revision` | 200 / 400 | — | — |
 | Archive | `ManageMoviePage` (`handleDeleteMovie`, tên hàm gây hiểu nhầm) | `POST /api/movies/{id}/archive` | 200 / 409 | — | — |
 
@@ -1524,6 +1655,34 @@ WHERE g.status = 'PENDING_REVIEW';
 
 -- Xác nhận 10 cột legacy đã bị xoá khỏi bảng movie (nếu câu lệnh này chạy được mà không lỗi "column does not exist" là đúng)
 SELECT movie_id FROM movie LIMIT 0; -- chạy \d movie trong psql để xem danh sách cột thật, đối chiếu với Mục 5
+
+-- [Mục 23] Release plan của 1 movie, theo cluster
+SELECT ma.availability_id, cc.cluster_name, ma.status, ma.showing_start_date, ma.showing_end_date,
+       ma.sales_start_at, ma.suspension_reason, ma.updated_by, ma.updated_at
+FROM movie_availability ma
+JOIN cinema_cluster cc ON cc.cluster_id = ma.cluster_id
+WHERE ma.movie_id = :movieId
+ORDER BY ma.showing_start_date;
+
+-- [Mục 23] Lịch sử chuyển trạng thái availability (KHÔNG có dòng nào actor="SYSTEM" nếu MovieScheduler
+-- chưa từng auto-close cái nào — xem Gap #11: auto-close hiện không ghi bảng này)
+SELECT history_id, availability_id, from_status, to_status, actor, reason, created_at
+FROM movie_availability_history
+WHERE availability_id = :availabilityId
+ORDER BY created_at ASC;
+
+-- [Mục 23] Tìm mọi availability đã bị MovieScheduler tự đóng đêm qua (updated_by = 'SYSTEM')
+-- — đối chiếu số dòng này với số dòng movie_availability_history có actor='SYSTEM' (Gap #11:
+-- kỳ vọng KHÔNG có dòng history nào, dù có thể có availability status=CLOSED, updated_by=SYSTEM)
+SELECT availability_id, movie_id, cluster_id, showing_end_date, updated_at
+FROM movie_availability
+WHERE status = 'CLOSED' AND updated_by = 'SYSTEM';
+
+-- [Mục 23] Movie đang APPROVED nhưng archive sẽ bị chặn (còn availability PLANNED/OPEN)
+SELECT DISTINCT m.movie_id, m.original_title
+FROM movie m
+JOIN movie_availability ma ON ma.movie_id = m.movie_id
+WHERE m.status = 'APPROVED' AND ma.status IN ('PLANNED', 'OPEN');
 ```
 
 ---
@@ -1555,13 +1714,14 @@ SELECT movie_id FROM movie LIMIT 0; -- chạy \d movie trong psql để xem danh
 | Partial update, không ghi đè null | `MovieMapper.updateMovieFromRequest` | `buildMoviePayload` | API-MOV-002, API-UPDATE-009 | UI-MOV-013 | Implemented |
 | Submit readiness gate | `MovieReadinessValidator.requireReadyForReview` | `MovieEditorActionBar` | API-MOV-003/004 | UI-SUBMIT-003 | Implemented |
 | Approve readiness gate | `MovieReadinessValidator.requireReadyForApproval` | `PendingReviewModal` | API-MOV-005/006 | UI-REVIEW-003 | Implemented |
-| Request changes + reason | `MovieService.requestChanges` | `PendingReviewModal` | API-MOV-007/008 | UI-REVIEW-004 | Implemented (ghi), **Not Implemented** (đọc lại) |
+| Request changes + reason | `MovieService.requestChanges` | `PendingReviewModal` (ghi), `MovieDetailModal` (đọc) | API-MOV-007/008 | UI-REVIEW-004, UI-REVIEW-007 | Implemented (ghi + đọc lại) |
 | Release readiness gate | `MovieReadinessValidator.requireReadyForRelease` | — | — (không caller) | — | Dead code |
-| TMDB one-shot import | `TmdbService.importMovie` | — (không caller) | API-TMDB-007/008 | — | Implemented (backend), Not wired (frontend) |
-| TMDB media import | `MovieImageService.importFromTmdb` | `TmdbMediaPicker` | API-TMDB-010 | UI-TMDB-006 | Implemented |
+| TMDB one-shot import | `TmdbService.importMovie` | `MovieEditorPage.persistCurrentDraft()` | API-TMDB-007/008 | UI-TMDB-009 | Implemented và wired (`feat/tmdb-import-ui`) |
+| TMDB media import | `MovieImageService.importFromTmdb` | `TmdbMediaPicker` (trong Media section) | API-TMDB-010 | UI-TMDB-006 | Implemented |
+| Media section consolidation | — (frontend-only) | `MovieEditorPage` (Poster/Backdrop/Trailer/Gallery trong 1 section), `MediaThumbnail` | — | UI-MEDIA-001..004 | Implemented (`feat/movie-editor-media-section`) |
 | Authorization (role gate) | `@PreAuthorize` mọi endpoint | `useRole().can` | API-AUTH-* | — | Implemented |
 | Public visibility (ẩn non-APPROVED) | `MovieService.isPubliclyVisible` | — | API-PUBLIC-* | — | Implemented |
-| Audit trail đọc được qua UI/API | `movie_status_history`, `movie_action_log` | — | — | UI-REVIEW-006 | Not Implemented (ghi có, đọc không) |
+| Audit trail đọc được qua UI/API | `movie_status_history`, `movie_action_log` | — | — | UI-REVIEW-006 | Not Implemented (ghi có, đọc không) — Gap #7 |
 
 ---
 
@@ -1570,7 +1730,7 @@ SELECT movie_id FROM movie LIMIT 0; -- chạy \d movie trong psql để xem danh
 | Gap | Evidence | Impact | Priority | Recommendation |
 |---|---|---|---|---|
 | **#1 — TMDB one-shot import (`POST /api/movies/tmdb/import`) không có UI trigger** — **[ĐÃ FIX, xem `feat/tmdb-import-ui`]** | `TmdbCatalogPage.tsx` "Use this movie" chỉ điều hướng + truyền `router state`, không gọi `movieApi.tmdbImport()`; `TmdbCatalogPage.test.tsx` có assertion tường minh `expect(mocks.tmdbImport).not.toHaveBeenCalled()` | Toàn bộ logic nghiệp vụ TMDB-specific (duplicate theo `tmdbId`/`imdbId` ngay từ đầu, resolve genre `selectedGenreMappings`/`createPendingGenres`/`ignoredGenres`, `confirmedRuntimeMinutes`, `confirmedAgeRatingId`) không thể demo qua UI; đường thật (qua form thường) không có các bảo vệ tương đương (ví dụ: 2 người cùng prefill 1 `tmdbId` chỉ được bắt bởi `DB UNIQUE constraint` → lỗi generic `DATA_INTEGRITY_VIOLATION` thay vì `TMDB_MOVIE_ALREADY_EXISTS`) | P1 | **Đã chọn hướng (a)**: `MovieEditorPage.persistCurrentDraft()` nay gọi `POST /api/movies/tmdb/import` thật khi lưu lần đầu 1 draft có nguồn gốc TMDB, dùng đúng resolution đã thu thập trong panel "TMDB Import Review" (map/create-pending/ignore), rồi `PUT` tiếp để áp local edit. Tác dụng phụ: sửa luôn 1 bug liên quan — "Create new" trước đây gọi thẳng `POST /api/genres` tạo genre `ACTIVE` ngay lập tức, bỏ qua hoàn toàn cơ chế `PENDING_REVIEW`; nay đúng theo thiết kế backend. |
-| **#2 — `rejectionNote` không được trả về/hiển thị ở đâu cho EMPLOYEE** | `MovieResponse.java` không có field `rejectionNote`; `MovieMapper.toMovieResponse()` không map nó; `PendingReviewModal.tsx`, `ManageMoviePage.tsx` không đọc/hiển thị nó ở đâu (đối chiếu với Cinema Cluster — `ClusterReviewModal`/`ClusterDetailPage` **có** hiển thị `cluster.rejectionNote`, cho thấy đây là pattern đã biết nhưng chưa áp dụng cho Movie) | EMPLOYEE thấy badge "Changes Requested" nhưng không biết phải sửa gì — phải hỏi trực tiếp ADMIN ngoài hệ thống | P0 (chặn 1 vòng nghiệp vụ cốt lõi: request-changes → revision) | Thêm `rejectionNote` vào `MovieResponse` + `@Mapping` tương ứng trong `MovieMapper`; hiển thị trong `ManageMoviePage`/1 modal xem chi tiết cho EMPLOYEE, theo đúng pattern đã có ở Cinema Cluster |
+| **#2 — `rejectionNote` không được trả về/hiển thị ở đâu cho EMPLOYEE** — **[ĐÃ FIX, xem `fix/movie-rejection-note-visibility`]** | `MovieResponse.java` không có field `rejectionNote`; `MovieMapper.toMovieResponse()` không map nó; `PendingReviewModal.tsx`, `ManageMoviePage.tsx` không đọc/hiển thị nó ở đâu (đối chiếu với Cinema Cluster — `ClusterReviewModal`/`ClusterDetailPage` **có** hiển thị `cluster.rejectionNote`, cho thấy đây là pattern đã biết nhưng chưa áp dụng cho Movie) | EMPLOYEE thấy badge "Changes Requested" nhưng không biết phải sửa gì — phải hỏi trực tiếp ADMIN ngoài hệ thống | P0 (chặn 1 vòng nghiệp vụ cốt lõi: request-changes → revision) | **Đã làm**: thêm `rejectionNote` vào `MovieResponse` (MapStruct tự map theo tên field, không cần `@Mapping` tường minh), thêm field tương ứng vào `MovieResponse` (frontend type), hiển thị trong `MovieDetailModal` (khung cảnh báo khi `CHANGES_REQUESTED`) theo đúng pattern đã có ở Cinema Cluster |
 | **#3 — `requireReadyForRelease()`/`collectReleaseOnlyViolations()` là dead code** | Grep toàn bộ `MovieService.java` không có lời gọi nào tới `requireReadyForRelease`; chỉ có unit test gọi trực tiếp validator | Không ảnh hưởng hành vi hiện tại (không ai gọi), nhưng gây hiểu nhầm khi đọc code/tài liệu — tưởng đâu có "release gate" đang hoạt động | P2 | Xoá hẳn method + test liên quan, hoặc nếu có kế hoạch dùng lại (ví dụ khi có "release" command trong tương lai), ghi chú rõ TODO/issue tham chiếu ngay tại code |
 | **#4 — `MOVIE_LIFECYCLE_CONTRACT.md` ghi sai tên error code cho optimistic-lock conflict** | Tài liệu ghi `409 MOVIE_CONCURRENT_MODIFICATION`/`AVAILABILITY_CONCURRENT_MODIFICATION`; thực tế `GlobalExceptionHandler.handlingOptimisticLocking()` luôn trả `GlobalErrorCode.CONCURRENT_MODIFICATION` (1010) dùng chung toàn hệ thống — không có 2 mã riêng theo tên đó trong `MovieErrorCode` | Tester dựa vào tài liệu cũ sẽ assert sai `code` trong Postman test | P2 | Sửa `MOVIE_LIFECYCLE_CONTRACT.md` cho khớp code thật |
 | **#5 — `docs/MOVIE_SERVICE_BUSINESS_RULES.md` (MOV-P0-002) còn nhắc `MovieService.deleteMovie`** | Method này không tồn tại trong `MovieService.java` hiện tại — đã được thay bằng `archiveMovie` theo `MOVIE_LIFECYCLE_CONTRACT.md` (mục Deprecation) | Tài liệu-code mismatch, gây nhầm lẫn khi review issue cũ | P2 | Cập nhật `MOV-P0-002` để phản ánh đúng cơ chế archive hiện tại |
@@ -1578,6 +1738,7 @@ SELECT movie_id FROM movie LIMIT 0; -- chạy \d movie trong psql để xem danh
 | **#7 — Không có endpoint đọc `movie_status_history`/`movie_action_log`** | Grep toàn bộ `movieservice/controller` không thấy | Không thể xây UI "audit history" cho Movie dù dữ liệu đã có sẵn trong DB | P1 | Thêm `GET /api/movies/{id}/status-history` (tương tự cluster audit log đã có) |
 | **#8 — `unsupported language code` không được validate theo whitelist ISO 639-1** | `originalLanguage`/`translations[].languageCode` chỉ có `@Size(min=2,max=2)`, không check danh sách hợp lệ | Có thể lưu `"zz"`, `"xx"` là ngôn ngữ không tồn tại | P2 | Thêm `@Pattern` hoặc validator whitelist nếu cần chặt chẽ hơn |
 | **#9 — Partial media-import failure là "tất cả hoặc không", không phải partial-success** | `MovieImageService.importFromTmdb()` build cả list `toSave` trước, gọi `saveAll()` 1 lần — 1 `filePath` sai khiến toàn bộ request throw trước khi `saveAll` được gọi | UI có thể hiểu nhầm là "ảnh hợp lệ vẫn được lưu, chỉ ảnh lỗi bị bỏ qua" nếu không đọc kỹ code | P2 | Tài liệu hoá rõ hành vi này cho UI/QA; cân nhắc đổi sang per-item best-effort nếu nghiệp vụ muốn partial-success |
+| **#10 — Frontend `MovieResponse` type thiếu `trailerSource`** — **[ĐÃ FIX, xem `feat/movie-editor-media-section`]** | `client/src/api/movieApi.ts` có `taglineSource?: string` nhưng không có `trailerSource`, dù backend (`MovieResponse.java`) đã trả field này từ lâu (`[Backend] Fetch and select an official TMDB trailer`) | Phát hiện khi cần hiển thị provenance cho nhóm Official Trailer trong Media section — nếu không fix, badge nguồn của Trailer sẽ luôn sai/thiếu | P2 | **Đã làm**: thêm `trailerSource?: string` vào type `MovieResponse` (frontend), dùng để set state `trailerSource` khi load movie có sẵn |
 
 ---
 
@@ -1606,7 +1767,8 @@ SELECT movie_id FROM movie LIMIT 0; -- chạy \d movie trong psql để xem danh
 - [ ] Submit: chặn khi thiếu genre/format/title/language/duration hợp lệ (`violations[]` đầy đủ, không fail-fast)
 - [ ] Submit: chặn khi còn genre `PENDING_REVIEW`
 - [ ] Approve: chặn khi thiếu ageRating/poster/synopsis/localized-title, và khi ageRating = `C`
-- [ ] Request Changes: bắt buộc `note`; note không được trả lại qua bất kỳ API nào (xác nhận Gap #2 vẫn tồn tại hoặc đã fix)
+- [ ] Request Changes: bắt buộc `note`; `GET /api/movies/{id}` phải trả lại đúng `note` đó trong `result.rejectionNote` (Gap #2 đã fix — nếu không thấy, coi là regression)
+- [ ] `MovieDetailModal` hiện khung `rejectionNote` khi và chỉ khi `contentStatus === "CHANGES_REQUESTED"` và có note
 - [ ] Start Revision: đưa đúng về `DRAFT`, cho phép sửa lại
 - [ ] Archive: chặn khi còn `MovieAvailability` `PLANNED`/`OPEN`
 - [ ] Optimistic lock: 2 request update/transition đồng thời trên cùng movie → request thứ 2 nhận `409 CONCURRENT_MODIFICATION` (1010)
@@ -1616,20 +1778,248 @@ SELECT movie_id FROM movie LIMIT 0; -- chạy \d movie trong psql để xem danh
 - [ ] TMDB: resolve genre "Create new" trong panel Import Review không còn gọi `POST /api/genres` ngay lập tức — genre chỉ thực sự được tạo (dạng `PENDING_REVIEW`) khi bấm Save Draft, qua `createPendingGenres` của `/tmdb/import`
 - [ ] TMDB: khi TMDB không có runtime, badge "TMDB HAD NO RUNTIME — CONFIRM" hiện cạnh Duration; giá trị form được gửi làm `confirmedRuntimeMinutes` khi import
 - [ ] TMDB media import: đúng giới hạn 1 poster/1 backdrop/N stills; dedupe theo `(movie_id, source, external_path)`
+- [ ] Media section: đúng 4 nhóm (Poster/Backdrop/Trailer/Gallery) trong 1 `<section>` duy nhất, không còn khối trùng lặp nào khác
+- [ ] Media section: poster/backdrop URL hỏng (404) hiện "Preview unavailable", không phải icon vỡ mặc định của trình duyệt; đổi sang URL hợp lệ thì load lại bình thường
+- [ ] Media section: badge nguồn/trạng thái (Poster/Backdrop/Trailer) cập nhật ngay khi chọn candidate TMDB (chưa Save) hoặc gõ tay đè lên
 - [ ] Authorization: đúng ma trận Mục 4 cho toàn bộ endpoint movie/tmdb/image
 - [ ] Migration: `V1`..`V9` + `R` áp dụng sạch trên DB rỗng (`FlywayMigrationIntegrationTest`)
 - [ ] Không còn tham chiếu nào tới 10 cột legacy đã xoá (`actor`, `director`, `content`, `movie_name_vn`, `movie_name_english`, `movie_production_company` (cột cũ), `large_image`, `small_image`, `create_at`, `duration`) hoặc `end_date`
+- [ ] **[Mục 23]** Availability: `create` chặn khi movie chưa `APPROVED` (`409 AVAILABILITY_MOVIE_NOT_APPROVED`), khi cluster không `ACTIVE` (`400 AVAILABILITY_CLUSTER_NOT_ACTIVE`), khi ngày không hợp lệ (`400 AVAILABILITY_DATE_RANGE_INVALID`), khi trùng `(movie, cluster, showingStartDate)` (`409 AVAILABILITY_WINDOW_ALREADY_EXISTS`)
+- [ ] **[Mục 23]** Availability: `update` chỉ cho phép khi còn `PLANNED` (`409 AVAILABILITY_NOT_EDITABLE` nếu đã `OPEN`/`SUSPENDED`/`CLOSED`)
+- [ ] **[Mục 23]** Availability: `open` chỉ từ `PLANNED`; `suspend` chỉ từ `PLANNED`/`OPEN` và bắt buộc `reason`; `resume` chỉ từ `SUSPENDED` (và xoá `suspensionReason`); `close` được từ bất kỳ trạng thái nào trừ `CLOSED` — sai thứ tự đều trả `409 AVAILABILITY_INVALID_TRANSITION`
+- [ ] **[Mục 23]** Availability: `open`/`suspend`/`resume`/`close` đều 403 với EMPLOYEE (chỉ ADMIN); `create`/`update` cho phép cả EMPLOYEE ở tầng API dù UI không có nút
+- [ ] **[Mục 23]** `archive` movie bị chặn (`409 MOVIE_HAS_ACTIVE_AVAILABILITY`) khi còn availability `PLANNED`/`OPEN`; không bị chặn bởi `SUSPENDED`/`CLOSED`
+- [ ] **[Mục 23]** Display status public: `NOW_SHOWING` chỉ khi availability `OPEN` **và** có showtime tương lai còn bán được; ngược lại (kể cả `OPEN` chưa có showtime) là `COMING_SOON`; `SUSPENDED`/`CLOSED` không hiện công khai
+- [ ] **[Mục 23]** `MovieScheduler` (cron 00:05): availability có `showing_end_date` đã qua tự chuyển `CLOSED`, `updated_by="SYSTEM"`, không phá vỡ `movie.status`; verify KHÔNG có dòng mới trong `movie_availability_history` cho transition này (hành vi hiện tại, xem Gap #11)
+
+---
+
+## 23. Movie Availability (Exhibition) Lifecycle
+
+**Mới ở v3.0.** Phần này trước đây bị loại khỏi phạm vi tài liệu (v1.0/v2.0), nhưng vì nó quyết định trực tiếp phim có thật sự "lên sóng" hay không — điều mà Flow A bước 14, Mục 6 và Executive Summary đều phải nhắc tới rồi lại nói "ngoài phạm vi" — nên được viết đầy đủ ở đây, cùng mức độ chi tiết với Movie content lifecycle. Nguồn tham chiếu song song: `docs/api-specs/movie-service/MOVIE_LIFECYCLE_CONTRACT.md` (đã tự audit và sửa 2 chỗ sai ở phiên làm việc trước — sơ đồ transition thiếu nhánh `PLANNED→CLOSED` trực tiếp, và role owner ghi sai là "ADMIN-only" trong khi `create`/`update` cho phép cả EMPLOYEE).
+
+### 23.1 Data Model — bảng `movie_availability`
+
+Đọc trực tiếp từ DB (`psql \d movie_availability`), nằm trong `V1__baseline_schema.sql`:
+
+| Field (JSON) | Field (DB) | Kiểu | Ghi chú |
+|---|---|---|---|
+| `availabilityId` | `availability_id` | `BIGSERIAL` | PK |
+| `movieId` | `movie_id` | `BIGINT NOT NULL` | FK `movie`, `ON DELETE CASCADE` |
+| `clusterId` | `cluster_id` | `BIGINT NOT NULL` | FK `cinema_cluster` |
+| `status` | `status` | `VARCHAR(20)`, default `'PLANNED'` | CHECK trong 4 giá trị `PLANNED\|OPEN\|SUSPENDED\|CLOSED` |
+| `salesStartAt` | `sales_start_at` | `TIMESTAMPTZ` | Optional — chỉ mang tính kế hoạch, KHÔNG tự mở bán vé thật (đó là hành động riêng ở Showtime, ngoài phạm vi) |
+| `showingStartDate` | `showing_start_date` | `DATE NOT NULL` | Cùng với `movieId`+`clusterId` tạo unique constraint `uq_availability_window` |
+| `showingEndDate` | `showing_end_date` | `DATE` | Optional = open-ended. CHECK `showing_end_date IS NULL OR showing_end_date >= showing_start_date` |
+| `suspensionReason` | `suspension_reason` | `VARCHAR(500)` | Chỉ có giá trị khi `SUSPENDED`; bị xoá (`null`) khi `resume` |
+| `version` | `version` | `BIGINT`, default `0` | `@Version` optimistic lock |
+| `createdAt`/`updatedAt`/`createdBy`/`updatedBy` | | | Có trigger DB `set_updated_at()` tự cập nhật `updated_at` |
+
+Index: `idx_movie_availability_cluster_status (cluster_id, status, showing_start_date)`, `idx_movie_availability_movie_cluster (movie_id, cluster_id)`. Unique: `uq_availability_window (movie_id, cluster_id, showing_start_date)` — nghĩa là **cùng 1 phim, cùng 1 cụm rạp vẫn có thể có nhiều release plan**, miễn `showingStartDate` khác nhau (ví dụ: relaunch sau khi đã `CLOSED`).
+
+Bảng `movie_availability_history` (entity `MovieAvailabilityHistory`) ghi lại `fromStatus`/`toStatus`/`actor`/`reason`/`createdAt` mỗi lần `MovieAvailabilityService` gọi `recordHistory()` — xem 23.9 Gap #11 về 1 trường hợp KHÔNG được ghi.
+
+### 23.2 Lifecycle & Transition Matrix
+
+```mermaid
+stateDiagram-v2
+    [*] --> PLANNED: create
+    PLANNED --> OPEN: open
+    OPEN --> SUSPENDED: suspend(reason)
+    SUSPENDED --> OPEN: resume
+    PLANNED --> CLOSED: close
+    OPEN --> CLOSED: close
+    SUSPENDED --> CLOSED: close
+    PLANNED --> CLOSED: (scheduled) showing_end_date đã qua
+    OPEN --> CLOSED: (scheduled) showing_end_date đã qua
+    SUSPENDED --> CLOSED: (scheduled) showing_end_date đã qua
+```
+
+| From | Command | To | Role | API | Preconditions | Failure Code |
+|---|---|---|---|---|---|---|
+| — | `create` | `PLANNED` | ADMIN, EMPLOYEE | `POST /api/movie-availabilities` | `movie.status == APPROVED`; cluster `status == ACTIVE`; `showingEndDate` (nếu có) ≥ `showingStartDate`; không trùng `(movieId, clusterId, showingStartDate)` | `409 AVAILABILITY_MOVIE_NOT_APPROVED` (2075); `400 AVAILABILITY_CLUSTER_NOT_ACTIVE` (2076); `400 AVAILABILITY_DATE_RANGE_INVALID` (2077); `409 AVAILABILITY_WINDOW_ALREADY_EXISTS` (2078, bắt qua `DataIntegrityViolationException` trên unique constraint, không phải pre-check ở service) |
+| `PLANNED` | `update` | `PLANNED` (không đổi status) | ADMIN, EMPLOYEE | `PUT /api/movie-availabilities/{id}` | Chỉ sửa được `salesStartAt`/`showingStartDate`/`showingEndDate`, chỉ khi còn `PLANNED` | `409 AVAILABILITY_NOT_EDITABLE` (2079) nếu đã `OPEN`/`SUSPENDED`/`CLOSED` |
+| `PLANNED` | `open` | `OPEN` | **ADMIN only** | `POST /api/movie-availabilities/{id}/open` | — | `409 AVAILABILITY_INVALID_TRANSITION` (2073) nếu không đúng `PLANNED` |
+| `PLANNED`, `OPEN` | `suspend` | `SUSPENDED` | **ADMIN only** | `POST /api/movie-availabilities/{id}/suspend` `{reason}` | `reason` bắt buộc (`@NotBlank`) | `400` validation nếu `reason` rỗng; `409 AVAILABILITY_INVALID_TRANSITION` nếu đang `CLOSED` |
+| `SUSPENDED` | `resume` | `OPEN` | **ADMIN only** | `POST /api/movie-availabilities/{id}/resume` | — | `409 AVAILABILITY_INVALID_TRANSITION` nếu không đúng `SUSPENDED` |
+| `PLANNED`, `OPEN`, `SUSPENDED` | `close` | `CLOSED` | **ADMIN only** | `POST /api/movie-availabilities/{id}/close` | — | `409 AVAILABILITY_INVALID_TRANSITION` chỉ khi đã `CLOSED` (trạng thái cuối, không transition nào thoát ra được) |
+| `PLANNED`, `OPEN`, `SUSPENDED` | *(tự động, không qua API)* | `CLOSED` | `SYSTEM` | `MovieScheduler.autoCloseExpiredAvailability()` — cron `0 5 0 * * *` (00:05 hàng đêm) | `showingEndDate` (nếu có) đã qua so với `LocalDate.now()` | — (không throw, chạy nền; xem Gap #11 — transition này KHÔNG ghi `movie_availability_history`) |
+| bất kỳ | mọi transition thủ công | — | — | (tất cả endpoint transition + `PUT`) | Version stale | `409`, `GlobalErrorCode.CONCURRENT_MODIFICATION` (1010) — **không phải** `AVAILABILITY_CONCURRENT_MODIFICATION` như `MOVIE_LIFECYCLE_CONTRACT.md` từng ghi nhầm (đã sửa ở tài liệu đó) |
+
+Ghi chú quan trọng khác với những gì có thể suy đoán từ tên gọi:
+
+- **`close` không yêu cầu trạng thái nguồn cụ thể** — có thể đóng thẳng từ `PLANNED` (chưa từng `OPEN` ngày nào) chứ không bắt buộc phải qua `OPEN`/`SUSPENDED` trước. Điều này khác với cách nhiều người mặc định nghĩ "phải mở rồi mới đóng được". Có test riêng xác nhận: `MovieAvailabilityServiceTest.closeTransitionsFromAnyNonClosedStatus()`.
+- **`resume` xoá `suspensionReason`** (`availability.setSuspensionReason(null)`), nên UI không còn cách nào xem lại lý do suspend cũ sau khi resume — chỉ còn trong `movie_availability_history.reason` nếu tra DB trực tiếp (không có endpoint đọc bảng này, giống Gap #7 của Movie).
+- **`update` chỉ sửa được khi `PLANNED`** — một release plan đã `OPEN` (đang thật sự khai thác) không sửa lại ngày được nữa; muốn đổi phải `close` rồi tạo plan mới.
+
+### 23.3 Actors and Authorization — chi tiết bổ sung
+
+Xem bảng chính ở Mục 4 (đã cập nhật). Điểm bất đối xứng đáng chú ý nhất của toàn bộ Availability layer:
+
+| Nhóm lệnh | Backend cho phép | UI cho phép | Khớp không? |
+|---|---|---|---|
+| `create`/`update` (tạo/sửa kế hoạch) | ADMIN, EMPLOYEE | **Chỉ ADMIN** — nút "New release plan"/"Create the first release plan" đều bọc trong `{isAdmin && (...)}` ([MovieAvailabilityPanel.tsx:466](../../client/src/layouts/MovieAvailabilityPanel.tsx), [:525](../../client/src/layouts/MovieAvailabilityPanel.tsx)) | **Không khớp** — UI hẹp hơn backend (xem Gap #12) |
+| `open`/`suspend`/`resume`/`close` | ADMIN only | ADMIN only (cùng gate `isAdmin`) | Khớp |
+| Xem danh sách release plan (tab "Availability" trong `MovieDetailModal`) | ADMIN, EMPLOYEE | ADMIN, EMPLOYEE (tab chỉ ẩn theo `contentStatus !== "APPROVED"`, không theo role) | Khớp |
+
+### 23.4 End-to-End Flow — Flow F: Create & Manage Release Plan (UI)
+
+| Bước | Actor | UI Action | API Call | Expected Status | Database Effect | Failure Handling |
+|---|---|---|---|---|---|---|
+| 1 | ADMIN | Movie Management → click icon "View details" (Eye) trên 1 movie `APPROVED` → `MovieDetailModal` mở, tab **"Availability"** xuất hiện (chỉ khi `contentStatus === "APPROVED"`) | `GET /api/movie-availabilities?movieId=`, `GET /api/clusters` (lọc `ACTIVE`) | `200` | Không ghi | Nếu movie chưa `APPROVED`, tab này không hiện — không có cách nào truy cập UI Availability cho movie `DRAFT`/`PENDING_REVIEW`/`CHANGES_REQUESTED` |
+| 2 | ADMIN | Thấy panel trống: "No cinema release has been planned", bấm **"Create the first release plan"** | — | — | — | Nút chỉ hiện với `isAdmin` (xem 23.3) |
+| 3 | ADMIN | Điền `CreatePlanDialog`: chọn cluster (chỉ liệt kê `ACTIVE`), `Showing starts` (bắt buộc, min = hôm nay), `Showing ends` (optional), `Sales start` (optional, datetime) | — (chưa gọi API cho tới khi bấm "Create release plan") | — | — | `showingEndDate < showingStartDate` bị chặn ngay ở client trước khi gọi API |
+| 4 | ADMIN | Bấm "Create release plan" | `POST /api/movie-availabilities` | `200`, `result.status = "PLANNED"` | Insert `movie_availability`; insert `movie_availability_history` (`null → PLANNED`) | `409 AVAILABILITY_MOVIE_NOT_APPROVED` nếu movie bị archive/đổi status ở tab khác đồng thời (hiếm); `409 AVAILABILITY_WINDOW_ALREADY_EXISTS` nếu trùng cluster+ngày |
+| 5 | Hệ thống | Panel hiện thanh workflow "Content approved ✓ → Release plan ✓ (current) → Schedule shows → Open sales", card cluster mới với badge "Planned" | `GET /api/movie-availabilities?movieId=` (reload sau `onCreated`) | `200` | — | — |
+| 6 | ADMIN | Bấm **"Open"** (chỉ hiện khi `status === PLANNED`) | `POST /api/movie-availabilities/{id}/open` | `200`, `status="OPEN"` | Update `movie_availability`; insert `movie_availability_history` (`PLANNED→OPEN`) | `403` nếu gọi bằng EMPLOYEE token |
+| 7 | ADMIN | Bấm icon "Pause" (Suspend) | `SuspendPrompt` bắt nhập lý do bắt buộc (không submit được nếu rỗng) → `POST /api/movie-availabilities/{id}/suspend {reason}` | `200`, `status="SUSPENDED"` | Update + set `suspension_reason`; insert history (`OPEN→SUSPENDED`, kèm `reason`) | `400` nếu `reason` rỗng (chặn ở client trước, nhưng backend cũng tự chặn) |
+| 8 | ADMIN | Bấm **"Resume"** | `POST /api/movie-availabilities/{id}/resume` | `200`, `status="OPEN"` | Update, xoá `suspension_reason`; insert history (`SUSPENDED→OPEN`) | — |
+| 9 | ADMIN | Bấm icon "Square" (Close) | `POST /api/movie-availabilities/{id}/close` | `200`, `status="CLOSED"` | Update; insert history (`OPEN→CLOSED`) | Không thể close lại lần 2 (`409 AVAILABILITY_INVALID_TRANSITION`) |
+| 10 | ADMIN | Thử "Archive" movie này ở Movie Management (nếu **không còn** availability nào `PLANNED`/`OPEN` khác) | `POST /api/movies/{id}/archive` | `200`, `status="ARCHIVED"` | — | Nếu còn availability khác đang `PLANNED`/`OPEN` ở cluster khác → `409 MOVIE_HAS_ACTIVE_AVAILABILITY` |
+
+**Đường phụ — EMPLOYEE cố tạo release plan qua API trực tiếp (không qua UI, vì UI không cho):**
+
+`POST /api/movie-availabilities` bằng `{{employeeToken}}` với payload hợp lệ → **`200` thành công** (backend cho phép) — đây chính là bằng chứng cụ thể cho Gap #12: hành vi hợp lệ ở backend nhưng không thể tái hiện qua UI với vai trò EMPLOYEE.
+
+### 23.5 Business Rules Catalogue (bổ sung MOV-AVAIL-*)
+
+| Rule ID | Business Rule | Enforcement Layer | Error Code | Implemented |
+|---|---|---|---|---|
+| MOV-AVAIL-01 | Chỉ tạo được release plan cho movie đã `APPROVED` | `MovieAvailabilityService.create()` | `AVAILABILITY_MOVIE_NOT_APPROVED` (2075) | Implemented, có test |
+| MOV-AVAIL-02 | Cluster phải `ACTIVE` mới tạo được release plan | Service | `AVAILABILITY_CLUSTER_NOT_ACTIVE` (2076) | Implemented, có test |
+| MOV-AVAIL-03 | `showingEndDate` (nếu có) ≥ `showingStartDate` | Service + DB `CHECK chk_availability_date_range` | `AVAILABILITY_DATE_RANGE_INVALID` (2077) | Implemented, có test (2 tầng: service pre-check + DB check dự phòng) |
+| MOV-AVAIL-04 | Không trùng `(movie, cluster, showingStartDate)` | DB `UNIQUE uq_availability_window` | `AVAILABILITY_WINDOW_ALREADY_EXISTS` (2078) | Implemented — bắt qua `DataIntegrityViolationException`, không phải pre-check ở service (đúng pattern race-safe giống `MOVIE_ALREADY_EXISTS`/`TMDB_MOVIE_ALREADY_EXISTS`) |
+| MOV-AVAIL-05 | `update` chỉ áp dụng khi còn `PLANNED` | Service | `AVAILABILITY_NOT_EDITABLE` (2079) | Implemented, có test |
+| MOV-AVAIL-06 | `suspend` bắt buộc `reason` | DTO `@NotBlank` (`SuspendRequest`) | Validation lỗi generic | Implemented |
+| MOV-AVAIL-07 | `open`/`suspend`/`resume`/`close` chỉ ADMIN; `create`/`update` cho ADMIN/EMPLOYEE | `@PreAuthorize` | 403 | Implemented ở backend; **UI chặt hơn yêu cầu cho `create`/`update`** (Gap #12) |
+| MOV-AVAIL-08 | Archive movie bị chặn khi còn availability `PLANNED`/`OPEN` | `MovieService.archiveMovie()` | `MOVIE_HAS_ACTIVE_AVAILABILITY` (2071) | Implemented, có test (`MovieServiceTest`) |
+| MOV-AVAIL-09 | Auto-close availability quá hạn mỗi đêm, không đụng `Movie.status` | `MovieScheduler` (cron 00:05) | — | Implemented, **nhưng không ghi audit trail** (Gap #11) |
+| MOV-AVAIL-10 | Display status public (`NOW_SHOWING`/`COMING_SOON`) suy ra từ `Movie.status=APPROVED` + `AvailabilityStatus` + showtime, không lưu DB | `MovieService.isPubliclyVisible()`/`toPublicMovieResponse()` | — | Implemented — xem `MOVIE_LIFECYCLE_CONTRACT.md` Mục 3 |
+
+### 23.6 API Catalogue (bổ sung)
+
+| API ID | Method | Endpoint | Actor | Purpose | Side Effect | Code Reference |
+|---|---|---|---|---|---|---|
+| AVAIL-API-01 | GET | `/api/movie-availabilities?movieId=&clusterId=&status=` | ADMIN, EMPLOYEE | Tìm kiếm release plan | Không | `MovieAvailabilityController.search` |
+| AVAIL-API-02 | POST | `/api/movie-availabilities` | ADMIN, EMPLOYEE | Tạo release plan mới | Insert `movie_availability` + history | `MovieAvailabilityController.create` |
+| AVAIL-API-03 | PUT | `/api/movie-availabilities/{id}` | ADMIN, EMPLOYEE | Sửa ngày/sales-start (chỉ khi `PLANNED`) | Update `movie_availability` | `MovieAvailabilityController.update` |
+| AVAIL-API-04 | POST | `/api/movie-availabilities/{id}/open` | **ADMIN** | `PLANNED→OPEN` | Update + history | `MovieAvailabilityController.open` |
+| AVAIL-API-05 | POST | `/api/movie-availabilities/{id}/suspend` | **ADMIN** | `→SUSPENDED`, lưu `reason` | Update + history | `MovieAvailabilityController.suspend` |
+| AVAIL-API-06 | POST | `/api/movie-availabilities/{id}/resume` | **ADMIN** | `SUSPENDED→OPEN` | Update + history | `MovieAvailabilityController.resume` |
+| AVAIL-API-07 | POST | `/api/movie-availabilities/{id}/close` | **ADMIN** | `→CLOSED` (terminal) | Update + history | `MovieAvailabilityController.close` |
+
+### 23.7 Postman API Test Cases (bổ sung)
+
+#### API-AVAIL-001 — Create release plan happy path
+
+**Preconditions:** Movie `{{movieId}}` đã `APPROVED`; `{{clusterId}}` đang `ACTIVE`.
+
+**Request:** `POST {{baseUrl}}/api/movie-availabilities`
+```json
+{ "movieId": {{movieId}}, "clusterId": {{clusterId}}, "showingStartDate": "2026-08-01" }
+```
+
+**Expected Response:** `200`, `result.status = "PLANNED"`, `result.availabilityId` → lưu vào `{{availabilityId}}`.
+
+---
+
+#### API-AVAIL-002 — Create rejected, movie not APPROVED
+
+**Preconditions:** Movie ở `DRAFT`/`PENDING_REVIEW`/`CHANGES_REQUESTED`.
+
+**Expected Response:** `409`, code `2075` (`AVAILABILITY_MOVIE_NOT_APPROVED`).
+
+---
+
+#### API-AVAIL-003 — Create rejected, duplicate window
+
+**Preconditions:** Đã có 1 availability cho đúng `(movieId, clusterId, showingStartDate)` như API-AVAIL-001.
+
+**Request:** Lặp lại y hệt request của API-AVAIL-001.
+
+**Expected Response:** `409`, code `2078` (`AVAILABILITY_WINDOW_ALREADY_EXISTS`).
+
+---
+
+#### API-AVAIL-004 — Open, then suspend without reason rejected
+
+1. `POST {{baseUrl}}/api/movie-availabilities/{{availabilityId}}/open` → `200`, `status="OPEN"`.
+2. `POST {{baseUrl}}/api/movie-availabilities/{{availabilityId}}/suspend` với body `{}` (không có `reason`) → `400` (validation lỗi generic `@NotBlank`).
+3. Lặp lại với `{ "reason": "Distribution hold" }` → `200`, `status="SUSPENDED"`.
+
+---
+
+#### API-AVAIL-005 — Close directly from PLANNED (không cần qua OPEN)
+
+**Preconditions:** Tạo 1 availability mới khác (ngày khác) đang `PLANNED`, chưa từng `open`.
+
+**Request:** `POST {{baseUrl}}/api/movie-availabilities/{{plannedAvailabilityId}}/close`
+
+**Expected Response:** `200`, `status="CLOSED"` — xác nhận MOV-AVAIL không bắt buộc phải `OPEN` trước khi `close`.
+
+---
+
+#### API-AVAIL-006 — Close twice rejected
+
+**Request (lần 2):** `POST {{baseUrl}}/api/movie-availabilities/{{plannedAvailabilityId}}/close`
+
+**Expected Response:** `409`, code `2073` (`AVAILABILITY_INVALID_TRANSITION`).
+
+---
+
+#### API-AVAIL-007 — Open/Suspend/Resume/Close forbidden for EMPLOYEE
+
+**Request:** Bất kỳ endpoint nào trong 4 endpoint transition, dùng `{{employeeToken}}`.
+
+**Expected Response:** `403` (Spring Security, trước khi vào tới service).
+
+---
+
+#### API-AVAIL-008 — Create allowed for EMPLOYEE (dù UI không có nút)
+
+**Request:** `POST {{baseUrl}}/api/movie-availabilities` dùng `{{employeeToken}}`, payload hợp lệ.
+
+**Expected Response:** `200` — xác nhận Gap #12 (backend cho phép, UI thì không).
+
+### 23.8 UI Test Scenarios (bổ sung)
+
+| Scenario ID | Steps | Expected |
+|---|---|---|
+| UI-AVAIL-001 | ADMIN mở `MovieDetailModal` cho movie `APPROVED` chưa có availability nào | Tab "Availability" hiện; empty-state "No cinema release has been planned"; nút "Create the first release plan" hiện |
+| UI-AVAIL-002 | EMPLOYEE mở cùng modal, cùng movie | Tab "Availability" **vẫn hiện** (view-only theo 23.3); **không có** nút tạo release plan nào (Gap #12) |
+| UI-AVAIL-003 | ADMIN mở `MovieDetailModal` cho movie `DRAFT`/`PENDING_REVIEW`/`CHANGES_REQUESTED` | Tab "Availability" **không xuất hiện trong danh sách tab** (điều kiện `show: contentStatus === "APPROVED"`) |
+| UI-AVAIL-004 | ADMIN tạo release plan với `showingEndDate` < `showingStartDate` trong `CreatePlanDialog` | Border đỏ + message "End date cannot be before start date." ngay tại client, nút "Create release plan" `disabled` |
+| UI-AVAIL-005 | ADMIN bấm "Suspend" (icon Pause) rồi bấm "Suspend plan" khi ô lý do còn trống | Nút "Suspend plan" `disabled` cho tới khi `reason.trim()` không rỗng |
+| UI-AVAIL-006 | ADMIN thao tác Open/Suspend/Resume/Close liên tiếp nhanh trên cùng 1 card | Card hiện "Updating..." (`busyId` khoá đúng card đang xử lý), các nút khác trên cùng card ẩn/khoá tạm trong lúc `busy` |
+
+### 23.9 Gaps found (Availability)
+
+| Gap | Evidence | Impact | Priority | Recommendation |
+|---|---|---|---|---|
+| **#11 — `MovieScheduler.autoCloseExpiredAvailability()` không ghi `movie_availability_history`** | So sánh: `MovieAvailabilityService`'s `open`/`suspend`/`resume`/`close` đều gọi `transitionTo()` → `recordHistory()`; `MovieScheduler.java` chỉ tiêm `MovieAvailabilityRepository`, không có `MovieAvailabilityHistoryRepository`, và tự `setStatus()`/`saveAll()` trực tiếp, không qua service | Không thể trả lời "release plan này bị đóng lúc nào — do ai bấm Close, hay tự động đóng vì hết hạn?" chỉ bằng cách đọc `movie_availability_history`; phải suy luận gián tiếp qua `updated_by = "SYSTEM"` + `updated_at` khớp giờ chạy cron | P2 | Cho `MovieScheduler` gọi qua `MovieAvailabilityService` (hoặc tự ghi `recordHistory()` với `actor="SYSTEM"`) thay vì thao tác thẳng repository |
+| **#12 — UI (`MovieAvailabilityPanel.tsx`) hẹp hơn backend cho `create`/`update` release plan** | `@PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")` trên `POST`/`PUT /api/movie-availabilities`; nhưng nút "New release plan"/"Create the first release plan" đều bọc `{isAdmin && ...}` — không có nhánh nào cho EMPLOYEE thấy nút này | EMPLOYEE có quyền hợp lệ ở backend (đã verify qua API-AVAIL-008) nhưng không có cách nào dùng quyền đó qua UI — ngược chiều với Gap #2 cũ (lần đó UI/backend đồng ý nhưng field bị thiếu; lần này 2 tầng chủ động bất đồng về ai được làm gì) | P2 | Xác nhận với Product đây có phải chủ đích ("chỉ ADMIN mới lên kế hoạch khai thác") hay chỉ là thiếu sót khi build UI; nếu là chủ đích, nên siết `@PreAuthorize` lại cho khớp (an toàn hơn là để lệch ngầm) |
+| **#13 — Không có `MovieAvailabilityControllerTest`** | `find` toàn repo chỉ thấy `MovieAvailabilityServiceTest.java` (test service, không test qua HTTP layer/`@PreAuthorize`) | Authorization matrix ở 23.3 hiện chỉ được xác nhận bằng đọc code (`@PreAuthorize` annotation), chưa có test tự động nào chặn regression nếu ai đó sửa nhầm role | P2 | Thêm test tương tự các `*ControllerAuthorizationTest` đã có cho module khác (ví dụ `ProductionCompanyControllerAuthorizationTest` — xem lịch sử branch `docs/update-movie-creation-flow-spec`) |
 
 ---
 
 ## Phụ lục — Danh sách file đã đọc trực tiếp để viết tài liệu này
 
-**Backend:** `MovieController`, `MovieService`, `MovieReadinessValidator`, `MovieScheduler`, `MovieMapper`, `MovieErrorCode`, `TmdbController`, `TmdbService`, `MovieImageController`, `MovieImageService`, entities (`Movie`, `MovieTranslation`, `MovieCast`, `MovieImage`, `MovieStatusHistory`, `MovieActionLog`, `Genre`), enums (`MovieStatus`, `MovieImageType`, `GenreStatus`), DTOs (`CreateMovieRequest`, `UpdateMovieRequest`, `MovieResponse`, `TranslationRequest`, `CastRequest`, `RejectRequest`, `TmdbImportRequest`, `ReadinessViolation`), `ApiResponse`, `GlobalExceptionHandler`, `GlobalErrorCode`, `MovieReadinessException`, `MovieReadinessExceptionHandler`.
+**Backend (audit gốc, v1.0):** `MovieController`, `MovieService`, `MovieReadinessValidator`, `MovieScheduler`, `MovieMapper`, `MovieErrorCode`, `TmdbController`, `TmdbService`, `MovieImageController`, `MovieImageService`, entities (`Movie`, `MovieTranslation`, `MovieCast`, `MovieImage`, `MovieStatusHistory`, `MovieActionLog`, `Genre`), enums (`MovieStatus`, `MovieImageType`, `GenreStatus`), DTOs (`CreateMovieRequest`, `UpdateMovieRequest`, `MovieResponse`, `TranslationRequest`, `CastRequest`, `RejectRequest`, `TmdbImportRequest`, `ReadinessViolation`), `ApiResponse`, `GlobalExceptionHandler`, `GlobalErrorCode`, `MovieReadinessException`, `MovieReadinessExceptionHandler`.
 
-**Frontend:** `movieApi.ts` (phần Movie/TMDB/Image API + type liên quan), `MovieEditorPage.tsx` (phần đầu: imports, types, form state, `movieToForm`; **chưa đọc hết** phần `handleSave`/TMDB-prefill `useEffect`), `MovieCreationStartPage.tsx`, `TmdbCatalogPage.tsx`, `PendingReviewModal.tsx`, `ManageMoviePage.tsx` (một phần), `MovieEditorActionBar.tsx`, `movieDraftActions.ts`, `buildMoviePayload.ts`, `useRole.ts`, `movieContentStatus.ts`.
+**Backend (bổ sung cho v2.0):** `MovieResponse.java` (thêm `rejectionNote`, xác nhận MapStruct auto-map theo tên field).
+
+**Frontend (audit gốc, v1.0):** `movieApi.ts` (phần Movie/TMDB/Image API + type liên quan), `MovieEditorPage.tsx` (phần đầu: imports, types, form state, `movieToForm`), `MovieCreationStartPage.tsx`, `TmdbCatalogPage.tsx`, `PendingReviewModal.tsx`, `ManageMoviePage.tsx` (một phần), `MovieEditorActionBar.tsx`, `movieDraftActions.ts`, `buildMoviePayload.ts`, `useRole.ts`, `movieContentStatus.ts`.
+
+**Frontend (bổ sung cho v2.0 — đã đọc/viết trực tiếp khi làm `fix/movie-rejection-note-visibility`, `feat/tmdb-import-ui`, `feat/movie-editor-media-section`):** phần còn lại của `MovieEditorPage.tsx` (`persistCurrentDraft`, `applyTmdb`, genre-resolution handlers, toàn bộ JSX Media section), `MovieDetailModal.tsx`, `TmdbMediaPicker.tsx` (đọc đầy đủ), `MediaThumbnail.tsx`/`MediaThumbnail.test.tsx` (mới), `TmdbCatalogPage.test.tsx` (đầy đủ).
 
 **Database:** `V1__baseline_schema.sql` (đầy đủ), `V3__add_movie_image_and_tmdb_provenance.sql`, `V5__add_movie_trailer_provenance.sql`, `V6__movie_multi_production_company.sql`, `V7__add_movie_tagline.sql`, `V8__drop_legacy_movie_columns.sql`, `V9__drop_movie_end_date.sql`, `R__seed_reference_data.sql` (một phần).
 
-**Docs:** `docs/api-specs/movie-service/MOVIE_LIFECYCLE_CONTRACT.md`, `docs/api-specs/movie-service/AUTHORIZATION_MATRIX.md`, `docs/issues/ISSUE_TEMPLATE.md`.
+**Backend (bổ sung cho v3.0 — Movie Availability, Mục 23):** `MovieAvailabilityController.java` (đầy đủ), `MovieAvailabilityService.java` (đầy đủ), `MovieAvailabilityServiceTest.java` (đọc tên + logic 12 test case), entity `MovieAvailability`/`MovieAvailabilityHistory`, `MovieScheduler.java` (đầy đủ), `MovieErrorCode.java` (toàn bộ mã `AVAILABILITY_*`, `MOVIE_HAS_ACTIVE_AVAILABILITY`), phần `isPubliclyVisible()`/`toPublicMovieResponse()` liên quan display status trong `MovieService.java`.
 
-**Chưa đọc / cần kiểm tra thêm nếu cần độ chính xác tuyệt đối:** phần còn lại của `MovieEditorPage.tsx` (đặc biệt `handleSave`, TMDB-prefill logic, exit/reload warning), `MovieEditorWorkflow.tsx`, `TmdbMediaPicker.tsx` (chi tiết UI), `utils/tmdbWarnings.ts`, `GenreController`/`GenreService.java`, `SecurityConfig` gốc, backend/frontend test files (`MovieServiceTest.java`, `MovieReadinessValidatorTest.java`, `TmdbServiceTest.java`, `TmdbCatalogPage.test.tsx` đầy đủ, v.v. — đã tham chiếu gián tiếp qua tên test case nhưng chưa đọc toàn bộ nội dung từng test).
+**Frontend (bổ sung cho v3.0):** `MovieAvailabilityPanel.tsx` (đầy đủ, kể cả `CreatePlanDialog`/`SuspendPrompt`), phần Availability trong `movieApi.ts` (type + API wrapper), đoạn render tab "Availability" trong `MovieDetailModal.tsx`.
+
+**Database (bổ sung cho v3.0):** `movie_availability` (đọc trực tiếp qua `psql \d movie_availability` — không qua file migration riêng, bảng này nằm trong `V1__baseline_schema.sql`), dữ liệu thật trong DB dev (`movie`, `movie_availability`) để đối chiếu ví dụ cụ thể.
+
+**Docs:** `docs/api-specs/movie-service/MOVIE_LIFECYCLE_CONTRACT.md`, `docs/api-specs/movie-service/AUTHORIZATION_MATRIX.md`, `docs/issues/ISSUE_TEMPLATE.md`, `docs/issues/mr-movie-rejection-note-visibility.md`, `docs/issues/mr-tmdb-import-ui.md`, `docs/issues/mr-movie-editor-media-section.md`.
+
+**Chưa đọc / cần kiểm tra thêm nếu cần độ chính xác tuyệt đối:** `MovieEditorWorkflow.tsx` (điều hướng section — có đọc ở phiên làm Media section nhưng không lặp lại chi tiết ở đây), `utils/tmdbWarnings.ts`, `GenreController`/`GenreService.java` (còn dùng cho case genre tạo thủ công ngoài luồng TMDB), `SecurityConfig` gốc, backend/frontend test files đầy đủ (`MovieServiceTest.java`, `MovieReadinessValidatorTest.java`, `TmdbServiceTest.java`, v.v. — đã tham chiếu gián tiếp qua tên test case nhưng chưa đọc toàn bộ nội dung từng test). `MovieAvailabilityHistoryRepository`/entity `MovieAvailabilityHistory` mới xác nhận tồn tại, chưa đọc toàn bộ field. **Chưa có QA trình duyệt thật cho bất kỳ thay đổi nào trong v2.0/v3.0** (môi trường không có Playwright/chromium-cli) — xem Mục 2.
