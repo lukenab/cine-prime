@@ -1,6 +1,6 @@
 -- Auto Showtime persistence foundation.
 
-CREATE TABLE movie_scheduling_profile (
+CREATE TABLE IF NOT EXISTS movie_scheduling_profile (
     movie_id BIGINT PRIMARY KEY REFERENCES movie(movie_id) ON DELETE CASCADE,
     popularity_score NUMERIC(5,2) NOT NULL,
     priority_override NUMERIC(5,2),
@@ -15,19 +15,22 @@ CREATE TABLE movie_scheduling_profile (
     CONSTRAINT chk_movie_scheduling_score_source CHECK (score_source IN ('MANUAL', 'TMDB', 'DERIVED'))
 );
 
+DROP TRIGGER IF EXISTS trg_movie_scheduling_profile_updated_at ON movie_scheduling_profile;
 CREATE TRIGGER trg_movie_scheduling_profile_updated_at
     BEFORE UPDATE ON movie_scheduling_profile
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 ALTER TABLE showtime_allocation_policy
-    ADD COLUMN planning_horizon_start_days INTEGER NOT NULL DEFAULT 3,
-    ADD COLUMN planning_horizon_end_days INTEGER NOT NULL DEFAULT 9,
-    ADD COLUMN cleanup_buffer_minutes INTEGER NOT NULL DEFAULT 15,
-    ADD COLUMN time_slot_interval_minutes INTEGER NOT NULL DEFAULT 15,
-    ADD COLUMN business_timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Ho_Chi_Minh',
-    ADD COLUMN peak_start_time TIME NOT NULL DEFAULT TIME '18:00',
-    ADD COLUMN peak_end_time TIME NOT NULL DEFAULT TIME '22:00';
+    ADD COLUMN IF NOT EXISTS planning_horizon_start_days INTEGER NOT NULL DEFAULT 3,
+    ADD COLUMN IF NOT EXISTS planning_horizon_end_days INTEGER NOT NULL DEFAULT 9,
+    ADD COLUMN IF NOT EXISTS cleanup_buffer_minutes INTEGER NOT NULL DEFAULT 15,
+    ADD COLUMN IF NOT EXISTS time_slot_interval_minutes INTEGER NOT NULL DEFAULT 15,
+    ADD COLUMN IF NOT EXISTS business_timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Ho_Chi_Minh',
+    ADD COLUMN IF NOT EXISTS peak_start_time TIME NOT NULL DEFAULT TIME '18:00',
+    ADD COLUMN IF NOT EXISTS peak_end_time TIME NOT NULL DEFAULT TIME '22:00';
 
+ALTER TABLE showtime_allocation_policy
+    DROP CONSTRAINT IF EXISTS chk_allocation_policy_generation_config;
 ALTER TABLE showtime_allocation_policy
     ADD CONSTRAINT chk_allocation_policy_generation_config
     CHECK (
@@ -38,7 +41,7 @@ ALTER TABLE showtime_allocation_policy
         AND peak_end_time > peak_start_time
     );
 
-CREATE TABLE showtime_allocation_format_priority (
+CREATE TABLE IF NOT EXISTS showtime_allocation_format_priority (
     policy_id BIGINT NOT NULL REFERENCES showtime_allocation_policy(policy_id) ON DELETE CASCADE,
     format_id SMALLINT NOT NULL REFERENCES screening_format(format_id) ON DELETE RESTRICT,
     allocation_priority INTEGER NOT NULL,
@@ -50,14 +53,15 @@ CREATE TABLE showtime_allocation_format_priority (
     CONSTRAINT chk_allocation_format_priority CHECK (allocation_priority >= 0)
 );
 
-CREATE INDEX idx_allocation_format_priority
+CREATE INDEX IF NOT EXISTS idx_allocation_format_priority
     ON showtime_allocation_format_priority(policy_id, allocation_priority DESC);
 
+DROP TRIGGER IF EXISTS trg_showtime_allocation_format_priority_updated_at ON showtime_allocation_format_priority;
 CREATE TRIGGER trg_showtime_allocation_format_priority_updated_at
     BEFORE UPDATE ON showtime_allocation_format_priority
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-CREATE TABLE showtime_generation_run (
+CREATE TABLE IF NOT EXISTS showtime_generation_run (
     generation_run_id BIGSERIAL PRIMARY KEY,
     policy_id BIGINT NOT NULL REFERENCES showtime_allocation_policy(policy_id) ON DELETE RESTRICT,
     idempotency_key VARCHAR(128) NOT NULL UNIQUE,
@@ -78,26 +82,27 @@ CREATE TABLE showtime_generation_run (
     CONSTRAINT chk_generation_run_counts CHECK (candidate_count >= 0 AND created_count >= 0 AND skipped_count >= 0)
 );
 
-CREATE INDEX idx_generation_run_status_created_at
+CREATE INDEX IF NOT EXISTS idx_generation_run_status_created_at
     ON showtime_generation_run(status, created_at);
 
+DROP TRIGGER IF EXISTS trg_showtime_generation_run_updated_at ON showtime_generation_run;
 CREATE TRIGGER trg_showtime_generation_run_updated_at
     BEFORE UPDATE ON showtime_generation_run
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-CREATE TABLE showtime_generation_run_movie (
+CREATE TABLE IF NOT EXISTS showtime_generation_run_movie (
     generation_run_id BIGINT NOT NULL REFERENCES showtime_generation_run(generation_run_id) ON DELETE CASCADE,
     movie_id BIGINT NOT NULL REFERENCES movie(movie_id) ON DELETE RESTRICT,
     PRIMARY KEY (generation_run_id, movie_id)
 );
 
-CREATE TABLE showtime_generation_run_cluster (
+CREATE TABLE IF NOT EXISTS showtime_generation_run_cluster (
     generation_run_id BIGINT NOT NULL REFERENCES showtime_generation_run(generation_run_id) ON DELETE CASCADE,
     cluster_id BIGINT NOT NULL REFERENCES cinema_cluster(cluster_id) ON DELETE RESTRICT,
     PRIMARY KEY (generation_run_id, cluster_id)
 );
 
-CREATE TABLE showtime_generation_skip (
+CREATE TABLE IF NOT EXISTS showtime_generation_skip (
     skip_id BIGSERIAL PRIMARY KEY,
     generation_run_id BIGINT NOT NULL REFERENCES showtime_generation_run(generation_run_id) ON DELETE CASCADE,
     movie_id BIGINT REFERENCES movie(movie_id) ON DELETE SET NULL,
@@ -111,17 +116,18 @@ CREATE TABLE showtime_generation_skip (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_generation_skip_run_created_at
+CREATE INDEX IF NOT EXISTS idx_generation_skip_run_created_at
     ON showtime_generation_skip(generation_run_id, created_at);
 
 ALTER TABLE show_time
-    ADD COLUMN source VARCHAR(10) NOT NULL DEFAULT 'MANUAL',
-    ADD COLUMN generation_run_id BIGINT REFERENCES showtime_generation_run(generation_run_id) ON DELETE SET NULL,
-    ADD COLUMN generation_reason VARCHAR(100);
+    ADD COLUMN IF NOT EXISTS source VARCHAR(10) NOT NULL DEFAULT 'MANUAL',
+    ADD COLUMN IF NOT EXISTS generation_run_id BIGINT REFERENCES showtime_generation_run(generation_run_id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS generation_reason VARCHAR(100);
 
+ALTER TABLE show_time DROP CONSTRAINT IF EXISTS chk_showtime_source;
 ALTER TABLE show_time
     ADD CONSTRAINT chk_showtime_source CHECK (source IN ('MANUAL', 'AUTO'));
 
-CREATE INDEX idx_showtime_generation_run
+CREATE INDEX IF NOT EXISTS idx_showtime_generation_run
     ON show_time(generation_run_id)
     WHERE generation_run_id IS NOT NULL;

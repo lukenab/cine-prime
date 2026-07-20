@@ -1,7 +1,7 @@
 -- Auto Showtime database foundation.
 -- screening_format and movie_format remain the canonical format catalog.
 
-CREATE TABLE cinema_room_format (
+CREATE TABLE IF NOT EXISTS cinema_room_format (
     cinema_room_id BIGINT NOT NULL
         REFERENCES cinema_room(cinema_room_id) ON DELETE CASCADE,
     format_id SMALLINT NOT NULL
@@ -14,10 +14,11 @@ CREATE TABLE cinema_room_format (
     PRIMARY KEY (cinema_room_id, format_id)
 );
 
-CREATE INDEX idx_cinema_room_format_enabled_format
+CREATE INDEX IF NOT EXISTS idx_cinema_room_format_enabled_format
     ON cinema_room_format(format_id, cinema_room_id)
     WHERE enabled = TRUE;
 
+DROP TRIGGER IF EXISTS trg_cinema_room_format_updated_at ON cinema_room_format;
 CREATE TRIGGER trg_cinema_room_format_updated_at
     BEFORE UPDATE ON cinema_room_format
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -25,7 +26,7 @@ CREATE TRIGGER trg_cinema_room_format_updated_at
 COMMENT ON TABLE cinema_room_format IS
     'Explicit room capability. Room type is descriptive only and is not a showtime eligibility rule.';
 
-CREATE TABLE cinema_cluster_demand_profile (
+CREATE TABLE IF NOT EXISTS cinema_cluster_demand_profile (
     cluster_id BIGINT PRIMARY KEY
         REFERENCES cinema_cluster(cluster_id) ON DELETE CASCADE,
     demand_tier VARCHAR(10) NOT NULL,
@@ -52,11 +53,12 @@ CREATE TABLE cinema_cluster_demand_profile (
             AND (revenue IS NULL OR revenue >= 0))
 );
 
+DROP TRIGGER IF EXISTS trg_cinema_cluster_demand_profile_updated_at ON cinema_cluster_demand_profile;
 CREATE TRIGGER trg_cinema_cluster_demand_profile_updated_at
     BEFORE UPDATE ON cinema_cluster_demand_profile
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-CREATE TABLE showtime_allocation_policy (
+CREATE TABLE IF NOT EXISTS showtime_allocation_policy (
     policy_id BIGSERIAL PRIMARY KEY,
     policy_code VARCHAR(50) NOT NULL UNIQUE,
     peak_demand_weight NUMERIC(6,4) NOT NULL,
@@ -89,6 +91,7 @@ CREATE TABLE showtime_allocation_policy (
             AND maximum_room_share <= 1)
 );
 
+DROP TRIGGER IF EXISTS trg_showtime_allocation_policy_updated_at ON showtime_allocation_policy;
 CREATE TRIGGER trg_showtime_allocation_policy_updated_at
     BEFORE UPDATE ON showtime_allocation_policy
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
