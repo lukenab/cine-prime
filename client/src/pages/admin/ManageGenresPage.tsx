@@ -240,29 +240,55 @@ export default function ManageGenresPage() {
         </div>
       )}
 
-      {/* Status filter tabs */}
-      <div className="flex items-center gap-2 mb-4">
-        {([
-          { key: "ALL", label: "All" },
-          { key: "ACTIVE", label: "Active" },
-          { key: "PENDING_REVIEW", label: `Pending Review${pendingCount > 0 ? ` (${pendingCount})` : ""}` },
-        ] as const).map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setStatusFilter(tab.key)}
-            className="px-3.5 py-1.5 rounded-lg border transition-colors"
-            style={{
-              fontSize: "13px",
-              fontWeight: 500,
-              borderColor: statusFilter === tab.key ? "transparent" : "var(--border-color)",
-              background: statusFilter === tab.key ? (tab.key === "PENDING_REVIEW" ? "#d97706" : "#6d28d9") : "var(--bg-card)",
-              color: statusFilter === tab.key ? "#fff" : "var(--text-main)",
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* Status tabs (Movie list style) */}
+      {(() => {
+        const counts: Record<string, number> = {};
+        types.forEach(t => {
+          counts[t.status] = (counts[t.status] ?? 0) + 1;
+        });
+
+        const tabs = [
+          { value: "ALL", label: "All", color: "var(--text-sub)" },
+          { value: "ACTIVE", label: "Active", color: "#6d28d9" },
+          { value: "PENDING_REVIEW", label: "Pending Review", color: "#d97706" },
+        ];
+
+        return (
+          <div className="flex items-center gap-1 mb-5 overflow-x-auto" style={{ borderBottom: "1px solid var(--border-color)", paddingBottom: "0" }}>
+            {tabs.map(({ value, label, color }) => {
+              const count = value === "ALL" ? types.length : (counts[value] ?? 0);
+              const isActive = statusFilter === value;
+              return (
+                <button
+                  key={value}
+                  onClick={() => setStatusFilter(value as any)}
+                  className="flex items-center gap-1.5 px-3 py-2.5 transition-colors relative whitespace-nowrap"
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    color: isActive ? color : "var(--text-sub)",
+                    borderBottom: isActive ? `2px solid ${color}` : "2px solid transparent",
+                    marginBottom: "-1px"
+                  }}
+                >
+                  {label}
+                  <span
+                    className="flex items-center justify-center rounded-full"
+                    style={{
+                      height: "20px", minWidth: "20px", padding: "0 6px",
+                      fontSize: "11px", fontWeight: 600,
+                      background: isActive ? (isDarkMode ? `${color}30` : `${color}20`) : "var(--bg-main)",
+                      color: isActive ? color : "var(--text-sub)",
+                    }}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap mb-6">

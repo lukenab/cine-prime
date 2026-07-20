@@ -245,32 +245,34 @@ function ReadinessSummary({
   
   if (blockingCount === 0) {
     return (
-      <div className="rounded-xl p-4 border mb-4" style={{ background: "rgba(16,185,129,0.05)", borderColor: "rgba(16,185,129,0.2)" }}>
-        <div className="flex items-center gap-2 text-emerald-600">
-          <Check size={18} />
-          <p className="font-semibold" style={{ fontSize: "14px" }}>Ready for review</p>
+      <div className="rounded-lg p-2.5 px-3.5 border mb-3 flex items-center justify-between" style={{ background: "rgba(16,185,129,0.05)", borderColor: "rgba(16,185,129,0.2)" }}>
+        <div className="flex items-center gap-2.5">
+          <Check size={15} className="text-emerald-600" />
+          <div>
+            <p className="font-medium text-emerald-700" style={{ fontSize: "12.5px", lineHeight: "1.2" }}>Ready for review</p>
+            <p className="mt-0.5" style={{ fontSize: "11px", color: "var(--text-sub)", lineHeight: "1.2" }}>All required fields and checks are complete.</p>
+          </div>
         </div>
-        <p className="mt-1" style={{ fontSize: "12.5px", color: "var(--text-sub)" }}>All required fields and checks are complete.</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl p-4 border mb-4" style={{ background: "rgba(244,63,94,0.05)", borderColor: "rgba(244,63,94,0.2)" }}>
-      <div className="flex items-center gap-2 text-rose-600 mb-3">
-        <AlertCircle size={18} />
-        <p className="font-semibold" style={{ fontSize: "14px" }}>Readiness Blockers ({blockingCount})</p>
+    <div className="rounded-lg p-3 px-4 border mb-3" style={{ background: "rgba(244,63,94,0.05)", borderColor: "rgba(244,63,94,0.2)" }}>
+      <div className="flex items-center gap-2 text-rose-600 mb-2">
+        <AlertCircle size={15} />
+        <p className="font-medium" style={{ fontSize: "12.5px" }}>Readiness Blockers ({blockingCount})</p>
       </div>
-      <ul className="space-y-2 text-rose-500" style={{ fontSize: "12.5px" }}>
-        {hasBlockingTmdbIssues && <li>• Unresolved TMDB mappings</li>}
+      <ul className="space-y-1.5 text-rose-600/90 ml-6" style={{ fontSize: "11.5px", listStyleType: "disc" }}>
+        {hasBlockingTmdbIssues && <li>Unresolved TMDB mappings</li>}
         {Object.entries(validationErrors).map(([field, msg]) => (
-          <li key={field}>• {msg}</li>
+          <li key={field}>{msg}</li>
         ))}
         {backendViolations.map((v, i) => (
-          <li key={i}>• {v.rule.replace(/_/g, " ")} ({v.field})</li>
+          <li key={i}>{v.rule.replace(/_/g, " ")} ({v.field})</li>
         ))}
       </ul>
-      <p className="mt-3" style={{ fontSize: "12px", color: "var(--text-sub)" }}>Please resolve these issues before submitting.</p>
+      <p className="mt-2.5 ml-6" style={{ fontSize: "11px", color: "var(--text-sub)" }}>Please resolve these issues before submitting.</p>
     </div>
   );
 }
@@ -1137,9 +1139,6 @@ export default function MovieEditorPage() {
                       style={{ background: "var(--bg-main)", borderColor: "var(--border-color)", fontSize: "12.5px", color: "var(--text-main)" }}
                     >
                       {c.name}
-                      {c.companyId == null && (
-                        <span style={{ fontSize: "10px", color: "#d97706", fontWeight: 600, background: "#fef3c7", padding: "1px 5px", borderRadius: "10px" }} title="Auto-create on save">(new)</span>
-                      )}
                       <button
                         type="button"
                         onClick={() => set("selectedCompanies", form.selectedCompanies.filter((_, j) => j !== i))}
@@ -1366,15 +1365,12 @@ export default function MovieEditorPage() {
                     ) : (
                       <div className="w-8 h-8 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center" style={{ fontSize: "12px", color: "#6b7280" }}>{c.fullName[0]}</div>
                     )}
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: "90px", flexShrink: 0 }}>
-                      <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-main)" }}>{c.fullName}</span>
-                      {c.personId == null && (
-                        <span style={{ fontSize: "10px", color: "#d97706", fontWeight: 600, background: "#fef3c7", padding: "1px 5px", borderRadius: "10px" }} title="Auto-create on save">(new)</span>
-                      )}
+                    <div className="flex-1 flex items-center gap-2 min-w-0">
+                      <span className="truncate" style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-main)" }} title={c.fullName}>{c.fullName}</span>
                     </div>
                     <select
                       value={c.roleType} onChange={(e) => updateCast(idx, "roleType", e.target.value as "ACTOR" | "DIRECTOR")}
-                      className="px-2 py-1 rounded-lg border text-xs cursor-pointer flex-shrink-0"
+                      className="px-2 py-1 rounded-lg border text-xs cursor-pointer flex-shrink-0 w-24"
                       style={{ background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
                     >
                       <option value="ACTOR">Actor</option>
@@ -1391,6 +1387,17 @@ export default function MovieEditorPage() {
                     </button>
                   </div>
                 ))}
+                {form.cast.length > MAX_VISIBLE_CAST && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllCast(!showAllCast)}
+                    className="w-full py-2.5 mt-1 text-[13px] font-medium transition-colors rounded-xl border hover:bg-gray-50/50"
+                    style={{ color: "var(--text-main)", borderColor: "var(--border-color)", background: "var(--bg-main)" }}
+                    aria-expanded={showAllCast}
+                  >
+                    {showAllCast ? "Show less" : `Show all cast (${form.cast.length})`}
+                  </button>
+                )}
               </div>
             )}
           </section>
@@ -1552,12 +1559,7 @@ export default function MovieEditorPage() {
             {/* Gallery */}
             <div className="pt-5 border-t" style={{ borderColor: "var(--border-color)" }}>
               <p className="mb-2" style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-main)" }}>Gallery</p>
-              {!activeMovieId ? (
-                <div className="flex flex-col items-center justify-center py-8 rounded-xl border-2 border-dashed" style={{ borderColor: "var(--border-color)" }}>
-                  <Images size={26} style={{ color: "var(--text-sub)", marginBottom: "8px" }} />
-                  <p style={{ fontSize: "12.5px", color: "var(--text-sub)", textAlign: "center" }}>Save the movie first to add gallery images.</p>
-                </div>
-              ) : (
+              {activeMovieId && (
                 <>
                   <div className="p-3 rounded-xl border space-y-2.5 mb-3" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
                     <input type="text" placeholder="Image URL…" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className={IC} style={{ ...IS, fontSize: "12.5px" }} />
@@ -1763,31 +1765,47 @@ export default function MovieEditorPage() {
                   
                   {/* Additional Master-Data Mappings for Companies and Persons */}
                   {(form.selectedCompanies.length > 0 || form.cast.length > 0) && (
-                    <div className="mt-4">
-                      <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-sub)", marginBottom: "6px" }}>
-                        Master-data mapping (Companies & Persons)
+                    <div className="mt-6 border-t pt-4" style={{ borderColor: "var(--border-color)" }}>
+                      <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-main)", marginBottom: "12px" }}>
+                        Master-data mapping summary
                       </p>
-                      <div className="space-y-2">
-                        {form.selectedCompanies.map((c, i) => (
-                          <div key={`company-${i}`} className="flex items-center justify-between p-2 rounded-lg border" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)", fontSize: "12px" }}>
-                            <span style={{ color: "var(--text-main)" }}>Company: {c.name}</span>
-                            {c.companyId ? (
-                              <span className="text-emerald-600 font-medium text-[11px]">✓ Mapped</span>
-                            ) : (
-                              <span className="text-amber-600 font-medium text-[11px]">Suggested (Auto-create on save)</span>
-                            )}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {form.selectedCompanies.length > 0 && (
+                          <div className="space-y-2">
+                            <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-sub)", textTransform: "uppercase", letterSpacing: "0.02em" }}>Companies</p>
+                            <div className="max-h-48 overflow-y-auto pr-1 space-y-1.5 custom-scrollbar">
+                              {form.selectedCompanies.map((c, i) => (
+                                <div key={`company-${i}`} className="flex items-center justify-between px-2.5 py-1.5 rounded-md border" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)", fontSize: "12px" }}>
+                                  <span className="truncate mr-2" style={{ color: "var(--text-main)" }} title={c.name}>{c.name}</span>
+                                  {c.companyId ? (
+                                    <span className="text-emerald-600 font-medium text-[10.5px] flex-shrink-0">✓ Mapped</span>
+                                  ) : (
+                                    <span className="text-amber-600 font-medium text-[10.5px] flex-shrink-0">Suggested</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        ))}
-                        {form.cast.map((p, i) => (
-                          <div key={`person-${p._key}`} className="flex items-center justify-between p-2 rounded-lg border" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)", fontSize: "12px" }}>
-                            <span style={{ color: "var(--text-main)" }}>Person: {p.fullName} ({p.roleType})</span>
-                            {p.personId ? (
-                              <span className="text-emerald-600 font-medium text-[11px]">✓ Mapped</span>
-                            ) : (
-                              <span className="text-amber-600 font-medium text-[11px]">Suggested (Auto-create on save)</span>
-                            )}
+                        )}
+                        {form.cast.length > 0 && (
+                          <div className="space-y-2">
+                            <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-sub)", textTransform: "uppercase", letterSpacing: "0.02em" }}>Cast & Crew</p>
+                            <div className="max-h-48 overflow-y-auto pr-1 space-y-1.5 custom-scrollbar">
+                              {form.cast.map((p, i) => (
+                                <div key={`person-${p._key}`} className="flex items-center justify-between px-2.5 py-1.5 rounded-md border" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)", fontSize: "12px" }}>
+                                  <span className="truncate mr-2" style={{ color: "var(--text-main)" }} title={p.fullName}>
+                                    {p.fullName} <span style={{ color: "var(--text-muted)", fontSize: "10.5px", fontWeight: 500 }}>({p.roleType})</span>
+                                  </span>
+                                  {p.personId ? (
+                                    <span className="text-emerald-600 font-medium text-[10.5px] flex-shrink-0">✓ Mapped</span>
+                                  ) : (
+                                    <span className="text-amber-600 font-medium text-[10.5px] flex-shrink-0">Suggested</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        ))}
+                        )}
                       </div>
                     </div>
                   )}
