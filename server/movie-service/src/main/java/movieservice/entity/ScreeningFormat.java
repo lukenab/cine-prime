@@ -5,6 +5,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "screening_format")
@@ -32,4 +33,26 @@ public class ScreeningFormat {
 
     @Column(name = "surcharge", nullable = false, precision = 10, scale = 2)
     BigDecimal surcharge;
+
+    @Builder.Default
+    @Column(name = "status", nullable = false, length = 20)
+    String status = "ACTIVE";
+
+    @Column(name = "created_at", updatable = false)
+    LocalDateTime createdAt;
+
+    @Column(name = "updated_at")
+    LocalDateTime updatedAt;
+
+    @PrePersist
+    void prePersist() {
+        createdAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
+        if (status == null) status = "ACTIVE";
+    }
+
+    @PreUpdate
+    void preUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 }

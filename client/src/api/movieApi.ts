@@ -371,6 +371,11 @@ export type MovieStatus =
   | 'CHANGES_REQUESTED'
   | 'ARCHIVED';
 
+export type ReadinessViolation = {
+  field: string;
+  rule: string;
+};
+
 export type AvailabilityStatus = 'PLANNED' | 'OPEN' | 'SUSPENDED' | 'CLOSED';
 
 export type DisplayStatus = 'NOW_SHOWING' | 'COMING_SOON';

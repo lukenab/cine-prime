@@ -230,6 +230,49 @@ function isLikelyVideoUrl(url: string): boolean {
  * squeezed into a 2-column grid. Create and edit now share a guided, single-owner form shell;
  * canonical sections are reordered visually without remounting their controlled field state.
  */
+function ReadinessSummary({
+  validationErrors,
+  backendViolations,
+  hasBlockingTmdbIssues
+}: {
+  validationErrors: Record<string, string>;
+  backendViolations: ReadinessViolation[];
+  hasBlockingTmdbIssues: boolean;
+}) {
+  const blockingCount = Object.keys(validationErrors).length + backendViolations.length + (hasBlockingTmdbIssues ? 1 : 0);
+  
+  if (blockingCount === 0) {
+    return (
+      <div className="rounded-xl p-4 border mb-4" style={{ background: "rgba(16,185,129,0.05)", borderColor: "rgba(16,185,129,0.2)" }}>
+        <div className="flex items-center gap-2 text-emerald-600">
+          <Check size={18} />
+          <p className="font-semibold" style={{ fontSize: "14px" }}>Ready for review</p>
+        </div>
+        <p className="mt-1" style={{ fontSize: "12.5px", color: "var(--text-sub)" }}>All required fields and checks are complete.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl p-4 border mb-4" style={{ background: "rgba(244,63,94,0.05)", borderColor: "rgba(244,63,94,0.2)" }}>
+      <div className="flex items-center gap-2 text-rose-600 mb-3">
+        <AlertCircle size={18} />
+        <p className="font-semibold" style={{ fontSize: "14px" }}>Readiness Blockers ({blockingCount})</p>
+      </div>
+      <ul className="space-y-2 text-rose-500" style={{ fontSize: "12.5px" }}>
+        {hasBlockingTmdbIssues && <li>• Unresolved TMDB mappings</li>}
+        {Object.entries(validationErrors).map(([field, msg]) => (
+          <li key={field}>• {msg}</li>
+        ))}
+        {backendViolations.map((v, i) => (
+          <li key={i}>• {v.rule.replace(/_/g, " ")} ({v.field})</li>
+        ))}
+      </ul>
+      <p className="mt-3" style={{ fontSize: "12px", color: "var(--text-sub)" }}>Please resolve these issues before submitting.</p>
+    </div>
+  );
+}
+
 export default function MovieEditorPage() {
   const navigate = useNavigate();
   const location = useLocation();

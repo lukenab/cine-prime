@@ -50,6 +50,7 @@ public class ScreeningFormatController {
                 .formatName(req.getFormatName().trim())
                 .description(req.getDescription())
                 .surcharge(req.getSurcharge())
+                .status(req.getStatus() != null ? req.getStatus() : "ACTIVE")
                 .build();
         return ApiResponse.<ScreeningFormatResponse>builder()
                 .code(201)
@@ -67,6 +68,9 @@ public class ScreeningFormatController {
         entity.setFormatName(req.getFormatName().trim());
         entity.setDescription(req.getDescription());
         entity.setSurcharge(req.getSurcharge());
+        if (req.getStatus() != null) {
+            entity.setStatus(req.getStatus());
+        }
         return ApiResponse.<ScreeningFormatResponse>builder()
                 .code(200)
                 .result(movieMapper.toScreeningFormatResponse(screeningFormatRepository.save(entity)))

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Check, Clapperboard, Film, Images, ListChecks, Users } from "lucide-react";
+import { AlertCircle, Check, Clapperboard, Film, Images, ListChecks, Users } from "lucide-react";
 
 export type MovieEditorSectionId =
   | "overview"
@@ -13,6 +13,7 @@ export interface MovieEditorSectionDefinition {
   label: string;
   description: string;
   complete?: boolean;
+  hasError?: boolean;
 }
 
 export const MOVIE_EDITOR_SECTION_META = [
@@ -76,9 +77,9 @@ function SectionNavigation({ activeSection, sections, onNavigate, compact = fals
               >
                 <span
                   className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg"
-                  style={{ background: active ? "#2563eb" : "var(--bg-main)", color: active ? "white" : "var(--text-sub)" }}
+                  style={{ background: active ? (section.hasError ? "#ef4444" : "#2563eb") : (section.hasError ? "#fef2f2" : "var(--bg-main)"), color: active ? "white" : (section.hasError ? "#ef4444" : "var(--text-sub)") }}
                 >
-                  {section.complete && !active ? <Check size={14} aria-label="Complete" /> : <Icon size={14} aria-hidden="true" />}
+                  {section.hasError ? <AlertCircle size={14} aria-label="Error" /> : (section.complete && !active ? <Check size={14} aria-label="Complete" /> : <Icon size={14} aria-hidden="true" />)}
                 </span>
                 <span className="min-w-0">
                   <span className="block whitespace-nowrap" style={{ fontSize: "12.5px", fontWeight: active ? 700 : 600 }}>
@@ -183,7 +184,7 @@ export default function MovieEditorWorkflow({ sections, children }: MovieEditorW
         <SectionNavigation activeSection={activeSection} sections={sections} onNavigate={navigateToSection} compact />
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_3fr]">
         <aside className="sticky top-6 hidden lg:block">
           <SectionNavigation activeSection={activeSection} sections={sections} onNavigate={navigateToSection} />
         </aside>

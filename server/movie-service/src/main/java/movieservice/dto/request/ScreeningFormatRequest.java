@@ -27,4 +27,7 @@ public class ScreeningFormatRequest {
     @NotNull(message = "Surcharge is required")
     @DecimalMin("0.0")
     BigDecimal surcharge;
+
+    @Size(max = 20)
+    String status;
 }
