@@ -692,6 +692,11 @@ export default function MovieEditorPage() {
       setCurrentStatus(reviewedMovie.status);
       setActionStatus("submitted");
       toast.success(`"${reviewedMovie.originalTitle}" submitted for review.`);
+      // Once submitted, the form becomes read-only (canSaveDraft/canSubmitForReview both go
+      // false via editableDraft) - nothing left to do here, so return to the list instead of
+      // leaving the admin stranded on a now-frozen page. Toaster is mounted above the router
+      // (App.tsx) so the success toast still shows after navigating.
+      navigate(exitDestination);
     } catch (e: any) {
       const message = errorMessage(
         e,
