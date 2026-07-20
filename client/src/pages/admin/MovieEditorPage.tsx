@@ -1,5 +1,6 @@
 import {
   X, Film, Upload, Loader2, Search, GripVertical, Trash2,
+  HelpCircle,
   AlertCircle, Check, Tag, Globe, Users, Images, ArrowLeft,
 } from "lucide-react";
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -23,6 +24,7 @@ import {
   type TmdbGenrePreview,
   type TmdbMovieDetails,
   type TmdbImportPayload,
+  type ReadinessViolation,
 } from "../../api/movieApi";
 import {
   MOVIE_CONTENT_STATUS_META,
@@ -287,7 +289,10 @@ export default function MovieEditorPage() {
   const currentContentStatus = currentStatus ? toMovieContentStatus(currentStatus) : null;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+    const [submitted, setSubmitted] = useState(false);
+
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [backendViolations, setBackendViolations] = useState<ReadinessViolation[]>([]);
 
   const [genres, setGenres] = useState<GenreResponse[]>([]);
   const [formats, setFormats] = useState<ScreeningFormatResponse[]>([]);
@@ -342,6 +347,8 @@ export default function MovieEditorPage() {
   const [personResults, setPersonResults] = useState<PersonResponse[]>([]);
   const [showPersonDrop, setShowPersonDrop] = useState(false);
   const [personLoading, setPersonLoading] = useState(false);
+  const [showAllCast, setShowAllCast] = useState(false);
+  const MAX_VISIBLE_CAST = 8;
   const personTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const personRef = useRef<HTMLDivElement>(null);
 
@@ -862,6 +869,7 @@ export default function MovieEditorPage() {
 
   const addCastMember = (p: PersonResponse) => {
     if (form.cast.find((c) => c.personId === p.personId)) return;
+    setShowAllCast(true);
     set("cast", [
       ...form.cast,
       {
@@ -1067,7 +1075,10 @@ export default function MovieEditorPage() {
               </div>
               <div>
                 <label style={FL}>
-                  Release Date <span style={{ fontWeight: 400, color: "var(--text-sub)" }}>(theatrical release — content metadata, not an exhibition window)</span>
+                  Release Date 
+                  <span title="theatrical release — content metadata, not an exhibition window" style={{ display: "inline-flex", alignItems: "center", cursor: "help", color: "var(--text-sub)", marginLeft: "4px" }}>
+                    <HelpCircle size={14} />
+                  </span>
                   {tmdbUnverified.releaseDate && (
                     <span className="ml-1.5 px-1.5 py-0.5 rounded" style={{ fontSize: "9.5px", fontWeight: 700, background: "#e0f2fe", color: "#0369a1" }}>
                       TMDB · UNVERIFIED
@@ -1127,7 +1138,7 @@ export default function MovieEditorPage() {
                     >
                       {c.name}
                       {c.companyId == null && (
-                        <span style={{ fontSize: "10px", color: "var(--text-sub)" }}>(new)</span>
+                        <span style={{ fontSize: "10px", color: "#d97706", fontWeight: 600, background: "#fef3c7", padding: "1px 5px", borderRadius: "10px" }} title="Auto-create on save">(new)</span>
                       )}
                       <button
                         type="button"
@@ -1339,7 +1350,7 @@ export default function MovieEditorPage() {
             ) : (
               <div className="space-y-2">
                 <p style={{ fontSize: "11px", color: "var(--text-sub)", marginBottom: "4px" }}>Drag ⠿ to reorder billing</p>
-                {form.cast.map((c, idx) => (
+                {(showAllCast ? form.cast : form.cast.slice(0, MAX_VISIBLE_CAST)).map((c, idx) => (
                   <div
                     key={c._key} draggable
                     onDragStart={() => { dragIdx.current = idx; }}
@@ -1355,7 +1366,12 @@ export default function MovieEditorPage() {
                     ) : (
                       <div className="w-8 h-8 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center" style={{ fontSize: "12px", color: "#6b7280" }}>{c.fullName[0]}</div>
                     )}
-                    <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-main)", minWidth: "90px", flexShrink: 0 }}>{c.fullName}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: "90px", flexShrink: 0 }}>
+                      <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-main)" }}>{c.fullName}</span>
+                      {c.personId == null && (
+                        <span style={{ fontSize: "10px", color: "#d97706", fontWeight: 600, background: "#fef3c7", padding: "1px 5px", borderRadius: "10px" }} title="Auto-create on save">(new)</span>
+                      )}
+                    </div>
                     <select
                       value={c.roleType} onChange={(e) => updateCast(idx, "roleType", e.target.value as "ACTOR" | "DIRECTOR")}
                       className="px-2 py-1 rounded-lg border text-xs cursor-pointer flex-shrink-0"
@@ -1379,7 +1395,7 @@ export default function MovieEditorPage() {
             )}
           </section>
 
-          {!form.tmdbId && (
+                    {!form.tmdbId && (
             <section
               id={movieEditorSectionDomId("review")}
               data-editor-section="review"
@@ -1389,6 +1405,7 @@ export default function MovieEditorPage() {
               style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
             >
               <p id="movie-editor-review-title" style={SL}>Review</p>
+              <ReadinessSummary validationErrors={validationErrors} backendViolations={backendViolations} hasBlockingTmdbIssues={hasBlockingTmdbIssues} />
               <p className="mb-4" style={{ fontSize: "12px", color: "var(--text-sub)" }}>
                 Review draft readiness before saving. Manual drafts have no external catalog mappings to resolve.
               </p>
@@ -1618,136 +1635,163 @@ export default function MovieEditorPage() {
           </section>
 
           {/* Source provenance remains visible after the full-width catalog populates this draft. */}
-          {form.tmdbId && <section
-            id={movieEditorSectionDomId("review")}
-            data-editor-section="review"
-            tabIndex={-1}
-            aria-labelledby="movie-editor-review-title"
-            className="order-5 scroll-mt-28 rounded-2xl border p-5 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
-          >
-            <p id="movie-editor-review-title" style={SL}>Review</p>
-            <p className="mb-2" style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-sub)" }}>Catalog source</p>
-
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 mb-3" style={{ width: "fit-content" }}>
-              <div className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0"><Check size={10} className="text-white" /></div>
-              <span style={{ fontSize: "12px", color: "#065f46", fontWeight: 500 }}>TMDB</span>
-              <span style={{ fontSize: "12px", color: "#6b7280" }}>·</span>
-              <a href={`https://www.themoviedb.org/movie/${form.tmdbId}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: "#059669", fontWeight: 500, textDecoration: "none" }}>#{form.tmdbId}</a>
-            </div>
-
-          </section>}
-
-          {/* TMDB Import Review - grouped/severity-tagged warnings and genre-mapping resolution
-              (map existing / create new / ignore with reason). Genre resolution below gates
-              Save (see hasBlockingTmdbIssues / validate()). Suggested-trailer review now lives
-              in the Media section's Official Trailer group, alongside the field it applies to.
-              There is no "re-sync" action here - the backend has no resync capability yet
-              (disclosed out-of-scope, same as the multi-company and trailer-ingestion MRs). */}
-          {form.tmdbId && (tmdbWarnings.length > 0 || tmdbUnmappedGenres.length > 0) && (
+                    {form.tmdbId && (
             <section
-              className="order-5 rounded-2xl border p-5 space-y-4"
+              id={movieEditorSectionDomId("review")}
+              data-editor-section="review"
+              tabIndex={-1}
+              aria-labelledby="movie-editor-review-title"
+              className="order-5 scroll-mt-28 rounded-2xl border p-5 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 space-y-4"
               style={{ background: "var(--bg-card)", borderColor: hasBlockingTmdbIssues ? "#f87171" : "var(--border-color)" }}
             >
-              <div className="flex items-center gap-2">
-                <AlertCircle size={14} className={hasBlockingTmdbIssues ? "text-red-500" : "text-amber-500"} />
-                <p style={{ ...SL, marginBottom: 0 }}>TMDB Import Review</p>
+              <p id="movie-editor-review-title" style={SL}>Review</p>
+              <ReadinessSummary validationErrors={validationErrors} backendViolations={backendViolations} hasBlockingTmdbIssues={hasBlockingTmdbIssues} />
+              
+              <p className="mb-2 mt-4" style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-sub)" }}>Catalog provenance</p>
+              <div className="flex flex-wrap gap-4">
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50" style={{ width: "fit-content" }}>
+                  <div className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0"><Check size={10} className="text-white" /></div>
+                  <span style={{ fontSize: "12px", color: "#065f46", fontWeight: 500 }}>TMDB Catalog</span>
+                  <span style={{ fontSize: "12px", color: "#6b7280" }}>·</span>
+                  <a href={`https://www.themoviedb.org/movie/${form.tmdbId}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: "#059669", fontWeight: 500, textDecoration: "none" }}>#${form.tmdbId}</a>
+                </div>
               </div>
 
-              {WARNING_GROUP_ORDER.filter((group) => group !== "genre-mapping").map((group) => {
-                const items = groupedTmdbWarnings[group];
-                if (!items?.length) return null;
-                return (
-                  <div key={group}>
-                    <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-sub)", marginBottom: "4px" }}>
-                      {WARNING_GROUP_LABELS[group]}
-                    </p>
-                    <ul className="space-y-1">
-                      {items.map((w, i) => (
-                        <li key={i} className="flex items-start gap-1.5" style={{ fontSize: "12px" }}>
-                          <span
-                            className="px-1.5 py-0.5 rounded flex-shrink-0"
-                            style={{
-                              fontSize: "9.5px", fontWeight: 700, textTransform: "uppercase", marginTop: "1px",
-                              background: w.severity === "BLOCKING" ? "#fee2e2" : w.severity === "WARNING" ? "#fef3c7" : "#e0f2fe",
-                              color: w.severity === "BLOCKING" ? "#b91c1c" : w.severity === "WARNING" ? "#92400e" : "#0369a1",
-                            }}
-                          >
-                            {w.severity}
-                          </span>
-                          <span style={{ color: "var(--text-main)" }}>{w.label}</span>
-                        </li>
-                      ))}
-                    </ul>
+              {(tmdbWarnings.length > 0 || tmdbUnmappedGenres.length > 0 || form.selectedCompanies.some(c => c.companyId == null) || form.cast.some(c => c.personId == null)) && (
+                <div className="mt-6 pt-4 border-t space-y-4" style={{ borderColor: "var(--border-color)" }}>
+                  <div className="flex items-center gap-2">
+                    <AlertCircle size={14} className={hasBlockingTmdbIssues ? "text-red-500" : "text-amber-500"} />
+                    <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-main)", marginBottom: 0 }}>TMDB Import Warnings & Mappings</p>
                   </div>
-                );
-              })}
 
-              {tmdbUnmappedGenres.length > 0 && (
-                <div>
-                  <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-sub)", marginBottom: "6px" }}>
-                    {WARNING_GROUP_LABELS["genre-mapping"]} ({unresolvedTmdbGenres.length} unresolved)
-                  </p>
-                  <div className="space-y-2">
-                    {tmdbUnmappedGenres.map((g) => {
-                      const resolution = genreResolutions[g.tmdbGenreId];
-                      return (
-                        <div
-                          key={g.tmdbGenreId}
-                          className="p-2.5 rounded-lg border"
-                          style={{ borderColor: resolution ? "var(--border-color)" : "#fca5a5", background: "var(--bg-main)" }}
-                        >
-                          <div className="flex items-center justify-between mb-1.5 gap-2">
-                            <span style={{ fontSize: "12.5px", fontWeight: 500, color: "var(--text-main)" }}>
-                              {g.name} <span style={{ color: "var(--text-sub)", fontWeight: 400 }}>(TMDB genre, unmapped)</span>
-                            </span>
-                            {resolution && (
-                              <span style={{ fontSize: "11px", color: "#059669", flexShrink: 0 }}>
-                                {resolution.action === "mapped" && "✓ Mapped"}
-                                {resolution.action === "created" && "Will create as Pending Review on save"}
-                                {resolution.action === "ignored" && `Ignored — ${resolution.reason}`}
+                  {WARNING_GROUP_ORDER.filter((group) => group !== "genre-mapping").map((group) => {
+                    const items = groupedTmdbWarnings[group];
+                    if (!items?.length) return null;
+                    return (
+                      <div key={group}>
+                        <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-sub)", marginBottom: "4px" }}>
+                          {WARNING_GROUP_LABELS[group]}
+                        </p>
+                        <ul className="space-y-1">
+                          {items.map((w, i) => (
+                            <li key={i} className="flex items-start gap-1.5" style={{ fontSize: "12px" }}>
+                              <span
+                                className="px-1.5 py-0.5 rounded flex-shrink-0"
+                                style={{
+                                  fontSize: "9.5px", fontWeight: 700, textTransform: "uppercase", marginTop: "1px",
+                                  background: w.severity === "BLOCKING" ? "#fee2e2" : w.severity === "WARNING" ? "#fef3c7" : "#e0f2fe",
+                                  color: w.severity === "BLOCKING" ? "#b91c1c" : w.severity === "WARNING" ? "#92400e" : "#0369a1",
+                                }}
+                              >
+                                {w.severity}
                               </span>
+                              <span style={{ color: "var(--text-main)" }}>{w.label}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
+
+                  {tmdbUnmappedGenres.length > 0 && (
+                    <div>
+                      <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-sub)", marginBottom: "6px" }}>
+                        {WARNING_GROUP_LABELS["genre-mapping"]} ({unresolvedTmdbGenres.length} unresolved)
+                      </p>
+                      <div className="space-y-2">
+                        {tmdbUnmappedGenres.map((g) => {
+                          const resolution = genreResolutions[g.tmdbGenreId];
+                          return (
+                            <div
+                              key={g.tmdbGenreId}
+                              className="p-2.5 rounded-lg border"
+                              style={{ borderColor: resolution ? "var(--border-color)" : "#fca5a5", background: "var(--bg-main)" }}
+                            >
+                              <div className="flex items-center justify-between mb-1.5 gap-2">
+                                <span style={{ fontSize: "12.5px", fontWeight: 500, color: "var(--text-main)" }}>
+                                  {g.name} <span style={{ color: "var(--text-sub)", fontWeight: 400 }}>(TMDB genre, unmapped)</span>
+                                </span>
+                                {resolution && (
+                                  <span style={{ fontSize: "11px", color: "#059669", flexShrink: 0 }}>
+                                    {resolution.action === "mapped" && "✓ Mapped"}
+                                    {resolution.action === "created" && "Will create as Pending Review on save"}
+                                    {resolution.action === "ignored" && `Ignored — ${resolution.reason}`}
+                                  </span>
+                                )}
+                              </div>
+                              {!resolution && (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <select
+                                    defaultValue=""
+                                    onChange={(e) => { if (e.target.value) resolveGenreMapExisting(g.tmdbGenreId, Number(e.target.value)); }}
+                                    className="px-2 py-1 rounded border cursor-pointer" style={{ ...IS, fontSize: "12px" }}
+                                  >
+                                    <option value="">Map to existing…</option>
+                                    {genres.map((lg) => <option key={lg.genreId} value={lg.genreId}>{lg.genreName}</option>)}
+                                  </select>
+                                  {isAdmin && (
+                                    <button
+                                      type="button"
+                                      onClick={() => resolveGenreCreateNew(g.tmdbGenreId)}
+                                      className="px-2 py-1 rounded border hover:bg-blue-50"
+                                      style={{ fontSize: "12px", borderColor: "var(--border-color)", color: "var(--text-main)" }}
+                                    >
+                                      Create new
+                                    </button>
+                                  )}
+                                  <input
+                                    type="text" placeholder="Ignore reason…"
+                                    value={ignoreReasonDraft[g.tmdbGenreId] ?? ""}
+                                    onChange={(e) => setIgnoreReasonDraft((prev) => ({ ...prev, [g.tmdbGenreId]: e.target.value }))}
+                                    className="px-2 py-1 rounded border flex-1 min-w-[110px]" style={{ ...IS, fontSize: "12px" }}
+                                  />
+                                  <button
+                                    type="button" onClick={() => resolveGenreIgnore(g.tmdbGenreId)}
+                                    className="px-2 py-1 rounded border hover:bg-red-50"
+                                    style={{ fontSize: "12px", borderColor: "var(--border-color)", color: "var(--text-main)" }}
+                                  >
+                                    Ignore
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Additional Master-Data Mappings for Companies and Persons */}
+                  {(form.selectedCompanies.length > 0 || form.cast.length > 0) && (
+                    <div className="mt-4">
+                      <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-sub)", marginBottom: "6px" }}>
+                        Master-data mapping (Companies & Persons)
+                      </p>
+                      <div className="space-y-2">
+                        {form.selectedCompanies.map((c, i) => (
+                          <div key={`company-${i}`} className="flex items-center justify-between p-2 rounded-lg border" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)", fontSize: "12px" }}>
+                            <span style={{ color: "var(--text-main)" }}>Company: {c.name}</span>
+                            {c.companyId ? (
+                              <span className="text-emerald-600 font-medium text-[11px]">✓ Mapped</span>
+                            ) : (
+                              <span className="text-amber-600 font-medium text-[11px]">Suggested (Auto-create on save)</span>
                             )}
                           </div>
-                          {!resolution && (
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <select
-                                defaultValue=""
-                                onChange={(e) => { if (e.target.value) resolveGenreMapExisting(g.tmdbGenreId, Number(e.target.value)); }}
-                                className="px-2 py-1 rounded border cursor-pointer" style={{ ...IS, fontSize: "12px" }}
-                              >
-                                <option value="">Map to existing…</option>
-                                {genres.map((lg) => <option key={lg.genreId} value={lg.genreId}>{lg.genreName}</option>)}
-                              </select>
-                              {isAdmin && (
-                                <button
-                                  type="button"
-                                  onClick={() => resolveGenreCreateNew(g.tmdbGenreId)}
-                                  className="px-2 py-1 rounded border hover:bg-blue-50"
-                                  style={{ fontSize: "12px", borderColor: "var(--border-color)", color: "var(--text-main)" }}
-                                >
-                                  Create new
-                                </button>
-                              )}
-                              <input
-                                type="text" placeholder="Ignore reason…"
-                                value={ignoreReasonDraft[g.tmdbGenreId] ?? ""}
-                                onChange={(e) => setIgnoreReasonDraft((prev) => ({ ...prev, [g.tmdbGenreId]: e.target.value }))}
-                                className="px-2 py-1 rounded border flex-1 min-w-[110px]" style={{ ...IS, fontSize: "12px" }}
-                              />
-                              <button
-                                type="button" onClick={() => resolveGenreIgnore(g.tmdbGenreId)}
-                                className="px-2 py-1 rounded border hover:bg-red-50"
-                                style={{ fontSize: "12px", borderColor: "var(--border-color)", color: "var(--text-main)" }}
-                              >
-                                Ignore
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                        ))}
+                        {form.cast.map((p, i) => (
+                          <div key={`person-${p._key}`} className="flex items-center justify-between p-2 rounded-lg border" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)", fontSize: "12px" }}>
+                            <span style={{ color: "var(--text-main)" }}>Person: {p.fullName} ({p.roleType})</span>
+                            {p.personId ? (
+                              <span className="text-emerald-600 font-medium text-[11px]">✓ Mapped</span>
+                            ) : (
+                              <span className="text-amber-600 font-medium text-[11px]">Suggested (Auto-create on save)</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                 </div>
               )}
             </section>
