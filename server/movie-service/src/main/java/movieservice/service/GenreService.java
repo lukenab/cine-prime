@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.exception.AppException;
 import movieservice.dto.response.GenreResponse;
 import movieservice.entity.Genre;
+import movieservice.enums.GenreStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.GenreRepository;
@@ -54,6 +55,18 @@ public class GenreService {
                 .genreName(genreName)
                 .genreCode(genreCode)
                 .build();
+        return movieMapper.toGenreResponse(genreRepository.save(genre));
+    }
+
+    /** Promotes a TMDB-import-created PENDING_REVIEW genre to ACTIVE so it becomes usable elsewhere. */
+    @Transactional
+    public GenreResponse approve(Long id) {
+        Genre genre = genreRepository.findById(id)
+                .orElseThrow(() -> new AppException(MovieErrorCode.GENRE_NOT_FOUND));
+        if (genre.getStatus() != GenreStatus.PENDING_REVIEW) {
+            throw new AppException(MovieErrorCode.GENRE_NOT_PENDING_REVIEW);
+        }
+        genre.setStatus(GenreStatus.ACTIVE);
         return movieMapper.toGenreResponse(genreRepository.save(genre));
     }
 }

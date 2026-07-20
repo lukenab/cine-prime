@@ -375,10 +375,14 @@ export type AvailabilityStatus = 'PLANNED' | 'OPEN' | 'SUSPENDED' | 'CLOSED';
 
 export type DisplayStatus = 'NOW_SHOWING' | 'COMING_SOON';
 
+export type GenreStatus = 'ACTIVE' | 'PENDING_REVIEW';
+
 export type GenreResponse = {
   genreId: number;
   genreCode: string;
   genreName: string;
+  tmdbGenreId?: number;
+  status: GenreStatus;
 };
 
 export type AgeRatingResponse = {
@@ -921,6 +925,9 @@ export const movieApi = {
 
   createGenre: (payload: CreateGenrePayload) =>
     axiosClient.post('/api/genres', payload) as Promise<ApiWrapper<GenreResponse>>,
+
+  approveGenre: (id: number) =>
+    axiosClient.patch(`/api/genres/${id}/approve`) as Promise<ApiWrapper<GenreResponse>>,
 
   // Age Ratings
   getAgeRatings: () =>
