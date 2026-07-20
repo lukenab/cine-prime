@@ -73,6 +73,10 @@ public class PersonController {
                 .photoUrl(request.getPhotoUrl())
                 .biography(request.getBiography())
                 .tmdbId(request.getTmdbId())
+                .gender(request.getGender())
+                .knownForDepartment(request.getKnownForDepartment())
+                .deathDate(request.getDeathDate())
+                .placeOfBirth(request.getPlaceOfBirth())
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -97,6 +101,10 @@ public class PersonController {
         person.setPhotoUrl(request.getPhotoUrl());
         person.setBiography(request.getBiography());
         if (request.getTmdbId() != null) person.setTmdbId(request.getTmdbId());
+        person.setGender(request.getGender());
+        person.setKnownForDepartment(request.getKnownForDepartment());
+        person.setDeathDate(request.getDeathDate());
+        person.setPlaceOfBirth(request.getPlaceOfBirth());
         person.setUpdatedAt(LocalDateTime.now());
         person = personRepository.save(person);
         return ApiResponse.<PersonResponse>builder()

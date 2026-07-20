@@ -154,6 +154,8 @@ public final class TmdbDraftMapper {
                             .name(item.getName())
                             .photoUrl(buildPosterUrl(item.getProfilePath()))
                             .roleType("DIRECTOR")
+                            .gender(convertGender(item.getGender()))
+                            .knownForDepartment(item.getKnownForDepartment())
                             .build()));
         }
 
@@ -172,6 +174,8 @@ public final class TmdbDraftMapper {
                         .roleType("ACTOR")
                         .characterName(item.getCharacter())
                         .billingOrder(i + 1)
+                        .gender(convertGender(item.getGender()))
+                        .knownForDepartment(item.getKnownForDepartment())
                         .build());
             }
         }
@@ -180,5 +184,18 @@ public final class TmdbDraftMapper {
 
     private static String buildPosterUrl(String path) {
         return path != null ? POSTER_BASE + path : null;
+    }
+
+    /** TMDB gender code (0=unknown, 1=female, 2=male, 3=non-binary) -> String enum used by Person. */
+    private static String convertGender(Integer tmdbGender) {
+        if (tmdbGender == null) {
+            return null;
+        }
+        return switch (tmdbGender) {
+            case 1 -> "FEMALE";
+            case 2 -> "MALE";
+            case 3 -> "NON_BINARY";
+            default -> "UNKNOWN";
+        };
     }
 }

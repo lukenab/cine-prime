@@ -23,6 +23,12 @@ public class TmdbCreditsResponse {
         String name;
         String character;
 
+        // TMDB gender: 0=unknown, 1=female, 2=male, 3=non-binary
+        Integer gender;
+
+        @JsonProperty("known_for_department")
+        String knownForDepartment;
+
         @JsonProperty("order")
         Integer order;
 
@@ -38,6 +44,12 @@ public class TmdbCreditsResponse {
         String name;
         String job;
         String department;
+
+        // TMDB gender: 0=unknown, 1=female, 2=male, 3=non-binary
+        Integer gender;
+
+        @JsonProperty("known_for_department")
+        String knownForDepartment;
 
         @JsonProperty("profile_path")
         String profilePath;

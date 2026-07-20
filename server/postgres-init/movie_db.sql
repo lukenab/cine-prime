@@ -133,6 +133,10 @@ CREATE TABLE IF NOT EXISTS person (
     photo_url    VARCHAR(500),
     biography    TEXT,
     tmdb_id      INTEGER      UNIQUE,   -- ID từ TMDB API → dùng để dedup và sync ảnh
+    gender               VARCHAR(10),   -- MALE | FEMALE | NON_BINARY | UNKNOWN
+    known_for_department VARCHAR(50),   -- Acting | Directing | Writing | Production | ...
+    death_date           DATE,          -- NULL = person vẫn còn sống
+    place_of_birth       VARCHAR(255),
     created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );

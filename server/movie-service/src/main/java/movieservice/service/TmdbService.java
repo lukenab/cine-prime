@@ -897,7 +897,8 @@ public class TmdbService {
     }
 
     /** Real upsert - only ever called from importMovie(), never from preview. */
-    private Person upsertPerson(Integer tmdbPersonId, String name, String photoUrl) {
+    private Person upsertPerson(Integer tmdbPersonId, String name, String photoUrl,
+                                String gender, String knownForDepartment) {
         return personRepository.findByTmdbId(tmdbPersonId)
                 .orElseGet(() -> {
                     Person p = new Person();
@@ -906,6 +907,8 @@ public class TmdbService {
                     if (photoUrl != null) {
                         p.setPhotoUrl(photoUrl);
                     }
+                    p.setGender(gender);
+                    p.setKnownForDepartment(knownForDepartment);
                     p.setCreatedAt(LocalDateTime.now());
                     p.setUpdatedAt(LocalDateTime.now());
                     return personRepository.save(p);
@@ -960,7 +963,8 @@ public class TmdbService {
     private int saveCast(Movie movie, List<TmdbCastDraft> castDrafts) {
         int count = 0;
         for (TmdbCastDraft c : castDrafts) {
-            Person person = upsertPerson(c.getTmdbPersonId(), c.getName(), c.getPhotoUrl());
+            Person person = upsertPerson(c.getTmdbPersonId(), c.getName(), c.getPhotoUrl(),
+                    c.getGender(), c.getKnownForDepartment());
             saveCastEntry(movie, person, c.getRoleType(), c.getCharacterName(), c.getBillingOrder());
             count++;
         }

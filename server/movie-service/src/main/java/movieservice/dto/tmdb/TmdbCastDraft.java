@@ -12,4 +12,6 @@ public class TmdbCastDraft {
     String roleType;
     String characterName;
     Integer billingOrder;
+    String gender;
+    String knownForDepartment;
 }
