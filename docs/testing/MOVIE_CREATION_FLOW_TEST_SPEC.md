@@ -6,15 +6,15 @@
 |---|---|
 | Tên tài liệu | Movie Creation Flow — Specification & Test Plan |
 | Module | `movie-service` (backend) + Movie Editor / TMDB catalog / Movie Management (frontend) |
-| Phiên bản | 2.0 |
-| Ngày kiểm tra | 2026-07-20 (audit gốc); cập nhật lần 2: 2026-07-20 |
+| Phiên bản | 3.0 |
+| Ngày kiểm tra | 2026-07-20 (audit gốc); cập nhật lần 2: 2026-07-20; cập nhật lần 3: 2026-07-21 |
 | Branch hiện tại | `docs/update-movie-creation-flow-spec` (tạo từ `develop`) |
 | Commit hiện tại | `8184664` — "Merge branch 'feat/movie-editor-media-section' into 'develop'" |
 | Người dùng mục tiêu | Developer (backend/frontend), Tester/QA, Reviewer (MR review), Product/Business (đọc phần Executive Summary + Gaps) |
-| Phạm vi | Toàn bộ vòng đời tạo/lưu/cập nhật/xét duyệt phim: manual creation, TMDB-assisted creation, review/approval, request-changes/revision, media, authorization, business rules liên quan |
-| Ngoài phạm vi | Movie Availability (per-cluster exhibition lifecycle — `movie_availability`, `MovieAvailabilityController`), Showtime/booking, Cinema Cluster/Room, Seat layout. Các module này chỉ được nhắc tới khi cần thiết để phân biệt ranh giới với Movie content lifecycle. |
+| Phạm vi | Toàn bộ vòng đời tạo/lưu/cập nhật/xét duyệt phim: manual creation, TMDB-assisted creation, review/approval, request-changes/revision, media, authorization, business rules liên quan. **Kể từ v3.0**: mở rộng thêm Movie Availability (vòng đời khai thác/chiếu theo từng cụm rạp) — xem Mục 23. |
+| Ngoài phạm vi | Showtime/booking (lịch chiếu cụ thể, ghế, đặt vé), Cinema Cluster/Room CRUD, Seat layout. Các module này chỉ được nhắc tới khi cần thiết để phân biệt ranh giới với Movie content/availability lifecycle. |
 
-> **Lịch sử cập nhật:** Bản audit gốc (v1.0, commit `83a83c5`) phát hiện 2 gap ảnh hưởng cốt lõi — Gap #1 (P1, TMDB one-shot import không có UI trigger) và Gap #2 (P0, `rejectionNote` không hiển thị cho EMPLOYEE) — cả hai đã được xử lý (`fix/movie-rejection-note-visibility`, `feat/tmdb-import-ui`, merge vào `develop`). Sau đó, `feat/movie-editor-media-section` (MOV-EDITOR-05) đã tổ chức lại Media section thành 1 khối duy nhất (Poster/Backdrop/Trailer/Gallery). Bản v2.0 này (commit `8184664`) đã viết lại các mục liên quan (Flow B, Business Rules, API Catalogue, UI Scenarios, Traceability, Gaps) để khớp với code hiện tại — không còn phần nào mô tả hành vi cũ như đang hoạt động.
+> **Lịch sử cập nhật:** Bản audit gốc (v1.0, commit `83a83c5`) phát hiện 2 gap ảnh hưởng cốt lõi — Gap #1 (P1, TMDB one-shot import không có UI trigger) và Gap #2 (P0, `rejectionNote` không hiển thị cho EMPLOYEE) — cả hai đã được xử lý (`fix/movie-rejection-note-visibility`, `feat/tmdb-import-ui`, merge vào `develop`). Sau đó, `feat/movie-editor-media-section` (MOV-EDITOR-05) đã tổ chức lại Media section thành 1 khối duy nhất (Poster/Backdrop/Trailer/Gallery). Bản v2.0 (commit `8184664`) đã viết lại các mục liên quan (Flow B, Business Rules, API Catalogue, UI Scenarios, Traceability, Gaps) để khớp với code hiện tại. **Bản v3.0** mở rộng phạm vi tài liệu, thêm Mục 23 (Movie Availability) — trước đây bị loại khỏi phạm vi, nay được viết đầy đủ cùng mức độ chi tiết với phần Movie content lifecycle, vì đây là phần trực tiếp quyết định phim có thật sự "lên sóng" hay không (mà phần Executive Summary/Flow A-E trước đó luôn phải nhắc tới rồi lại nói "ngoài phạm vi").
 
 **Nguyên tắc đọc tài liệu:** mọi khẳng định trong tài liệu này đều bắt nguồn từ source code tại commit nêu trên. Khi một chi tiết không thể xác minh chắc chắn từ code đã đọc, tài liệu ghi rõ **"Chưa xác minh từ implementation"** kèm file cần kiểm tra thêm, thay vì suy đoán.
 
@@ -58,10 +58,12 @@ Tác dụng phụ đáng chú ý của việc wire endpoint thật: resolve "Cre
 - **`MOVIE_LIFECYCLE_CONTRACT.md` ghi sai tên error code cho optimistic-lock conflict** — tài liệu nói `409 MOVIE_CONCURRENT_MODIFICATION`, nhưng thực tế `OptimisticLockingFailureException` được xử lý bởi `GlobalExceptionHandler` (dùng chung toàn hệ thống) trả về `GlobalErrorCode.CONCURRENT_MODIFICATION` (code `1010`), không có `MOVIE_CONCURRENT_MODIFICATION` nào tồn tại trong `MovieErrorCode`.
 - Không có endpoint xoá phim (`DELETE /api/movies/{id}`) — đã bị loại bỏ có chủ đích, thay bằng `archive`. Một số tài liệu cũ (`docs/MOVIE_SERVICE_BUSINESS_RULES.md` MOV-P0-002) vẫn còn nhắc `MovieService.deleteMovie` — **không còn tồn tại trong code hiện tại**, đây là tài liệu-code mismatch cần cập nhật riêng.
 - **Chưa có QA trình duyệt thật** cho cả 3 thay đổi (`fix/movie-rejection-note-visibility`, `feat/tmdb-import-ui`, `feat/movie-editor-media-section`) — môi trường audit không có Playwright/chromium-cli. Chỉ xác minh được qua `tsc`, unit test và `npm run build`.
+- **[Mục 23 — mới ở v3.0] `MovieScheduler.autoCloseExpiredAvailability()` tự động đóng availability window (`PLANNED`/`OPEN`/`SUSPENDED` → `CLOSED`) mỗi đêm 00:05 khi `showing_end_date` đã qua, nhưng KHÔNG ghi `movie_availability_history`** — audit trail có lỗ hổng cho transition loại này (Gap #11, xem Mục 23.9).
+- **[Mục 23 — mới ở v3.0] UI (`MovieAvailabilityPanel.tsx`) hạn chế việc tạo release plan chỉ cho ADMIN, dù backend cho phép cả EMPLOYEE** (`@PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")` trên `POST /api/movie-availabilities`) — chiều ngược lại với Gap #2 cũ (lần này UI chặt hơn backend, không phải lỏng hơn). Xem Gap #12, Mục 23.9.
 
 **Đánh giá mức độ sẵn sàng: `Academic-ready`** (giữ nguyên, chưa nâng lên `Production-oriented`).
 
-Bằng chứng: state machine, validation 2 tầng (DTO `@Valid` + `MovieReadinessValidator`), authorization, và test coverage cho phần lõi (create/update/transition) đều có và được test khá kỹ (`MovieServiceTest`, `MovieReadinessValidatorTest`, `MovieMapperTest`, `TmdbServiceTest`...). Cả 2 gap cốt lõi ban đầu (rejectionNote, TMDB import không wired) đã được xử lý và Media section đã hợp nhất, nhưng **chưa có bằng chứng QA trình duyệt thật** cho những thay đổi này — theo đúng nguyên tắc của tài liệu ("không khẳng định production-ready khi chưa có bằng chứng kiểm thử"), mức đánh giá giữ nguyên `Academic-ready` cho tới khi có QA thủ công xác nhận, và cho tới khi Gap #7 (audit history) được xử lý.
+Bằng chứng: state machine, validation 2 tầng (DTO `@Valid` + `MovieReadinessValidator`), authorization, và test coverage cho phần lõi (create/update/transition) đều có và được test khá kỹ (`MovieServiceTest`, `MovieReadinessValidatorTest`, `MovieMapperTest`, `TmdbServiceTest`...). Cả 2 gap cốt lõi ban đầu (rejectionNote, TMDB import không wired) đã được xử lý và Media section đã hợp nhất, nhưng **chưa có bằng chứng QA trình duyệt thật** cho những thay đổi này — theo đúng nguyên tắc của tài liệu ("không khẳng định production-ready khi chưa có bằng chứng kiểm thử"), mức đánh giá giữ nguyên `Academic-ready` cho tới khi có QA thủ công xác nhận, và cho tới khi Gap #7 (audit history) được xử lý. Mục Availability mới thêm ở v3.0 có state machine + unit test riêng khá tốt (`MovieAvailabilityServiceTest`, 12 test case bao phủ đủ 4 transition + 3 validation ở `create`), nhưng **không có test authorization ở tầng controller** (không tìm thấy file `MovieAvailabilityControllerTest`) và có 2 gap mới (audit trail thiếu cho auto-close, UI hẹp hơn backend) — xem Mục 23.9.
 
 ---
 
@@ -71,7 +73,8 @@ Bằng chứng: state machine, validation 2 tầng (DTO `@Valid` + `MovieReadine
 |---|---|---|
 | Movie Draft | Bản nháp phim | `Movie.status = DRAFT`. Trạng thái duy nhất có thể sửa trực tiếp qua `PUT /api/movies/{id}`. |
 | Content Approval | Phê duyệt nội dung | Chuyển `PENDING_REVIEW → APPROVED` qua `POST /api/movies/{id}/approve`. Chỉ là quyết định biên tập, **không** làm phim lên sóng/mở bán ở đâu cả. |
-| Exhibition Lifecycle | Vòng đời khai thác/chiếu phim | Thuộc về `MovieAvailability` (bảng `movie_availability`, ngoài phạm vi tài liệu này) — theo từng cụm rạp (`cluster`), tách biệt hoàn toàn khỏi `Movie.status`. |
+| Exhibition Lifecycle | Vòng đời khai thác/chiếu phim | Thuộc về `MovieAvailability` (bảng `movie_availability`) — theo từng cụm rạp (`cluster`), tách biệt hoàn toàn khỏi `Movie.status`. **Kể từ v3.0, trong phạm vi tài liệu này** — xem Mục 23. |
+| Release Plan / Availability Window | Kế hoạch chiếu | 1 dòng `movie_availability` = 1 quyết định "phim X được phép khai thác ở cụm rạp Y, từ ngày A (đến ngày B nếu có)". Không tự động kéo theo suất chiếu hay mở bán — xem Mục 23.2. |
 | Readiness Gate | Điều kiện sẵn sàng | `MovieReadinessValidator` — tập hợp rule phải thoả trước khi submit/approve, thu thập **tất cả** vi phạm cùng lúc thay vì dừng ở lỗi đầu tiên. |
 | Display Status | Trạng thái hiển thị | `NOW_SHOWING`/`COMING_SOON` — tính toán tại thời điểm đọc (không lưu DB), dựa trên `Movie.status = APPROVED` + `MovieAvailability` + showtime. |
 | TMDB Preview | Bản xem trước dữ liệu TMDB | `GET /api/movies/tmdb/{tmdbId}/details` — đọc thuần, không ghi DB, không gọi `save()` ở bất kỳ repository nào. |
@@ -104,6 +107,9 @@ Nguồn: `@PreAuthorize` trên `MovieController`, `TmdbController`, `MovieImageC
 | Quản lý movie image (list/add/delete/tmdb-import ảnh) | Allow | Allow | Deny | Deny | `MovieImageController` — tất cả `hasAnyRole('ADMIN','EMPLOYEE')` |
 | Upload ảnh (Cloudinary) | Allow | Allow | Deny | Deny | `POST /api/movies/images` |
 | Xem audit log của 1 movie | — | — | — | — | **Không có endpoint đọc `movie_action_log`/`movie_status_history` qua API.** Chưa xác minh từ implementation liệu có endpoint nào khác expose 2 bảng này — grep trong `movieservice/controller` không thấy repository nào cho 2 bảng này được expose qua REST. |
+| Tạo/sửa release plan (Availability) | Allow | Allow | Deny | Deny | `POST`/`PUT /api/movie-availabilities` — `@PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")`. **Nhưng UI (`MovieAvailabilityPanel.tsx`) chỉ hiện nút "New release plan" khi `isAdmin`** — EMPLOYEE có quyền API nhưng không có đường vào UI (xem Mục 23.3 để biết đây là gap gì) |
+| Xem release plan (Availability) | Allow | Allow | Deny | Deny | `GET /api/movie-availabilities` |
+| Open / Suspend / Resume / Close (Availability) | Allow | Deny | Deny | Deny | `POST /api/movie-availabilities/{id}/{open|suspend|resume|close}` — `@PreAuthorize("hasRole('ADMIN')")`, UI cũng gate đúng bằng `isAdmin` |
 
 Ghi chú:
 - Không có khái niệm "own draft only" ở tầng `@PreAuthorize` cho Movie (khác với Cinema Cluster/Room, nơi có ownership check trong service) — bất kỳ EMPLOYEE nào cũng sửa được draft của EMPLOYEE khác. **Chưa xác minh** đây có phải hành vi mong muốn hay là gap — không thấy rule nghiệp vụ nào trong `docs/MOVIE_SERVICE_BUSINESS_RULES.md` nói về ownership cho Movie draft.
@@ -819,7 +825,7 @@ Nếu phim có genre TMDB chưa từng map và không gửi `selectedGenreMappin
 
 ### API-MOV-011 — Archive blocked by active availability
 
-**Chưa xác minh đầy đủ từ tài liệu này** (tạo `MovieAvailability` ngoài phạm vi) — nếu môi trường có sẵn 1 `movie_availability` `PLANNED`/`OPEN` cho movie này:
+**Preconditions:** Movie đã `APPROVED`, và đã tạo 1 `movie_availability` `PLANNED`/`OPEN` cho movie này — xem API-AVAIL-001 (Mục 23.7) để tạo.
 
 **Request:** `POST {{baseUrl}}/api/movies/{{movieId}}/archive`
 
@@ -1649,6 +1655,34 @@ WHERE g.status = 'PENDING_REVIEW';
 
 -- Xác nhận 10 cột legacy đã bị xoá khỏi bảng movie (nếu câu lệnh này chạy được mà không lỗi "column does not exist" là đúng)
 SELECT movie_id FROM movie LIMIT 0; -- chạy \d movie trong psql để xem danh sách cột thật, đối chiếu với Mục 5
+
+-- [Mục 23] Release plan của 1 movie, theo cluster
+SELECT ma.availability_id, cc.cluster_name, ma.status, ma.showing_start_date, ma.showing_end_date,
+       ma.sales_start_at, ma.suspension_reason, ma.updated_by, ma.updated_at
+FROM movie_availability ma
+JOIN cinema_cluster cc ON cc.cluster_id = ma.cluster_id
+WHERE ma.movie_id = :movieId
+ORDER BY ma.showing_start_date;
+
+-- [Mục 23] Lịch sử chuyển trạng thái availability (KHÔNG có dòng nào actor="SYSTEM" nếu MovieScheduler
+-- chưa từng auto-close cái nào — xem Gap #11: auto-close hiện không ghi bảng này)
+SELECT history_id, availability_id, from_status, to_status, actor, reason, created_at
+FROM movie_availability_history
+WHERE availability_id = :availabilityId
+ORDER BY created_at ASC;
+
+-- [Mục 23] Tìm mọi availability đã bị MovieScheduler tự đóng đêm qua (updated_by = 'SYSTEM')
+-- — đối chiếu số dòng này với số dòng movie_availability_history có actor='SYSTEM' (Gap #11:
+-- kỳ vọng KHÔNG có dòng history nào, dù có thể có availability status=CLOSED, updated_by=SYSTEM)
+SELECT availability_id, movie_id, cluster_id, showing_end_date, updated_at
+FROM movie_availability
+WHERE status = 'CLOSED' AND updated_by = 'SYSTEM';
+
+-- [Mục 23] Movie đang APPROVED nhưng archive sẽ bị chặn (còn availability PLANNED/OPEN)
+SELECT DISTINCT m.movie_id, m.original_title
+FROM movie m
+JOIN movie_availability ma ON ma.movie_id = m.movie_id
+WHERE m.status = 'APPROVED' AND ma.status IN ('PLANNED', 'OPEN');
 ```
 
 ---
@@ -1750,6 +1784,221 @@ SELECT movie_id FROM movie LIMIT 0; -- chạy \d movie trong psql để xem danh
 - [ ] Authorization: đúng ma trận Mục 4 cho toàn bộ endpoint movie/tmdb/image
 - [ ] Migration: `V1`..`V9` + `R` áp dụng sạch trên DB rỗng (`FlywayMigrationIntegrationTest`)
 - [ ] Không còn tham chiếu nào tới 10 cột legacy đã xoá (`actor`, `director`, `content`, `movie_name_vn`, `movie_name_english`, `movie_production_company` (cột cũ), `large_image`, `small_image`, `create_at`, `duration`) hoặc `end_date`
+- [ ] **[Mục 23]** Availability: `create` chặn khi movie chưa `APPROVED` (`409 AVAILABILITY_MOVIE_NOT_APPROVED`), khi cluster không `ACTIVE` (`400 AVAILABILITY_CLUSTER_NOT_ACTIVE`), khi ngày không hợp lệ (`400 AVAILABILITY_DATE_RANGE_INVALID`), khi trùng `(movie, cluster, showingStartDate)` (`409 AVAILABILITY_WINDOW_ALREADY_EXISTS`)
+- [ ] **[Mục 23]** Availability: `update` chỉ cho phép khi còn `PLANNED` (`409 AVAILABILITY_NOT_EDITABLE` nếu đã `OPEN`/`SUSPENDED`/`CLOSED`)
+- [ ] **[Mục 23]** Availability: `open` chỉ từ `PLANNED`; `suspend` chỉ từ `PLANNED`/`OPEN` và bắt buộc `reason`; `resume` chỉ từ `SUSPENDED` (và xoá `suspensionReason`); `close` được từ bất kỳ trạng thái nào trừ `CLOSED` — sai thứ tự đều trả `409 AVAILABILITY_INVALID_TRANSITION`
+- [ ] **[Mục 23]** Availability: `open`/`suspend`/`resume`/`close` đều 403 với EMPLOYEE (chỉ ADMIN); `create`/`update` cho phép cả EMPLOYEE ở tầng API dù UI không có nút
+- [ ] **[Mục 23]** `archive` movie bị chặn (`409 MOVIE_HAS_ACTIVE_AVAILABILITY`) khi còn availability `PLANNED`/`OPEN`; không bị chặn bởi `SUSPENDED`/`CLOSED`
+- [ ] **[Mục 23]** Display status public: `NOW_SHOWING` chỉ khi availability `OPEN` **và** có showtime tương lai còn bán được; ngược lại (kể cả `OPEN` chưa có showtime) là `COMING_SOON`; `SUSPENDED`/`CLOSED` không hiện công khai
+- [ ] **[Mục 23]** `MovieScheduler` (cron 00:05): availability có `showing_end_date` đã qua tự chuyển `CLOSED`, `updated_by="SYSTEM"`, không phá vỡ `movie.status`; verify KHÔNG có dòng mới trong `movie_availability_history` cho transition này (hành vi hiện tại, xem Gap #11)
+
+---
+
+## 23. Movie Availability (Exhibition) Lifecycle
+
+**Mới ở v3.0.** Phần này trước đây bị loại khỏi phạm vi tài liệu (v1.0/v2.0), nhưng vì nó quyết định trực tiếp phim có thật sự "lên sóng" hay không — điều mà Flow A bước 14, Mục 6 và Executive Summary đều phải nhắc tới rồi lại nói "ngoài phạm vi" — nên được viết đầy đủ ở đây, cùng mức độ chi tiết với Movie content lifecycle. Nguồn tham chiếu song song: `docs/api-specs/movie-service/MOVIE_LIFECYCLE_CONTRACT.md` (đã tự audit và sửa 2 chỗ sai ở phiên làm việc trước — sơ đồ transition thiếu nhánh `PLANNED→CLOSED` trực tiếp, và role owner ghi sai là "ADMIN-only" trong khi `create`/`update` cho phép cả EMPLOYEE).
+
+### 23.1 Data Model — bảng `movie_availability`
+
+Đọc trực tiếp từ DB (`psql \d movie_availability`), nằm trong `V1__baseline_schema.sql`:
+
+| Field (JSON) | Field (DB) | Kiểu | Ghi chú |
+|---|---|---|---|
+| `availabilityId` | `availability_id` | `BIGSERIAL` | PK |
+| `movieId` | `movie_id` | `BIGINT NOT NULL` | FK `movie`, `ON DELETE CASCADE` |
+| `clusterId` | `cluster_id` | `BIGINT NOT NULL` | FK `cinema_cluster` |
+| `status` | `status` | `VARCHAR(20)`, default `'PLANNED'` | CHECK trong 4 giá trị `PLANNED\|OPEN\|SUSPENDED\|CLOSED` |
+| `salesStartAt` | `sales_start_at` | `TIMESTAMPTZ` | Optional — chỉ mang tính kế hoạch, KHÔNG tự mở bán vé thật (đó là hành động riêng ở Showtime, ngoài phạm vi) |
+| `showingStartDate` | `showing_start_date` | `DATE NOT NULL` | Cùng với `movieId`+`clusterId` tạo unique constraint `uq_availability_window` |
+| `showingEndDate` | `showing_end_date` | `DATE` | Optional = open-ended. CHECK `showing_end_date IS NULL OR showing_end_date >= showing_start_date` |
+| `suspensionReason` | `suspension_reason` | `VARCHAR(500)` | Chỉ có giá trị khi `SUSPENDED`; bị xoá (`null`) khi `resume` |
+| `version` | `version` | `BIGINT`, default `0` | `@Version` optimistic lock |
+| `createdAt`/`updatedAt`/`createdBy`/`updatedBy` | | | Có trigger DB `set_updated_at()` tự cập nhật `updated_at` |
+
+Index: `idx_movie_availability_cluster_status (cluster_id, status, showing_start_date)`, `idx_movie_availability_movie_cluster (movie_id, cluster_id)`. Unique: `uq_availability_window (movie_id, cluster_id, showing_start_date)` — nghĩa là **cùng 1 phim, cùng 1 cụm rạp vẫn có thể có nhiều release plan**, miễn `showingStartDate` khác nhau (ví dụ: relaunch sau khi đã `CLOSED`).
+
+Bảng `movie_availability_history` (entity `MovieAvailabilityHistory`) ghi lại `fromStatus`/`toStatus`/`actor`/`reason`/`createdAt` mỗi lần `MovieAvailabilityService` gọi `recordHistory()` — xem 23.9 Gap #11 về 1 trường hợp KHÔNG được ghi.
+
+### 23.2 Lifecycle & Transition Matrix
+
+```mermaid
+stateDiagram-v2
+    [*] --> PLANNED: create
+    PLANNED --> OPEN: open
+    OPEN --> SUSPENDED: suspend(reason)
+    SUSPENDED --> OPEN: resume
+    PLANNED --> CLOSED: close
+    OPEN --> CLOSED: close
+    SUSPENDED --> CLOSED: close
+    PLANNED --> CLOSED: (scheduled) showing_end_date đã qua
+    OPEN --> CLOSED: (scheduled) showing_end_date đã qua
+    SUSPENDED --> CLOSED: (scheduled) showing_end_date đã qua
+```
+
+| From | Command | To | Role | API | Preconditions | Failure Code |
+|---|---|---|---|---|---|---|
+| — | `create` | `PLANNED` | ADMIN, EMPLOYEE | `POST /api/movie-availabilities` | `movie.status == APPROVED`; cluster `status == ACTIVE`; `showingEndDate` (nếu có) ≥ `showingStartDate`; không trùng `(movieId, clusterId, showingStartDate)` | `409 AVAILABILITY_MOVIE_NOT_APPROVED` (2075); `400 AVAILABILITY_CLUSTER_NOT_ACTIVE` (2076); `400 AVAILABILITY_DATE_RANGE_INVALID` (2077); `409 AVAILABILITY_WINDOW_ALREADY_EXISTS` (2078, bắt qua `DataIntegrityViolationException` trên unique constraint, không phải pre-check ở service) |
+| `PLANNED` | `update` | `PLANNED` (không đổi status) | ADMIN, EMPLOYEE | `PUT /api/movie-availabilities/{id}` | Chỉ sửa được `salesStartAt`/`showingStartDate`/`showingEndDate`, chỉ khi còn `PLANNED` | `409 AVAILABILITY_NOT_EDITABLE` (2079) nếu đã `OPEN`/`SUSPENDED`/`CLOSED` |
+| `PLANNED` | `open` | `OPEN` | **ADMIN only** | `POST /api/movie-availabilities/{id}/open` | — | `409 AVAILABILITY_INVALID_TRANSITION` (2073) nếu không đúng `PLANNED` |
+| `PLANNED`, `OPEN` | `suspend` | `SUSPENDED` | **ADMIN only** | `POST /api/movie-availabilities/{id}/suspend` `{reason}` | `reason` bắt buộc (`@NotBlank`) | `400` validation nếu `reason` rỗng; `409 AVAILABILITY_INVALID_TRANSITION` nếu đang `CLOSED` |
+| `SUSPENDED` | `resume` | `OPEN` | **ADMIN only** | `POST /api/movie-availabilities/{id}/resume` | — | `409 AVAILABILITY_INVALID_TRANSITION` nếu không đúng `SUSPENDED` |
+| `PLANNED`, `OPEN`, `SUSPENDED` | `close` | `CLOSED` | **ADMIN only** | `POST /api/movie-availabilities/{id}/close` | — | `409 AVAILABILITY_INVALID_TRANSITION` chỉ khi đã `CLOSED` (trạng thái cuối, không transition nào thoát ra được) |
+| `PLANNED`, `OPEN`, `SUSPENDED` | *(tự động, không qua API)* | `CLOSED` | `SYSTEM` | `MovieScheduler.autoCloseExpiredAvailability()` — cron `0 5 0 * * *` (00:05 hàng đêm) | `showingEndDate` (nếu có) đã qua so với `LocalDate.now()` | — (không throw, chạy nền; xem Gap #11 — transition này KHÔNG ghi `movie_availability_history`) |
+| bất kỳ | mọi transition thủ công | — | — | (tất cả endpoint transition + `PUT`) | Version stale | `409`, `GlobalErrorCode.CONCURRENT_MODIFICATION` (1010) — **không phải** `AVAILABILITY_CONCURRENT_MODIFICATION` như `MOVIE_LIFECYCLE_CONTRACT.md` từng ghi nhầm (đã sửa ở tài liệu đó) |
+
+Ghi chú quan trọng khác với những gì có thể suy đoán từ tên gọi:
+
+- **`close` không yêu cầu trạng thái nguồn cụ thể** — có thể đóng thẳng từ `PLANNED` (chưa từng `OPEN` ngày nào) chứ không bắt buộc phải qua `OPEN`/`SUSPENDED` trước. Điều này khác với cách nhiều người mặc định nghĩ "phải mở rồi mới đóng được". Có test riêng xác nhận: `MovieAvailabilityServiceTest.closeTransitionsFromAnyNonClosedStatus()`.
+- **`resume` xoá `suspensionReason`** (`availability.setSuspensionReason(null)`), nên UI không còn cách nào xem lại lý do suspend cũ sau khi resume — chỉ còn trong `movie_availability_history.reason` nếu tra DB trực tiếp (không có endpoint đọc bảng này, giống Gap #7 của Movie).
+- **`update` chỉ sửa được khi `PLANNED`** — một release plan đã `OPEN` (đang thật sự khai thác) không sửa lại ngày được nữa; muốn đổi phải `close` rồi tạo plan mới.
+
+### 23.3 Actors and Authorization — chi tiết bổ sung
+
+Xem bảng chính ở Mục 4 (đã cập nhật). Điểm bất đối xứng đáng chú ý nhất của toàn bộ Availability layer:
+
+| Nhóm lệnh | Backend cho phép | UI cho phép | Khớp không? |
+|---|---|---|---|
+| `create`/`update` (tạo/sửa kế hoạch) | ADMIN, EMPLOYEE | **Chỉ ADMIN** — nút "New release plan"/"Create the first release plan" đều bọc trong `{isAdmin && (...)}` ([MovieAvailabilityPanel.tsx:466](../../client/src/layouts/MovieAvailabilityPanel.tsx), [:525](../../client/src/layouts/MovieAvailabilityPanel.tsx)) | **Không khớp** — UI hẹp hơn backend (xem Gap #12) |
+| `open`/`suspend`/`resume`/`close` | ADMIN only | ADMIN only (cùng gate `isAdmin`) | Khớp |
+| Xem danh sách release plan (tab "Availability" trong `MovieDetailModal`) | ADMIN, EMPLOYEE | ADMIN, EMPLOYEE (tab chỉ ẩn theo `contentStatus !== "APPROVED"`, không theo role) | Khớp |
+
+### 23.4 End-to-End Flow — Flow F: Create & Manage Release Plan (UI)
+
+| Bước | Actor | UI Action | API Call | Expected Status | Database Effect | Failure Handling |
+|---|---|---|---|---|---|---|
+| 1 | ADMIN | Movie Management → click icon "View details" (Eye) trên 1 movie `APPROVED` → `MovieDetailModal` mở, tab **"Availability"** xuất hiện (chỉ khi `contentStatus === "APPROVED"`) | `GET /api/movie-availabilities?movieId=`, `GET /api/clusters` (lọc `ACTIVE`) | `200` | Không ghi | Nếu movie chưa `APPROVED`, tab này không hiện — không có cách nào truy cập UI Availability cho movie `DRAFT`/`PENDING_REVIEW`/`CHANGES_REQUESTED` |
+| 2 | ADMIN | Thấy panel trống: "No cinema release has been planned", bấm **"Create the first release plan"** | — | — | — | Nút chỉ hiện với `isAdmin` (xem 23.3) |
+| 3 | ADMIN | Điền `CreatePlanDialog`: chọn cluster (chỉ liệt kê `ACTIVE`), `Showing starts` (bắt buộc, min = hôm nay), `Showing ends` (optional), `Sales start` (optional, datetime) | — (chưa gọi API cho tới khi bấm "Create release plan") | — | — | `showingEndDate < showingStartDate` bị chặn ngay ở client trước khi gọi API |
+| 4 | ADMIN | Bấm "Create release plan" | `POST /api/movie-availabilities` | `200`, `result.status = "PLANNED"` | Insert `movie_availability`; insert `movie_availability_history` (`null → PLANNED`) | `409 AVAILABILITY_MOVIE_NOT_APPROVED` nếu movie bị archive/đổi status ở tab khác đồng thời (hiếm); `409 AVAILABILITY_WINDOW_ALREADY_EXISTS` nếu trùng cluster+ngày |
+| 5 | Hệ thống | Panel hiện thanh workflow "Content approved ✓ → Release plan ✓ (current) → Schedule shows → Open sales", card cluster mới với badge "Planned" | `GET /api/movie-availabilities?movieId=` (reload sau `onCreated`) | `200` | — | — |
+| 6 | ADMIN | Bấm **"Open"** (chỉ hiện khi `status === PLANNED`) | `POST /api/movie-availabilities/{id}/open` | `200`, `status="OPEN"` | Update `movie_availability`; insert `movie_availability_history` (`PLANNED→OPEN`) | `403` nếu gọi bằng EMPLOYEE token |
+| 7 | ADMIN | Bấm icon "Pause" (Suspend) | `SuspendPrompt` bắt nhập lý do bắt buộc (không submit được nếu rỗng) → `POST /api/movie-availabilities/{id}/suspend {reason}` | `200`, `status="SUSPENDED"` | Update + set `suspension_reason`; insert history (`OPEN→SUSPENDED`, kèm `reason`) | `400` nếu `reason` rỗng (chặn ở client trước, nhưng backend cũng tự chặn) |
+| 8 | ADMIN | Bấm **"Resume"** | `POST /api/movie-availabilities/{id}/resume` | `200`, `status="OPEN"` | Update, xoá `suspension_reason`; insert history (`SUSPENDED→OPEN`) | — |
+| 9 | ADMIN | Bấm icon "Square" (Close) | `POST /api/movie-availabilities/{id}/close` | `200`, `status="CLOSED"` | Update; insert history (`OPEN→CLOSED`) | Không thể close lại lần 2 (`409 AVAILABILITY_INVALID_TRANSITION`) |
+| 10 | ADMIN | Thử "Archive" movie này ở Movie Management (nếu **không còn** availability nào `PLANNED`/`OPEN` khác) | `POST /api/movies/{id}/archive` | `200`, `status="ARCHIVED"` | — | Nếu còn availability khác đang `PLANNED`/`OPEN` ở cluster khác → `409 MOVIE_HAS_ACTIVE_AVAILABILITY` |
+
+**Đường phụ — EMPLOYEE cố tạo release plan qua API trực tiếp (không qua UI, vì UI không cho):**
+
+`POST /api/movie-availabilities` bằng `{{employeeToken}}` với payload hợp lệ → **`200` thành công** (backend cho phép) — đây chính là bằng chứng cụ thể cho Gap #12: hành vi hợp lệ ở backend nhưng không thể tái hiện qua UI với vai trò EMPLOYEE.
+
+### 23.5 Business Rules Catalogue (bổ sung MOV-AVAIL-*)
+
+| Rule ID | Business Rule | Enforcement Layer | Error Code | Implemented |
+|---|---|---|---|---|
+| MOV-AVAIL-01 | Chỉ tạo được release plan cho movie đã `APPROVED` | `MovieAvailabilityService.create()` | `AVAILABILITY_MOVIE_NOT_APPROVED` (2075) | Implemented, có test |
+| MOV-AVAIL-02 | Cluster phải `ACTIVE` mới tạo được release plan | Service | `AVAILABILITY_CLUSTER_NOT_ACTIVE` (2076) | Implemented, có test |
+| MOV-AVAIL-03 | `showingEndDate` (nếu có) ≥ `showingStartDate` | Service + DB `CHECK chk_availability_date_range` | `AVAILABILITY_DATE_RANGE_INVALID` (2077) | Implemented, có test (2 tầng: service pre-check + DB check dự phòng) |
+| MOV-AVAIL-04 | Không trùng `(movie, cluster, showingStartDate)` | DB `UNIQUE uq_availability_window` | `AVAILABILITY_WINDOW_ALREADY_EXISTS` (2078) | Implemented — bắt qua `DataIntegrityViolationException`, không phải pre-check ở service (đúng pattern race-safe giống `MOVIE_ALREADY_EXISTS`/`TMDB_MOVIE_ALREADY_EXISTS`) |
+| MOV-AVAIL-05 | `update` chỉ áp dụng khi còn `PLANNED` | Service | `AVAILABILITY_NOT_EDITABLE` (2079) | Implemented, có test |
+| MOV-AVAIL-06 | `suspend` bắt buộc `reason` | DTO `@NotBlank` (`SuspendRequest`) | Validation lỗi generic | Implemented |
+| MOV-AVAIL-07 | `open`/`suspend`/`resume`/`close` chỉ ADMIN; `create`/`update` cho ADMIN/EMPLOYEE | `@PreAuthorize` | 403 | Implemented ở backend; **UI chặt hơn yêu cầu cho `create`/`update`** (Gap #12) |
+| MOV-AVAIL-08 | Archive movie bị chặn khi còn availability `PLANNED`/`OPEN` | `MovieService.archiveMovie()` | `MOVIE_HAS_ACTIVE_AVAILABILITY` (2071) | Implemented, có test (`MovieServiceTest`) |
+| MOV-AVAIL-09 | Auto-close availability quá hạn mỗi đêm, không đụng `Movie.status` | `MovieScheduler` (cron 00:05) | — | Implemented, **nhưng không ghi audit trail** (Gap #11) |
+| MOV-AVAIL-10 | Display status public (`NOW_SHOWING`/`COMING_SOON`) suy ra từ `Movie.status=APPROVED` + `AvailabilityStatus` + showtime, không lưu DB | `MovieService.isPubliclyVisible()`/`toPublicMovieResponse()` | — | Implemented — xem `MOVIE_LIFECYCLE_CONTRACT.md` Mục 3 |
+
+### 23.6 API Catalogue (bổ sung)
+
+| API ID | Method | Endpoint | Actor | Purpose | Side Effect | Code Reference |
+|---|---|---|---|---|---|---|
+| AVAIL-API-01 | GET | `/api/movie-availabilities?movieId=&clusterId=&status=` | ADMIN, EMPLOYEE | Tìm kiếm release plan | Không | `MovieAvailabilityController.search` |
+| AVAIL-API-02 | POST | `/api/movie-availabilities` | ADMIN, EMPLOYEE | Tạo release plan mới | Insert `movie_availability` + history | `MovieAvailabilityController.create` |
+| AVAIL-API-03 | PUT | `/api/movie-availabilities/{id}` | ADMIN, EMPLOYEE | Sửa ngày/sales-start (chỉ khi `PLANNED`) | Update `movie_availability` | `MovieAvailabilityController.update` |
+| AVAIL-API-04 | POST | `/api/movie-availabilities/{id}/open` | **ADMIN** | `PLANNED→OPEN` | Update + history | `MovieAvailabilityController.open` |
+| AVAIL-API-05 | POST | `/api/movie-availabilities/{id}/suspend` | **ADMIN** | `→SUSPENDED`, lưu `reason` | Update + history | `MovieAvailabilityController.suspend` |
+| AVAIL-API-06 | POST | `/api/movie-availabilities/{id}/resume` | **ADMIN** | `SUSPENDED→OPEN` | Update + history | `MovieAvailabilityController.resume` |
+| AVAIL-API-07 | POST | `/api/movie-availabilities/{id}/close` | **ADMIN** | `→CLOSED` (terminal) | Update + history | `MovieAvailabilityController.close` |
+
+### 23.7 Postman API Test Cases (bổ sung)
+
+#### API-AVAIL-001 — Create release plan happy path
+
+**Preconditions:** Movie `{{movieId}}` đã `APPROVED`; `{{clusterId}}` đang `ACTIVE`.
+
+**Request:** `POST {{baseUrl}}/api/movie-availabilities`
+```json
+{ "movieId": {{movieId}}, "clusterId": {{clusterId}}, "showingStartDate": "2026-08-01" }
+```
+
+**Expected Response:** `200`, `result.status = "PLANNED"`, `result.availabilityId` → lưu vào `{{availabilityId}}`.
+
+---
+
+#### API-AVAIL-002 — Create rejected, movie not APPROVED
+
+**Preconditions:** Movie ở `DRAFT`/`PENDING_REVIEW`/`CHANGES_REQUESTED`.
+
+**Expected Response:** `409`, code `2075` (`AVAILABILITY_MOVIE_NOT_APPROVED`).
+
+---
+
+#### API-AVAIL-003 — Create rejected, duplicate window
+
+**Preconditions:** Đã có 1 availability cho đúng `(movieId, clusterId, showingStartDate)` như API-AVAIL-001.
+
+**Request:** Lặp lại y hệt request của API-AVAIL-001.
+
+**Expected Response:** `409`, code `2078` (`AVAILABILITY_WINDOW_ALREADY_EXISTS`).
+
+---
+
+#### API-AVAIL-004 — Open, then suspend without reason rejected
+
+1. `POST {{baseUrl}}/api/movie-availabilities/{{availabilityId}}/open` → `200`, `status="OPEN"`.
+2. `POST {{baseUrl}}/api/movie-availabilities/{{availabilityId}}/suspend` với body `{}` (không có `reason`) → `400` (validation lỗi generic `@NotBlank`).
+3. Lặp lại với `{ "reason": "Distribution hold" }` → `200`, `status="SUSPENDED"`.
+
+---
+
+#### API-AVAIL-005 — Close directly from PLANNED (không cần qua OPEN)
+
+**Preconditions:** Tạo 1 availability mới khác (ngày khác) đang `PLANNED`, chưa từng `open`.
+
+**Request:** `POST {{baseUrl}}/api/movie-availabilities/{{plannedAvailabilityId}}/close`
+
+**Expected Response:** `200`, `status="CLOSED"` — xác nhận MOV-AVAIL không bắt buộc phải `OPEN` trước khi `close`.
+
+---
+
+#### API-AVAIL-006 — Close twice rejected
+
+**Request (lần 2):** `POST {{baseUrl}}/api/movie-availabilities/{{plannedAvailabilityId}}/close`
+
+**Expected Response:** `409`, code `2073` (`AVAILABILITY_INVALID_TRANSITION`).
+
+---
+
+#### API-AVAIL-007 — Open/Suspend/Resume/Close forbidden for EMPLOYEE
+
+**Request:** Bất kỳ endpoint nào trong 4 endpoint transition, dùng `{{employeeToken}}`.
+
+**Expected Response:** `403` (Spring Security, trước khi vào tới service).
+
+---
+
+#### API-AVAIL-008 — Create allowed for EMPLOYEE (dù UI không có nút)
+
+**Request:** `POST {{baseUrl}}/api/movie-availabilities` dùng `{{employeeToken}}`, payload hợp lệ.
+
+**Expected Response:** `200` — xác nhận Gap #12 (backend cho phép, UI thì không).
+
+### 23.8 UI Test Scenarios (bổ sung)
+
+| Scenario ID | Steps | Expected |
+|---|---|---|
+| UI-AVAIL-001 | ADMIN mở `MovieDetailModal` cho movie `APPROVED` chưa có availability nào | Tab "Availability" hiện; empty-state "No cinema release has been planned"; nút "Create the first release plan" hiện |
+| UI-AVAIL-002 | EMPLOYEE mở cùng modal, cùng movie | Tab "Availability" **vẫn hiện** (view-only theo 23.3); **không có** nút tạo release plan nào (Gap #12) |
+| UI-AVAIL-003 | ADMIN mở `MovieDetailModal` cho movie `DRAFT`/`PENDING_REVIEW`/`CHANGES_REQUESTED` | Tab "Availability" **không xuất hiện trong danh sách tab** (điều kiện `show: contentStatus === "APPROVED"`) |
+| UI-AVAIL-004 | ADMIN tạo release plan với `showingEndDate` < `showingStartDate` trong `CreatePlanDialog` | Border đỏ + message "End date cannot be before start date." ngay tại client, nút "Create release plan" `disabled` |
+| UI-AVAIL-005 | ADMIN bấm "Suspend" (icon Pause) rồi bấm "Suspend plan" khi ô lý do còn trống | Nút "Suspend plan" `disabled` cho tới khi `reason.trim()` không rỗng |
+| UI-AVAIL-006 | ADMIN thao tác Open/Suspend/Resume/Close liên tiếp nhanh trên cùng 1 card | Card hiện "Updating..." (`busyId` khoá đúng card đang xử lý), các nút khác trên cùng card ẩn/khoá tạm trong lúc `busy` |
+
+### 23.9 Gaps found (Availability)
+
+| Gap | Evidence | Impact | Priority | Recommendation |
+|---|---|---|---|---|
+| **#11 — `MovieScheduler.autoCloseExpiredAvailability()` không ghi `movie_availability_history`** | So sánh: `MovieAvailabilityService`'s `open`/`suspend`/`resume`/`close` đều gọi `transitionTo()` → `recordHistory()`; `MovieScheduler.java` chỉ tiêm `MovieAvailabilityRepository`, không có `MovieAvailabilityHistoryRepository`, và tự `setStatus()`/`saveAll()` trực tiếp, không qua service | Không thể trả lời "release plan này bị đóng lúc nào — do ai bấm Close, hay tự động đóng vì hết hạn?" chỉ bằng cách đọc `movie_availability_history`; phải suy luận gián tiếp qua `updated_by = "SYSTEM"` + `updated_at` khớp giờ chạy cron | P2 | Cho `MovieScheduler` gọi qua `MovieAvailabilityService` (hoặc tự ghi `recordHistory()` với `actor="SYSTEM"`) thay vì thao tác thẳng repository |
+| **#12 — UI (`MovieAvailabilityPanel.tsx`) hẹp hơn backend cho `create`/`update` release plan** | `@PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")` trên `POST`/`PUT /api/movie-availabilities`; nhưng nút "New release plan"/"Create the first release plan" đều bọc `{isAdmin && ...}` — không có nhánh nào cho EMPLOYEE thấy nút này | EMPLOYEE có quyền hợp lệ ở backend (đã verify qua API-AVAIL-008) nhưng không có cách nào dùng quyền đó qua UI — ngược chiều với Gap #2 cũ (lần đó UI/backend đồng ý nhưng field bị thiếu; lần này 2 tầng chủ động bất đồng về ai được làm gì) | P2 | Xác nhận với Product đây có phải chủ đích ("chỉ ADMIN mới lên kế hoạch khai thác") hay chỉ là thiếu sót khi build UI; nếu là chủ đích, nên siết `@PreAuthorize` lại cho khớp (an toàn hơn là để lệch ngầm) |
+| **#13 — Không có `MovieAvailabilityControllerTest`** | `find` toàn repo chỉ thấy `MovieAvailabilityServiceTest.java` (test service, không test qua HTTP layer/`@PreAuthorize`) | Authorization matrix ở 23.3 hiện chỉ được xác nhận bằng đọc code (`@PreAuthorize` annotation), chưa có test tự động nào chặn regression nếu ai đó sửa nhầm role | P2 | Thêm test tương tự các `*ControllerAuthorizationTest` đã có cho module khác (ví dụ `ProductionCompanyControllerAuthorizationTest` — xem lịch sử branch `docs/update-movie-creation-flow-spec`) |
 
 ---
 
@@ -1765,6 +2014,12 @@ SELECT movie_id FROM movie LIMIT 0; -- chạy \d movie trong psql để xem danh
 
 **Database:** `V1__baseline_schema.sql` (đầy đủ), `V3__add_movie_image_and_tmdb_provenance.sql`, `V5__add_movie_trailer_provenance.sql`, `V6__movie_multi_production_company.sql`, `V7__add_movie_tagline.sql`, `V8__drop_legacy_movie_columns.sql`, `V9__drop_movie_end_date.sql`, `R__seed_reference_data.sql` (một phần).
 
+**Backend (bổ sung cho v3.0 — Movie Availability, Mục 23):** `MovieAvailabilityController.java` (đầy đủ), `MovieAvailabilityService.java` (đầy đủ), `MovieAvailabilityServiceTest.java` (đọc tên + logic 12 test case), entity `MovieAvailability`/`MovieAvailabilityHistory`, `MovieScheduler.java` (đầy đủ), `MovieErrorCode.java` (toàn bộ mã `AVAILABILITY_*`, `MOVIE_HAS_ACTIVE_AVAILABILITY`), phần `isPubliclyVisible()`/`toPublicMovieResponse()` liên quan display status trong `MovieService.java`.
+
+**Frontend (bổ sung cho v3.0):** `MovieAvailabilityPanel.tsx` (đầy đủ, kể cả `CreatePlanDialog`/`SuspendPrompt`), phần Availability trong `movieApi.ts` (type + API wrapper), đoạn render tab "Availability" trong `MovieDetailModal.tsx`.
+
+**Database (bổ sung cho v3.0):** `movie_availability` (đọc trực tiếp qua `psql \d movie_availability` — không qua file migration riêng, bảng này nằm trong `V1__baseline_schema.sql`), dữ liệu thật trong DB dev (`movie`, `movie_availability`) để đối chiếu ví dụ cụ thể.
+
 **Docs:** `docs/api-specs/movie-service/MOVIE_LIFECYCLE_CONTRACT.md`, `docs/api-specs/movie-service/AUTHORIZATION_MATRIX.md`, `docs/issues/ISSUE_TEMPLATE.md`, `docs/issues/mr-movie-rejection-note-visibility.md`, `docs/issues/mr-tmdb-import-ui.md`, `docs/issues/mr-movie-editor-media-section.md`.
 
-**Chưa đọc / cần kiểm tra thêm nếu cần độ chính xác tuyệt đối:** `MovieEditorWorkflow.tsx` (điều hướng section — có đọc ở phiên làm Media section nhưng không lặp lại chi tiết ở đây), `utils/tmdbWarnings.ts`, `GenreController`/`GenreService.java` (còn dùng cho case genre tạo thủ công ngoài luồng TMDB), `SecurityConfig` gốc, backend/frontend test files đầy đủ (`MovieServiceTest.java`, `MovieReadinessValidatorTest.java`, `TmdbServiceTest.java`, v.v. — đã tham chiếu gián tiếp qua tên test case nhưng chưa đọc toàn bộ nội dung từng test). **Chưa có QA trình duyệt thật cho bất kỳ thay đổi nào trong v2.0** (môi trường không có Playwright/chromium-cli) — xem Mục 2.
+**Chưa đọc / cần kiểm tra thêm nếu cần độ chính xác tuyệt đối:** `MovieEditorWorkflow.tsx` (điều hướng section — có đọc ở phiên làm Media section nhưng không lặp lại chi tiết ở đây), `utils/tmdbWarnings.ts`, `GenreController`/`GenreService.java` (còn dùng cho case genre tạo thủ công ngoài luồng TMDB), `SecurityConfig` gốc, backend/frontend test files đầy đủ (`MovieServiceTest.java`, `MovieReadinessValidatorTest.java`, `TmdbServiceTest.java`, v.v. — đã tham chiếu gián tiếp qua tên test case nhưng chưa đọc toàn bộ nội dung từng test). `MovieAvailabilityHistoryRepository`/entity `MovieAvailabilityHistory` mới xác nhận tồn tại, chưa đọc toàn bộ field. **Chưa có QA trình duyệt thật cho bất kỳ thay đổi nào trong v2.0/v3.0** (môi trường không có Playwright/chromium-cli) — xem Mục 2.
