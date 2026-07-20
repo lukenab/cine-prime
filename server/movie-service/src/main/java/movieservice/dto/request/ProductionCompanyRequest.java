@@ -23,4 +23,6 @@ public class ProductionCompanyRequest {
 
     @Size(max = 500)
     String websiteUrl;
+
+    Integer tmdbCompanyId;
 }

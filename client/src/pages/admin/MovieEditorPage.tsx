@@ -69,7 +69,7 @@ type CastRow = {
 /** Issue #151: a movie can link several production companies. companyId is null for a
  *  company picked up from a TMDB preview that hasn't been created locally yet - resolved to a
  *  real ID (via movieApi.createCompany) right before submit, same as the old single-company flow. */
-type SelectedCompany = { companyId: number | null; name: string; country?: string; logoUrl?: string };
+type SelectedCompany = { companyId: number | null; name: string; country?: string; logoUrl?: string; tmdbId?: number };
 
 type FormState = {
   originalTitle: string;
@@ -435,7 +435,7 @@ export default function MovieEditorPage() {
         resolved.push(c);
         continue;
       }
-      const created = await movieApi.createCompany({ name: c.name, country: c.country, logoUrl: c.logoUrl });
+      const created = await movieApi.createCompany({ name: c.name, country: c.country, logoUrl: c.logoUrl, tmdbCompanyId: c.tmdbId });
       resolved.push({ ...c, companyId: created.result.companyId });
     }
     return { ids: resolved.map((c) => c.companyId!), resolved };
@@ -670,7 +670,7 @@ export default function MovieEditorPage() {
       // first one. Ones never imported locally (localCompanyId == null) are created on submit
       // via resolveCompanyIds(), same pattern the old single-company flow used.
       const tmdbCompanies: SelectedCompany[] | null = details.companies?.map((c) => ({
-        companyId: c.localCompanyId ?? null, name: c.name, country: c.country, logoUrl: c.logoUrl,
+        companyId: c.localCompanyId ?? null, name: c.name, country: c.country, logoUrl: c.logoUrl, tmdbId: c.tmdbId,
       })) ?? null;
 
       setForm((p) => ({
