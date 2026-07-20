@@ -117,14 +117,16 @@ public class MovieAvailabilityService {
         return transitionTo(availability, AvailabilityStatus.OPEN, actor, null);
     }
 
-    /** PLANNED/OPEN/SUSPENDED → CLOSED */
+    /** PLANNED/OPEN/SUSPENDED → CLOSED. Reason is optional - unlike suspend, closing needs no
+     *  justification, but capturing one (e.g. "cancelled before playing" vs "run completed")
+     *  lets reporting later tell the two apart in movie_availability_history. */
     @Transactional
-    public MovieAvailabilityResponse close(Long id, String actor) {
+    public MovieAvailabilityResponse close(Long id, String reason, String actor) {
         MovieAvailability availability = findOrThrow(id);
         if (availability.getStatus() == AvailabilityStatus.CLOSED) {
             throw new AppException(MovieErrorCode.AVAILABILITY_INVALID_TRANSITION);
         }
-        return transitionTo(availability, AvailabilityStatus.CLOSED, actor, null);
+        return transitionTo(availability, AvailabilityStatus.CLOSED, actor, reason);
     }
 
     public List<MovieAvailabilityResponse> search(Long movieId, Long clusterId, AvailabilityStatus status) {

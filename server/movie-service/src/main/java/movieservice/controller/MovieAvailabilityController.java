@@ -5,6 +5,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import movie.theater.common.dto.ApiResponse;
+import movieservice.dto.request.CloseRequest;
 import movieservice.dto.request.CreateMovieAvailabilityRequest;
 import movieservice.dto.request.SuspendRequest;
 import movieservice.dto.request.UpdateMovieAvailabilityRequest;
@@ -87,10 +88,13 @@ public class MovieAvailabilityController {
 
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/{id}/close")
-    public ApiResponse<MovieAvailabilityResponse> close(@PathVariable Long id) {
+    public ApiResponse<MovieAvailabilityResponse> close(
+            @PathVariable Long id,
+            @RequestBody(required = false) CloseRequest request) {
+        String reason = request != null ? request.getReason() : null;
         return ApiResponse.<MovieAvailabilityResponse>builder()
                 .code(200).message("Availability closed")
-                .result(movieAvailabilityService.close(id, actor()))
+                .result(movieAvailabilityService.close(id, reason, actor()))
                 .build();
     }
 

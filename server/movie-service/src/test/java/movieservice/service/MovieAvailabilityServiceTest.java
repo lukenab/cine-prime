@@ -195,7 +195,7 @@ class MovieAvailabilityServiceTest {
     void closeRejectsWhenAlreadyClosed() {
         when(movieAvailabilityRepository.findById(10L)).thenReturn(Optional.of(availabilityWith(AvailabilityStatus.CLOSED)));
 
-        AppException ex = assertThrows(AppException.class, () -> service.close(10L, "admin"));
+        AppException ex = assertThrows(AppException.class, () -> service.close(10L, null, "admin"));
 
         assertEquals(MovieErrorCode.AVAILABILITY_INVALID_TRANSITION, ex.getErrorCode());
     }
@@ -205,8 +205,20 @@ class MovieAvailabilityServiceTest {
         MovieAvailability availability = availabilityWith(AvailabilityStatus.SUSPENDED);
         when(movieAvailabilityRepository.findById(10L)).thenReturn(Optional.of(availability));
 
-        service.close(10L, "admin");
+        service.close(10L, null, "admin");
 
         assertEquals(AvailabilityStatus.CLOSED, availability.getStatus());
+    }
+
+    @Test
+    void closeAcceptsOptionalReasonAndRecordsIt() {
+        MovieAvailability availability = availabilityWith(AvailabilityStatus.PLANNED);
+        when(movieAvailabilityRepository.findById(10L)).thenReturn(Optional.of(availability));
+
+        service.close(10L, "Cancelled before playing - distributor pulled the title", "admin");
+
+        assertEquals(AvailabilityStatus.CLOSED, availability.getStatus());
+        verify(movieAvailabilityHistoryRepository).save(argThat(history ->
+                "Cancelled before playing - distributor pulled the title".equals(history.getReason())));
     }
 }

@@ -167,6 +167,80 @@ function SuspendPrompt({
   );
 }
 
+/** Unlike SuspendPrompt, the reason here is optional - closing needs no justification, but
+ *  capturing one (e.g. "cancelled before playing" vs "run completed") lets reporting later
+ *  tell the two apart in movie_availability_history. */
+function ClosePrompt({
+  onConfirm,
+  onCancel,
+}: {
+  onConfirm: (reason?: string) => void;
+  onCancel: () => void;
+}) {
+  const [reason, setReason] = useState("");
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center px-4" onClick={onCancel}>
+      <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]" />
+      <div
+        className="relative w-full max-w-md rounded-2xl border p-5 shadow-2xl"
+        style={{ background: "var(--bg-main)", borderColor: "var(--border-color)" }}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mb-4 flex items-start gap-3">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-slate-500/10 text-slate-600">
+            <Square size={17} />
+          </div>
+          <div>
+            <h3 style={{ color: "var(--text-main)", fontSize: "15px", fontWeight: 700 }}>
+              Close this release window?
+            </h3>
+            <p className="mt-1" style={{ color: "var(--text-sub)", fontSize: "12px" }}>
+              This is terminal - a closed window can't be reopened; a new release plan would be needed instead.
+            </p>
+          </div>
+        </div>
+
+        <label className="mb-1.5 block" style={{ color: "var(--text-main)", fontSize: "12px", fontWeight: 600 }}>
+          Reason <span style={{ color: "var(--text-sub)", fontWeight: 400 }}>(optional)</span>
+        </label>
+        <textarea
+          autoFocus
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          placeholder="For example: cancelled before playing, or run completed as planned"
+          rows={3}
+          className="w-full resize-none rounded-xl border px-3 py-2.5 outline-none focus:ring-2 focus:ring-slate-500/20"
+          style={{
+            background: "var(--bg-card)",
+            borderColor: "var(--border-color)",
+            color: "var(--text-main)",
+            fontSize: "13px",
+          }}
+        />
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-xl border px-4 py-2 text-sm"
+            style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(reason.trim() || undefined)}
+            className="rounded-xl bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+          >
+            Close window
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CreatePlanDialog({
   movieId,
   clusters,
@@ -396,6 +470,7 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [suspendTarget, setSuspendTarget] = useState<number | null>(null);
+  const [closeTarget, setCloseTarget] = useState<number | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -639,7 +714,7 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
                       <button
                         type="button"
                         title="Close this release window"
-                        onClick={() => runCommand(availability.availabilityId, () => movieApi.closeAvailability(availability.availabilityId))}
+                        onClick={() => setCloseTarget(availability.availabilityId)}
                         className="flex h-7 w-7 items-center justify-center rounded-lg border hover:bg-slate-500/10"
                         style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}
                       >
@@ -673,6 +748,17 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
             void runCommand(id, () => movieApi.suspendAvailability(id, reason));
           }}
           onCancel={() => setSuspendTarget(null)}
+        />
+      )}
+
+      {closeTarget !== null && (
+        <ClosePrompt
+          onConfirm={(reason) => {
+            const id = closeTarget;
+            setCloseTarget(null);
+            void runCommand(id, () => movieApi.closeAvailability(id, reason));
+          }}
+          onCancel={() => setCloseTarget(null)}
         />
       )}
     </section>

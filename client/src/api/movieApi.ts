@@ -1047,9 +1047,10 @@ export const movieApi = {
   resumeAvailability: (id: number) =>
     axiosClient.post(`/api/movie-availabilities/${id}/resume`) as Promise<ApiWrapper<MovieAvailabilityResponse>>,
 
-  /** PLANNED/OPEN/SUSPENDED → CLOSED */
-  closeAvailability: (id: number) =>
-    axiosClient.post(`/api/movie-availabilities/${id}/close`) as Promise<ApiWrapper<MovieAvailabilityResponse>>,
+  /** PLANNED/OPEN/SUSPENDED → CLOSED. Reason is optional - e.g. "cancelled before playing" vs
+   *  "run completed" - captured for reporting, unlike suspend it's never required. */
+  closeAvailability: (id: number, reason?: string) =>
+    axiosClient.post(`/api/movie-availabilities/${id}/close`, reason ? { reason } : undefined) as Promise<ApiWrapper<MovieAvailabilityResponse>>,
 
   // TMDB APIs
   tmdbSearch: (q: string) =>
