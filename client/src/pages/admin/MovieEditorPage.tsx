@@ -50,6 +50,7 @@ import {
 } from "./movieEditor/MovieEditorActionBar";
 import { persistMovieDraft, saveDraftThenSubmit } from "./movieEditor/movieDraftActions";
 import { buildMoviePayload } from "./movieEditor/buildMoviePayload";
+import { MediaThumbnail } from "./movieEditor/MediaThumbnail";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Local types (same shape as the previous MovieModal)
@@ -183,6 +184,44 @@ const SL: React.CSSProperties = {
   textTransform: "uppercase", color: "var(--text-sub)", marginBottom: "12px",
 };
 
+type MediaAssetState = "imported" | "pending" | "manual" | "empty";
+
+const MEDIA_ASSET_STATE_META: Record<MediaAssetState, { label: string; bg: string; color: string }> = {
+  imported: { label: "Imported", bg: "rgba(16,185,129,0.12)", color: "#059669" },
+  pending: { label: "Pending import", bg: "rgba(245,158,11,0.12)", color: "#d97706" },
+  manual: { label: "Manual", bg: "rgba(107,114,128,0.12)", color: "#6b7280" },
+  empty: { label: "Not selected", bg: "rgba(107,114,128,0.10)", color: "var(--text-sub)" },
+};
+
+/** `[Frontend] Consolidate movie assets into a dedicated Media section`: one consistent
+ *  source/status readout shared by the Poster, Backdrop and Trailer groups, so an operator
+ *  never has to guess whether an asset came from TMDB, was typed in manually, or is still
+ *  waiting to be imported after Save. */
+function MediaAssetBadges({ source, state }: { source?: string | null; state: MediaAssetState }) {
+  const meta = MEDIA_ASSET_STATE_META[state];
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+      {source && (
+        <span
+          className="px-1.5 py-0.5 rounded"
+          style={{ fontSize: "9.5px", fontWeight: 700, background: "rgba(37,99,235,0.10)", color: "#2563eb" }}
+        >
+          Source: {source}
+        </span>
+      )}
+      <span className="px-1.5 py-0.5 rounded" style={{ fontSize: "9.5px", fontWeight: 700, background: meta.bg, color: meta.color }}>
+        {meta.label}
+      </span>
+    </div>
+  );
+}
+
+/** Lightweight sanity check for the Trailer group's broken-link indicator - not a validator,
+ *  just a hint that the URL doesn't look like a playable YouTube link before the operator saves. */
+function isLikelyVideoUrl(url: string): boolean {
+  return /^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)/i.test(url.trim());
+}
+
 /**
  * Dedicated Create/Edit Movie page (replaces the old MovieModal). A movie's full editing
  * surface — TMDB import, poster/gallery previews, genre/format chips, bilingual titles,
@@ -238,6 +277,11 @@ export default function MovieEditorPage() {
   // value) so admin can edit it, but the real POST /api/movies/tmdb/import call will fail with
   // MISSING_RUNTIME unless this value is sent as confirmedRuntimeMinutes.
   const [tmdbMissingRuntime, setTmdbMissingRuntime] = useState(false);
+
+  // `[Frontend] Consolidate movie assets into a dedicated Media section`: provenance shown in
+  // the Media section's Trailer group - mirrors Movie.trailerSource server-side (a manual edit
+  // always wins over whatever TMDB suggested, same rule MovieService.updateMovie() enforces).
+  const [trailerSource, setTrailerSource] = useState<"TMDB" | "MANUAL" | null>(null);
 
   // TMDB-FIX-05: media candidates from the last applyTmdb(), and the admin's pending
   // poster/backdrop/still selections (imported right after save if the movie is new).
@@ -309,6 +353,7 @@ export default function MovieEditorPage() {
         const mv = res.result;
         const loadedForm = movieToForm(mv);
         setCurrentStatus(mv.status);
+        setTrailerSource((mv.trailerSource as "TMDB" | "MANUAL" | undefined) ?? null);
         setForm(loadedForm);
         setPendingMediaSelections([]);
         previousFingerprint.current = editorFingerprint(loadedForm, []);
@@ -675,6 +720,7 @@ export default function MovieEditorPage() {
       setGenreResolutions({});
       setIgnoreReasonDraft({});
       setTmdbTrailer(details.trailerUrl ? { url: details.trailerUrl, videoType: details.trailerVideoType } : null);
+      if (details.trailerUrl) setTrailerSource("TMDB");
       setTmdbUnverified({
         releaseDate: !!(details.releaseDate || item.releaseDate),
         ageRatingId: details.ageRatingId != null,
@@ -737,6 +783,28 @@ export default function MovieEditorPage() {
   const unresolvedTmdbGenres = tmdbUnmappedGenres.filter((g) => !genreResolutions[g.tmdbGenreId]);
   const pendingCreatedGenreCount = Object.values(genreResolutions).filter((r) => r.action === "created").length;
   const hasBlockingTmdbIssues = unresolvedTmdbGenres.length > 0;
+
+  // ── Media section derived state (selected asset + source/provenance + imported/pending) ──
+
+  const posterProvenance = useMemo((): { source?: string; state: MediaAssetState } => {
+    if (!form.posterUrl) return { state: "empty" };
+    if (pendingMediaSelections.some((s) => s.imageType === "POSTER")) return { source: "TMDB", state: "pending" };
+    const imported = movieImages.find((img) => img.imageType === "POSTER" && img.imageUrl === form.posterUrl);
+    if (imported) return { source: imported.source, state: "imported" };
+    return { source: form.tmdbId ? "TMDB" : "Manual", state: "manual" };
+  }, [form.posterUrl, form.tmdbId, pendingMediaSelections, movieImages]);
+
+  const selectedBackdrop = useMemo((): { url?: string; source?: string; state: MediaAssetState } => {
+    const pendingBackdrop = pendingMediaSelections.find((s) => s.imageType === "BACKDROP");
+    if (pendingBackdrop) {
+      const candidate = tmdbMedia?.backdrops.find((c) => c.filePath === pendingBackdrop.filePath);
+      return { url: candidate?.url, source: "TMDB", state: "pending" };
+    }
+    const imported = movieImages.find((img) => img.imageType === "BACKDROP" && img.isDefault)
+      ?? movieImages.find((img) => img.imageType === "BACKDROP");
+    if (imported) return { url: imported.imageUrl, source: imported.source, state: "imported" };
+    return { state: "empty" };
+  }, [pendingMediaSelections, tmdbMedia, movieImages]);
   const groupedTmdbWarnings = groupWarnings(tmdbWarnings);
 
   const handleDrop = (toIdx: number) => {
@@ -1063,10 +1131,6 @@ export default function MovieEditorPage() {
               )}
             </div>
 
-            <div className="mt-3">
-              <label style={FL}>Trailer URL</label>
-              <input type="text" placeholder="https://www.youtube.com/watch?v=…" value={form.trailerUrl} onChange={(e) => set("trailerUrl", e.target.value)} className={IC} style={IS} />
-            </div>
           </section>
 
           {/* Genres & Formats */}
@@ -1292,44 +1356,222 @@ export default function MovieEditorPage() {
         {/* Media and review content are part of the same full-width editor canvas. */}
         <div className="contents">
 
-          {/* Poster / thumbnail preview */}
+          {/* Media - Primary Poster, Backdrop, Official Trailer and Gallery all live in one
+              canonical section (`[Frontend] Consolidate movie assets into a dedicated Media
+              section`). Every group shows the selected asset, its source/provenance and
+              imported/pending status via MediaAssetBadges/MediaThumbnail, so there's no need to
+              jump between a poster card, a TMDB panel and a separate gallery to know what's
+              actually going to be saved. */}
           <section
             id={movieEditorSectionDomId("media")}
             data-editor-section="media"
             tabIndex={-1}
             aria-labelledby="movie-editor-media-title"
-            className="order-3 scroll-mt-28 rounded-2xl border p-5 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="order-3 scroll-mt-28 rounded-2xl border p-5 space-y-6 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
           >
             <p id="movie-editor-media-title" style={SL}>Media</p>
-            <p className="mb-3" style={{ fontSize: "12px", color: "var(--text-sub)" }}>Primary poster</p>
-            {form.posterUrl ? (
-              <div className="relative rounded-xl border overflow-hidden mb-3" style={{ borderColor: "var(--border-color)" }}>
-                <img src={form.posterUrl} alt="Poster" className="w-full object-cover" style={{ aspectRatio: "2 / 3" }} />
-                <button type="button" onClick={() => set("posterUrl", "")} className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors">
-                  <X size={14} />
-                </button>
-              </div>
-            ) : (
-              <label className="flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed cursor-pointer hover:border-blue-400 transition-colors mb-3" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)", aspectRatio: "2 / 3" }}>
-                {uploadingImg === "posterUrl" ? (
-                  <><Loader2 size={22} className="animate-spin text-blue-500" /><span style={{ fontSize: "12px", color: "var(--text-sub)" }}>Uploading…</span></>
-                ) : (
-                  <><Upload size={22} className="text-blue-500" /><span style={{ fontSize: "12.5px", fontWeight: 500, color: "var(--text-main)" }}>Click to upload</span><span style={{ fontSize: "11px", color: "var(--text-sub)" }}>JPG · PNG · WebP · ≤ 5MB</span></>
-                )}
-                <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={uploadingImg === "posterUrl"}
-                  onChange={(e) => { handleImgUpload("posterUrl", e.target.files?.[0]); e.currentTarget.value = ""; }} />
-              </label>
-            )}
-            <input type="text" placeholder="or paste poster URL…" value={form.posterUrl} onChange={(e) => set("posterUrl", e.target.value)} className={IC} style={{ ...IS, fontSize: "12px" }} />
-            {uploadError && <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600">{uploadError}</p>}
 
-            {form.thumbnailUrl && form.thumbnailUrl !== form.posterUrl && (
-              <div className="mt-3 flex items-center gap-2">
-                <img src={form.thumbnailUrl} alt="Thumbnail" className="w-12 h-16 rounded-lg object-cover border" style={{ borderColor: "var(--border-color)" }} />
-                <p style={{ fontSize: "11px", color: "var(--text-sub)" }}>Thumbnail derivative (auto-generated from TMDB)</p>
+            {/* Primary Poster */}
+            <div>
+              <p className="mb-2" style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-main)" }}>Primary Poster</p>
+              <div style={{ maxWidth: "220px" }}>
+                {form.posterUrl ? (
+                  <div className="relative mb-3">
+                    <MediaThumbnail src={form.posterUrl} alt="Selected poster" emptyLabel="No poster selected yet" />
+                    <button type="button" onClick={() => set("posterUrl", "")} className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors">
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed cursor-pointer hover:border-blue-400 transition-colors mb-3" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)", aspectRatio: "2 / 3" }}>
+                    {uploadingImg === "posterUrl" ? (
+                      <><Loader2 size={22} className="animate-spin text-blue-500" /><span style={{ fontSize: "12px", color: "var(--text-sub)" }}>Uploading…</span></>
+                    ) : (
+                      <><Upload size={22} className="text-blue-500" /><span style={{ fontSize: "12.5px", fontWeight: 500, color: "var(--text-main)" }}>Click to upload</span><span style={{ fontSize: "11px", color: "var(--text-sub)" }}>JPG · PNG · WebP · ≤ 5MB</span></>
+                    )}
+                    <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={uploadingImg === "posterUrl"}
+                      onChange={(e) => { handleImgUpload("posterUrl", e.target.files?.[0]); e.currentTarget.value = ""; }} />
+                  </label>
+                )}
+                <input type="text" placeholder="or paste poster URL…" value={form.posterUrl} onChange={(e) => set("posterUrl", e.target.value)} className={IC} style={{ ...IS, fontSize: "12px" }} />
+                {uploadError && <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600">{uploadError}</p>}
+              </div>
+              <MediaAssetBadges source={posterProvenance.source} state={posterProvenance.state} />
+
+              {form.thumbnailUrl && form.thumbnailUrl !== form.posterUrl && (
+                <div className="mt-3 flex items-center gap-2">
+                  <img src={form.thumbnailUrl} alt="Thumbnail" className="w-12 h-16 rounded-lg object-cover border" style={{ borderColor: "var(--border-color)" }} />
+                  <p style={{ fontSize: "11px", color: "var(--text-sub)" }}>Thumbnail derivative (auto-generated from TMDB)</p>
+                </div>
+              )}
+            </div>
+
+            {/* Backdrop - Movie has no standalone backdrop URL field (only movie_image rows with
+                imageType=BACKDROP), so "selected" here means the default/first BACKDROP image
+                already imported, or one picked but not yet imported via the TMDB picker below. */}
+            <div className="pt-5 border-t" style={{ borderColor: "var(--border-color)" }}>
+              <p className="mb-2" style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-main)" }}>Backdrop</p>
+              <div style={{ maxWidth: "320px" }}>
+                <MediaThumbnail
+                  src={selectedBackdrop.url}
+                  alt="Selected backdrop"
+                  aspectRatio="16 / 9"
+                  emptyLabel="No backdrop selected yet"
+                />
+              </div>
+              <MediaAssetBadges source={selectedBackdrop.source} state={selectedBackdrop.state} />
+              <p className="mt-1.5" style={{ fontSize: "11px", color: "var(--text-sub)" }}>
+                {form.tmdbId
+                  ? "Pick a different backdrop from the TMDB candidates below, or add one manually in the Gallery."
+                  : "Add a backdrop manually in the Gallery below."}
+              </p>
+            </div>
+
+            {/* Official Trailer */}
+            <div className="pt-5 border-t" style={{ borderColor: "var(--border-color)" }}>
+              <p className="mb-2" style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-main)" }}>Official Trailer</p>
+              <input
+                type="text" placeholder="https://www.youtube.com/watch?v=…" value={form.trailerUrl}
+                onChange={(e) => { set("trailerUrl", e.target.value); setTrailerSource("MANUAL"); }}
+                className={IC} style={IS}
+              />
+              {form.trailerUrl && !isLikelyVideoUrl(form.trailerUrl) && (
+                <p className="mt-1.5 flex items-center gap-1" style={{ fontSize: "11px", color: "#b45309" }}>
+                  <AlertCircle size={12} /> This doesn't look like a playable video URL — double check it before saving.
+                </p>
+              )}
+              <MediaAssetBadges
+                source={form.trailerUrl ? (trailerSource ?? "Manual") : undefined}
+                state={form.trailerUrl ? (trailerSource === "TMDB" ? "imported" : "manual") : "empty"}
+              />
+              {tmdbTrailer && (
+                <div className="mt-3 p-3 rounded-lg border" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
+                  <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-sub)", marginBottom: "4px" }}>Suggested trailer (TMDB)</p>
+                  <a
+                    href={tmdbTrailer.url} target="_blank" rel="noopener noreferrer"
+                    style={{ fontSize: "12px", color: "#2563eb", wordBreak: "break-all" }}
+                  >
+                    {tmdbTrailer.url}
+                  </a>
+                  {tmdbTrailer.videoType === "TEASER" && (
+                    <span style={{ fontSize: "10.5px", color: "var(--text-sub)", marginLeft: "6px" }}>(teaser fallback - no trailer found)</span>
+                  )}
+                  {tmdbTrailer.url !== form.trailerUrl && (
+                    <button
+                      type="button"
+                      onClick={() => { set("trailerUrl", tmdbTrailer.url); setTrailerSource("TMDB"); }}
+                      className="mt-2 block px-2.5 py-1 rounded-lg border hover:bg-blue-50"
+                      style={{ fontSize: "11.5px", borderColor: "var(--border-color)", color: "var(--text-main)" }}
+                    >
+                      Use this trailer
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* TMDB media picker - only once a search result has been applied. Reused as-is
+                (technical note: "Reuse TmdbMediaPicker logic nhưng tách UI theo section mới") -
+                nothing here persists until Save; see TmdbMediaPicker's own pending-selection
+                contract (movieId is only passed once the movie already exists). */}
+            {tmdbMedia && form.tmdbId && (
+              <div className="pt-5 border-t" style={{ borderColor: "var(--border-color)" }}>
+                <TmdbMediaPicker
+                  tmdbId={form.tmdbId}
+                  media={tmdbMedia}
+                  movieId={activeMovieId}
+                  onPendingSelectionChange={setPendingMediaSelections}
+                  onImported={() => {
+                    if (activeMovieId) movieApi.getMovieImages(activeMovieId).then((r) => setMovieImages(r.result ?? [])).catch(() => {});
+                  }}
+                />
               </div>
             )}
+
+            {/* Gallery */}
+            <div className="pt-5 border-t" style={{ borderColor: "var(--border-color)" }}>
+              <p className="mb-2" style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-main)" }}>Gallery</p>
+              {!activeMovieId ? (
+                <div className="flex flex-col items-center justify-center py-8 rounded-xl border-2 border-dashed" style={{ borderColor: "var(--border-color)" }}>
+                  <Images size={26} style={{ color: "var(--text-sub)", marginBottom: "8px" }} />
+                  <p style={{ fontSize: "12.5px", color: "var(--text-sub)", textAlign: "center" }}>Save the movie first to add gallery images.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="p-3 rounded-xl border space-y-2.5 mb-3" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
+                    <input type="text" placeholder="Image URL…" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className={IC} style={{ ...IS, fontSize: "12.5px" }} />
+                    <div className="flex gap-2">
+                      <select
+                        value={imageType} onChange={(e) => setImageType(e.target.value as MovieImageRequest["imageType"])}
+                        className="flex-1 px-2.5 py-2 rounded-lg border text-xs cursor-pointer"
+                        style={{ background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
+                      >
+                        <option value="POSTER">Poster</option>
+                        <option value="BACKDROP">Backdrop</option>
+                        <option value="STILL">Still</option>
+                        <option value="PROMOTIONAL">Promotional</option>
+                      </select>
+                      <button
+                        type="button" disabled={!imageUrl.trim() || addingImage}
+                        onClick={async () => {
+                          if (!imageUrl.trim() || !activeMovieId) return;
+                          setAddingImage(true);
+                          try {
+                            const r = await movieApi.addMovieImage(activeMovieId, { imageUrl: imageUrl.trim(), imageType, caption: imageCaption.trim() || undefined, displayOrder: movieImages.length });
+                            setMovieImages((prev) => [...prev, r.result]);
+                            setImageUrl("");
+                            setImageCaption("");
+                          } catch (e: any) {
+                            toast.error(e?.response?.data?.message ?? "Failed to add image.");
+                          } finally {
+                            setAddingImage(false);
+                          }
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 flex-shrink-0"
+                        style={{ fontSize: "12.5px" }}
+                      >
+                        {addingImage ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                        Add
+                      </button>
+                    </div>
+                  </div>
+
+                  {movieImages.length === 0 ? (
+                    <p className="text-center py-6" style={{ fontSize: "12.5px", color: "var(--text-sub)" }}>No images yet.</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2.5">
+                      {movieImages.map((img) => (
+                        <div key={img.imageId} className="relative rounded-xl overflow-hidden">
+                          <MediaThumbnail src={img.imageUrl} alt={img.caption || img.imageType} aspectRatio="1 / 1" emptyLabel="No preview" />
+                          <div className="absolute inset-x-0 bottom-0 px-1.5 py-1" style={{ background: "rgba(0,0,0,0.55)" }}>
+                            <span className="px-1 py-0.5 rounded text-white" style={{ fontSize: "9px", background: "rgba(255,255,255,0.2)" }}>{img.imageType}</span>
+                            {img.source && (
+                              <span className="ml-1 px-1 py-0.5 rounded text-white" style={{ fontSize: "9px", background: "rgba(255,255,255,0.2)" }}>{img.source}</span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!activeMovieId) return;
+                              try {
+                                await movieApi.deleteMovieImage(activeMovieId, img.imageId);
+                                setMovieImages((prev) => prev.filter((i) => i.imageId !== img.imageId));
+                              } catch (e: any) {
+                                toast.error(e?.response?.data?.message ?? "Failed to delete image.");
+                              }
+                            }}
+                            className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-rose-600 transition-colors"
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </section>
 
           {/* Source provenance remains visible after the full-width catalog populates this draft. */}
@@ -1353,12 +1595,13 @@ export default function MovieEditorPage() {
 
           </section>}
 
-          {/* TMDB Import Review - grouped/severity-tagged warnings, genre-mapping resolution
-              (map existing / create new / ignore with reason), and the suggested trailer.
-              Genre resolution below gates Save (see hasBlockingTmdbIssues / validate()).
+          {/* TMDB Import Review - grouped/severity-tagged warnings and genre-mapping resolution
+              (map existing / create new / ignore with reason). Genre resolution below gates
+              Save (see hasBlockingTmdbIssues / validate()). Suggested-trailer review now lives
+              in the Media section's Official Trailer group, alongside the field it applies to.
               There is no "re-sync" action here - the backend has no resync capability yet
               (disclosed out-of-scope, same as the multi-company and trailer-ingestion MRs). */}
-          {form.tmdbId && (tmdbWarnings.length > 0 || tmdbUnmappedGenres.length > 0 || tmdbTrailer) && (
+          {form.tmdbId && (tmdbWarnings.length > 0 || tmdbUnmappedGenres.length > 0) && (
             <section
               className="order-5 rounded-2xl border p-5 space-y-4"
               style={{ background: "var(--bg-card)", borderColor: hasBlockingTmdbIssues ? "#f87171" : "var(--border-color)" }}
@@ -1464,122 +1707,8 @@ export default function MovieEditorPage() {
                   </div>
                 </div>
               )}
-
-              {tmdbTrailer && (
-                <div>
-                  <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-sub)", marginBottom: "4px" }}>Suggested trailer</p>
-                  <a
-                    href={tmdbTrailer.url} target="_blank" rel="noopener noreferrer"
-                    style={{ fontSize: "12px", color: "#2563eb", wordBreak: "break-all" }}
-                  >
-                    {tmdbTrailer.url}
-                  </a>
-                  {tmdbTrailer.videoType === "TEASER" && (
-                    <span style={{ fontSize: "10.5px", color: "var(--text-sub)", marginLeft: "6px" }}>(teaser fallback - no trailer found)</span>
-                  )}
-                  <p style={{ fontSize: "11px", color: "var(--text-sub)", marginTop: "2px" }}>
-                    Applied to the Trailer URL field above — edit it there to use a different one.
-                  </p>
-                </div>
-              )}
             </section>
           )}
-
-          {/* TMDB media picker - only once a search result has been applied */}
-          {tmdbMedia && form.tmdbId && (
-            <div className="order-3">
-              <TmdbMediaPicker
-                tmdbId={form.tmdbId}
-                media={tmdbMedia}
-                movieId={activeMovieId}
-                onPendingSelectionChange={setPendingMediaSelections}
-                onImported={() => {
-                  if (activeMovieId) movieApi.getMovieImages(activeMovieId).then((r) => setMovieImages(r.result ?? [])).catch(() => {});
-                }}
-              />
-            </div>
-          )}
-
-          {/* Gallery */}
-          <section className="order-3 rounded-2xl border p-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-            <p style={SL}>Photo Gallery</p>
-            {!activeMovieId ? (
-              <div className="flex flex-col items-center justify-center py-8 rounded-xl border-2 border-dashed" style={{ borderColor: "var(--border-color)" }}>
-                <Images size={26} style={{ color: "var(--text-sub)", marginBottom: "8px" }} />
-                <p style={{ fontSize: "12.5px", color: "var(--text-sub)", textAlign: "center" }}>Save the movie first to add gallery images.</p>
-              </div>
-            ) : (
-              <>
-                <div className="p-3 rounded-xl border space-y-2.5 mb-3" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
-                  <input type="text" placeholder="Image URL…" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className={IC} style={{ ...IS, fontSize: "12.5px" }} />
-                  <div className="flex gap-2">
-                    <select
-                      value={imageType} onChange={(e) => setImageType(e.target.value as MovieImageRequest["imageType"])}
-                      className="flex-1 px-2.5 py-2 rounded-lg border text-xs cursor-pointer"
-                      style={{ background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
-                    >
-                      <option value="POSTER">Poster</option>
-                      <option value="BACKDROP">Backdrop</option>
-                      <option value="STILL">Still</option>
-                      <option value="PROMOTIONAL">Promotional</option>
-                    </select>
-                    <button
-                      type="button" disabled={!imageUrl.trim() || addingImage}
-                      onClick={async () => {
-                        if (!imageUrl.trim() || !activeMovieId) return;
-                        setAddingImage(true);
-                        try {
-                          const r = await movieApi.addMovieImage(activeMovieId, { imageUrl: imageUrl.trim(), imageType, caption: imageCaption.trim() || undefined, displayOrder: movieImages.length });
-                          setMovieImages((prev) => [...prev, r.result]);
-                          setImageUrl("");
-                          setImageCaption("");
-                        } catch (e: any) {
-                          toast.error(e?.response?.data?.message ?? "Failed to add image.");
-                        } finally {
-                          setAddingImage(false);
-                        }
-                      }}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 flex-shrink-0"
-                      style={{ fontSize: "12.5px" }}
-                    >
-                      {addingImage ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
-                      Add
-                    </button>
-                  </div>
-                </div>
-
-                {movieImages.length === 0 ? (
-                  <p className="text-center py-6" style={{ fontSize: "12.5px", color: "var(--text-sub)" }}>No images yet.</p>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {movieImages.map((img) => (
-                      <div key={img.imageId} className="relative rounded-lg overflow-hidden border" style={{ borderColor: "var(--border-color)" }}>
-                        <img src={img.imageUrl} alt={img.caption ?? ""} className="w-full h-20 object-cover" />
-                        <div className="absolute inset-x-0 bottom-0 px-1.5 py-1" style={{ background: "rgba(0,0,0,0.55)" }}>
-                          <span className="px-1 py-0.5 rounded text-white" style={{ fontSize: "9px", background: "rgba(255,255,255,0.2)" }}>{img.imageType}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (!activeMovieId) return;
-                            try {
-                              await movieApi.deleteMovieImage(activeMovieId, img.imageId);
-                              setMovieImages((prev) => prev.filter((i) => i.imageId !== img.imageId));
-                            } catch (e: any) {
-                              toast.error(e?.response?.data?.message ?? "Failed to delete image.");
-                            }
-                          }}
-                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-rose-600 transition-colors"
-                        >
-                          <X size={10} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </section>
         </div>
       </MovieEditorWorkflow>
 

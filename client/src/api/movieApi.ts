@@ -471,6 +471,9 @@ export type MovieResponse = {
   posterUrl?: string;
   thumbnailUrl?: string;
   trailerUrl?: string;
+  /** `[Backend] Fetch and select an official TMDB trailer`:
+   *  TMDB = auto-selected on import; MANUAL = admin-entered/edited. */
+  trailerSource?: string;
   synopsis?: string;
   tagline?: string;
   /** `[Backend] Add tagline field to Movie and MovieTranslation entities`:
