@@ -88,8 +88,15 @@ CREATE TABLE IF NOT EXISTS screening_format (
     format_code  VARCHAR(20)   NOT NULL UNIQUE,  -- 2D, 3D, IMAX, 4DX, SCREENX
     format_name  VARCHAR(100)  NOT NULL,
     description  VARCHAR(255),
-    surcharge    DECIMAL(10,2) NOT NULL DEFAULT 0  -- phụ phí so với giá gốc
+    surcharge    DECIMAL(10,2) NOT NULL DEFAULT 0, -- phụ phí so với giá gốc
+    status       VARCHAR(20)   NOT NULL DEFAULT 'ACTIVE',
+    created_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
+
+CREATE TRIGGER trg_screening_format_updated_at
+    BEFORE UPDATE ON screening_format
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 COMMENT ON TABLE  screening_format IS '2D/3D/IMAX/4DX/ScreenX — quản lý qua dropdown, không nhập tay';
 COMMENT ON COLUMN screening_format.surcharge IS 'Phụ phí thêm vào giá vé cơ bản (VD: IMAX + 50.000đ)';

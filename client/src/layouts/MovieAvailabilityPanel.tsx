@@ -1,10 +1,28 @@
-import { useEffect, useState } from "react";
-import { CalendarClock, MapPin, Pause, Play, Plus, Square, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  AlertTriangle,
+  ArrowRight,
+  CalendarClock,
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  Clock3,
+  Film,
+  MapPin,
+  Pause,
+  Play,
+  Plus,
+  Square,
+  Ticket,
+  X,
+} from "lucide-react";
 import {
   movieApi,
-  type ClusterResponse,
-  type MovieAvailabilityResponse,
   type AvailabilityStatus,
+  type ClusterResponse,
+  type CreateMovieAvailabilityPayload,
+  type MovieAvailabilityResponse,
 } from "../api/movieApi";
 import { useRole } from "../hooks/useRole";
 
@@ -12,45 +30,136 @@ type Props = {
   movieId: number;
 };
 
-const STATUS_META: Record<AvailabilityStatus, { label: string; bg: string; text: string }> = {
-  PLANNED:   { label: "Planned",   bg: "rgba(59,130,246,0.12)",  text: "#2563eb" },
-  OPEN:      { label: "Open",      bg: "rgba(16,185,129,0.12)",  text: "#059669" },
-  SUSPENDED: { label: "Suspended", bg: "rgba(245,158,11,0.12)",  text: "#d97706" },
-  CLOSED:    { label: "Closed",    bg: "rgba(156,163,175,0.12)", text: "#6b7280" },
+type StatusMeta = {
+  label: string;
+  description: string;
+  color: string;
+  background: string;
+  border: string;
 };
 
-function SuspendPrompt({ onConfirm, onCancel }: { onConfirm: (reason: string) => void; onCancel: () => void }) {
+const STATUS_META: Record<AvailabilityStatus, StatusMeta> = {
+  PLANNED: {
+    label: "Planned",
+    description: "Release window prepared",
+    color: "#2563eb",
+    background: "rgba(37,99,235,0.09)",
+    border: "rgba(37,99,235,0.22)",
+  },
+  OPEN: {
+    label: "Open",
+    description: "Exhibition is enabled",
+    color: "#059669",
+    background: "rgba(5,150,105,0.09)",
+    border: "rgba(5,150,105,0.22)",
+  },
+  SUSPENDED: {
+    label: "Suspended",
+    description: "Temporarily unavailable",
+    color: "#d97706",
+    background: "rgba(217,119,6,0.09)",
+    border: "rgba(217,119,6,0.24)",
+  },
+  CLOSED: {
+    label: "Closed",
+    description: "Release window ended",
+    color: "#64748b",
+    background: "rgba(100,116,139,0.09)",
+    border: "rgba(100,116,139,0.22)",
+  },
+};
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+function formatDate(value?: string) {
+  if (!value) return "Open-ended";
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+function formatDateTime(value?: string) {
+  if (!value) return "Not scheduled";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function SuspendPrompt({
+  onConfirm,
+  onCancel,
+}: {
+  onConfirm: (reason: string) => void;
+  onCancel: () => void;
+}) {
   const [reason, setReason] = useState("");
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center" onClick={onCancel}>
-      <div className="absolute inset-0 bg-black/50" />
+    <div className="fixed inset-0 z-[70] flex items-center justify-center px-4" onClick={onCancel}>
+      <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]" />
       <div
-        className="relative w-full max-w-sm mx-4 rounded-2xl p-5"
-        style={{ background: "var(--bg-main)", border: "1px solid var(--border-color)" }}
-        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-md rounded-2xl border p-5 shadow-2xl"
+        style={{ background: "var(--bg-main)", borderColor: "var(--border-color)" }}
+        onClick={(event) => event.stopPropagation()}
       >
-        <h3 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-main)", marginBottom: "10px" }}>Suspend availability</h3>
+        <div className="mb-4 flex items-start gap-3">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600">
+            <Pause size={17} />
+          </div>
+          <div>
+            <h3 style={{ color: "var(--text-main)", fontSize: "15px", fontWeight: 700 }}>
+              Suspend this release plan?
+            </h3>
+            <p className="mt-1" style={{ color: "var(--text-sub)", fontSize: "12px" }}>
+              New sales and scheduling should be stopped until the plan is resumed.
+            </p>
+          </div>
+        </div>
+
+        <label className="mb-1.5 block" style={{ color: "var(--text-main)", fontSize: "12px", fontWeight: 600 }}>
+          Operational reason <span className="text-rose-500">*</span>
+        </label>
         <textarea
           autoFocus
           value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          placeholder="Reason (required) — e.g. projector maintenance"
+          onChange={(event) => setReason(event.target.value)}
+          placeholder="For example: distribution hold or auditorium maintenance"
           rows={3}
-          className="w-full px-3 py-2.5 rounded-xl border outline-none resize-none"
-          style={{ fontSize: "13px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
+          className="w-full resize-none rounded-xl border px-3 py-2.5 outline-none focus:ring-2 focus:ring-amber-500/20"
+          style={{
+            background: "var(--bg-card)",
+            borderColor: "var(--border-color)",
+            color: "var(--text-main)",
+            fontSize: "13px",
+          }}
         />
-        <div className="flex gap-2 mt-3">
-          <button type="button" onClick={onCancel} className="flex-1 py-2 rounded-xl border text-sm" style={{ color: "var(--text-main)", borderColor: "var(--border-color)" }}>
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-xl border px-4 py-2 text-sm"
+            style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }}
+          >
             Cancel
           </button>
           <button
             type="button"
             disabled={!reason.trim()}
             onClick={() => onConfirm(reason.trim())}
-            className="flex-1 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-40"
-            style={{ background: "#d97706" }}
+            className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Suspend
+            Suspend plan
           </button>
         </div>
       </div>
@@ -58,208 +167,502 @@ function SuspendPrompt({ onConfirm, onCancel }: { onConfirm: (reason: string) =>
   );
 }
 
+function CreatePlanDialog({
+  movieId,
+  clusters,
+  onCreated,
+  onClose,
+}: {
+  movieId: number;
+  clusters: ClusterResponse[];
+  onCreated: () => Promise<void>;
+  onClose: () => void;
+}) {
+  const [clusterId, setClusterId] = useState<number | "">("");
+  const [showingStartDate, setShowingStartDate] = useState("");
+  const [showingEndDate, setShowingEndDate] = useState("");
+  const [salesStartAt, setSalesStartAt] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const invalidDateRange = Boolean(
+    showingStartDate && showingEndDate && showingEndDate < showingStartDate,
+  );
+  const canSubmit = Boolean(clusterId && showingStartDate && !invalidDateRange && !submitting);
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError(null);
+    const payload: CreateMovieAvailabilityPayload = {
+      movieId,
+      clusterId: Number(clusterId),
+      showingStartDate,
+      showingEndDate: showingEndDate || undefined,
+      salesStartAt: salesStartAt || undefined,
+    };
+
+    try {
+      await movieApi.createAvailability(payload);
+      await onCreated();
+      onClose();
+    } catch (requestError: unknown) {
+      const message = (requestError as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(message ?? "The release plan could not be created.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[65] flex items-center justify-center px-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]" />
+      <div
+        className="relative w-full max-w-2xl overflow-hidden rounded-2xl border shadow-2xl"
+        style={{ background: "var(--bg-main)", borderColor: "var(--border-color)" }}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between border-b px-6 py-5" style={{ borderColor: "var(--border-color)" }}>
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600">
+              <CalendarClock size={19} />
+            </div>
+            <div>
+              <h2 style={{ color: "var(--text-main)", fontSize: "17px", fontWeight: 700 }}>
+                Create a release plan
+              </h2>
+              <p className="mt-1" style={{ color: "var(--text-sub)", fontSize: "12px" }}>
+                Decide where and when this approved movie may be exhibited. Showtimes are scheduled afterward.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-500/10"
+            style={{ color: "var(--text-sub)" }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="space-y-5 px-6 py-5">
+          {error && (
+            <div className="flex items-start gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2.5 text-rose-600">
+              <AlertTriangle size={15} className="mt-0.5 flex-shrink-0" />
+              <p style={{ fontSize: "12px" }}>{error}</p>
+            </div>
+          )}
+
+          <div>
+            <label className="mb-1.5 block" style={{ color: "var(--text-main)", fontSize: "12px", fontWeight: 600 }}>
+              Cinema cluster <span className="text-rose-500">*</span>
+            </label>
+            <select
+              value={clusterId}
+              onChange={(event) => setClusterId(event.target.value ? Number(event.target.value) : "")}
+              className="w-full rounded-xl border px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500/20"
+              style={{ background: "var(--bg-card)", borderColor: "var(--border-color)", color: "var(--text-main)", fontSize: "13px" }}
+            >
+              <option value="">Select an active cinema cluster</option>
+              {clusters.map((cluster) => (
+                <option key={cluster.clusterId} value={cluster.clusterId}>
+                  {cluster.clusterName}
+                </option>
+              ))}
+            </select>
+            {clusters.length === 0 && (
+              <p className="mt-1.5 text-amber-600" style={{ fontSize: "11px" }}>
+                No active cinema cluster is available. Approve and activate a cluster first.
+              </p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block" style={{ color: "var(--text-main)", fontSize: "12px", fontWeight: 600 }}>
+                Showing starts <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="date"
+                min={today()}
+                value={showingStartDate}
+                onChange={(event) => setShowingStartDate(event.target.value)}
+                className="w-full rounded-xl border px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500/20"
+                style={{ colorScheme: "var(--color-scheme)" as string, background: "var(--bg-card)", borderColor: "var(--border-color)", color: "var(--text-main)", fontSize: "13px" }}
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block" style={{ color: "var(--text-main)", fontSize: "12px", fontWeight: 600 }}>
+                Showing ends <span style={{ color: "var(--text-sub)", fontWeight: 400 }}>(optional)</span>
+              </label>
+              <input
+                type="date"
+                min={showingStartDate || today()}
+                value={showingEndDate}
+                onChange={(event) => setShowingEndDate(event.target.value)}
+                className="w-full rounded-xl border px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500/20"
+                style={{ colorScheme: "var(--color-scheme)" as string, background: "var(--bg-card)", borderColor: invalidDateRange ? "#e11d48" : "var(--border-color)", color: "var(--text-main)", fontSize: "13px" }}
+              />
+              {invalidDateRange && <p className="mt-1 text-rose-500" style={{ fontSize: "11px" }}>End date cannot be before start date.</p>}
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block" style={{ color: "var(--text-main)", fontSize: "12px", fontWeight: 600 }}>
+              Sales start <span style={{ color: "var(--text-sub)", fontWeight: 400 }}>(optional)</span>
+            </label>
+            <input
+              type="datetime-local"
+              value={salesStartAt}
+              onChange={(event) => setSalesStartAt(event.target.value)}
+              className="w-full rounded-xl border px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500/20"
+              style={{ colorScheme: "var(--color-scheme)" as string, background: "var(--bg-card)", borderColor: "var(--border-color)", color: "var(--text-main)", fontSize: "13px" }}
+            />
+            <p className="mt-1.5" style={{ color: "var(--text-sub)", fontSize: "11px" }}>
+              This is the planned presale time. Opening individual showtimes remains a separate operational action.
+            </p>
+          </div>
+
+          <div className="rounded-xl border p-3" style={{ borderColor: "rgba(37,99,235,0.18)", background: "rgba(37,99,235,0.05)" }}>
+            <div className="flex items-center gap-2 text-blue-600">
+              <CheckCircle2 size={14} />
+              <p style={{ fontSize: "12px", fontWeight: 600 }}>The new plan starts as PLANNED</p>
+            </div>
+            <p className="mt-1 pl-[22px]" style={{ color: "var(--text-sub)", fontSize: "11px" }}>
+              It will not open ticket sales or publish a showtime automatically.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 border-t px-6 py-4" style={{ borderColor: "var(--border-color)" }}>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border px-4 py-2.5 text-sm"
+            style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!canSubmit}
+            onClick={handleSubmit}
+            className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {submitting ? "Creating..." : "Create release plan"}
+            {!submitting && <ArrowRight size={14} />}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WorkflowStep({
+  icon,
+  label,
+  state,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  state: "complete" | "current" | "upcoming";
+}) {
+  const palette = state === "complete"
+    ? { color: "#059669", background: "rgba(5,150,105,0.1)", border: "rgba(5,150,105,0.2)" }
+    : state === "current"
+      ? { color: "#2563eb", background: "rgba(37,99,235,0.1)", border: "rgba(37,99,235,0.24)" }
+      : { color: "var(--text-sub)", background: "var(--bg-card)", border: "var(--border-color)" };
+
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-2">
+      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border" style={palette}>
+        {state === "complete" ? <Check size={13} /> : icon}
+      </div>
+      <p className="truncate" style={{ color: palette.color, fontSize: "11px", fontWeight: state === "upcoming" ? 500 : 650 }}>
+        {label}
+      </p>
+    </div>
+  );
+}
+
 export function MovieAvailabilityPanel({ movieId }: Props) {
+  const navigate = useNavigate();
   const { isAdmin } = useRole();
   const [availabilities, setAvailabilities] = useState<MovieAvailabilityResponse[]>([]);
   const [clusters, setClusters] = useState<ClusterResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [suspendTarget, setSuspendTarget] = useState<number | null>(null);
-
-  const [newClusterId, setNewClusterId] = useState<number | "">("");
-  const [newStartDate, setNewStartDate] = useState("");
-  const [newEndDate, setNewEndDate] = useState("");
 
   const load = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [availRes, clusterRes] = await Promise.all([
+      const [availabilityResponse, clusterResponse] = await Promise.all([
         movieApi.searchAvailabilities({ movieId }),
         movieApi.getClusters(),
       ]);
-      setAvailabilities(availRes.result ?? []);
-      setClusters((clusterRes.result ?? []).filter((c) => c.status === "ACTIVE"));
-    } catch (err: any) {
-      setError(err?.response?.data?.message ?? "Failed to load availability plans.");
+      setAvailabilities(availabilityResponse.result ?? []);
+      setClusters((clusterResponse.result ?? []).filter((cluster) => cluster.status === "ACTIVE"));
+    } catch (requestError: unknown) {
+      const message = (requestError as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(message ?? "Release plans could not be loaded.");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, [movieId]);
+  useEffect(() => {
+    void load();
+  }, [movieId]);
 
-  const runCommand = async (id: number, fn: () => Promise<unknown>) => {
+  const counts = useMemo(() => ({
+    total: availabilities.length,
+    planned: availabilities.filter((item) => item.status === "PLANNED").length,
+    open: availabilities.filter((item) => item.status === "OPEN").length,
+    suspended: availabilities.filter((item) => item.status === "SUSPENDED").length,
+  }), [availabilities]);
+
+  const runCommand = async (id: number, command: () => Promise<unknown>) => {
     setBusyId(id);
     setError(null);
     try {
-      await fn();
+      await command();
       await load();
-    } catch (err: any) {
-      setError(err?.response?.data?.message ?? "Action failed.");
+    } catch (requestError: unknown) {
+      const message = (requestError as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(message ?? "The release plan action failed.");
     } finally {
       setBusyId(null);
     }
   };
 
-  const handleAdd = async () => {
-    if (!newClusterId || !newStartDate) return;
-    setError(null);
-    try {
-      await movieApi.createAvailability({
-        movieId,
-        clusterId: Number(newClusterId),
-        showingStartDate: newStartDate,
-        showingEndDate: newEndDate || undefined,
-      });
-      setShowAddForm(false);
-      setNewClusterId("");
-      setNewStartDate("");
-      setNewEndDate("");
-      await load();
-    } catch (err: any) {
-      setError(err?.response?.data?.message ?? "Failed to create availability plan.");
-    }
-  };
-
-  const inputStyle: React.CSSProperties = {
-    fontSize: "13px", background: "var(--bg-card)", color: "var(--text-main)", border: "1px solid var(--border-color)",
+  const goToScheduling = (availability: MovieAvailabilityResponse) => {
+    const query = new URLSearchParams({
+      movieId: String(movieId),
+      clusterId: String(availability.clusterId),
+      availabilityId: String(availability.availabilityId),
+    });
+    navigate(`/admin/showtimes?${query.toString()}`);
   };
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-1.5">
-          <CalendarClock size={12} style={{ color: "var(--text-sub)" }} />
-          <p style={{ fontSize: "10.5px", fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-sub)" }}>
-            Availability by cluster
-          </p>
+    <section>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600">
+              <CalendarClock size={16} />
+            </div>
+            <div>
+              <h3 style={{ color: "var(--text-main)", fontSize: "14px", fontWeight: 700 }}>Release plans</h3>
+              <p style={{ color: "var(--text-sub)", fontSize: "11px" }}>Control exhibition separately for each cinema cluster.</p>
+            </div>
+          </div>
         </div>
-        {isAdmin && !showAddForm && (
+        {isAdmin && (
           <button
             type="button"
-            onClick={() => setShowAddForm(true)}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-medium hover:opacity-80"
-            style={{ color: "#2563eb", borderColor: "rgba(37,99,235,0.3)", background: "rgba(37,99,235,0.06)" }}
+            onClick={() => setShowCreateDialog(true)}
+            className="flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700"
           >
-            <Plus size={12} /> Add plan
+            <Plus size={13} /> New release plan
           </button>
         )}
       </div>
 
-      {error && (
-        <p className="mb-2" style={{ fontSize: "12px", color: "#dc2626" }}>{error}</p>
+      <div className="mt-4 flex items-center gap-2 rounded-xl border px-3 py-2.5" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
+        <WorkflowStep icon={<Film size={13} />} label="Content approved" state="complete" />
+        <ArrowRight size={12} style={{ color: "var(--text-sub)", flexShrink: 0 }} />
+        <WorkflowStep icon={<CalendarDays size={13} />} label="Release plan" state={counts.total > 0 ? "complete" : "current"} />
+        <ArrowRight size={12} style={{ color: "var(--text-sub)", flexShrink: 0 }} />
+        <WorkflowStep icon={<Clock3 size={13} />} label="Schedule shows" state={counts.total > 0 ? "current" : "upcoming"} />
+        <ArrowRight size={12} style={{ color: "var(--text-sub)", flexShrink: 0 }} />
+        <WorkflowStep icon={<Ticket size={13} />} label="Open sales" state="upcoming" />
+      </div>
+
+      {counts.total > 0 && (
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[
+            ["Clusters", counts.total, "var(--text-main)"],
+            ["Planned", counts.planned, "#2563eb"],
+            ["Open", counts.open, "#059669"],
+            ["Suspended", counts.suspended, "#d97706"],
+          ].map(([label, value, color]) => (
+            <div key={String(label)} className="rounded-xl border px-3 py-2" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
+              <p style={{ color: "var(--text-sub)", fontSize: "10px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</p>
+              <p className="mt-0.5" style={{ color: String(color), fontSize: "17px", fontWeight: 750 }}>{value}</p>
+            </div>
+          ))}
+        </div>
       )}
 
-      {showAddForm && (
-        <div className="mb-3 p-3 rounded-xl border" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
-            <select
-              value={newClusterId}
-              onChange={(e) => setNewClusterId(e.target.value ? Number(e.target.value) : "")}
-              className="px-2.5 py-2 rounded-lg"
-              style={inputStyle}
-            >
-              <option value="">Select cluster…</option>
-              {clusters.map((c) => (
-                <option key={c.clusterId} value={c.clusterId}>{c.clusterName}</option>
-              ))}
-            </select>
-            <input
-              type="date"
-              value={newStartDate}
-              onChange={(e) => setNewStartDate(e.target.value)}
-              className="px-2.5 py-2 rounded-lg"
-              style={inputStyle}
-            />
-            <input
-              type="date"
-              value={newEndDate}
-              onChange={(e) => setNewEndDate(e.target.value)}
-              placeholder="End (optional)"
-              className="px-2.5 py-2 rounded-lg"
-              style={inputStyle}
-            />
-          </div>
-          <div className="flex gap-2 justify-end">
-            <button type="button" onClick={() => setShowAddForm(false)} className="px-3 py-1.5 rounded-lg border text-xs" style={{ color: "var(--text-main)", borderColor: "var(--border-color)" }}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={!newClusterId || !newStartDate}
-              onClick={handleAdd}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-40"
-              style={{ background: "#2563eb" }}
-            >
-              Create plan
-            </button>
-          </div>
+      {error && (
+        <div className="mt-3 flex items-start gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2.5 text-rose-600">
+          <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+          <p style={{ fontSize: "12px" }}>{error}</p>
         </div>
       )}
 
       {loading ? (
-        <p style={{ fontSize: "12px", color: "var(--text-sub)" }}>Loading…</p>
+        <div className="mt-4 space-y-2">
+          {[0, 1].map((item) => (
+            <div key={item} className="h-24 animate-pulse rounded-xl border" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }} />
+          ))}
+        </div>
       ) : availabilities.length === 0 ? (
-        <p style={{ fontSize: "12px", color: "var(--text-sub)" }}>No availability plan yet at any cluster.</p>
+        <div className="mt-4 rounded-2xl border border-dashed px-5 py-7 text-center" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
+          <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600/10 text-blue-600">
+            <MapPin size={20} />
+          </div>
+          <h4 className="mt-3" style={{ color: "var(--text-main)", fontSize: "13px", fontWeight: 700 }}>No cinema release has been planned</h4>
+          <p className="mx-auto mt-1 max-w-md" style={{ color: "var(--text-sub)", fontSize: "11px" }}>
+            Add a cinema cluster and exhibition window first. This does not publish showtimes or open ticket sales.
+          </p>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setShowCreateDialog(true)}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold text-blue-600"
+              style={{ borderColor: "rgba(37,99,235,0.25)", background: "rgba(37,99,235,0.06)" }}
+            >
+              <Plus size={13} /> Create the first release plan
+            </button>
+          )}
+        </div>
       ) : (
-        <div className="space-y-2">
-          {availabilities.map((a) => {
-            const meta = STATUS_META[a.status];
-            const busy = busyId === a.availabilityId;
+        <div className="mt-4 space-y-2.5">
+          {availabilities.map((availability) => {
+            const meta = STATUS_META[availability.status];
+            const busy = busyId === availability.availabilityId;
+
             return (
-              <div key={a.availabilityId} className="flex items-center justify-between gap-2 p-2.5 rounded-xl border" style={{ borderColor: "var(--border-color)" }}>
-                <div className="flex items-center gap-2 min-w-0">
-                  <MapPin size={12} style={{ color: "var(--text-sub)", flexShrink: 0 }} />
-                  <div className="min-w-0">
-                    <p style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {a.clusterName ?? `Cluster #${a.clusterId}`}
-                    </p>
-                    <p style={{ fontSize: "11px", color: "var(--text-sub)" }}>
-                      {a.showingStartDate}{a.showingEndDate ? ` → ${a.showingEndDate}` : ""}
-                      {a.status === "SUSPENDED" && a.suspensionReason ? ` · ${a.suspensionReason}` : ""}
-                    </p>
+              <article
+                key={availability.availabilityId}
+                className="rounded-2xl border p-3.5"
+                style={{ borderColor: availability.status === "OPEN" ? meta.border : "var(--border-color)", background: "var(--bg-main)" }}
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <MapPin size={14} className="flex-shrink-0" style={{ color: "#2563eb" }} />
+                        <h4 className="truncate" style={{ color: "var(--text-main)", fontSize: "13px", fontWeight: 700 }}>
+                          {availability.clusterName ?? `Cluster #${availability.clusterId}`}
+                        </h4>
+                      </div>
+                      <span className="rounded-lg border px-2 py-0.5" style={{ color: meta.color, background: meta.background, borderColor: meta.border, fontSize: "10px", fontWeight: 700 }}>
+                        {meta.label}
+                      </span>
+                    </div>
+                    <p className="mt-1" style={{ color: "var(--text-sub)", fontSize: "10.5px" }}>{meta.description}</p>
+
+                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <div className="flex items-start gap-2 rounded-xl border px-2.5 py-2" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+                        <CalendarDays size={13} className="mt-0.5 flex-shrink-0" style={{ color: "var(--text-sub)" }} />
+                        <div>
+                          <p style={{ color: "var(--text-sub)", fontSize: "9.5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Showing window</p>
+                          <p className="mt-0.5" style={{ color: "var(--text-main)", fontSize: "11px", fontWeight: 600 }}>
+                            {formatDate(availability.showingStartDate)} → {formatDate(availability.showingEndDate)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2 rounded-xl border px-2.5 py-2" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+                        <Ticket size={13} className="mt-0.5 flex-shrink-0" style={{ color: "var(--text-sub)" }} />
+                        <div>
+                          <p style={{ color: "var(--text-sub)", fontSize: "9.5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Planned sales start</p>
+                          <p className="mt-0.5" style={{ color: "var(--text-main)", fontSize: "11px", fontWeight: 600 }}>
+                            {formatDateTime(availability.salesStartAt)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {availability.status === "SUSPENDED" && availability.suspensionReason && (
+                      <div className="mt-2 flex items-start gap-2 rounded-lg bg-amber-500/10 px-2.5 py-2 text-amber-700">
+                        <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
+                        <p style={{ fontSize: "10.5px" }}>{availability.suspensionReason}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5 sm:max-w-[210px] sm:justify-end">
+                    {availability.status !== "CLOSED" && (
+                      <button
+                        type="button"
+                        onClick={() => goToScheduling(availability)}
+                        className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-500/5"
+                        style={{ borderColor: "rgba(37,99,235,0.24)" }}
+                      >
+                        <Clock3 size={12} /> Schedule shows
+                      </button>
+                    )}
+
+                    {isAdmin && !busy && availability.status === "PLANNED" && (
+                      <button
+                        type="button"
+                        title="Enable exhibition for this cluster"
+                        onClick={() => runCommand(availability.availabilityId, () => movieApi.openAvailability(availability.availabilityId))}
+                        className="flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white"
+                      >
+                        <Play size={11} /> Open
+                      </button>
+                    )}
+
+                    {isAdmin && !busy && (availability.status === "PLANNED" || availability.status === "OPEN") && (
+                      <button
+                        type="button"
+                        title="Temporarily suspend"
+                        onClick={() => setSuspendTarget(availability.availabilityId)}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border text-amber-600 hover:bg-amber-500/10"
+                        style={{ borderColor: "var(--border-color)" }}
+                      >
+                        <Pause size={12} />
+                      </button>
+                    )}
+
+                    {isAdmin && !busy && availability.status === "SUSPENDED" && (
+                      <button
+                        type="button"
+                        title="Resume exhibition"
+                        onClick={() => runCommand(availability.availabilityId, () => movieApi.resumeAvailability(availability.availabilityId))}
+                        className="flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white"
+                      >
+                        <Play size={11} /> Resume
+                      </button>
+                    )}
+
+                    {isAdmin && !busy && availability.status !== "CLOSED" && (
+                      <button
+                        type="button"
+                        title="Close this release window"
+                        onClick={() => runCommand(availability.availabilityId, () => movieApi.closeAvailability(availability.availabilityId))}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border hover:bg-slate-500/10"
+                        style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}
+                      >
+                        <Square size={11} />
+                      </button>
+                    )}
+
+                    {busy && <span style={{ color: "var(--text-sub)", fontSize: "11px" }}>Updating...</span>}
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <span className="px-2 py-0.5 rounded-md text-xs font-medium" style={{ color: meta.text, background: meta.bg }}>
-                    {meta.label}
-                  </span>
-                  {isAdmin && !busy && (
-                    <>
-                      {a.status === "PLANNED" && (
-                        <button type="button" title="Open" onClick={() => runCommand(a.availabilityId, () => movieApi.openAvailability(a.availabilityId))}
-                          className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-emerald-50" style={{ color: "#059669" }}>
-                          <Play size={12} />
-                        </button>
-                      )}
-                      {(a.status === "PLANNED" || a.status === "OPEN") && (
-                        <button type="button" title="Suspend" onClick={() => setSuspendTarget(a.availabilityId)}
-                          className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-amber-50" style={{ color: "#d97706" }}>
-                          <Pause size={12} />
-                        </button>
-                      )}
-                      {a.status === "SUSPENDED" && (
-                        <button type="button" title="Resume" onClick={() => runCommand(a.availabilityId, () => movieApi.resumeAvailability(a.availabilityId))}
-                          className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-emerald-50" style={{ color: "#059669" }}>
-                          <Play size={12} />
-                        </button>
-                      )}
-                      {a.status !== "CLOSED" && (
-                        <button type="button" title="Close" onClick={() => runCommand(a.availabilityId, () => movieApi.closeAvailability(a.availabilityId))}
-                          className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-gray-100" style={{ color: "#6b7280" }}>
-                          <Square size={11} />
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
+              </article>
             );
           })}
         </div>
+      )}
+
+      {showCreateDialog && (
+        <CreatePlanDialog
+          movieId={movieId}
+          clusters={clusters}
+          onCreated={load}
+          onClose={() => setShowCreateDialog(false)}
+        />
       )}
 
       {suspendTarget !== null && (
@@ -267,11 +670,11 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
           onConfirm={(reason) => {
             const id = suspendTarget;
             setSuspendTarget(null);
-            runCommand(id, () => movieApi.suspendAvailability(id, reason));
+            void runCommand(id, () => movieApi.suspendAvailability(id, reason));
           }}
           onCancel={() => setSuspendTarget(null)}
         />
       )}
-    </div>
+    </section>
   );
 }
