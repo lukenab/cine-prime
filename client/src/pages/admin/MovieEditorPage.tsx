@@ -696,7 +696,15 @@ export default function MovieEditorPage() {
       // false via editableDraft) - nothing left to do here, so return to the list instead of
       // leaving the admin stranded on a now-frozen page. Toaster is mounted above the router
       // (App.tsx) so the success toast still shows after navigating.
-      navigate(exitDestination);
+      //
+      // Deliberately hardcoded, not exitDestination: that const is computed once per render
+      // from editMovieId/activeMovieId, and this closure is created (and captures it) before
+      // the very first save of a brand-new draft has happened - saveDraftThenSubmit() above
+      // updates activeMovieId as a side effect, but this already-running handler still holds
+      // the stale pre-save value ("/admin/movies/new", the create-flow chooser) rather than
+      // the fresh one. reviewedMovie having a real id here always means an actual saved movie
+      // exists, so the list is always the correct destination, never the chooser.
+      navigate("/admin/movies");
     } catch (e: any) {
       const message = errorMessage(
         e,
