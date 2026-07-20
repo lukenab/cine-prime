@@ -76,7 +76,7 @@ export function Header({ activePage, isDarkMode = true, onToggleTheme }: HeaderP
         padding: "0 28px",
         position: "sticky",
         top: 0,
-        zIndex: 40,
+        zIndex: 50,
         fontFamily: "Inter, sans-serif",
         transition: "background 0.25s ease, border-color 0.25s ease",
       }}
