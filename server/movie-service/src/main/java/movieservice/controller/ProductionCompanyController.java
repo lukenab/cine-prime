@@ -47,7 +47,10 @@ public class ProductionCompanyController {
                 .code(200).result(movieMapper.toProductionCompanyResponse(entity)).build();
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    // ADMIN + EMPLOYEE - a production company is added inline while creating/editing a movie
+    // in MovieEditorPage (both roles use it, same rationale as PersonController's create/update),
+    // not a standalone governance action like genre creation.
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @PostMapping
     public ApiResponse<ProductionCompanyResponse> create(@Valid @RequestBody ProductionCompanyRequest req) {
         // If this exact TMDB company was already created (e.g. a concurrent save, or the same
@@ -76,7 +79,7 @@ public class ProductionCompanyController {
                 .build();
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @PutMapping("/{id}")
     public ApiResponse<ProductionCompanyResponse> update(@PathVariable Long id,
                                                           @Valid @RequestBody ProductionCompanyRequest req) {
@@ -92,6 +95,8 @@ public class ProductionCompanyController {
                 .build();
     }
 
+    // DELETE /api/companies/{id} - ADMIN only, more consequential than create/update (a company
+    // may be referenced as production company on several movies).
     @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable Long id) {
