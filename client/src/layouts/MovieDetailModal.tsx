@@ -2,7 +2,7 @@ import {
   X, Film, Tag, Globe, Users, Clock, Calendar, MapPin,
   Building2, ExternalLink, Play, ShieldCheck, Images, Loader2, ChevronLeft, ChevronRight,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { MovieResponse } from "../api/movieApi";
 import {
   MOVIE_CONTENT_STATUS_META,
@@ -42,6 +42,8 @@ export function MovieDetailModal({ open, movie, loading, onClose }: Props) {
   const [synopsisLang, setSynopsisLang] = useState<"vi" | "en">("vi");
   const [galleryIdx, setGalleryIdx] = useState(0);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const [carouselPaused, setCarouselPaused] = useState(false);
+  const touchStartX = useRef<number | null>(null);
 
   // Esc-to-close + body scroll lock, matching the customer-facing preview modal's behavior.
   useEffect(() => {
@@ -61,6 +63,7 @@ export function MovieDetailModal({ open, movie, loading, onClose }: Props) {
   useEffect(() => {
     setActiveTab("overview");
     setGalleryIdx(0);
+    setCarouselPaused(false);
   }, [movie?.movieId]);
 
   const vi = movie?.translations?.find(t => t.languageCode === "vi");
@@ -74,6 +77,33 @@ export function MovieDetailModal({ open, movie, loading, onClose }: Props) {
   const mainPoster = images.find(i => i.imageType === "POSTER")?.imageUrl ?? movie?.posterUrl;
   const backdrop = images.find(i => i.imageType === "BACKDROP")?.imageUrl ?? images.find(i => i.isDefault)?.imageUrl;
   const galleryImages = images.length ? images : (movie?.posterUrl ? [{ imageId: 0, imageUrl: movie.posterUrl, imageType: "POSTER" as const }] : []);
+
+  // Auto-advance the Media carousel every 4s, matching MoviePreviewModal's backdrop-cycling
+  // convention - only while that tab is actually visible, paused on hover/touch so a reader
+  // can linger on one image without it slipping away mid-look.
+  useEffect(() => {
+    if (activeTab !== "media" || carouselPaused || galleryImages.length <= 1) return;
+    const id = setInterval(() => setGalleryIdx((i) => (i + 1) % galleryImages.length), 4000);
+    return () => clearInterval(id);
+  }, [activeTab, carouselPaused, galleryImages.length]);
+
+  const SWIPE_THRESHOLD_PX = 40;
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    setCarouselPaused(true);
+  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current == null) return;
+    const delta = e.changedTouches[0].clientX - touchStartX.current;
+    if (Math.abs(delta) > SWIPE_THRESHOLD_PX) {
+      setGalleryIdx((i) => {
+        const dir = delta < 0 ? 1 : -1;
+        return (i + dir + galleryImages.length) % galleryImages.length;
+      });
+    }
+    touchStartX.current = null;
+    setCarouselPaused(false);
+  };
 
   const tabs = useMemo(() => ([
     { key: "overview" as TabKey, label: "Overview", show: true },
@@ -388,13 +418,18 @@ export function MovieDetailModal({ open, movie, loading, onClose }: Props) {
           {tab === "media" && galleryImages.length > 0 && (
             <div>
               <div
-                className="rounded-xl overflow-hidden border relative"
-                style={{ borderColor: "var(--border-color)", background: "var(--bg-card)", aspectRatio: "16/9" }}
+                className="rounded-xl overflow-hidden border relative select-none"
+                style={{ borderColor: "var(--border-color)", background: "var(--bg-card)", aspectRatio: "16/9", touchAction: "pan-y" }}
+                onMouseEnter={() => setCarouselPaused(true)}
+                onMouseLeave={() => setCarouselPaused(false)}
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
               >
                 <img
+                  key={galleryImages[galleryIdx]?.imageId}
                   src={galleryImages[galleryIdx]?.imageUrl}
                   alt={galleryImages[galleryIdx]?.caption ?? galleryImages[galleryIdx]?.imageType}
-                  className="w-full h-full object-contain"
+                  className="w-full h-full object-contain animate-in fade-in duration-300"
                 />
                 {galleryImages.length > 1 && (
                   <>
@@ -422,6 +457,23 @@ export function MovieDetailModal({ open, movie, loading, onClose }: Props) {
                     >
                       {galleryIdx + 1} / {galleryImages.length}
                     </span>
+                    {/* Carousel progress dots - also click-to-jump, doubles as an at-a-glance
+                        position indicator distinct from the numeric counter above. */}
+                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5">
+                      {galleryImages.map((img, idx) => (
+                        <button
+                          key={img.imageId}
+                          type="button"
+                          onClick={() => setGalleryIdx(idx)}
+                          aria-label={`Go to image ${idx + 1}`}
+                          className="rounded-full transition-all cursor-pointer"
+                          style={{
+                            width: idx === galleryIdx ? "16px" : "6px", height: "6px",
+                            background: idx === galleryIdx ? "#fff" : "rgba(255,255,255,0.5)",
+                          }}
+                        />
+                      ))}
+                    </div>
                   </>
                 )}
               </div>

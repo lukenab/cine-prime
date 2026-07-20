@@ -394,6 +394,24 @@ public class MovieService {
     }
 
     /**
+     * Mutates an existing Hibernate-managed collection in place rather than replacing its
+     * reference (movie.setTranslations(newList)/setCast(newList)) - replacing an
+     * orphanRemoval=true collection's reference breaks Hibernate's orphan tracking for it,
+     * surfacing as "A collection with orphan deletion was no longer referenced by the owning
+     * entity instance" the next time anything in the same transaction forces a flush. Falls back
+     * to a plain reference assignment when the target is null (e.g. a plain, not-yet-persisted
+     * entity in a unit test) - nothing to orphan there since there's no existing collection.
+     */
+    private static <T> void replaceInPlace(List<T> target, List<T> replacement, java.util.function.Consumer<List<T>> setter) {
+        if (target == null) {
+            setter.accept(replacement);
+        } else {
+            target.clear();
+            target.addAll(replacement);
+        }
+    }
+
+    /**
      * Reconcile translations theo composite key (movieId, languageCode) - xem AC section 5
      * cua issue #143. Update tai cho neu key da ton tai (giu nguyen createdAt), insert moi neu
      * chua co, chi xoa nhung language khong con xuat hien trong request (neu request khong rong).
@@ -403,7 +421,7 @@ public class MovieService {
 
         if (requests.isEmpty()) {
             if (!existing.isEmpty()) movieTranslationRepository.deleteAll(existing);
-            movie.setTranslations(new ArrayList<>());
+            replaceInPlace(movie.getTranslations(), new ArrayList<>(), movie::setTranslations);
             return;
         }
 
@@ -449,7 +467,7 @@ public class MovieService {
                 .collect(Collectors.toList());
         if (!toRemove.isEmpty()) movieTranslationRepository.deleteAll(toRemove);
 
-        movie.setTranslations(result);
+        replaceInPlace(movie.getTranslations(), result, movie::setTranslations);
     }
 
     /** Business key cho cast reconciliation - xem AC section 6 cua issue #143. */
@@ -467,7 +485,7 @@ public class MovieService {
 
         if (requests.isEmpty()) {
             if (!existing.isEmpty()) movieCastRepository.deleteAll(existing);
-            movie.setCast(new ArrayList<>());
+            replaceInPlace(movie.getCast(), new ArrayList<>(), movie::setCast);
             return;
         }
 
@@ -520,7 +538,7 @@ public class MovieService {
                 .collect(Collectors.toList());
         if (!toRemove.isEmpty()) movieCastRepository.deleteAll(toRemove);
 
-        movie.setCast(result);
+        replaceInPlace(movie.getCast(), result, movie::setCast);
     }
 
     // ── Status transitions ────────────────────────────────────

@@ -52,10 +52,10 @@ class FlywayMigrationIntegrationTest {
         MigrateResult result = flywayFor(FRESH_DB).migrate();
 
         assertTrue(result.success);
-        // V1..V10, V12, V13, V14, V16 (versioned - V11 and V15 are reserved on sibling branches
-        // not yet merged) + R (repeatable seed) all actually executed — a fresh DB has no prior
+        // V1..V10, V12, V13, V14, V15, V16 (versioned - V11 is reserved on a sibling branch not
+        // yet merged) + R (repeatable seed) all actually executed — a fresh DB has no prior
         // state for baselineOnMigrate to kick in on.
-        assertEquals(15, result.migrationsExecuted);
+        assertEquals(16, result.migrationsExecuted);
 
         try (Connection conn = DriverManager.getConnection(
                 FRESH_DB.getJdbcUrl(), FRESH_DB.getUsername(), FRESH_DB.getPassword());
