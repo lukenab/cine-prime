@@ -5,10 +5,13 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import movie.theater.common.dto.ApiResponse;
+import movie.theater.common.exception.AppException;
 import movieservice.dto.request.PersonRequest;
 import movieservice.dto.response.PersonResponse;
 import movieservice.entity.Person;
+import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
+import movieservice.repository.MovieCastRepository;
 import movieservice.repository.PersonRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,6 +28,7 @@ import java.util.List;
 public class PersonController {
 
     PersonRepository personRepository;
+    MovieCastRepository movieCastRepository;
     MovieMapper movieMapper;
 
     // GET /api/persons?q=  — list / search
@@ -66,8 +70,12 @@ public class PersonController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<PersonResponse> create(@Valid @RequestBody PersonRequest request) {
+        String fullName = request.getFullName().trim();
+        if (personRepository.existsByFullNameIgnoreCase(fullName)) {
+            throw new AppException(MovieErrorCode.PERSON_NAME_ALREADY_EXISTS);
+        }
         Person person = Person.builder()
-                .fullName(request.getFullName())
+                .fullName(fullName)
                 .nationality(request.getNationality())
                 .birthDate(request.getBirthDate())
                 .photoUrl(request.getPhotoUrl())
@@ -95,7 +103,11 @@ public class PersonController {
             @Valid @RequestBody PersonRequest request) {
         Person person = personRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Person not found"));
-        person.setFullName(request.getFullName());
+        String fullName = request.getFullName().trim();
+        if (personRepository.existsByFullNameIgnoreCaseAndPersonIdNot(fullName, id)) {
+            throw new AppException(MovieErrorCode.PERSON_NAME_ALREADY_EXISTS);
+        }
+        person.setFullName(fullName);
         person.setNationality(request.getNationality());
         person.setBirthDate(request.getBirthDate());
         person.setPhotoUrl(request.getPhotoUrl());
@@ -120,6 +132,9 @@ public class PersonController {
     public ApiResponse<Void> delete(@PathVariable Long id) {
         if (!personRepository.existsById(id)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Person not found");
+        }
+        if (movieCastRepository.existsByPerson_PersonId(id)) {
+            throw new AppException(MovieErrorCode.PERSON_STILL_REFERENCED);
         }
         personRepository.deleteById(id);
         return ApiResponse.<Void>builder()
