@@ -10,6 +10,7 @@ import java.util.Optional;
 @Repository
 public interface PersonRepository extends JpaRepository<Person, Long> {
     Optional<Person> findByTmdbId(Integer tmdbId);
+    Optional<Person> findByFullNameIgnoreCase(String fullName);
     boolean existsByFullNameIgnoreCase(String fullName);
     boolean existsByFullNameIgnoreCaseAndPersonIdNot(String fullName, Long personId);
     List<Person> findByFullNameContainingIgnoreCase(String keyword);
