@@ -3,16 +3,20 @@ import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import {
   ArrowLeft, MapPin, Phone, Building2, Armchair, RefreshCw, AlertCircle,
   Plus, Search, ChevronRight, CheckCircle, CheckCircle2, XCircle, Clock, SendHorizonal, Edit2, Trash2,
+  Mail, Timer, Copy,
 } from "lucide-react";
 import {
   movieApi,
   type ClusterResponse,
   type ClusterStatus,
+  type ClusterOperatingHour,
   type RoomResponse,
   ROOM_TYPE_CONFIG,
 } from "../../api/movieApi";
-import { AddCinemaRoomModal } from "../../layouts/AddCinemaRoomModal";
 import { useRole } from "../../hooks/useRole";
+import { RoomCreationMethodDialog } from "./cinemaRoomEditor/RoomCreationMethodDialog";
+import { ClusterWizardModal } from "./ClusterWizardModal";
+import { ConfirmDialog } from "../../components/shared/ConfirmDialog";
 
 // ── Status config (small local copy — kept in sync with ManageCinemaClusterPage.tsx) ──
 
@@ -23,6 +27,44 @@ const STATUS_CONFIG: Record<ClusterStatus, { label: string; icon: React.ElementT
   INACTIVE:       { label: "Inactive",       icon: XCircle,     color: "#ef4444", bg: "rgba(239,68,68,0.10)"   },
 };
 
+const OPERATING_DAY_LABELS = { MONDAY: "Mon", TUESDAY: "Tue", WEDNESDAY: "Wed", THURSDAY: "Thu", FRIDAY: "Fri", SATURDAY: "Sat", SUNDAY: "Sun" } as const;
+const OPERATING_DAY_ORDER = Object.keys(OPERATING_DAY_LABELS) as Array<keyof typeof OPERATING_DAY_LABELS>;
+
+function formatHourRange(hour: ClusterOperatingHour): string {
+  if (hour.closed) return "Closed";
+  if (!hour.opensAt || !hour.closesAt) return "—";
+  return `${hour.opensAt.slice(0, 5)}–${hour.closesAt.slice(0, 5)}${hour.closesNextDay ? " (overnight)" : ""}`;
+}
+
+/** Groups consecutive days sharing the same hours into one line each (e.g. "Mon–Sun 08:00–23:00"
+ *  instead of 7 near-identical boxes) — the common case (uniform week) collapses to a single row. */
+function summarizeSchedule(hours: ClusterOperatingHour[]) {
+  const groups: Array<{ labels: string[]; hour: ClusterOperatingHour }> = [];
+  for (const id of OPERATING_DAY_ORDER) {
+    const hour = hours.find((h) => h.dayOfWeek === id);
+    if (!hour) continue;
+    const label: string = OPERATING_DAY_LABELS[id];
+    const last = groups[groups.length - 1];
+    if (
+      last
+      && last.hour.closed === hour.closed
+      && last.hour.opensAt === hour.opensAt
+      && last.hour.closesAt === hour.closesAt
+      && last.hour.closesNextDay === hour.closesNextDay
+    ) {
+      last.labels.push(label);
+    } else {
+      groups.push({ labels: [label], hour });
+    }
+  }
+
+  return groups.map(({ labels, hour }) => ({
+    range: labels.length > 1 ? `${labels[0]}–${labels[labels.length - 1]}` : labels[0],
+    hours: formatHourRange(hour),
+    closed: hour.closed,
+  }));
+}
+
 // Nhan hang kieu Excel (khop rowLabel() ben backend): 0->A, 1->B, ..., 25->Z, 26->AA...
 function excelRowLabel(index: number): string {
   let n = index;
@@ -32,6 +74,42 @@ function excelRowLabel(index: number): string {
     n = Math.floor(n / 26) - 1;
   } while (n >= 0);
   return label;
+}
+
+type ResourceError = {
+  message: string;
+  requestId?: string;
+};
+
+function firstString(...values: unknown[]): string | undefined {
+  return values.find((value): value is string => typeof value === "string" && value.trim().length > 0);
+}
+
+/** Normalizes the common API/gateway error shapes without coupling the page to Axios. */
+function toResourceError(error: unknown, fallbackMessage: string): ResourceError {
+  if (!error || typeof error !== "object") return { message: fallbackMessage };
+
+  const response = "response" in error && error.response && typeof error.response === "object"
+    ? error.response as Record<string, unknown>
+    : undefined;
+  const data = response?.data && typeof response.data === "object"
+    ? response.data as Record<string, unknown>
+    : undefined;
+  const headers = response?.headers && typeof response.headers === "object"
+    ? response.headers as Record<string, unknown>
+    : undefined;
+
+  return {
+    message: firstString(data?.message, data?.error, fallbackMessage) ?? fallbackMessage,
+    requestId: firstString(
+      data?.correlationId,
+      data?.requestId,
+      data?.traceId,
+      headers?.["x-correlation-id"],
+      headers?.["x-request-id"],
+      headers?.["x-trace-id"],
+    ),
+  };
 }
 
 // ── Toast (matches the pattern used in SettingsPage.tsx / CreateEmployeePage.tsx) ──
@@ -94,21 +172,25 @@ export default function ClusterDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
-  const { can, isAdmin } = useRole();
+  const { can, isAdmin, username } = useRole();
 
   const clusterId = Number(id);
 
   const [cluster, setCluster] = useState<ClusterResponse | null>(null);
   const [rooms, setRooms] = useState<RoomResponse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [clusterLoading, setClusterLoading] = useState(true);
+  const [roomsLoading, setRoomsLoading] = useState(true);
+  const [clusterError, setClusterError] = useState<ResourceError | null>(null);
+  const [roomsError, setRoomsError] = useState<ResourceError | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [workflowBusy, setWorkflowBusy] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deletingRoomId, setDeletingRoomId] = useState<number | null>(null);
+  const [deleteRoomTarget, setDeleteRoomTarget] = useState<RoomResponse | null>(null);
+  const [confirmClusterDelete, setConfirmClusterDelete] = useState(false);
+  const [choosingRoomCreationMethod, setChoosingRoomCreationMethod] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const showToast = (type: "success" | "error", message: string) => {
@@ -118,44 +200,56 @@ export default function ClusterDetailPage() {
 
   const load = useCallback(async () => {
     if (!clusterId) return;
-    setLoading(true);
-    setError(null);
+    setClusterLoading(true);
+    setRoomsLoading(true);
+    setClusterError(null);
+    setRoomsError(null);
+
+    const [clusterRes, roomsRes] = await Promise.allSettled([
+      movieApi.getClusterById(clusterId),
+      movieApi.getRoomsByCluster(clusterId),
+    ]);
+
+    if (clusterRes.status === "fulfilled") {
+      setCluster(clusterRes.value.result);
+    } else {
+      setClusterError(toResourceError(clusterRes.reason, "Failed to load cluster."));
+    }
+
+    if (roomsRes.status === "fulfilled") {
+      setRooms(roomsRes.value.result ?? []);
+    } else {
+      setRoomsError(toResourceError(roomsRes.reason, "The room service is temporarily unavailable."));
+    }
+
+    setClusterLoading(false);
+    setRoomsLoading(false);
+  }, [clusterId]);
+
+  const loadRooms = useCallback(async () => {
+    if (!clusterId) return;
+    setRoomsLoading(true);
+    setRoomsError(null);
     try {
-      const [clusterRes, roomsRes] = await Promise.allSettled([
-        movieApi.getClusterById(clusterId),
-        movieApi.getRoomsByCluster(clusterId),
-      ]);
-      if (clusterRes.status === "fulfilled") setCluster(clusterRes.value.result);
-      else setError("Failed to load cluster.");
-      if (roomsRes.status === "fulfilled") setRooms(roomsRes.value.result ?? []);
+      const response = await movieApi.getRoomsByCluster(clusterId);
+      setRooms(response.result ?? []);
+    } catch (roomRequestError) {
+      setRoomsError(toResourceError(roomRequestError, "The room service is temporarily unavailable."));
     } finally {
-      setLoading(false);
+      setRoomsLoading(false);
     }
   }, [clusterId]);
 
   useEffect(() => { load(); }, [load]);
 
-  const handleCreateRoom = async (data: Parameters<typeof movieApi.createRoom>[0]) => {
-    setSubmitting(true);
-    try {
-      const res = await movieApi.createRoom(data);
-      setRooms((prev) => [...prev, res.result]);
-      setModalOpen(false);
-      showToast("success", `Room "${res.result.cinemaRoomName}" created.`);
-      // Room counts on the cluster (totalRooms/totalSeats) are computed server-side —
-      // refresh so the stat cards below reflect the room we just added.
-      const clusterRes = await movieApi.getClusterById(clusterId);
-      setCluster(clusterRes.result);
-    } catch (err: any) {
-      showToast("error", err?.response?.data?.message ?? "Create failed.");
-    } finally {
-      setSubmitting(false);
-    }
+  const requestDeleteRoom = (room: RoomResponse, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDeleteRoomTarget(room);
   };
 
-  const handleDeleteRoom = async (room: RoomResponse, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!window.confirm(`Delete room "${room.cinemaRoomName}"? This cannot be undone.`)) return;
+  const handleDeleteRoom = async () => {
+    if (!deleteRoomTarget) return;
+    const room = deleteRoomTarget;
     setDeletingRoomId(room.cinemaRoomId);
     try {
       await movieApi.deleteRoom(room.cinemaRoomId);
@@ -163,8 +257,10 @@ export default function ClusterDetailPage() {
       showToast("success", `Room "${room.cinemaRoomName}" deleted.`);
       const clusterRes = await movieApi.getClusterById(clusterId);
       setCluster(clusterRes.result);
+      setDeleteRoomTarget(null);
     } catch (err: any) {
-      showToast("error", err?.response?.data?.message ?? "Delete failed — room may already have showtimes.");
+      showToast("error", err?.response?.data?.message ?? "Unable to delete this room draft.");
+      setDeleteRoomTarget(null);
     } finally {
       setDeletingRoomId(null);
     }
@@ -184,13 +280,13 @@ export default function ClusterDetailPage() {
 
   const handleDelete = async () => {
     if (!cluster) return;
-    if (!window.confirm(`Delete cluster "${cluster.clusterName}"? This cannot be undone.`)) return;
     setDeleting(true);
     try {
       await movieApi.deleteCluster(cluster.clusterId);
       navigate("/admin/clusters");
     } catch (err: any) {
-      showToast("error", err?.response?.data?.message ?? "Delete failed — cluster may still have rooms.");
+      showToast("error", err?.response?.data?.message ?? "Unable to delete this cluster draft.");
+      setConfirmClusterDelete(false);
     } finally {
       setDeleting(false);
     }
@@ -208,7 +304,7 @@ export default function ClusterDetailPage() {
     border: "1px solid var(--border-color)",
   };
 
-  if (loading && !cluster) {
+  if (clusterLoading && !cluster) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-3">
         <RefreshCw size={20} className="animate-spin" style={{ color: "var(--text-sub)" }} />
@@ -221,14 +317,23 @@ export default function ClusterDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-3">
         <AlertCircle size={22} style={{ color: "#ef4444" }} />
-        <p style={{ fontSize: "14px", color: "var(--text-sub)" }}>{error ?? "Cluster not found."}</p>
-        <button
-          onClick={() => navigate("/admin/clusters")}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl border transition-all hover:opacity-80"
-          style={{ fontSize: "13px", color: "var(--text-sub)", borderColor: "var(--border-color)", background: "var(--bg-card)" }}
-        >
-          <ArrowLeft size={15} /> Back to Clusters
-        </button>
+        <p style={{ fontSize: "14px", color: "var(--text-sub)" }}>{clusterError?.message ?? "Cluster not found."}</p>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={load}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border transition-all hover:opacity-80"
+            style={{ fontSize: "13px", color: "#2563eb", borderColor: "var(--border-color)", background: "var(--bg-card)" }}
+          >
+            <RefreshCw size={15} /> Retry
+          </button>
+          <button
+            onClick={() => navigate("/admin/clusters")}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border transition-all hover:opacity-80"
+            style={{ fontSize: "13px", color: "var(--text-sub)", borderColor: "var(--border-color)", background: "var(--bg-card)" }}
+          >
+            <ArrowLeft size={15} /> Back to Clusters
+          </button>
+        </div>
       </div>
     );
   }
@@ -312,17 +417,17 @@ export default function ClusterDetailPage() {
           )}
           {can.edit && (
             <button
-              onClick={() => navigate("/admin/clusters", { state: { editClusterId: cluster.clusterId } })}
+              onClick={() => setEditOpen(true)}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl border hover:opacity-80"
               style={{ fontSize: "13px", color: "var(--text-main)", borderColor: "var(--border-color)", background: "var(--bg-card)" }}
             >
               <Edit2 size={14} /> Edit
             </button>
           )}
-          {isAdmin && (
+          {isAdmin && cluster.status === "DRAFT" && (
             <button
               disabled={deleting}
-              onClick={handleDelete}
+              onClick={() => setConfirmClusterDelete(true)}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl border hover:opacity-80 disabled:opacity-50"
               style={{ fontSize: "13px", color: "#ef4444", borderColor: "var(--border-color)", background: "var(--bg-card)" }}
             >
@@ -332,33 +437,60 @@ export default function ClusterDetailPage() {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-5 mb-6">
-        <div className="rounded-2xl border p-5 flex items-center gap-4" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-          <div className="w-12 h-12 rounded-xl bg-violet-50 flex items-center justify-center flex-shrink-0">
-            <Building2 size={20} className="text-violet-600" />
-          </div>
-          <div>
-            <p style={{ fontSize: "13px", color: "var(--text-sub)" }}>Rooms</p>
-            <p style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-main)", lineHeight: 1.2 }}>{cluster.totalRooms ?? rooms.length}</p>
-          </div>
-        </div>
-        <div className="rounded-2xl border p-5 flex items-center gap-4" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
-            <Armchair size={20} className="text-emerald-600" />
-          </div>
-          <div>
-            <p style={{ fontSize: "13px", color: "var(--text-sub)" }}>Seats</p>
-            <p style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-main)", lineHeight: 1.2 }}>{(cluster.totalSeats ?? totalSeats).toLocaleString()}</p>
-          </div>
-        </div>
-      </div>
+      {/* Operational profile — Sections 1-4 only; amenities remain out of scope. Everything
+          reads as two flowing lines (like the "province · address · phone" line in the
+          header) instead of a labeled dl-grid + divided sub-sections — that stacked so much
+          vertical chrome it ate half the page before the room table even showed up. */}
+      <section className="mb-6 rounded-2xl border p-4" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+        <div className="flex items-center gap-2"><Building2 size={16} className="text-blue-600" /><h2 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-main)" }}>Cluster profile</h2></div>
 
-      {/* Error */}
-      {error && (
+        <p className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-1" style={{ fontSize: "12.5px", color: "var(--text-sub)" }}>
+          {[
+            cluster.clusterCode ?? `Cluster ${cluster.clusterId}`,
+            (cluster.venueType ?? "MALL").replace(/_/g, " "),
+            cluster.timezone ?? "Asia/Ho_Chi_Minh",
+            cluster.countryCode ?? "VN",
+            cluster.openingDate && `Opened ${cluster.openingDate}`,
+            cluster.ward,
+            [cluster.buildingName, cluster.floorLocation].filter(Boolean).join(" · ") || undefined,
+          ].filter(Boolean).map((part, i, arr) => (
+            <span key={i}>
+              <strong style={{ color: "var(--text-main)", fontWeight: 600 }}>{part}</strong>{i < arr.length - 1 && <span className="ml-1.5">·</span>}
+            </span>
+          ))}
+          {cluster.publicEmail && (
+            <>
+              <span>·</span>
+              <a href={`mailto:${cluster.publicEmail}`} className="inline-flex items-center gap-1" style={{ color: "#2563eb", fontWeight: 600 }}>
+                <Mail size={11} />{cluster.publicEmail}
+              </a>
+            </>
+          )}
+        </p>
+
+        <div className="mt-3 pt-3 border-t flex flex-wrap items-center gap-x-4 gap-y-2" style={{ borderColor: "var(--border-color)" }}>
+          <span className="flex items-center gap-1.5" style={{ fontSize: "12.5px", color: "var(--text-sub)" }}>
+            <Building2 size={13} className="text-violet-600" /><strong style={{ color: "var(--text-main)" }}>{cluster.totalRooms ?? rooms.length}</strong> rooms
+          </span>
+          <span className="flex items-center gap-1.5" style={{ fontSize: "12.5px", color: "var(--text-sub)" }}>
+            <Armchair size={13} className="text-emerald-600" /><strong style={{ color: "var(--text-main)" }}>{(cluster.totalSeats ?? totalSeats).toLocaleString()}</strong> seats
+          </span>
+          <span style={{ width: "1px", height: "14px", background: "var(--border-color)" }} />
+          {summarizeSchedule(cluster.operatingHours ?? []).map((group) => (
+            <span key={group.range} className="flex items-center gap-1.5" style={{ fontSize: "12.5px", color: group.closed ? "#ef4444" : "var(--text-sub)" }}>
+              <Timer size={13} style={{ color: group.closed ? "#ef4444" : "#2563eb" }} />
+              <strong style={{ color: group.closed ? "#ef4444" : "var(--text-main)" }}>{group.range}</strong> {group.hours}
+            </span>
+          ))}
+          {!cluster.operatingHours?.length && <span style={{ fontSize: "12.5px", color: "var(--text-sub)" }}>Schedule not migrated</span>}
+        </div>
+      </section>
+
+      {/* A refresh can fail after an earlier cluster response has already rendered. */}
+      {clusterError && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl mb-5 border border-rose-200 bg-rose-50">
           <AlertCircle size={16} className="text-rose-500 flex-shrink-0" />
-          <p style={{ fontSize: "14px", color: "#e11d48" }}>{error}</p>
+          <p style={{ fontSize: "14px", color: "#e11d48" }}>{clusterError.message}</p>
           <button onClick={load} className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 transition-colors text-rose-600" style={{ fontSize: "13px" }}>
             <RefreshCw size={13} /> Retry
           </button>
@@ -367,7 +499,6 @@ export default function ClusterDetailPage() {
 
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap mb-4">
-        <h2 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-main)" }}>Rooms in this cluster</h2>
         <div className="relative flex-1 min-w-48">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-sub)" }} />
           <input
@@ -378,16 +509,16 @@ export default function ClusterDetailPage() {
           />
         </div>
         <button
-          onClick={load} disabled={loading}
+          onClick={load} disabled={clusterLoading || roomsLoading}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all hover:opacity-80 disabled:opacity-50"
           style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
         >
-          <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
-          {loading ? "Loading…" : "Refresh"}
+          <RefreshCw size={15} className={clusterLoading || roomsLoading ? "animate-spin" : ""} />
+          {clusterLoading || roomsLoading ? "Loading…" : "Refresh"}
         </button>
         {can.edit && cluster.status === "ACTIVE" && (
           <button
-            onClick={() => setModalOpen(true)}
+            onClick={() => setChoosingRoomCreationMethod(true)}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all shadow-sm"
             style={{ fontSize: "14px", fontWeight: 500, background: isDarkMode ? "#3b82f6" : "#2563eb" }}
           >
@@ -400,6 +531,23 @@ export default function ClusterDetailPage() {
           </span>
         )}
       </div>
+
+      <ClusterWizardModal
+        open={editOpen}
+        mode="edit"
+        clusterId={cluster.clusterId}
+        onClose={() => setEditOpen(false)}
+        onSaved={(saved) => setCluster(saved)}
+      />
+
+      {choosingRoomCreationMethod && (
+        <RoomCreationMethodDialog
+          rooms={rooms}
+          onClose={() => setChoosingRoomCreationMethod(false)}
+          onCreateNew={() => navigate(`/admin/clusters/${cluster.clusterId}/rooms/new`)}
+          onDuplicate={(sourceRoomId) => navigate(`/admin/clusters/${cluster.clusterId}/rooms/new?duplicateFrom=${sourceRoomId}`)}
+        />
+      )}
 
       {/* Rooms table */}
       <div className="rounded-2xl border overflow-hidden" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
@@ -414,11 +562,52 @@ export default function ClusterDetailPage() {
             </tr>
           </thead>
           <tbody>
-            {loading && rooms.length === 0 ? (
+            {roomsLoading ? (
               <tr>
                 <td colSpan={6} className="px-5 py-16 text-center">
                   <RefreshCw size={18} className="animate-spin mx-auto mb-2" style={{ color: "var(--text-sub)" }} />
                   <p style={{ fontSize: "14px", color: "var(--text-sub)" }}>Loading rooms…</p>
+                </td>
+              </tr>
+            ) : roomsError ? (
+              <tr>
+                <td colSpan={6} className="px-5 py-12 text-center">
+                  <div role="alert" className="mx-auto flex max-w-lg flex-col items-center gap-2">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full" style={{ background: "rgba(239,68,68,0.10)" }}>
+                      <AlertCircle size={20} style={{ color: "#ef4444" }} />
+                    </div>
+                    <p style={{ color: "var(--text-main)", fontSize: "14px", fontWeight: 600 }}>Failed to load rooms</p>
+                    <p style={{ color: "var(--text-sub)", fontSize: "13px" }}>{roomsError.message}</p>
+                    {roomsError.requestId && (
+                      <div className="mt-1 flex items-center gap-2" style={{ color: "var(--text-sub)", fontSize: "12px" }}>
+                        <span>Request ID: <code style={{ color: "var(--text-main)" }}>{roomsError.requestId}</code></span>
+                        <button
+                          type="button"
+                          title="Copy request ID"
+                          aria-label="Copy request ID"
+                          className="rounded-md p-1 transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(roomsError.requestId!);
+                              showToast("success", "Request ID copied.");
+                            } catch {
+                              showToast("error", "Could not copy request ID.");
+                            }
+                          }}
+                        >
+                          <Copy size={13} />
+                        </button>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={loadRooms}
+                      className="mt-2 flex items-center gap-1.5 rounded-lg border px-3 py-2 transition-opacity hover:opacity-80"
+                      style={{ color: "#2563eb", borderColor: "var(--border-color)", background: "var(--bg-card)", fontSize: "13px", fontWeight: 600 }}
+                    >
+                      <RefreshCw size={13} /> Retry
+                    </button>
+                  </div>
                 </td>
               </tr>
             ) : filteredRooms.length === 0 ? (
@@ -478,10 +667,10 @@ export default function ClusterDetailPage() {
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3 justify-end">
-                        {can.edit && (
+                        {room.status === "DRAFT" && (isAdmin || room.createdBy?.toLowerCase() === username.toLowerCase()) && (
                           <button
                             disabled={deletingRoomId === room.cinemaRoomId}
-                            onClick={(e) => handleDeleteRoom(room, e)}
+                            onClick={(e) => requestDeleteRoom(room, e)}
                             className="p-1.5 rounded-lg hover:opacity-80 disabled:opacity-50"
                             style={{ color: "#ef4444" }}
                             title="Delete room"
@@ -499,7 +688,7 @@ export default function ClusterDetailPage() {
           </tbody>
         </table>
 
-        {filteredRooms.length > 0 && (
+        {!roomsLoading && !roomsError && filteredRooms.length > 0 && (
           <div className="px-5 py-3.5 border-t" style={{ borderColor: "var(--border-color)" }}>
             <p style={{ fontSize: "13px", color: "var(--text-sub)" }}>
               <span style={{ color: "var(--text-main)", fontWeight: 500 }}>{filteredRooms.length}</span> room{filteredRooms.length !== 1 ? "s" : ""} ·{" "}
@@ -509,14 +698,41 @@ export default function ClusterDetailPage() {
         )}
       </div>
 
-      <AddCinemaRoomModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSave={handleCreateRoom}
-        submitting={submitting}
-        clusterId={cluster.clusterId}
-        existingRoomNames={rooms.map((r) => r.cinemaRoomName)}
-      />
+      {deleteRoomTarget && (
+        <ConfirmDialog
+          title="Delete unused room draft?"
+          body={
+            <p className="text-center">
+              <strong style={{ color: "var(--text-main)" }}>{deleteRoomTarget.cinemaRoomName}</strong> and
+              its draft layout will be permanently deleted. Rooms with submitted layouts, seats, showtimes,
+              or operational history cannot be hard-deleted.
+            </p>
+          }
+          confirmLabel={deletingRoomId ? "Deleting..." : "Delete draft"}
+          danger
+          busy={deletingRoomId !== null}
+          onConfirm={handleDeleteRoom}
+          onCancel={() => { if (deletingRoomId === null) setDeleteRoomTarget(null); }}
+        />
+      )}
+
+      {confirmClusterDelete && (
+        <ConfirmDialog
+          title="Delete unused cluster draft?"
+          body={
+            <p className="text-center">
+              <strong style={{ color: "var(--text-main)" }}>{cluster.clusterName}</strong> will be permanently
+              deleted. A cluster that has rooms, availability records, or review/operational history cannot be
+              hard-deleted.
+            </p>
+          }
+          confirmLabel={deleting ? "Deleting..." : "Delete draft"}
+          danger
+          busy={deleting}
+          onConfirm={handleDelete}
+          onCancel={() => { if (!deleting) setConfirmClusterDelete(false); }}
+        />
+      )}
 
       {rejecting && (
         <RejectModal

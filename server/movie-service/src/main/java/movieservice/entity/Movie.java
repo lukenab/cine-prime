@@ -44,16 +44,19 @@ public class Movie {
     @Column(name = "release_date")
     LocalDate releaseDate;
 
-    @Column(name = "end_date")
-    LocalDate endDate;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "age_rating_id")
     AgeRating ageRating;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "company_id")
-    ProductionCompany company;
+    // Issue #151: multi-company support - TMDB returns several production companies per
+    // title, previously only the first was ever kept.
+    @ManyToMany
+    @JoinTable(
+            name = "movie_production_company",
+            joinColumns = @JoinColumn(name = "movie_id"),
+            inverseJoinColumns = @JoinColumn(name = "company_id")
+    )
+    List<ProductionCompany> companies;
 
     @Column(name = "country", length = 100)
     String country;
@@ -68,19 +71,63 @@ public class Movie {
     @Column(name = "trailer_url", length = 500)
     String trailerUrl;
 
+    // Provenance for trailerUrl - see V5__add_movie_trailer_provenance.sql. Populated when
+    // TmdbService selects a trailer from /movie/{id}/videos; trailerSource distinguishes an
+    // auto-selected TMDB trailer from a manual admin override so a future re-sync can leave
+    // manual overrides alone.
+    @Column(name = "trailer_provider", length = 20)
+    String trailerProvider;
+
+    @Column(name = "trailer_external_key", length = 50)
+    String trailerExternalKey;
+
+    @Column(name = "trailer_language_code", length = 10)
+    String trailerLanguageCode;
+
+    @Column(name = "trailer_video_type", length = 20)
+    String trailerVideoType;
+
+    @Column(name = "trailer_official")
+    Boolean trailerOfficial;
+
+    @Builder.Default
+    @Column(name = "trailer_source", nullable = false, length = 20)
+    @org.hibernate.annotations.ColumnDefault("'MANUAL'")
+    String trailerSource = "MANUAL";
+
     @Column(name = "synopsis", columnDefinition = "TEXT")
     String synopsis;
 
+    // [Backend] Add tagline field to Movie and MovieTranslation entities - original-language
+    // tagline (mirrors synopsis). taglineSource follows the same TMDB/MANUAL provenance
+    // pattern as trailerSource above, see V7__add_movie_tagline.sql.
+    @Column(name = "tagline", length = 500)
+    String tagline;
+
+    @Builder.Default
+    @Column(name = "tagline_source", nullable = false, length = 20)
+    @org.hibernate.annotations.ColumnDefault("'MANUAL'")
+    String taglineSource = "MANUAL";
+
     // ── Status / lifecycle ────────────────────────────────────
+    // Content-review status only — see MovieAvailability for per-cluster
+    // exhibition state. See docs/api-specs/movie-service/MOVIE_LIFECYCLE_CONTRACT.md.
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     MovieStatus status = MovieStatus.DRAFT;
 
-    @Column(name = "suspended_reason", columnDefinition = "TEXT")
-    String suspendedReason;
-
     @Column(name = "rejection_note", columnDefinition = "TEXT")
     String rejectionNote;
+
+    // Optimistic locking for lifecycle commands — a stale concurrent transition
+    // throws ObjectOptimisticLockingFailureException, translated to 409 by
+    // MovieService's transition methods (which use save(), not @Modifying bulk
+    // updates, specifically so this actually engages).
+    @Builder.Default
+    @Version
+    @Column(name = "version", nullable = false)
+    Long version = 0L;
 
     // ── Relationships ─────────────────────────────────────────
     @ManyToMany

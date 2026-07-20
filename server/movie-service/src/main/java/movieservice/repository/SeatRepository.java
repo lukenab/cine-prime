@@ -14,7 +14,7 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
 
     List<Seat> findByCinemaRoomCinemaRoomId(Long cinemaRoomId);
 
-    void deleteByCinemaRoomCinemaRoomId(Long cinemaRoomId);
+    boolean existsByCinemaRoomCinemaRoomId(Long cinemaRoomId);
 
     @Query("SELECT MIN(s.price) FROM Seat s WHERE s.cinemaRoom.cinemaRoomId = :roomId AND s.status = :status")
     BigDecimal findMinPriceByCinemaRoomIdAndStatus(@Param("roomId") Long roomId, @Param("status") SeatStatus status);

@@ -3,15 +3,16 @@ import {
   Building2, ExternalLink, Play, ShieldCheck, Images, Loader2,
 } from "lucide-react";
 import { useState } from "react";
-import type { MovieV2 } from "../api/movieApi";
+import type { MovieResponse } from "../api/movieApi";
 import {
   MOVIE_CONTENT_STATUS_META,
   toMovieContentStatus,
 } from "../utils/movieContentStatus";
+import { MovieAvailabilityPanel } from "./MovieAvailabilityPanel";
 
 type Props = {
   open: boolean;
-  movie: MovieV2 | null;
+  movie: MovieResponse | null;
   loading?: boolean;
   onClose: () => void;
 };
@@ -199,6 +200,15 @@ export function MovieDetailModal({ open, movie, loading, onClose }: Props) {
                 )}
               </div>
 
+              {/* Changes requested reason — the employee reads this to know what to fix
+                  before resubmitting. Mirrors ClusterDetailPage's rejectionNote panel. */}
+              {contentStatus === "CHANGES_REQUESTED" && movie.rejectionNote && (
+                <div className="rounded-xl border p-3" style={{ borderColor: "#fecaca", background: "#fef2f2" }}>
+                  <p style={{ ...FL, color: "#b91c1c" }}>Changes requested</p>
+                  <p style={{ fontSize: "13px", color: "#7f1d1d", lineHeight: 1.6 }}>{movie.rejectionNote}</p>
+                </div>
+              )}
+
               {/* Quick stats row */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
@@ -262,6 +272,14 @@ export function MovieDetailModal({ open, movie, loading, onClose }: Props) {
                   </div>
                 )}
               </div>
+
+              {/* Tagline - `[Backend] Add tagline field to Movie and MovieTranslation entities`:
+                  a short catchphrase, deliberately not shown as/instead of the synopsis below. */}
+              {(vi?.tagline || en?.tagline || movie.tagline) && (
+                <p style={{ fontSize: "13px", fontStyle: "italic", color: "var(--text-sub)" }}>
+                  “{synopsisLang === "vi" ? (vi?.tagline ?? en?.tagline ?? movie.tagline) : (en?.tagline ?? vi?.tagline ?? movie.tagline)}”
+                </p>
+              )}
 
               {/* Synopsis */}
               {(vi?.synopsis || en?.synopsis) && (
@@ -354,12 +372,22 @@ export function MovieDetailModal({ open, movie, loading, onClose }: Props) {
                 </div>
               )}
 
-              {/* Production Company */}
-              {movie.companyName && (
+              {/* Availability by cluster — content must be APPROVED before any
+                  release plan can exist (MOV-LC-06). */}
+              {contentStatus === "APPROVED" && (
+                <div className="rounded-xl border p-3" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+                  <MovieAvailabilityPanel movieId={movie.movieId} />
+                </div>
+              )}
+
+              {/* Production Companies */}
+              {movie.companies && movie.companies.length > 0 && (
                 <div className="flex items-center gap-2">
                   <Building2 size={12} style={{ color: "var(--text-sub)" }} />
                   <p style={FL}>Production</p>
-                  <p style={{ fontSize: "13px", color: "var(--text-main)", fontWeight: 500 }}>{movie.companyName}</p>
+                  <p style={{ fontSize: "13px", color: "var(--text-main)", fontWeight: 500 }}>
+                    {movie.companies.map((c) => c.name).join(", ")}
+                  </p>
                 </div>
               )}
 

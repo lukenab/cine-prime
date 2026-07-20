@@ -11,6 +11,7 @@ import movieservice.entity.Person;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.PersonRepository;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -57,7 +58,11 @@ public class PersonController {
                 .build();
     }
 
-    // POST /api/persons
+    // POST /api/persons - `[Backend] Enforce movie-service endpoint authorization matrix`:
+    // previously had no @PreAuthorize at all, so any authenticated CUSTOMER could create/edit/
+    // delete cast & crew reference data. ADMIN/EMPLOYEE matches who actually needs this - cast
+    // is added inline while creating/editing a movie in MovieEditorPage (both roles use it).
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<PersonResponse> create(@Valid @RequestBody PersonRequest request) {
@@ -83,6 +88,7 @@ public class PersonController {
     }
 
     // PUT /api/persons/{id}
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @PutMapping("/{id}")
     public ApiResponse<PersonResponse> update(
             @PathVariable Long id,
@@ -107,7 +113,9 @@ public class PersonController {
                 .build();
     }
 
-    // DELETE /api/persons/{id}
+    // DELETE /api/persons/{id} - ADMIN only, more consequential than create/update (a person
+    // may be referenced as cast on several movies).
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         if (!personRepository.existsById(id)) {

@@ -1,12 +1,10 @@
 package movieservice.repository;
 
-import jakarta.transaction.Transactional;
 import movieservice.entity.Movie;
 import movieservice.enums.MovieStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -44,37 +42,21 @@ public interface MovieRepository extends JpaRepository<Movie, Long> {
 
     boolean existsByImdbId(String imdbId);
 
-    /** Dung boi TmdbService de danh dau alreadyImported trong browse/search list (bulk, tranh N+1) */
-    @Query("SELECT m.tmdbId FROM Movie m WHERE m.tmdbId IN :tmdbIds")
-    List<Integer> findExistingTmdbIds(@Param("tmdbIds") List<Integer> tmdbIds);
+    /**
+     * Dung boi TmdbService de danh dau alreadyImported (va localMovieId cho View/Sync action)
+     * trong browse/search list - bulk, tranh N+1 goi existsByTmdbId() tung item mot.
+     */
+    @Query("SELECT m.tmdbId AS tmdbId, m.movieId AS movieId FROM Movie m WHERE m.tmdbId IN :tmdbIds")
+    List<TmdbIdAndMovieId> findExistingTmdbIdsWithMovieId(@Param("tmdbIds") List<Integer> tmdbIds);
 
-    // ── Status transitions (soft lifecycle) ───────────────────
-    @Transactional
-    @Modifying
-    @Query("UPDATE Movie m SET m.status = :status, m.updatedBy = :updatedBy WHERE m.movieId = :movieId")
-    int updateStatus(@Param("movieId") Long movieId,
-                     @Param("status") MovieStatus status,
-                     @Param("updatedBy") String updatedBy);
+    interface TmdbIdAndMovieId {
+        Integer getTmdbId();
+        Long getMovieId();
+    }
 
-    @Transactional
-    @Modifying
-    @Query("UPDATE Movie m SET m.status = :#{T(movieservice.enums.MovieStatus).SUSPENDED}, " +
-           "m.suspendedReason = :reason, m.updatedBy = :updatedBy WHERE m.movieId = :movieId")
-    int suspendMovie(@Param("movieId") Long movieId,
-                     @Param("reason") String reason,
-                     @Param("updatedBy") String updatedBy);
-
-    @Transactional
-    @Modifying
-    @Query("UPDATE Movie m SET m.status = :#{T(movieservice.enums.MovieStatus).REJECTED}, " +
-           "m.rejectionNote = :note, m.updatedBy = :updatedBy WHERE m.movieId = :movieId")
-    int rejectMovie(@Param("movieId") Long movieId,
-                    @Param("note") String note,
-                    @Param("updatedBy") String updatedBy);
-
-    // ── Scheduler queries ─────────────────────────────────────
-    /** Dùng bởi MovieScheduler: tìm phim NOW_SHOWING có endDate < today */
-    List<Movie> findByStatusAndEndDateBefore(MovieStatus status, LocalDate date);
+    // Lifecycle transitions go through MovieService's load → mutate → save()
+    // instead of @Modifying bulk JPQL updates — bulk updates bypass @Version
+    // increment entirely, which would silently defeat optimistic locking.
 
     // ── Stats ─────────────────────────────────────────────────
     @Query("SELECT COUNT(m) FROM Movie m " +

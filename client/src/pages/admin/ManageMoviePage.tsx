@@ -1,22 +1,17 @@
 import { useState, useEffect, useCallback } from "react";
 import { Search, Plus, SlidersHorizontal, RefreshCw, AlertCircle } from "lucide-react";
 import { useRole } from "../../hooks/useRole";
-import { useOutletContext } from "react-router-dom";
+import { Outlet, useOutletContext, useNavigate } from "react-router-dom";
 
 import { MovieStatsCards } from "../../layouts/MovieStatsCards";
 import { MovieTable } from "../../layouts/MovieTable";
-import { MovieModal } from "../../layouts/MovieModal";
 import { MovieDetailModal } from "../../layouts/MovieDetailModal";
 import { PendingReviewModal } from "../../layouts/PendingReviewModal";
 import {
   movieApi,
   type MovieApiResponse,
   type GenreResponse,
-  type ScreeningFormatResponse,
-  type AgeRatingResponse,
-  type CreateMovieRequest,
-  type UpdateMovieRequest,
-  type MovieV2,
+  type MovieResponse,
 } from "../../api/movieApi";
 import {
   MOVIE_CONTENT_STATUS_META,
@@ -27,13 +22,12 @@ import {
 export default function ManageMoviePage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
   const { isAdmin } = useRole();
+  const navigate = useNavigate();
 
   const [movies, setMovies] = useState<MovieApiResponse[]>([]);
 
-  // v2 lookup data for MovieModal
+  // Genre names for the filter panel (Add/Edit now happens on a dedicated page - see MovieEditorPage).
   const [genres, setGenres] = useState<GenreResponse[]>([]);
-  const [formats, setFormats] = useState<ScreeningFormatResponse[]>([]);
-  const [ageRatings, setAgeRatings] = useState<AgeRatingResponse[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,11 +37,9 @@ export default function ManageMoviePage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editMovie, setEditMovie] = useState<MovieApiResponse | null>(null);
-  const [detailMovie, setDetailMovie] = useState<MovieV2 | null>(null);
+  const [detailMovie, setDetailMovie] = useState<MovieResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [reviewMovie, setReviewMovie] = useState<MovieV2 | null>(null);
+  const [reviewMovie, setReviewMovie] = useState<MovieResponse | null>(null);
   const [reviewLoading, setReviewLoading] = useState(false);
 
   // ── Load movies from API ──────────────────────────────────────────────────
@@ -69,20 +61,12 @@ export default function ManageMoviePage() {
   useEffect(() => {
     loadMovies();
     movieApi.getGenres().then((r) => setGenres(r.result ?? [])).catch(() => {});
-    movieApi.getScreeningFormats().then((r) => setFormats(r.result ?? [])).catch(() => {});
-    movieApi.getAgeRatings().then((r) => setAgeRatings(r.result ?? [])).catch(() => {});
   }, [loadMovies]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
-  const handleAddMovie = () => {
-    setEditMovie(null);
-    setModalOpen(true);
-  };
+  const handleAddMovie = () => navigate("/admin/movies/new");
 
-  const handleEditMovie = (movie: MovieApiResponse) => {
-    setEditMovie(movie);
-    setModalOpen(true);
-  };
+  const handleEditMovie = (movie: MovieApiResponse) => navigate(`/admin/movies/${movie.movieId}/edit`);
 
   const handleViewMovie = async (movie: MovieApiResponse) => {
     setDetailLoading(true);
@@ -99,7 +83,7 @@ export default function ManageMoviePage() {
 
   const handleDeleteMovie = async (id: number) => {
     try {
-      await movieApi.deleteMovie(id);
+      await movieApi.archiveMovie(id);
       await loadMovies();
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? "Archive failed.";
@@ -140,17 +124,6 @@ export default function ManageMoviePage() {
 
   const handleReviewReject = async (id: number, note: string) => {
     await movieApi.requestMovieChanges(id, note);
-    await loadMovies();
-  };
-
-  const handleCreate = async (data: CreateMovieRequest): Promise<MovieV2> => {
-    const res = await movieApi.createMovieV2(data);
-    await loadMovies();
-    return res.result;
-  };
-
-  const handleUpdate = async (id: number, data: UpdateMovieRequest) => {
-    await movieApi.updateMovieV2(id, data);
     await loadMovies();
   };
 
@@ -342,17 +315,6 @@ export default function ManageMoviePage() {
         />
       )}
 
-      <MovieModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onCreate={handleCreate}
-        onUpdate={handleUpdate}
-        editMovieId={editMovie?.movieId ?? null}
-        genres={genres}
-        formats={formats}
-        ageRatings={ageRatings}
-      />
-
       <MovieDetailModal
         open={Boolean(detailMovie) || detailLoading}
         movie={detailMovie}
@@ -368,6 +330,10 @@ export default function ManageMoviePage() {
         onApprove={handleReviewApprove}
         onReject={handleReviewReject}
       />
+
+      {/* Route-aware creation modal. The movie list remains mounted underneath so filters,
+          loaded data and scroll context are preserved while /admin/movies/new is active. */}
+      <Outlet />
 
       <style>{`
         .hover-row:hover { background-color: rgba(128,128,128,0.04); }

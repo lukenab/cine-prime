@@ -1,7 +1,63 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation, useOutletContext } from "react-router-dom";
-import { ArrowLeft, Building2, Armchair, RefreshCw, AlertCircle, X, Check } from "lucide-react";
-import { movieApi, type SeatResponse, type RoomResponse, type SeatTypeValue, ROOM_TYPE_CONFIG } from "../../api/movieApi";
+import { Armchair, RefreshCw, AlertCircle, X, Check, SendHorizonal, CheckCircle, XCircle, Rocket, Clock } from "lucide-react";
+import { movieApi, type SeatResponse, type RoomResponse, type CinemaRoomDetail, type SeatTypeValue, ROOM_TYPE_CONFIG } from "../../api/movieApi";
+import { useRole } from "../../hooks/useRole";
+import { Toast } from "../../components/shared/Toast";
+import { CinemaRoomHeader } from "./cinemaRoomEditor/CinemaRoomHeader";
+import { AudioCoverageFrame, ProjectionBeamOverlay, ProjectionScreenVisualization } from "./cinemaRoomEditor/AuditoriumVisualization";
+import { ProjectorLegendMarker, SpeakerLegendMarker } from "./cinemaRoomEditor/SeatLegend";
+import type { AuditoriumVisualizationConfig } from "./cinemaRoomEditor/cinemaRoomEditor.types";
+
+// ── Layout workflow status config ───────────────────────────────────────────
+
+export const LAYOUT_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  DRAFT:             { label: "Draft",             color: "#6b7280", bg: "rgba(107,114,128,0.10)" },
+  PENDING_APPROVAL:  { label: "Pending Approval",   color: "#d97706", bg: "rgba(245,158,11,0.10)"  },
+  APPROVED:          { label: "Approved",           color: "#2563eb", bg: "rgba(37,99,235,0.10)"   },
+  ACTIVE:            { label: "Active",             color: "#10b981", bg: "rgba(16,185,129,0.10)"  },
+  REJECTED:          { label: "Rejected",           color: "#ef4444", bg: "rgba(239,68,68,0.10)"   },
+  SUPERSEDED:        { label: "Superseded",         color: "#9ca3af", bg: "rgba(156,163,175,0.10)" },
+};
+
+function RejectLayoutModal({ onConfirm, onCancel }: { onConfirm: (note: string) => void; onCancel: () => void }) {
+  const [value, setValue] = useState("");
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.45)" }} onClick={onCancel}>
+      <div className="rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-center w-12 h-12 rounded-full mx-auto mb-4" style={{ background: "#dc262618" }}>
+          <XCircle size={22} style={{ color: "#dc2626" }} />
+        </div>
+        <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-main)", textAlign: "center", marginBottom: "16px" }}>Reject Layout</h3>
+        <div className="mb-4">
+          <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-sub)", display: "block", marginBottom: "6px" }}>Rejection reason</label>
+          <textarea
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="Mô tả vấn đề cụ thể: sai số ghế, thiếu lối thoát hiểm, couple bị lỗi…"
+            rows={3}
+            autoFocus
+            className="w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 resize-none"
+            style={{ fontSize: "13px", background: "var(--bg-main)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
+          />
+        </div>
+        <div className="flex gap-3">
+          <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl border text-sm font-medium hover:opacity-80" style={{ color: "var(--text-main)", borderColor: "var(--border-color)", background: "transparent" }}>
+            Cancel
+          </button>
+          <button
+            onClick={() => value.trim() ? onConfirm(value.trim()) : null}
+            disabled={!value.trim()}
+            className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ background: "#dc2626" }}
+          >
+            Reject
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Seat type config ─────────────────────────────────────────────────────────
 
@@ -168,6 +224,7 @@ export default function RoomDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
+  const { isAdmin, can } = useRole();
 
   const passedRoom = (location.state as any)?.room as RoomResponse | undefined;
 
@@ -177,14 +234,27 @@ export default function RoomDetailPage() {
   const [editingSeat, setEditingSeat] = useState<SeatResponse | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const [room, setRoom] = useState<CinemaRoomDetail | null>(null);
+  const [workflowBusy, setWorkflowBusy] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  const showToast = (type: "success" | "error", message: string) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3500);
+  };
+
   const roomName =
+    room?.cinemaRoomName ??
     passedRoom?.cinemaRoomName ??
     seats[0]?.cinemaRoomName ??
     `Room #${id}`;
 
-  const backTarget = passedRoom?.clusterId
-    ? `/admin/clusters/${passedRoom.clusterId}`
+  const backTarget = (room?.clusterId ?? passedRoom?.clusterId)
+    ? `/admin/clusters/${room?.clusterId ?? passedRoom?.clusterId}`
     : "/admin/clusters";
+
+  const clusterName = room?.clusterName ?? passedRoom?.clusterName;
 
   const loadSeats = useCallback(async () => {
     if (!id) return;
@@ -200,7 +270,35 @@ export default function RoomDetailPage() {
     }
   }, [id]);
 
-  useEffect(() => { loadSeats(); }, [loadSeats]);
+  const loadRoom = useCallback(async () => {
+    if (!id) return;
+    try {
+      const res = await movieApi.getRoomDetail(Number(id));
+      setRoom(res.result);
+    } catch {
+      // Non-fatal — legacy rooms created via the old quick-create flow have no
+      // wizard/layout data; the seat grid below still works without it.
+    }
+  }, [id]);
+
+  useEffect(() => { loadSeats(); loadRoom(); }, [loadSeats, loadRoom]);
+
+  const layout = room?.activeLayout;
+  const layoutCfg = layout ? LAYOUT_STATUS_CONFIG[layout.status] : null;
+
+  const doLayoutWorkflow = async (fn: () => Promise<unknown>, successMessage: string) => {
+    if (!room || !layout) return;
+    setWorkflowBusy(true);
+    try {
+      await fn();
+      showToast("success", successMessage);
+      await Promise.all([loadRoom(), loadSeats()]);
+    } catch (err: any) {
+      showToast("error", err?.response?.data?.message ?? "Action failed.");
+    } finally {
+      setWorkflowBusy(false);
+    }
+  };
 
   const handleSave = async (seatType: SeatTypeValue, price: number) => {
     if (!editingSeat) return;
@@ -212,7 +310,7 @@ export default function RoomDetailPage() {
       );
       setEditingSeat(null);
     } catch (err: any) {
-      alert(err?.response?.data?.message ?? "Update failed.");
+      showToast("error", err?.response?.data?.message ?? "Update failed.");
     } finally {
       setSaving(false);
     }
@@ -239,47 +337,135 @@ export default function RoomDetailPage() {
     return acc;
   }, {});
 
+  // Mirrors the create page's visualization exactly — same config shape, same
+  // graceful fallback to a plain Standard screen when a legacy room has no
+  // projection/audio tech recorded.
+  const visualizationConfig: AuditoriumVisualizationConfig = {
+    presentationSystem: room?.presentationSystem ?? "STANDARD",
+    projectionTechnologyCode: room?.projectionTechnologyCode,
+    projectionTechnologyName: room?.projectionTechnologyName,
+    resolutionCode: room?.resolutionCode,
+    audioFormatCode: room?.audioFormatCode,
+  };
+  const showProjector = visualizationConfig.projectionTechnologyCode === "LASER" || visualizationConfig.projectionTechnologyCode === "XENON";
+  const showSpeakers = Boolean(visualizationConfig.audioFormatCode);
+
   return (
     <>
-      {/* Back header */}
-      <div className="flex items-center gap-4 mb-7">
-        <button
-          onClick={() => navigate(backTarget)}
-          className="flex items-center gap-2 px-3 py-2 rounded-xl border transition-all hover:opacity-80"
-          style={{ fontSize: "13px", color: "var(--text-sub)", borderColor: "var(--border-color)", background: "var(--bg-card)" }}
-        >
-          <ArrowLeft size={15} /> Back
-        </button>
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-            <Building2 size={18} className="text-blue-600" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 mb-0.5">
-              <h1 style={{ color: "var(--text-main)", fontWeight: 700, fontSize: "20px", lineHeight: 1.2 }}>
-                {roomName}
-              </h1>
-              {passedRoom?.roomType && (() => {
-                const cfg = ROOM_TYPE_CONFIG[passedRoom.roomType];
-                const colors: Record<string, { bg: string; text: string }> = {
-                  STANDARD: { bg: "rgba(59,130,246,0.12)",  text: "#3b82f6" },
-                  LARGE:    { bg: "rgba(16,185,129,0.12)",  text: "#059669" },
-                  IMAX:     { bg: "rgba(139,92,246,0.12)",  text: "#7c3aed" },
-                };
-                const c = colors[passedRoom.roomType] ?? { bg: "rgba(128,128,128,0.1)", text: "#6b7280" };
-                return (
-                  <span style={{ padding: "2px 10px", borderRadius: "999px", fontSize: "11px", fontWeight: 700, background: c.bg, color: c.text, letterSpacing: "0.04em" }}>
-                    {cfg?.label ?? passedRoom.roomType}
-                  </span>
-                );
-              })()}
-            </div>
-            <p style={{ color: "var(--text-sub)", fontSize: "13px" }}>
-              {seats.length} seats · {rows.length} rows
-            </p>
+      <CinemaRoomHeader
+        mode="view"
+        roomName={roomName}
+        clusterName={clusterName}
+        onBack={() => navigate(backTarget)}
+        badges={passedRoom?.roomType && (() => {
+          const cfg = ROOM_TYPE_CONFIG[passedRoom.roomType];
+          const colors: Record<string, { bg: string; text: string }> = {
+            STANDARD: { bg: "rgba(59,130,246,0.12)",  text: "#3b82f6" },
+            LARGE:    { bg: "rgba(16,185,129,0.12)",  text: "#059669" },
+            IMAX:     { bg: "rgba(139,92,246,0.12)",  text: "#7c3aed" },
+          };
+          const c = colors[passedRoom.roomType] ?? { bg: "rgba(128,128,128,0.1)", text: "#6b7280" };
+          return (
+            <span style={{ padding: "2px 10px", borderRadius: "999px", fontSize: "11px", fontWeight: 700, background: c.bg, color: c.text, letterSpacing: "0.04em" }}>
+              {cfg?.label ?? passedRoom.roomType}
+            </span>
+          );
+        })()}
+        subtitle={
+          <p style={{ color: "var(--text-sub)", fontSize: "13px" }}>
+            {clusterName && <>{clusterName} · </>}
+            {seats.length} seats · {rows.length} rows
+          </p>
+        }
+      />
+
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
+
+      {/* Wizard layout workflow — only shown for rooms created via the wizard (have a
+          room_layout). Legacy quick-create rooms are already ACTIVE with real seats and
+          have no `activeLayout`, so this section stays hidden for them. */}
+      {layout && layoutCfg && (
+        <div className="rounded-2xl border p-4 mb-6 flex items-center gap-4 flex-wrap" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+          <span
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold flex-shrink-0"
+            style={{ background: layoutCfg.bg, color: layoutCfg.color }}
+          >
+            <Clock size={12} /> Layout v{layout.version} · {layoutCfg.label}
+          </span>
+          <span style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+            {layout.personCapacity} people capacity · {layout.sellableUnitCount} sellable units
+          </span>
+
+          <div className="flex items-center gap-2 ml-auto">
+            {layout.status === "DRAFT" && can.edit && (
+              <button
+                onClick={() => navigate(`/admin/clusters/${room?.clusterId}/rooms/${id}/edit`)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border hover:opacity-80"
+                style={{ fontSize: "13px", color: "var(--text-main)", borderColor: "var(--border-color)", background: "var(--bg-main)" }}
+              >
+                Continue Editing
+              </button>
+            )}
+            {layout.status === "PENDING_APPROVAL" && isAdmin && (
+              <>
+                <button
+                  disabled={workflowBusy}
+                  onClick={() => doLayoutWorkflow(
+                    () => movieApi.approveRoomLayout(Number(id), layout.roomLayoutId),
+                    "Layout approved."
+                  )}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl border hover:opacity-80 disabled:opacity-50"
+                  style={{ fontSize: "13px", color: "#059669", borderColor: "var(--border-color)", background: "var(--bg-main)" }}
+                >
+                  <CheckCircle size={14} /> Approve
+                </button>
+                <button
+                  disabled={workflowBusy}
+                  onClick={() => setRejecting(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl border hover:opacity-80 disabled:opacity-50"
+                  style={{ fontSize: "13px", color: "#dc2626", borderColor: "var(--border-color)", background: "var(--bg-main)" }}
+                >
+                  <XCircle size={14} /> Reject
+                </button>
+              </>
+            )}
+            {layout.status === "PENDING_APPROVAL" && !isAdmin && (
+              <span className="flex items-center gap-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+                <SendHorizonal size={14} /> Waiting for admin approval
+              </span>
+            )}
+            {layout.status === "APPROVED" && isAdmin && (
+              <button
+                disabled={workflowBusy}
+                onClick={() => doLayoutWorkflow(
+                  () => movieApi.activateRoomLayout(Number(id), layout.roomLayoutId),
+                  "Layout activated — seats are now live."
+                )}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white hover:opacity-90 disabled:opacity-50"
+                style={{ fontSize: "13px", fontWeight: 600, background: "#059669" }}
+              >
+                <Rocket size={14} /> {workflowBusy ? "Activating…" : "Activate"}
+              </button>
+            )}
+            {layout.status === "APPROVED" && !isAdmin && (
+              <span style={{ fontSize: "13px", color: "var(--text-sub)" }}>Approved — waiting for admin to activate</span>
+            )}
           </div>
         </div>
-      </div>
+      )}
+
+      {rejecting && layout && (
+        <RejectLayoutModal
+          onConfirm={(note) => {
+            setRejecting(false);
+            doLayoutWorkflow(
+              () => movieApi.rejectRoomLayout(Number(id), layout.roomLayoutId, note),
+              "Layout rejected."
+            );
+          }}
+          onCancel={() => setRejecting(false)}
+        />
+      )}
 
       {/* Type summary chips */}
       {!loading && seats.length > 0 && (
@@ -328,35 +514,28 @@ export default function RoomDetailPage() {
         ) : seats.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-2">
             <Armchair size={32} style={{ color: "var(--text-sub)" }} />
-            <p style={{ fontSize: "14px", color: "var(--text-sub)" }}>No seats found for this room.</p>
+            <p style={{ fontSize: "14px", color: "var(--text-sub)" }}>
+              {layout && layout.status !== "ACTIVE"
+                ? `No seats yet — this room's layout is still ${LAYOUT_STATUS_CONFIG[layout.status]?.label.toLowerCase() ?? layout.status}. Seats are only created once the layout is Activated (see the banner above).`
+                : "No seats found for this room."}
+            </p>
           </div>
         ) : (
           <>
-            {/* Scrollable seat map — centred horizontally */}
-            <div style={{ overflowX: "auto", paddingBottom: "4px" }}>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: "fit-content", margin: "0 auto" }}>
+            {/* Screen + projector booth — same visualization as the create page,
+                driven by the room's recorded projection/audio tech. */}
+            <div className={`relative${showProjector ? " pb-7" : ""}`}>
+              <ProjectionScreenVisualization config={visualizationConfig} />
+              <ProjectionBeamOverlay technologyCode={visualizationConfig.projectionTechnologyCode} />
 
-                {/* Screen */}
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", marginBottom: "32px" }}>
-                  <div
-                    style={{
-                      width: "70%",
-                      height: "6px",
-                      borderRadius: "50% 50% 0 0 / 100% 100% 0 0",
-                      background: isDarkMode
-                        ? "linear-gradient(to right, transparent, rgba(255,255,255,0.18), transparent)"
-                        : "linear-gradient(to right, transparent, rgba(0,0,0,0.12), transparent)",
-                      marginBottom: "8px",
-                    }}
-                  />
-                  <span style={{ fontSize: "11px", color: "var(--text-sub)", letterSpacing: "0.14em", textTransform: "uppercase", fontWeight: 600 }}>
-                    Screen
-                  </span>
-                </div>
+              <AudioCoverageFrame config={visualizationConfig}>
+                {/* Scrollable seat map — centred horizontally */}
+                <div style={{ overflowX: "auto", paddingBottom: "4px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: "fit-content", margin: "0 auto" }}>
 
-                {/* Rows */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  {rows.map((row) => (
+                    {/* Rows */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {rows.map((row) => (
                     <div key={row} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                       {/* Row label */}
                       <span
@@ -439,12 +618,34 @@ export default function RoomDetailPage() {
                       </span>
                     </div>
                   ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </AudioCoverageFrame>
             </div>
 
             {/* Legend */}
-            <div className="flex flex-wrap items-center gap-4 mt-8 pt-5" style={{ borderTop: "1px solid var(--border-color)" }}>
+            {(showProjector || showSpeakers) && (
+              <div
+                className="mb-3 inline-flex flex-wrap items-center gap-4 rounded-lg border px-2.5 py-1.5 mt-8"
+                style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}
+                aria-label="Room equipment"
+              >
+                {showProjector && (
+                  <div className="flex items-center gap-1.5">
+                    <ProjectorLegendMarker />
+                    <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-main)" }}>Projector</span>
+                  </div>
+                )}
+                {showSpeakers && (
+                  <div className="flex items-center gap-1.5">
+                    <SpeakerLegendMarker />
+                    <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-main)" }}>Speaker</span>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className={`flex flex-wrap items-center gap-4 pt-5 ${showProjector || showSpeakers ? "" : "mt-8"}`} style={{ borderTop: "1px solid var(--border-color)" }}>
               <span style={{ fontSize: "11px", color: "var(--text-sub)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>
                 Legend
               </span>

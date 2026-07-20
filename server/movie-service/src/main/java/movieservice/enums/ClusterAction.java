@@ -14,5 +14,7 @@ public enum ClusterAction {
     /** ADMIN tắt cluster (ACTIVE → INACTIVE) */
     DEACTIVATE,
     /** ADMIN mở lại cluster (INACTIVE → ACTIVE) */
-    REACTIVATE
+    REACTIVATE,
+    /** Unused DRAFT was permanently removed; the audit row remains as a tombstone. */
+    DELETE
 }

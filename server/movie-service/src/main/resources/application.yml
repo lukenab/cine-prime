@@ -15,7 +15,6 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD:123456}
     driver-class-name: org.postgresql.Driver
   jpa:
-    defer-datasource-initialization: true
     hibernate:
       ddl-auto: none
     show-sql: false
@@ -26,6 +25,31 @@ spring:
   sql:
     init:
       mode: never
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # This database was hand-migrated (docs/database/movie-service/V3..V34,
+    # applied by hand via docker exec psql) before Flyway existed, so it
+    # already has the full V1 baseline schema+seed but no flyway_schema_history
+    # row. baseline-on-migrate makes Flyway insert a "V1 already applied"
+    # marker instead of re-running CREATE TABLE statements that already exist.
+    # A genuinely empty/fresh database has no schema for baseline-on-migrate to
+    # detect, so Flyway just runs every migration from V1 normally in that case.
+    baseline-on-migrate: true
+    baseline-version: 1
+    baseline-description: "Pre-Flyway schema (docs/database/movie-service/V3-V34, applied by hand)"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,flyway
+  endpoint:
+    health:
+      show-details: always
+  health:
+    flyway:
+      enabled: true
 
 eureka:
   instance:
@@ -39,6 +63,11 @@ jwt:
 
 tmdb:
   api-key: 4cf6e7ff7b2095ae0d09da1cae2f1606
+  image:
+    # Max "still" candidates surfaced/importable per movie beyond the single recommended
+    # backdrop (TMDB has no dedicated "stills" endpoint for movies - these are additional
+    # backdrops). Posters and backdrops are always capped at 1 recommended each per import.
+    max-stills: ${TMDB_IMAGE_MAX_STILLS:10}
 
 movie:
   readiness:

@@ -16,7 +16,22 @@ public class TmdbMovieDetailsResponse {
     String releaseDate;
     String country;
     String posterUrl;
+    // Explicit smaller CDN derivative of the same recommended poster asset - the frontend
+    // must use this, not copy posterUrl verbatim (that was the original bug this fixes).
+    String thumbnailUrl;
     String overview;
+    // [Backend] Add tagline field to Movie and MovieTranslation entities - original-language
+    // tagline; per-locale ones are in each entry of `translations` below.
+    String tagline;
+    MovieMediaPreviewResponse media;
+    // Built server-side from an allow-listed provider ("YOUTUBE") + external video key -
+    // never a raw URL taken straight out of TMDB's payload.
+    String trailerUrl;
+    String trailerProvider;
+    String trailerExternalKey;
+    String trailerLanguageCode;
+    String trailerVideoType;
+    Boolean trailerOfficial;
     List<TmdbCompanyPreview> companies;
     List<TranslationResponse> translations;
     List<TmdbCastPreview> cast;

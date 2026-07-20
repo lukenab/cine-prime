@@ -27,7 +27,7 @@ function formatReleaseDate(dateStr?: string): string {
 }
 
 function PosterCard({ movie, onOpen }: { movie: MovieApiResponse; onOpen: () => void }) {
-  const isComingSoon = movie.movieStatus === "COMING_SOON";
+  const isComingSoon = movie.displayStatus === "COMING_SOON";
 
   return (
     <div
@@ -170,12 +170,14 @@ export default function MoviesPage() {
     });
   }, [withPosters, query, activeGenre]);
 
-  // getPublicMovies() already only returns NOW_SHOWING/COMING_SOON (see MovieService.findAllPublic
-  // on the backend) — ENDED/DRAFT/PENDING_REVIEW/etc. never reach this page, so no extra filtering
-  // is needed here beyond splitting the two visible statuses into their own sections. mockMovies
-  // (offline/error fallback) predates movieStatus and has no such field — treat it as now-showing.
-  const nowShowing = useMemo(() => filtered.filter((m) => m.movieStatus !== "COMING_SOON"), [filtered]);
-  const comingSoon = useMemo(() => filtered.filter((m) => m.movieStatus === "COMING_SOON"), [filtered]);
+  // getPublicMovies() already only returns movies with a derived displayStatus of
+  // NOW_SHOWING/COMING_SOON (see MovieService.findAllPublic on the backend, MOV-LC-07)
+  // — DRAFT/PENDING_REVIEW/CHANGES_REQUESTED/ARCHIVED content never reaches this page,
+  // so no extra filtering is needed here beyond splitting into the two sections.
+  // mockMovies (offline/error fallback) predates displayStatus and has no such field
+  // — treat it as now-showing.
+  const nowShowing = useMemo(() => filtered.filter((m) => m.displayStatus !== "COMING_SOON"), [filtered]);
+  const comingSoon = useMemo(() => filtered.filter((m) => m.displayStatus === "COMING_SOON"), [filtered]);
 
   return (
     <div className="min-h-screen pt-16" style={{ backgroundColor: "#050505" }}>

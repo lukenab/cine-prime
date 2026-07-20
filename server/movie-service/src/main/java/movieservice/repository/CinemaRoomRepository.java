@@ -11,6 +11,7 @@ import movieservice.entity.CinemaRoom;
 import jakarta.persistence.LockModeType;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface CinemaRoomRepository extends JpaRepository<CinemaRoom, Long> {
     CinemaRoom findByCinemaRoomId(Long cinemaId);
@@ -20,6 +21,15 @@ public interface CinemaRoomRepository extends JpaRepository<CinemaRoom, Long> {
     @Query("SELECT r FROM CinemaRoom r WHERE r.cinemaRoomId IN :roomIds ORDER BY r.cinemaRoomId")
     List<CinemaRoom> findAllByIdForUpdate(@Param("roomIds") List<Long> roomIds);
 
+    /** Serializes destructive commands with room lifecycle transitions. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT r FROM CinemaRoom r WHERE r.cinemaRoomId = :roomId")
+    Optional<CinemaRoom> findByIdForUpdate(@Param("roomId") Long roomId);
+
     boolean existsByCluster_ClusterIdAndCinemaRoomName(Long clusterId, String cinemaRoomName);
     List<CinemaRoom> findByCluster_ClusterId(Long clusterId);
+
+    boolean existsByCluster_ClusterIdAndRoomCode(Long clusterId, String roomCode);
+    boolean existsByCluster_ClusterIdAndRoomCodeAndCinemaRoomIdNot(Long clusterId, String roomCode, Long excludeId);
+    boolean existsByCluster_ClusterIdAndCinemaRoomNameAndCinemaRoomIdNot(Long clusterId, String cinemaRoomName, Long excludeId);
 }

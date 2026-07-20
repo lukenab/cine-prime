@@ -21,9 +21,13 @@ import ProfilePage from "../pages/customer/ProfilePage";
 import AdminDashboard from "../pages/admin/AdminDashboardPage";
 import ManageUserPage from "../pages/admin/ManageUserPage";
 import ManageMoviePage from "../pages/admin/ManageMoviePage";
+import MovieEditorPage from "../pages/admin/MovieEditorPage";
+import MovieCreationStartPage from "../pages/admin/MovieCreationStartPage";
+import TmdbCatalogPage from "../pages/admin/TmdbCatalogPage";
 import ManageCinemaClusterPage from "../pages/admin/ManageCinemaClusterPage";
 import RoomDetailPage from "../pages/admin/RoomDetailPage";
 import ClusterDetailPage from "../pages/admin/ClusterDetailPage";
+import CinemaRoomEditorPage from "../pages/admin/CinemaRoomEditorPage";
 import ManageGenresPage from "../pages/admin/ManageGenresPage";
 import CreateUserPage from "../pages/admin/CreateUserPage";
 import EditUserPage from "../pages/admin/EditUserPage";
@@ -81,9 +85,16 @@ export default function AppRoutes() {
           <Route index element={<AdminDashboard />} />
 
           {/* ADMIN + EMPLOYEE */}
-          <Route path="movies"    element={<ManageMoviePage />} />
+          <Route path="movies" element={<ManageMoviePage />}>
+            <Route path="new" element={<MovieCreationStartPage />} />
+          </Route>
+          <Route path="movies/new/catalog" element={<TmdbCatalogPage />} />
+          <Route path="movies/new/manual" element={<MovieEditorPage />} />
+          <Route path="movies/:movieId/edit" element={<MovieEditorPage />} />
           <Route path="clusters"  element={<ManageCinemaClusterPage />} />
           <Route path="clusters/:id" element={<ClusterDetailPage />} />
+          <Route path="clusters/:clusterId/rooms/new" element={<CinemaRoomEditorPage />} />
+          <Route path="clusters/:clusterId/rooms/:roomId/edit" element={<CinemaRoomEditorPage />} />
           <Route path="rooms/:id"    element={<RoomDetailPage />} />
           <Route path="showtimes" element={<ManageShowtimePage />} />
           <Route path="bookings"  element={<ManageBookingPage />} />

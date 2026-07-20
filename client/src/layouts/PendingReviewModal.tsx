@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { X, CheckCircle, XCircle, Loader2, Clock, Calendar, ShieldCheck, Tag } from "lucide-react";
 import { toast } from "sonner";
-import type { MovieV2 } from "../api/movieApi";
+import type { MovieResponse } from "../api/movieApi";
 import { useRole } from "../hooks/useRole";
 
 type Props = {
   open: boolean;
-  movie: MovieV2 | null;
+  movie: MovieResponse | null;
   loading?: boolean;
   onClose: () => void;
   onApprove: (id: number) => Promise<void>;

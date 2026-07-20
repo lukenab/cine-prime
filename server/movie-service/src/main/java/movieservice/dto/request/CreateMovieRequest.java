@@ -31,8 +31,6 @@ public class CreateMovieRequest {
 
     LocalDate releaseDate;
 
-    LocalDate endDate;
-
     @Size(max = 100)
     String country;
 
@@ -40,8 +38,8 @@ public class CreateMovieRequest {
     /** AgeRating.ratingId */
     Integer ageRatingId;
 
-    /** ProductionCompany.companyId */
-    Long companyId;
+    /** ProductionCompany.companyId - all valid IDs are linked, no single-company limit */
+    List<Long> companyIds;
 
     /** Genre IDs — min 1 required */
     @NotEmpty
@@ -62,6 +60,10 @@ public class CreateMovieRequest {
     String trailerUrl;
 
     String synopsis;
+
+    /** Original-language tagline - mirrors synopsis. Localized ones live on each translation. */
+    @Size(max = 500)
+    String tagline;
 
     // ── External IDs (optional, from TMDB import) ─────────────
     Integer tmdbId;

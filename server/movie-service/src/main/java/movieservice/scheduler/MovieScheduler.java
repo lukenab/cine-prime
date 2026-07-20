@@ -2,9 +2,9 @@ package movieservice.scheduler;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import movieservice.entity.Movie;
-import movieservice.enums.MovieStatus;
-import movieservice.repository.MovieRepository;
+import movieservice.entity.MovieAvailability;
+import movieservice.enums.AvailabilityStatus;
+import movieservice.repository.MovieAvailabilityRepository;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,43 +13,44 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Nightly job chạy 00:05 mỗi ngày.
- * Tự động chuyển trạng thái NOW_SHOWING → ENDED cho các phim
- * có endDate < ngày hôm nay.
+ * Nightly job at 00:05. Auto-closes MovieAvailability windows whose
+ * showing_end_date has passed — this used to flip Movie.status straight to
+ * ENDED, which conflated exhibition end with content archival. Movie.status
+ * (content) is untouched here; a movie stays APPROVED after every one of its
+ * availability windows closes, until an admin explicitly archives it.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class MovieScheduler {
 
-    private final MovieRepository movieRepository;
+    private static final List<AvailabilityStatus> CLOSEABLE =
+            List.of(AvailabilityStatus.PLANNED, AvailabilityStatus.OPEN, AvailabilityStatus.SUSPENDED);
 
-    /**
-     * Chạy lúc 00:05 mỗi đêm (cron: giây phút giờ ngày tháng thứ).
-     * Tìm tất cả phim NOW_SHOWING có endDate trước ngày hôm nay
-     * và chuyển sang ENDED.
-     */
+    private final MovieAvailabilityRepository movieAvailabilityRepository;
+
     @Scheduled(cron = "0 5 0 * * *")
     @Transactional
-    public void autoEndExpiredMovies() {
+    public void autoCloseExpiredAvailability() {
         LocalDate today = LocalDate.now();
-        List<Movie> expired = movieRepository
-                .findByStatusAndEndDateBefore(MovieStatus.NOW_SHOWING, today);
+        List<MovieAvailability> expired = movieAvailabilityRepository
+                .findByStatusInAndShowingEndDateBefore(CLOSEABLE, today);
 
         if (expired.isEmpty()) {
-            log.debug("[MovieScheduler] No expired movies to end for {}", today);
+            log.debug("[MovieScheduler] No expired availability windows to close for {}", today);
             return;
         }
 
-        log.info("[MovieScheduler] Auto-ending {} movie(s) with endDate < {}", expired.size(), today);
+        log.info("[MovieScheduler] Auto-closing {} availability window(s) with showing_end_date < {}", expired.size(), today);
 
-        for (Movie movie : expired) {
-            movie.setStatus(MovieStatus.ENDED);
-            movie.setUpdatedBy("SYSTEM");
-            log.info("[MovieScheduler] → ENDED: [{}] {}", movie.getMovieId(), movie.getOriginalTitle());
+        for (MovieAvailability availability : expired) {
+            availability.setStatus(AvailabilityStatus.CLOSED);
+            availability.setUpdatedBy("SYSTEM");
+            log.info("[MovieScheduler] → CLOSED: availability {} (movie {})",
+                    availability.getAvailabilityId(), availability.getMovie().getMovieId());
         }
 
-        movieRepository.saveAll(expired);
-        log.info("[MovieScheduler] Done. {} movie(s) transitioned to ENDED.", expired.size());
+        movieAvailabilityRepository.saveAll(expired);
+        log.info("[MovieScheduler] Done. {} availability window(s) transitioned to CLOSED.", expired.size());
     }
 }

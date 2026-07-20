@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -81,7 +82,8 @@ class TmdbServiceTest {
                 productionCompanyRepository,
                 genreRepository,
                 ageRatingRepository,
-                "dummy-api-key");
+                "dummy-api-key",
+                10);
         // TmdbService tu new RestTemplate() trong constructor - thay bang mock qua reflection
         // de co the stub cac cuoc goi HTTP ben trong fetchMovieDetail()/fetchCredits()/...
         ReflectionTestUtils.setField(tmdbService, "restTemplate", restTemplate);
@@ -322,6 +324,47 @@ class TmdbServiceTest {
         verify(movieRepository).save(captor.capture());
         assertTrue(captor.getValue().getFormats().isEmpty());
         assertEquals(MovieStatus.DRAFT, captor.getValue().getStatus());
+    }
+
+    // ── `[Backend] Add tagline field to Movie and MovieTranslation entities` ────────
+
+    @Test
+    void importMovieSetsTaglineAndMarksSourceAsTmdbWhenTmdbProvidesOne() {
+        TmdbMovieDetail detail = detailWithOneCompanyAndGenre();
+        detail.setTagline("Fear is a choice.");
+        stubTmdbHttpCalls(detail, creditsWithOneDirectorAndOneActor());
+        when(movieRepository.existsByTmdbId(693134)).thenReturn(false);
+        when(movieRepository.existsByImdbId("tt15239678")).thenReturn(false);
+        when(genreRepository.findByTmdbGenreId(878)).thenReturn(Optional.of(activeGenre(9L, 878, "Sci-Fi")));
+        stubCompanyAndPersonUpsertsAsNew();
+        stubMovieSaveAssignsId(1L);
+
+        tmdbService.importMovie(importRequest(693134));
+
+        ArgumentCaptor<Movie> captor = ArgumentCaptor.forClass(Movie.class);
+        verify(movieRepository).save(captor.capture());
+        assertEquals("Fear is a choice.", captor.getValue().getTagline());
+        assertEquals("TMDB", captor.getValue().getTaglineSource());
+    }
+
+    @Test
+    void importMovieLeavesTaglineNullAndSourceManualWhenTmdbHasNone() {
+        TmdbMovieDetail detail = detailWithOneCompanyAndGenre();
+        detail.setTagline(null);
+        stubTmdbHttpCalls(detail, creditsWithOneDirectorAndOneActor());
+        when(movieRepository.existsByTmdbId(693134)).thenReturn(false);
+        when(movieRepository.existsByImdbId("tt15239678")).thenReturn(false);
+        when(genreRepository.findByTmdbGenreId(878)).thenReturn(Optional.of(activeGenre(9L, 878, "Sci-Fi")));
+        stubCompanyAndPersonUpsertsAsNew();
+        stubMovieSaveAssignsId(1L);
+
+        // Missing tagline must never fail the import.
+        assertDoesNotThrow(() -> tmdbService.importMovie(importRequest(693134)));
+
+        ArgumentCaptor<Movie> captor = ArgumentCaptor.forClass(Movie.class);
+        verify(movieRepository).save(captor.capture());
+        assertNull(captor.getValue().getTagline());
+        assertEquals("MANUAL", captor.getValue().getTaglineSource());
     }
 
     // ── TMDB-FIX-03: import never silently drops or auto-activates an unmapped genre ──

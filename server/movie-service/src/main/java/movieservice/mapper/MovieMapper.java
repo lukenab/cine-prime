@@ -1,7 +1,6 @@
 package movieservice.mapper;
 
 import movieservice.dto.request.CinemaClusterRequest;
-import movieservice.dto.request.CinemaRoomRequest;
 import movieservice.dto.request.CreateMovieRequest;
 import movieservice.dto.request.UpdateMovieRequest;
 import movieservice.dto.response.*;
@@ -27,7 +26,7 @@ public interface MovieMapper {
     @Mapping(target = "cast", ignore = true)
     @Mapping(target = "translations", ignore = true)
     @Mapping(target = "ageRating", ignore = true)
-    @Mapping(target = "company", ignore = true)
+    @Mapping(target = "companies", ignore = true)
     Movie toMovie(CreateMovieRequest request);
 
     // NullValuePropertyMappingStrategy.IGNORE: field khong xuat hien hoac gui null trong
@@ -43,11 +42,11 @@ public interface MovieMapper {
     @Mapping(target = "cast", ignore = true)
     @Mapping(target = "translations", ignore = true)
     @Mapping(target = "ageRating", ignore = true)
-    @Mapping(target = "company", ignore = true)
+    @Mapping(target = "companies", ignore = true)
     void updateMovieFromRequest(UpdateMovieRequest request, @MappingTarget Movie movie);
 
     @Mapping(target = "status", expression = "java(movie.getStatus() != null ? movie.getStatus().name() : null)")
-    @Mapping(target = "companyName", source = "company.name")
+    @Mapping(target = "companies", source = "companies")
     @Mapping(target = "ageRating", source = "ageRating")
     @Mapping(target = "genres", source = "genres")
     @Mapping(target = "formats", source = "formats")
@@ -101,27 +100,33 @@ public interface MovieMapper {
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "operatingHours", ignore = true)
     CinemaCluster toCinemaCluster(CinemaClusterRequest request);
 
     @Mapping(target = "status", expression = "java(cluster.getStatus() != null ? cluster.getStatus().name() : null)")
+    @Mapping(target = "venueType", expression = "java(cluster.getVenueType() != null ? cluster.getVenueType().name() : null)")
     @Mapping(target = "totalRooms", ignore = true)
     @Mapping(target = "totalSeats", ignore = true)
     CinemaClusterResponse toCinemaClusterResponse(CinemaCluster cluster);
 
-    // ── Cinema room ───────────────────────────────────────────
+    ClusterOperatingHourResponse toClusterOperatingHourResponse(CinemaClusterOperatingHour operatingHour);
 
-    @Mapping(target = "cinemaRoomId", ignore = true)
-    @Mapping(target = "status", ignore = true)
-    @Mapping(target = "seats", ignore = true)
-    @Mapping(target = "showTimes", ignore = true)
-    @Mapping(target = "maintenanceHistory", ignore = true)
-    @Mapping(target = "cluster", ignore = true)
-    CinemaRoom toCinemaRoom(CinemaRoomRequest request);
+    // ── Cinema room ───────────────────────────────────────────
 
     @Mapping(target = "clusterId", expression = "java(cinemaRoom.getCluster() != null ? cinemaRoom.getCluster().getClusterId() : null)")
     @Mapping(target = "clusterName", expression = "java(cinemaRoom.getCluster() != null ? cinemaRoom.getCluster().getClusterName() : null)")
     CinemaRoomResponse toCinemaRoomResponse(CinemaRoom cinemaRoom);
     List<CinemaRoomResponse> toCinemaRoomResponseList(List<CinemaRoom> cinemaRooms);
+
+    // ── Movie availability (MOV-LC-06) ────────────────────────
+
+    @Mapping(target = "status", expression = "java(availability.getStatus() != null ? availability.getStatus().name() : null)")
+    @Mapping(target = "movieId", expression = "java(availability.getMovie() != null ? availability.getMovie().getMovieId() : null)")
+    @Mapping(target = "movieTitle", expression = "java(availability.getMovie() != null ? availability.getMovie().getOriginalTitle() : null)")
+    @Mapping(target = "clusterId", expression = "java(availability.getCluster() != null ? availability.getCluster().getClusterId() : null)")
+    @Mapping(target = "clusterName", expression = "java(availability.getCluster() != null ? availability.getCluster().getClusterName() : null)")
+    MovieAvailabilityResponse toMovieAvailabilityResponse(MovieAvailability availability);
+    List<MovieAvailabilityResponse> toMovieAvailabilityResponseList(List<MovieAvailability> availabilities);
 
     // ── ShowTime ──────────────────────────────────────────────
 

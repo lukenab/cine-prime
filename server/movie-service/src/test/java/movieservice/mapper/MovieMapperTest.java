@@ -28,13 +28,12 @@ class MovieMapperTest {
                 .originalLanguage("en")
                 .durationMinutes(120)
                 .releaseDate(LocalDate.of(2026, 1, 1))
-                .endDate(LocalDate.of(2026, 6, 1))
                 .country("USA")
                 .posterUrl("https://example.com/poster.jpg")
                 .thumbnailUrl("https://example.com/thumb.jpg")
                 .trailerUrl("https://example.com/trailer.mp4")
                 .synopsis("Original synopsis")
-                .status(MovieStatus.NOW_SHOWING)
+                .status(MovieStatus.APPROVED)
                 .build();
     }
 
@@ -59,8 +58,6 @@ class MovieMapperTest {
                 "durationMinutes khong duoc gui - phai giu nguyen");
         assertEquals(LocalDate.of(2026, 1, 1), movie.getReleaseDate(),
                 "releaseDate khong duoc gui - phai giu nguyen");
-        assertEquals(LocalDate.of(2026, 6, 1), movie.getEndDate(),
-                "endDate khong duoc gui - phai giu nguyen");
         assertEquals("USA", movie.getCountry(),
                 "country khong duoc gui - phai giu nguyen");
         assertEquals("https://example.com/poster.jpg", movie.getPosterUrl(),
@@ -83,7 +80,6 @@ class MovieMapperTest {
         assertEquals(expected.getOriginalLanguage(), movie.getOriginalLanguage());
         assertEquals(expected.getDurationMinutes(), movie.getDurationMinutes());
         assertEquals(expected.getReleaseDate(), movie.getReleaseDate());
-        assertEquals(expected.getEndDate(), movie.getEndDate());
         assertEquals(expected.getCountry(), movie.getCountry());
         assertEquals(expected.getPosterUrl(), movie.getPosterUrl());
         assertEquals(expected.getThumbnailUrl(), movie.getThumbnailUrl());
@@ -103,7 +99,7 @@ class MovieMapperTest {
 
         assertEquals(1L, movie.getMovieId(),
                 "movieId phai duoc @Mapping(ignore = true), khong duoc mapper dong vao");
-        assertEquals(MovieStatus.NOW_SHOWING, movie.getStatus(),
+        assertEquals(MovieStatus.APPROVED, movie.getStatus(),
                 "status phai duoc @Mapping(ignore = true), khong duoc mapper dong vao - "
                         + "chuyen trang thai chi qua cac endpoint status transition rieng");
     }

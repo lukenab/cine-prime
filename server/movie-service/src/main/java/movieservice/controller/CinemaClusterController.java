@@ -12,7 +12,6 @@ import movieservice.dto.response.CinemaClusterResponse;
 import movieservice.dto.response.ClusterAuditLogResponse;
 import movieservice.entity.CinemaCluster;
 import movieservice.entity.ClusterAuditLog;
-import movieservice.enums.ClusterAction;
 import movieservice.enums.ClusterStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
@@ -21,9 +20,9 @@ import movieservice.repository.ClusterAuditLogRepository;
 import movieservice.service.CinemaClusterService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -83,16 +82,24 @@ public class CinemaClusterController {
     }
 
     // ── GET by id ─────────────────────────────────────────────────────────────
+    // `[Backend] Enforce movie-service endpoint authorization matrix`: getAll() already
+    // hid non-ACTIVE clusters from non-staff callers, but getById() didn't - an
+    // anonymous/customer caller could enumerate cluster IDs and read a DRAFT/PENDING_REVIEW/
+    // REJECTED cluster's full detail. Same visibility rule as getAll(), and the same
+    // CLUSTER_NOT_FOUND a nonexistent ID gets, so a hidden cluster's existence isn't leaked.
 
     @GetMapping("/{id}")
-    public ApiResponse<CinemaClusterResponse> getById(@PathVariable Long id) {
+    public ApiResponse<CinemaClusterResponse> getById(@PathVariable Long id, Authentication authentication) {
         CinemaCluster cluster = clusterRepository.findById(id)
                 .orElseThrow(() -> new AppException(MovieErrorCode.CLUSTER_NOT_FOUND));
+        if (cluster.getStatus() != ClusterStatus.ACTIVE && !isStaff(authentication)) {
+            throw new AppException(MovieErrorCode.CLUSTER_NOT_FOUND);
+        }
         return ApiResponse.<CinemaClusterResponse>builder()
                 .code(200).result(toResponseWithStats(cluster)).build();
     }
 
-    // ── POST create → EMPLOYEE: DRAFT (needs approval) / ADMIN: ACTIVE (self-approved) ──
+    // ── POST create → always DRAFT regardless of role; must go through submit/approve ──
 
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     @PostMapping
@@ -123,16 +130,9 @@ public class CinemaClusterController {
 
     @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> delete(@PathVariable Long id) {
-        if (!clusterRepository.existsById(id))
-            throw new AppException(MovieErrorCode.CLUSTER_NOT_FOUND);
-
-        int roomCount = clusterRepository.countRoomsByClusterId(id);
-        if (roomCount > 0)
-            throw new AppException(MovieErrorCode.CLUSTER_HAS_ROOMS);
-
-        clusterRepository.deleteById(id);
-        return ApiResponse.<Void>builder().code(200).message("Deleted").build();
+    public ResponseEntity<Void> delete(@PathVariable Long id, Authentication authentication) {
+        cinemaClusterService.deleteUnusedDraft(id, authentication);
+        return ResponseEntity.noContent().build();
     }
 
     // ── WORKFLOW: submit (DRAFT → PENDING_REVIEW) ─────────────────────────────
@@ -142,24 +142,10 @@ public class CinemaClusterController {
     public ApiResponse<CinemaClusterResponse> submit(
             @PathVariable Long id,
             Authentication authentication) {
-
-        CinemaCluster cluster = clusterRepository.findById(id)
-                .orElseThrow(() -> new AppException(MovieErrorCode.CLUSTER_NOT_FOUND));
-
-        if (cluster.getStatus() != ClusterStatus.DRAFT) {
-            throw new AppException(MovieErrorCode.CLUSTER_INVALID_TRANSITION);
-        }
-
-        ClusterStatus oldStatus = cluster.getStatus();
-        cluster.setStatus(ClusterStatus.PENDING_REVIEW);
-        cluster.setRejectionNote(null); // clear previous rejection note on re-submit
-        CinemaCluster saved = clusterRepository.save(cluster);
-
-        logAction(saved.getClusterId(), ClusterAction.SUBMIT, getActor(authentication),
-                oldStatus, ClusterStatus.PENDING_REVIEW, null);
-
         return ApiResponse.<CinemaClusterResponse>builder()
-                .code(200).result(toResponseWithStats(saved)).build();
+                .code(200)
+                .result(cinemaClusterService.submitCluster(id, authentication))
+                .build();
     }
 
     // ── WORKFLOW: approve (PENDING_REVIEW → ACTIVE) ───────────────────────────
@@ -169,23 +155,10 @@ public class CinemaClusterController {
     public ApiResponse<CinemaClusterResponse> approve(
             @PathVariable Long id,
             Authentication authentication) {
-
-        CinemaCluster cluster = clusterRepository.findById(id)
-                .orElseThrow(() -> new AppException(MovieErrorCode.CLUSTER_NOT_FOUND));
-
-        if (cluster.getStatus() != ClusterStatus.PENDING_REVIEW) {
-            throw new AppException(MovieErrorCode.CLUSTER_INVALID_TRANSITION);
-        }
-
-        ClusterStatus oldStatus = cluster.getStatus();
-        cluster.setStatus(ClusterStatus.ACTIVE);
-        CinemaCluster saved = clusterRepository.save(cluster);
-
-        logAction(saved.getClusterId(), ClusterAction.APPROVE, getActor(authentication),
-                oldStatus, ClusterStatus.ACTIVE, null);
-
         return ApiResponse.<CinemaClusterResponse>builder()
-                .code(200).result(toResponseWithStats(saved)).build();
+                .code(200)
+                .result(cinemaClusterService.approveCluster(id, authentication))
+                .build();
     }
 
     // ── WORKFLOW: reject (PENDING_REVIEW → DRAFT) ─────────────────────────────
@@ -197,23 +170,10 @@ public class CinemaClusterController {
             @Valid @RequestBody RejectRequest req,
             Authentication authentication) {
 
-        CinemaCluster cluster = clusterRepository.findById(id)
-                .orElseThrow(() -> new AppException(MovieErrorCode.CLUSTER_NOT_FOUND));
-
-        if (cluster.getStatus() != ClusterStatus.PENDING_REVIEW) {
-            throw new AppException(MovieErrorCode.CLUSTER_INVALID_TRANSITION);
-        }
-
-        ClusterStatus oldStatus = cluster.getStatus();
-        cluster.setStatus(ClusterStatus.DRAFT);
-        cluster.setRejectionNote(req.getNote());
-        CinemaCluster saved = clusterRepository.save(cluster);
-
-        logAction(saved.getClusterId(), ClusterAction.REJECT, getActor(authentication),
-                oldStatus, ClusterStatus.DRAFT, req.getNote());
-
         return ApiResponse.<CinemaClusterResponse>builder()
-                .code(200).result(toResponseWithStats(saved)).build();
+                .code(200)
+                .result(cinemaClusterService.rejectCluster(id, req.getNote(), authentication))
+                .build();
     }
 
     // ── GET audit log ─────────────────────────────────────────────────────────
@@ -256,19 +216,6 @@ public class CinemaClusterController {
                 .build();
     }
 
-    private void logAction(Long clusterId, ClusterAction action, String performedBy,
-            ClusterStatus oldStatus, ClusterStatus newStatus, String note) {
-        ClusterAuditLog entry = new ClusterAuditLog();
-        entry.setClusterId(clusterId);
-        entry.setAction(action);
-        entry.setPerformedBy(performedBy);
-        entry.setOldStatus(oldStatus != null ? oldStatus.name() : null);
-        entry.setNewStatus(newStatus != null ? newStatus.name() : null);
-        entry.setNote(note);
-        entry.setTimestamp(LocalDateTime.now());
-        auditLogRepository.save(entry);
-    }
-
     /** ADMIN và EMPLOYEE đều là internal staff — thấy tất cả status trong GET */
     private boolean isStaff(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) return false;
@@ -278,13 +225,4 @@ public class CinemaClusterController {
     }
 
     /** Kiểm tra đúng role ADMIN (không bao gồm EMPLOYEE) */
-    private boolean isAdminRole(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) return false;
-        return authentication.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-    }
-
-    private String getActor(Authentication authentication) {
-        return authentication != null ? authentication.getName() : "UNKNOWN";
-    }
 }

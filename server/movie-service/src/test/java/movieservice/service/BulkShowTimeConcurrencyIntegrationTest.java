@@ -34,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @SpringBootTest(properties = {
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.sql.init.mode=never",
+        "spring.flyway.enabled=false",
         "eureka.client.enabled=false",
         "spring.cloud.discovery.enabled=false"
 })
@@ -71,7 +72,7 @@ class BulkShowTimeConcurrencyIntegrationTest {
         movie.setOriginalTitle("Concurrent Bulk Test");
         movie.setOriginalLanguage("en");
         movie.setDurationMinutes(90);
-        movie.setStatus(MovieStatus.NOW_SHOWING);
+        movie.setStatus(MovieStatus.APPROVED);
         movieId = movieRepository.saveAndFlush(movie).getMovieId();
 
         CinemaRoom room = new CinemaRoom();

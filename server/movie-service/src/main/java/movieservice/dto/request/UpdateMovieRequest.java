@@ -26,13 +26,11 @@ public class UpdateMovieRequest {
 
     LocalDate releaseDate;
 
-    LocalDate endDate;
-
     @Size(max = 100)
     String country;
 
     Integer ageRatingId;
-    Long companyId;
+    List<Long> companyIds;
     List<Long> genreIds;
     List<Integer> formatIds;
 
@@ -45,6 +43,10 @@ public class UpdateMovieRequest {
     @Size(max = 500)
     String trailerUrl;
     String synopsis;
+
+    /** Original-language tagline - mirrors synopsis. Localized ones live on each translation. */
+    @Size(max = 500)
+    String tagline;
 
     @Valid
     List<TranslationRequest> translations;

@@ -4,6 +4,8 @@ import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.exception.AppException;
 import movieservice.dto.request.TmdbImportRequest;
+import movieservice.dto.response.MovieMediaCandidateResponse;
+import movieservice.dto.response.MovieMediaPreviewResponse;
 import movieservice.dto.response.TmdbCastPreview;
 import movieservice.dto.response.TmdbCompanyPreview;
 import movieservice.dto.response.TmdbGenrePreview;
@@ -14,14 +16,17 @@ import movieservice.dto.response.TmdbSearchResultItem;
 import movieservice.dto.response.TranslationResponse;
 import movieservice.dto.tmdb.TmdbCastDraft;
 import movieservice.dto.tmdb.TmdbCompanyDraft;
+import movieservice.dto.tmdb.TmdbConfigurationResponse;
 import movieservice.dto.tmdb.TmdbCreditsResponse;
 import movieservice.dto.tmdb.TmdbGenreDraft;
 import movieservice.dto.tmdb.TmdbGenreListResponse;
+import movieservice.dto.tmdb.TmdbImagesResponse;
 import movieservice.dto.tmdb.TmdbMovieDetail;
 import movieservice.dto.tmdb.TmdbMovieDraft;
 import movieservice.dto.tmdb.TmdbReleaseDatesResponse;
 import movieservice.dto.tmdb.TmdbSearchResponse;
 import movieservice.dto.tmdb.TmdbTranslationsResponse;
+import movieservice.dto.tmdb.TmdbVideosResponse;
 import movieservice.dto.tmdb.TranslationDraft;
 import movieservice.entity.*;
 import movieservice.enums.GenreStatus;
@@ -61,9 +66,39 @@ public class TmdbService {
     private final GenreRepository genreRepository;
     private final AgeRatingRepository ageRatingRepository;
     private final String apiKey;
+    private final int maxStills;
     private final RestTemplate restTemplate;
 
     private static final String TMDB_BASE = "https://api.themoviedb.org/3";
+
+    // include_image_language=vi,en,null - TMDB-FIX-05: prefer Vietnamese, then English,
+    // then textless (no-language) assets over any other locale.
+    private static final String IMAGE_LANGUAGE_PARAM = "vi,en,null";
+    private static final List<String> LANGUAGE_PRIORITY = List.of("vi", "en", "");
+
+    // TMDB's own aspect ratios have natural jitter (2.03, 1.777..., 1.78...) - tolerate a
+    // reasonable band around the canonical ratio rather than requiring an exact match.
+    private static final double POSTER_ASPECT_MIN = 0.5;
+    private static final double POSTER_ASPECT_MAX = 0.8;
+    private static final double BACKDROP_ASPECT_MIN = 1.5;
+    private static final double BACKDROP_ASPECT_MAX = 2.0;
+
+    private static final String PREFERRED_POSTER_SIZE = "w780";
+    private static final String PREFERRED_THUMBNAIL_SIZE = "w342";
+    private static final String PREFERRED_BACKDROP_SIZE = "w1280";
+
+    // [Backend] Fetch and select an official TMDB trailer: only YouTube-hosted videos are
+    // eligible (the only provider trailerUrl is ever built for), Trailer type is preferred
+    // over Teaser, and vi/en locales are preferred over any other language.
+    private static final String TRAILER_SITE = "YouTube";
+    private static final String TRAILER_TYPE = "Trailer";
+    private static final String TEASER_TYPE = "Teaser";
+    private static final String TRAILER_PROVIDER = "YOUTUBE";
+    private static final List<String> TRAILER_LANGUAGE_PRIORITY = List.of("vi", "en");
+
+    /** Fetched once and cached - TMDB's image configuration (base URL, available size profiles)
+     *  is effectively static for the lifetime of the app. */
+    private volatile TmdbConfigurationResponse cachedConfig;
 
     /**
      * Maps US MPAA certification → local VN rating code.
@@ -109,7 +144,8 @@ public class TmdbService {
             ProductionCompanyRepository productionCompanyRepository,
             GenreRepository genreRepository,
             AgeRatingRepository ageRatingRepository,
-            @Value("${tmdb.api-key}") String apiKey) {
+            @Value("${tmdb.api-key}") String apiKey,
+            @Value("${tmdb.image.max-stills:10}") int maxStills) {
         this.movieRepository = movieRepository;
         this.movieTranslationRepository = movieTranslationRepository;
         this.movieCastRepository = movieCastRepository;
@@ -118,7 +154,12 @@ public class TmdbService {
         this.genreRepository = genreRepository;
         this.ageRatingRepository = ageRatingRepository;
         this.apiKey = apiKey;
+        this.maxStills = maxStills;
         this.restTemplate = new RestTemplate();
+    }
+
+    public int getMaxStills() {
+        return maxStills;
     }
 
     // ── Search ────────────────────────────────────────────────
@@ -201,9 +242,12 @@ public class TmdbService {
                 .map(TmdbSearchResponse.MovieItem::getId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
-        Set<Integer> existingIds = tmdbIds.isEmpty()
-                ? Set.of()
-                : new HashSet<>(movieRepository.findExistingTmdbIds(tmdbIds));
+        Map<Integer, Long> localMovieIdByTmdbId = tmdbIds.isEmpty()
+                ? Map.of()
+                : movieRepository.findExistingTmdbIdsWithMovieId(tmdbIds).stream()
+                        .collect(Collectors.toMap(
+                                MovieRepository.TmdbIdAndMovieId::getTmdbId,
+                                MovieRepository.TmdbIdAndMovieId::getMovieId));
         return items.stream()
                 .map(item -> TmdbSearchResultItem.builder()
                         .tmdbId(item.getId())
@@ -212,7 +256,8 @@ public class TmdbService {
                         .releaseDate(item.getReleaseDate())
                         .posterUrl(item.getPosterPath() != null ? TmdbDraftMapper.POSTER_BASE + item.getPosterPath() : null)
                         .overview(item.getOverview())
-                        .alreadyImported(item.getId() != null && existingIds.contains(item.getId()))
+                        .alreadyImported(item.getId() != null && localMovieIdByTmdbId.containsKey(item.getId()))
+                        .localMovieId(item.getId() != null ? localMovieIdByTmdbId.get(item.getId()) : null)
                         .build())
                 .collect(Collectors.toList());
     }
@@ -249,6 +294,13 @@ public class TmdbService {
                 .filter(m -> m.mappingStatus() == GenreMappingStatus.UNMAPPED)
                 .forEach(m -> warnings.add("GENRE_UNMAPPED:" + m.tmdbGenreId()));
 
+        PosterMedia posterMedia = resolvePosterMedia(tmdbId, draft.getPosterUrl());
+        if (posterMedia.media().getRecommendedPosterPath() == null && draft.getPosterUrl() == null) {
+            warnings.add("POSTER_NOT_AVAILABLE");
+        }
+
+        TrailerSelection trailer = selectTrailer(bundle.videos(), warnings);
+
         return TmdbMovieDetailsResponse.builder()
                 .tmdbId(tmdbId)
                 .imdbId(draft.getImdbId())
@@ -257,8 +309,17 @@ public class TmdbService {
                 .durationMinutes(draft.getRuntimeMinutes())
                 .releaseDate(draft.getReleaseDate())
                 .country(draft.getCountry())
-                .posterUrl(draft.getPosterUrl())
+                .posterUrl(posterMedia.posterUrl())
+                .thumbnailUrl(posterMedia.thumbnailUrl())
                 .overview(draft.getOverview())
+                .tagline(draft.getTagline())
+                .media(posterMedia.media())
+                .trailerUrl(trailer != null ? trailer.url() : null)
+                .trailerProvider(trailer != null ? trailer.provider() : null)
+                .trailerExternalKey(trailer != null ? trailer.externalKey() : null)
+                .trailerLanguageCode(trailer != null ? trailer.languageCode() : null)
+                .trailerVideoType(trailer != null ? trailer.videoType() : null)
+                .trailerOfficial(trailer != null ? trailer.official() : null)
                 .companies(companies)
                 .translations(toTranslationResponses(draft.getTranslations()))
                 .cast(cast)
@@ -266,6 +327,29 @@ public class TmdbService {
                 .ageRatingId(resolvedRating != null ? resolvedRating.getRatingId() : null)
                 .warnings(warnings)
                 .build();
+    }
+
+    private record PosterMedia(String posterUrl, String thumbnailUrl, MovieMediaPreviewResponse media) {
+    }
+
+    /**
+     * Shared by getDetails() (preview) and importMovie() so both compute the movie-level
+     * posterUrl/thumbnailUrl the exact same way (TMDB-FIX-02 precedent) - fixes the original bug
+     * where the frontend copied one TMDB poster string into both fields. thumbnailUrl is always a
+     * genuinely smaller CDN size profile of the same recommended poster, never a raw copy.
+     */
+    private PosterMedia resolvePosterMedia(Integer tmdbId, String fallbackPosterUrl) {
+        TmdbImagesResponse imagesResponse = fetchImages(tmdbId);
+        TmdbConfigurationResponse config = getImageConfig();
+        MovieMediaPreviewResponse media = buildMediaPreview(imagesResponse, config, maxStills);
+
+        String posterUrl = media.getRecommendedPosterPath() != null
+                ? buildSizedUrl(config, media.getRecommendedPosterPath(), PREFERRED_POSTER_SIZE)
+                : fallbackPosterUrl;
+        String thumbnailUrl = media.getRecommendedPosterPath() != null
+                ? buildSizedUrl(config, media.getRecommendedPosterPath(), PREFERRED_THUMBNAIL_SIZE)
+                : fallbackPosterUrl;
+        return new PosterMedia(posterUrl, thumbnailUrl, media);
     }
 
     // ── Import ────────────────────────────────────────────────
@@ -302,11 +386,17 @@ public class TmdbService {
         List<Genre> resolvedGenres = resolveGenresForImport(
                 resolveGenreMatches(draft.getGenres()), request, warnings);
 
-        // 5. Companies (upsert - unchanged pre-existing limitation: Movie keeps only 1 company, see Update #151)
-        List<ProductionCompany> companies = new ArrayList<>();
+        // 5. Companies - issue #151: all TMDB-listed companies are linked, not just the first.
+        // ProductionCompany has no @EqualsAndHashCode, so a LinkedHashSet dedupes by reference
+        // identity - correct here because upsertCompany() returns the SAME managed instance for
+        // repeated matches within this persistence context (JPA first-level cache), while two
+        // genuinely distinct new companies (both with a null, not-yet-assigned companyId) are
+        // never mistaken for one another. Preserves TMDB's original ordering.
+        Set<ProductionCompany> uniqueCompanies = new LinkedHashSet<>();
         for (TmdbCompanyDraft c : draft.getCompanies()) {
-            companies.add(upsertCompany(c));
+            uniqueCompanies.add(upsertCompany(c));
         }
+        List<ProductionCompany> companies = new ArrayList<>(uniqueCompanies);
 
         // 6. Age rating - admin confirmation overrides auto-resolution
         AgeRating resolvedRating;
@@ -320,6 +410,13 @@ public class TmdbService {
         // 7. Screening format - never inferred from movie master; belongs to release-version/showtime
         warnings.add("SCREENING_FORMAT_NOT_SET");
 
+        // 7b. Poster + thumbnail - same resolution logic as preview (TMDB-FIX-02), never a
+        // straight copy of the same URL into both fields.
+        PosterMedia posterMedia = resolvePosterMedia(tmdbId, draft.getPosterUrl());
+
+        // 7c. Trailer - same selection policy as preview; never blocks import if absent.
+        TrailerSelection trailer = selectTrailer(bundle.videos(), warnings);
+
         // 8. Build & save movie - DRAFT only, never auto-published
         Movie movie = Movie.builder()
                 .tmdbId(tmdbId)
@@ -329,10 +426,20 @@ public class TmdbService {
                 .durationMinutes(runtimeMinutes)
                 .releaseDate(parseDate(draft.getReleaseDate()))
                 .country(draft.getCountry())
-                .posterUrl(draft.getPosterUrl())
+                .posterUrl(posterMedia.posterUrl())
+                .thumbnailUrl(posterMedia.thumbnailUrl())
+                .trailerUrl(trailer != null ? trailer.url() : null)
+                .trailerProvider(trailer != null ? trailer.provider() : null)
+                .trailerExternalKey(trailer != null ? trailer.externalKey() : null)
+                .trailerLanguageCode(trailer != null ? trailer.languageCode() : null)
+                .trailerVideoType(trailer != null ? trailer.videoType() : null)
+                .trailerOfficial(trailer != null ? trailer.official() : null)
+                .trailerSource(trailer != null ? "TMDB" : "MANUAL")
                 .synopsis(draft.getOverview())
+                .tagline(draft.getTagline())
+                .taglineSource(draft.getTagline() != null ? "TMDB" : "MANUAL")
                 .status(MovieStatus.DRAFT)
-                .company(companies.isEmpty() ? null : companies.get(0))
+                .companies(companies)
                 .formats(new ArrayList<>())
                 .genres(resolvedGenres)
                 .ageRating(resolvedRating)
@@ -402,16 +509,18 @@ public class TmdbService {
             TmdbMovieDetail detail,
             TmdbCreditsResponse credits,
             TmdbTranslationsResponse translations,
-            TmdbReleaseDatesResponse releaseDates) {
+            TmdbReleaseDatesResponse releaseDates,
+            TmdbVideosResponse videos) {
     }
 
-    /** Groups the 4 HTTP calls behind getDetails()/importMovie() so both call the exact same fetch step. */
+    /** Groups the 5 HTTP calls behind getDetails()/importMovie() so both call the exact same fetch step. */
     private TmdbFetchBundle fetchAll(Integer tmdbId) {
         return new TmdbFetchBundle(
                 fetchMovieDetail(tmdbId),
                 fetchCredits(tmdbId),
                 fetchTranslations(tmdbId),
-                fetchReleaseDates(tmdbId));
+                fetchReleaseDates(tmdbId),
+                fetchVideos(tmdbId));
     }
 
     private TmdbMovieDetail fetchMovieDetail(Integer tmdbId) {
@@ -468,26 +577,316 @@ public class TmdbService {
         }
     }
 
-    // ── Company / person resolution ───────────────────────────
-
-    /** Real upsert - only ever called from importMovie(), never from preview. */
-    private ProductionCompany upsertCompany(TmdbCompanyDraft company) {
-        return productionCompanyRepository.findByName(company.getName())
-                .orElseGet(() -> {
-                    ProductionCompany c = new ProductionCompany();
-                    c.setName(company.getName());
-                    c.setCountry(company.getCountry());
-                    if (company.getLogoUrl() != null) {
-                        c.setLogoUrl(company.getLogoUrl());
-                    }
-                    c.setCreatedAt(LocalDateTime.now());
-                    return productionCompanyRepository.save(c);
-                });
+    /** TMDB-FIX-05: posters/backdrops/logos, filtered to Vietnamese/English/textless assets. */
+    TmdbImagesResponse fetchImages(Integer tmdbId) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(TMDB_BASE + "/movie/" + tmdbId + "/images")
+                .queryParam("api_key", apiKey)
+                .queryParam("include_image_language", IMAGE_LANGUAGE_PARAM)
+                .build().toUri();
+        try {
+            TmdbImagesResponse r = restTemplate.getForObject(uri, TmdbImagesResponse.class);
+            return r != null ? r : new TmdbImagesResponse();
+        } catch (RestClientException e) {
+            log.warn("TMDB fetchImages failed for tmdbId={}: {}", tmdbId, e.getMessage());
+            return new TmdbImagesResponse();
+        }
     }
 
-    /** Issue #188: preview-only, read-only - KHONG duoc goi productionCompanyRepository.save(). */
+    /** [Backend] Fetch and select an official TMDB trailer - GET /movie/{id}/videos. */
+    TmdbVideosResponse fetchVideos(Integer tmdbId) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(TMDB_BASE + "/movie/" + tmdbId + "/videos")
+                .queryParam("api_key", apiKey)
+                .build().toUri();
+        try {
+            TmdbVideosResponse r = restTemplate.getForObject(uri, TmdbVideosResponse.class);
+            return r != null ? r : new TmdbVideosResponse();
+        } catch (RestClientException e) {
+            log.warn("TMDB fetchVideos failed for tmdbId={}: {}", tmdbId, e.getMessage());
+            return new TmdbVideosResponse();
+        }
+    }
+
+    /** Cached - TMDB's image configuration (base URL, size profiles) is effectively static. */
+    TmdbConfigurationResponse getImageConfig() {
+        TmdbConfigurationResponse cached = cachedConfig;
+        if (cached != null) return cached;
+        URI uri = UriComponentsBuilder.fromHttpUrl(TMDB_BASE + "/configuration")
+                .queryParam("api_key", apiKey)
+                .build().toUri();
+        try {
+            TmdbConfigurationResponse fetched = restTemplate.getForObject(uri, TmdbConfigurationResponse.class);
+            if (fetched == null || fetched.getImages() == null) {
+                fetched = fallbackConfig();
+            }
+            cachedConfig = fetched;
+            return fetched;
+        } catch (RestClientException e) {
+            log.warn("TMDB fetchConfiguration failed, using fallback size profile: {}", e.getMessage());
+            return fallbackConfig();
+        }
+    }
+
+    /** Only used if /configuration itself is unreachable - the same default TMDB has used for years. */
+    private static TmdbConfigurationResponse fallbackConfig() {
+        TmdbConfigurationResponse config = new TmdbConfigurationResponse();
+        TmdbConfigurationResponse.Images images = new TmdbConfigurationResponse.Images();
+        images.setSecureBaseUrl("https://image.tmdb.org/t/p/");
+        images.setPosterSizes(List.of("w92", "w154", "w185", "w342", "w500", "w780", "original"));
+        images.setBackdropSizes(List.of("w300", "w780", "w1280", "original"));
+        config.setImages(images);
+        return config;
+    }
+
+    /** Package-visible: reused by MovieImageService when persisting a selected TMDB image. */
+    String resolveImageUrl(TmdbConfigurationResponse config, String filePath, movieservice.enums.MovieImageType type) {
+        String preferredSize = type == movieservice.enums.MovieImageType.POSTER
+                ? PREFERRED_POSTER_SIZE : PREFERRED_BACKDROP_SIZE;
+        return buildSizedUrl(config, filePath, preferredSize);
+    }
+
+    String buildSizedUrl(TmdbConfigurationResponse config, String filePath, String preferredSize) {
+        if (filePath == null) return null;
+        TmdbConfigurationResponse.Images images = config.getImages();
+        String baseUrl = images != null && images.getSecureBaseUrl() != null
+                ? images.getSecureBaseUrl() : "https://image.tmdb.org/t/p/";
+        List<String> available = preferredSize.startsWith("w7") || preferredSize.equals("w342")
+                ? (images != null ? images.getPosterSizes() : null)
+                : (images != null ? images.getBackdropSizes() : null);
+        String size = pickSize(available, preferredSize);
+        return baseUrl + size + filePath;
+    }
+
+    /** Uses the preferred size if TMDB's own configuration lists it as available, otherwise the
+     *  closest smaller listed size, otherwise "original" - never silently hardcodes w500. */
+    private String pickSize(List<String> available, String preferred) {
+        if (available == null || available.isEmpty()) return preferred;
+        if (available.contains(preferred)) return preferred;
+        return available.contains("original") ? "original" : available.get(available.size() - 1);
+    }
+
+    /**
+     * TMDB-FIX-05: normalizes raw TMDB images into ranked candidates. Selection weighs, in order:
+     * (1) locale match (vi > en > textless > other), (2) TMDB vote_average, (3) resolution. Assets
+     * with an aspect ratio outside a sane band for their category (mistagged uploads) are dropped.
+     * TMDB's movie /images endpoint has no "stills" category - extra backdrops beyond the single
+     * recommended one become our own STILL candidates, capped at maxStillsAllowed.
+     */
+    private MovieMediaPreviewResponse buildMediaPreview(
+            TmdbImagesResponse images, TmdbConfigurationResponse config, int maxStillsAllowed) {
+
+        List<TmdbImagesResponse.TmdbImageItem> posterItems = dedupeByFilePath(images.getPosters());
+        List<TmdbImagesResponse.TmdbImageItem> backdropItems = dedupeByFilePath(images.getBackdrops());
+
+        List<MovieMediaCandidateResponse> posters = rankCandidates(
+                posterItems, config, PREFERRED_POSTER_SIZE, POSTER_ASPECT_MIN, POSTER_ASPECT_MAX);
+        List<MovieMediaCandidateResponse> backdrops = rankCandidates(
+                backdropItems, config, PREFERRED_BACKDROP_SIZE, BACKDROP_ASPECT_MIN, BACKDROP_ASPECT_MAX);
+
+        String recommendedPosterPath = posters.isEmpty() ? null : posters.get(0).getFilePath();
+        String recommendedBackdropPath = backdrops.isEmpty() ? null : backdrops.get(0).getFilePath();
+
+        List<MovieMediaCandidateResponse> stills = backdrops.stream()
+                .skip(backdrops.isEmpty() ? 0 : 1)
+                .limit(Math.max(0, maxStillsAllowed))
+                .collect(Collectors.toList());
+
+        return MovieMediaPreviewResponse.builder()
+                .recommendedPosterPath(recommendedPosterPath)
+                .recommendedBackdropPath(recommendedBackdropPath)
+                .posters(markRecommended(posters, recommendedPosterPath))
+                .backdrops(markRecommended(backdrops, recommendedBackdropPath))
+                .stills(stills)
+                .build();
+    }
+
+    private List<TmdbImagesResponse.TmdbImageItem> dedupeByFilePath(List<TmdbImagesResponse.TmdbImageItem> items) {
+        if (items == null) return List.of();
+        Map<String, TmdbImagesResponse.TmdbImageItem> byPath = new LinkedHashMap<>();
+        for (TmdbImagesResponse.TmdbImageItem item : items) {
+            if (item.getFilePath() != null) byPath.putIfAbsent(item.getFilePath(), item);
+        }
+        return new ArrayList<>(byPath.values());
+    }
+
+    private List<MovieMediaCandidateResponse> rankCandidates(
+            List<TmdbImagesResponse.TmdbImageItem> items, TmdbConfigurationResponse config,
+            String preferredSize, double aspectMin, double aspectMax) {
+
+        return items.stream()
+                .filter(item -> item.getAspectRatio() == null
+                        || (item.getAspectRatio() >= aspectMin && item.getAspectRatio() <= aspectMax))
+                .sorted(Comparator
+                        .comparingInt((TmdbImagesResponse.TmdbImageItem item) -> languageRank(item.getIso6391()))
+                        .thenComparing(Comparator.comparingDouble(
+                                (TmdbImagesResponse.TmdbImageItem item) ->
+                                        item.getVoteAverage() != null ? item.getVoteAverage() : 0.0).reversed())
+                        .thenComparing(Comparator.comparingInt(
+                                (TmdbImagesResponse.TmdbImageItem item) -> resolutionOf(item)).reversed()))
+                .map(item -> MovieMediaCandidateResponse.builder()
+                        .filePath(item.getFilePath())
+                        .url(buildSizedUrl(config, item.getFilePath(), preferredSize))
+                        .width(item.getWidth())
+                        .height(item.getHeight())
+                        .aspectRatio(item.getAspectRatio())
+                        .languageCode(normalizeLanguage(item.getIso6391()))
+                        .voteAverage(item.getVoteAverage())
+                        .recommended(false)
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    private int languageRank(String iso6391) {
+        int rank = LANGUAGE_PRIORITY.indexOf(normalizeLanguage(iso6391));
+        return rank >= 0 ? rank : LANGUAGE_PRIORITY.size();
+    }
+
+    private String normalizeLanguage(String iso6391) {
+        return iso6391 == null ? "" : iso6391;
+    }
+
+    private int resolutionOf(TmdbImagesResponse.TmdbImageItem item) {
+        if (item.getWidth() == null || item.getHeight() == null) return 0;
+        return item.getWidth() * item.getHeight();
+    }
+
+    private List<MovieMediaCandidateResponse> markRecommended(
+            List<MovieMediaCandidateResponse> candidates, String recommendedPath) {
+        if (recommendedPath == null) return candidates;
+        return candidates.stream()
+                .map(c -> c.getFilePath().equals(recommendedPath)
+                        ? MovieMediaCandidateResponse.builder()
+                                .filePath(c.getFilePath()).url(c.getUrl()).width(c.getWidth())
+                                .height(c.getHeight()).aspectRatio(c.getAspectRatio())
+                                .languageCode(c.getLanguageCode()).voteAverage(c.getVoteAverage())
+                                .recommended(true).build()
+                        : c)
+                .collect(Collectors.toList());
+    }
+
+    // ── Trailer selection ──────────────────────────────────────
+
+    private record TrailerSelection(
+            String provider, String externalKey, String languageCode,
+            String videoType, boolean official, String url) {
+    }
+
+    /**
+     * [Backend] Fetch and select an official TMDB trailer. Only YouTube-hosted videos are
+     * eligible. Ranks by (1) official flag, (2) vi/en locale priority, then picks the first
+     * Trailer-type candidate; falls back to a Teaser only if no Trailer exists at all, and
+     * always records a warning when it does (never silently substitutes a teaser). Returns
+     * null (with a TRAILER_NOT_FOUND warning) if TMDB has no eligible YouTube video at all -
+     * this never blocks import, only the warning list is affected.
+     */
+    private TrailerSelection selectTrailer(TmdbVideosResponse videos, List<String> warnings) {
+        List<TmdbVideosResponse.TmdbVideoItem> candidates = videos.getResults() == null
+                ? List.of()
+                : videos.getResults().stream()
+                        .filter(v -> v.getKey() != null && !v.getKey().isBlank())
+                        .filter(v -> TRAILER_SITE.equalsIgnoreCase(v.getSite()))
+                        .collect(Collectors.toList());
+
+        Comparator<TmdbVideosResponse.TmdbVideoItem> rank = Comparator
+                .comparing((TmdbVideosResponse.TmdbVideoItem v) -> !Boolean.TRUE.equals(v.getOfficial()))
+                .thenComparingInt(v -> trailerLanguageRank(v.getIso6391()));
+
+        TmdbVideosResponse.TmdbVideoItem best = candidates.stream()
+                .filter(v -> TRAILER_TYPE.equalsIgnoreCase(v.getType()))
+                .min(rank)
+                .orElse(null);
+
+        boolean isTeaserFallback = false;
+        if (best == null) {
+            best = candidates.stream()
+                    .filter(v -> TEASER_TYPE.equalsIgnoreCase(v.getType()))
+                    .min(rank)
+                    .orElse(null);
+            isTeaserFallback = best != null;
+        }
+
+        if (best == null) {
+            warnings.add("TRAILER_NOT_FOUND");
+            return null;
+        }
+
+        if (isTeaserFallback) {
+            warnings.add("TRAILER_FALLBACK_TEASER:" + best.getKey());
+        }
+
+        String url = "https://www.youtube.com/watch?v=" + best.getKey();
+        String videoType = TEASER_TYPE.equalsIgnoreCase(best.getType()) ? "TEASER" : "TRAILER";
+        return new TrailerSelection(
+                TRAILER_PROVIDER, best.getKey(), best.getIso6391(),
+                videoType, Boolean.TRUE.equals(best.getOfficial()), url);
+    }
+
+    private int trailerLanguageRank(String iso6391) {
+        int rank = TRAILER_LANGUAGE_PRIORITY.indexOf(normalizeLanguage(iso6391));
+        return rank >= 0 ? rank : TRAILER_LANGUAGE_PRIORITY.size();
+    }
+
+    // ── Company / person resolution ───────────────────────────
+
+    /**
+     * Issue #151: real upsert, only ever called from importMovie(), never from preview.
+     * Matches primarily by the stable tmdbCompanyId - falls back to exact name only for
+     * companies created before this field existed (migration-era rows) or manually via the
+     * admin UI with no TMDB id yet. An existing row is enriched, never overwritten with nulls:
+     * TMDB not providing a field (e.g. logoUrl) must never erase a locally-curated value.
+     */
+    private ProductionCompany upsertCompany(TmdbCompanyDraft company) {
+        ProductionCompany existing = findExistingCompany(company);
+        if (existing != null) {
+            enrichCompany(existing, company);
+            return productionCompanyRepository.save(existing);
+        }
+
+        ProductionCompany created = ProductionCompany.builder()
+                .name(company.getName())
+                .country(company.getCountry())
+                .logoUrl(company.getLogoUrl())
+                .tmdbCompanyId(company.getTmdbId())
+                .createdAt(LocalDateTime.now())
+                .build();
+        try {
+            return productionCompanyRepository.save(created);
+        } catch (DataIntegrityViolationException e) {
+            // Concurrent import created the same TMDB company (or same name) first - reuse it.
+            ProductionCompany raced = findExistingCompany(company);
+            if (raced == null) throw e;
+            return raced;
+        }
+    }
+
+    private ProductionCompany findExistingCompany(TmdbCompanyDraft company) {
+        if (company.getTmdbId() != null) {
+            ProductionCompany byTmdbId = productionCompanyRepository.findByTmdbCompanyId(company.getTmdbId()).orElse(null);
+            if (byTmdbId != null) return byTmdbId;
+        }
+        return company.getName() != null
+                ? productionCompanyRepository.findByName(company.getName()).orElse(null)
+                : null;
+    }
+
+    /** Never nulls out an existing local value just because TMDB didn't provide one this time. */
+    private void enrichCompany(ProductionCompany existing, TmdbCompanyDraft draft) {
+        if (existing.getTmdbCompanyId() == null && draft.getTmdbId() != null) {
+            existing.setTmdbCompanyId(draft.getTmdbId());
+        }
+        if (draft.getCountry() != null && !draft.getCountry().isBlank()) {
+            existing.setCountry(draft.getCountry());
+        }
+        if (draft.getLogoUrl() != null && !draft.getLogoUrl().isBlank()) {
+            existing.setLogoUrl(draft.getLogoUrl());
+        }
+    }
+
+    /**
+     * Issue #188: preview-only, read-only - KHONG duoc goi productionCompanyRepository.save().
+     * Matching priority mirrors upsertCompany(): tmdbCompanyId first, exact name fallback.
+     */
     private TmdbCompanyPreview previewCompany(TmdbCompanyDraft company) {
-        ProductionCompany existing = productionCompanyRepository.findByName(company.getName()).orElse(null);
+        ProductionCompany existing = findExistingCompany(company);
         return TmdbCompanyPreview.builder()
                 .tmdbId(company.getTmdbId())
                 .name(company.getName())
@@ -539,21 +938,23 @@ public class TmdbService {
                         .languageCode(t.getLanguageCode())
                         .title(t.getTitle())
                         .synopsis(t.getSynopsis())
+                        .tagline(t.getTagline())
                         .build())
                 .collect(Collectors.toList());
     }
 
     private void saveTranslations(Movie movie, List<TranslationDraft> translations) {
         for (TranslationDraft t : translations) {
-            saveOneTranslation(movie, t.getLanguageCode(), t.getTitle(), t.getSynopsis());
+            saveOneTranslation(movie, t.getLanguageCode(), t.getTitle(), t.getSynopsis(), t.getTagline());
         }
     }
 
-    private void saveOneTranslation(Movie movie, String langCode, String title, String synopsis) {
+    private void saveOneTranslation(Movie movie, String langCode, String title, String synopsis, String tagline) {
         MovieTranslationId id = new MovieTranslationId(movie.getMovieId(), langCode);
         MovieTranslation t = new MovieTranslation();
         t.setId(id);
         t.setMovie(movie);
+        t.setTagline(tagline);
         t.setTitle(title != null ? title : movie.getOriginalTitle());
         t.setSynopsis(synopsis);
         movieTranslationRepository.save(t);

@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -118,6 +119,18 @@ public class GlobalExceptionHandler {
     ResponseEntity<ApiResponse<?>> handlingDataIntegrity(DataIntegrityViolationException exception) {
         log.error("Data integrity violation: ", exception);
         GlobalErrorCode errorCode = GlobalErrorCode.DATA_INTEGRITY_VIOLATION;
+        return ResponseEntity.status(errorCode.getStatusCode()).body(ApiResponse.builder()
+                .code(errorCode.getCode())
+                .message(errorCode.getMessage())
+                .build());
+    }
+
+    // @Version optimistic-lock conflict — two actors transitioned/edited the same
+    // row concurrently (e.g. two admins approving the same movie at once).
+    @ExceptionHandler(value = OptimisticLockingFailureException.class)
+    ResponseEntity<ApiResponse<?>> handlingOptimisticLocking(OptimisticLockingFailureException exception) {
+        log.warn("Concurrent modification conflict: {}", exception.getMessage());
+        GlobalErrorCode errorCode = GlobalErrorCode.CONCURRENT_MODIFICATION;
         return ResponseEntity.status(errorCode.getStatusCode()).body(ApiResponse.builder()
                 .code(errorCode.getCode())
                 .message(errorCode.getMessage())

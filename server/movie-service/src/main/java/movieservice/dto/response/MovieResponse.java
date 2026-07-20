@@ -23,17 +23,24 @@ public class MovieResponse {
 
     Integer durationMinutes;
     LocalDate releaseDate;
-    LocalDate endDate;
     String country;
     String status;
+    /** Set when an ADMIN requests changes (PENDING_REVIEW -> CHANGES_REQUESTED). The employee
+     *  reads this to know what to fix before resubmitting. */
+    String rejectionNote;
 
     AgeRatingResponse ageRating;
 
-    String companyName;
+    List<ProductionCompanyResponse> companies;
     String posterUrl;
     String thumbnailUrl;
     String trailerUrl;
+    /** TMDB = auto-selected on import; MANUAL = admin-entered/edited. */
+    String trailerSource;
     String synopsis;
+    String tagline;
+    /** TMDB = auto-imported on import; MANUAL = admin-entered/edited. */
+    String taglineSource;
 
     List<GenreResponse> genres;
     List<ScreeningFormatResponse> formats;

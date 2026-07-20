@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -233,6 +234,13 @@ public class ShowTimeService {
     }
     public Boolean existsMovie(Long movieId, LocalDate currentDate, LocalTime currentTime) {
         return showTimeRepository.existsByMovieMovieIdAndFutureShowTime(movieId, currentDate, currentTime);
+    }
+
+    /** MOV-LC-07: earliest upcoming saleable showtime for a movie at a cluster, if any. */
+    public Optional<ShowTime> findNextSaleableShowTime(Long movieId, Long clusterId, LocalDate currentDate, LocalTime currentTime) {
+        List<ShowTime> upcoming = showTimeRepository.findUpcomingSaleableByMovieAndCluster(
+                movieId, clusterId, currentDate, currentTime);
+        return upcoming.isEmpty() ? Optional.empty() : Optional.of(upcoming.get(0));
     }
 
     public List<ShowTime> saveSchedule(List<ShowTime> showTimes) {
