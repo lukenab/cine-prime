@@ -45,4 +45,15 @@ public class GenreController {
                 .result(genreService.create(request.getGenreName()))
                 .build();
     }
+
+    // PENDING_REVIEW -> ACTIVE. ADMIN-only, same governance level as the movie content-review
+    // promotion (PENDING_REVIEW -> APPROVED in MovieController) and as genre creation itself.
+    @PreAuthorize("hasRole('ADMIN')")
+    @PatchMapping("/{id}/approve")
+    public ApiResponse<GenreResponse> approve(@PathVariable Long id) {
+        return ApiResponse.<GenreResponse>builder()
+                .code(200)
+                .result(genreService.approve(id))
+                .build();
+    }
 }

@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, RefreshCw, AlertCircle, Tags, Film, Hash, X } from "lucide-react";
+import { Plus, Search, RefreshCw, AlertCircle, Tags, Film, Hash, X, ShieldCheck, Clock } from "lucide-react";
 import { useOutletContext } from "react-router-dom";
 import { movieApi, type GenreResponse, type MovieApiResponse, type CreateGenrePayload } from "../../api/movieApi";
+
+type StatusFilter = "ALL" | "ACTIVE" | "PENDING_REVIEW";
 
 // ── Add Genre Modal ───────────────────────────────────────────────────────────
 
@@ -120,6 +122,8 @@ export default function ManageGenresPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [approvingId, setApprovingId] = useState<number | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -153,13 +157,29 @@ export default function ManageGenresPage() {
     }
   };
 
+  const handleApprove = async (id: number) => {
+    setApprovingId(id);
+    try {
+      const res = await movieApi.approveGenre(id);
+      setTypes((prev) => prev.map((t) => (t.genreId === id ? res.result : t)));
+    } catch (err: any) {
+      alert(`Error: ${err?.response?.data?.message ?? "Approve failed."}`);
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
   // Count how many movies use each genre
   const movieCountByGenre = (typeName: string): number =>
     movies.filter((m) => m.movieType?.includes(typeName)).length;
 
-  const filtered = types.filter((t) =>
-    !searchQuery || t.genreName?.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const pendingCount = types.filter((t) => t.status === "PENDING_REVIEW").length;
+
+  const filtered = types
+    .filter((t) => statusFilter === "ALL" || t.status === statusFilter)
+    .filter((t) =>
+      !searchQuery || t.genreName?.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
 
   const inputStyle: React.CSSProperties = {
     fontSize: "14px",
@@ -220,6 +240,30 @@ export default function ManageGenresPage() {
         </div>
       )}
 
+      {/* Status filter tabs */}
+      <div className="flex items-center gap-2 mb-4">
+        {([
+          { key: "ALL", label: "All" },
+          { key: "ACTIVE", label: "Active" },
+          { key: "PENDING_REVIEW", label: `Pending Review${pendingCount > 0 ? ` (${pendingCount})` : ""}` },
+        ] as const).map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setStatusFilter(tab.key)}
+            className="px-3.5 py-1.5 rounded-lg border transition-colors"
+            style={{
+              fontSize: "13px",
+              fontWeight: 500,
+              borderColor: statusFilter === tab.key ? "transparent" : "var(--border-color)",
+              background: statusFilter === tab.key ? (tab.key === "PENDING_REVIEW" ? "#d97706" : "#6d28d9") : "var(--bg-card)",
+              color: statusFilter === tab.key ? "#fff" : "var(--text-main)",
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap mb-6">
         <div className="relative flex-1 min-w-48">
@@ -258,7 +302,7 @@ export default function ManageGenresPage() {
         <table className="w-full">
           <thead>
             <tr className="border-b" style={{ borderColor: "var(--border-color)", backgroundColor: "rgba(128,128,128,0.04)" }}>
-              {["#", "Genre", "Movies Using This Genre", "ID"].map((h) => (
+              {["#", "Genre", "Status", "Movies Using This Genre", "ID", ""].map((h) => (
                 <th key={h} className="px-5 py-3.5 text-left">
                   <span style={{ color: "var(--text-sub)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>{h}</span>
                 </th>
@@ -268,15 +312,17 @@ export default function ManageGenresPage() {
           <tbody>
             {loading && types.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-5 py-16 text-center">
+                <td colSpan={6} className="px-5 py-16 text-center">
                   <RefreshCw size={18} className="animate-spin mx-auto mb-2" style={{ color: "var(--text-sub)" }} />
                   <p style={{ fontSize: "14px", color: "var(--text-sub)" }}>Loading genres…</p>
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>
-                  {searchQuery ? "No genres match your search." : "No genres yet. Add one to get started."}
+                <td colSpan={6} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>
+                  {searchQuery ? "No genres match your search."
+                    : statusFilter === "PENDING_REVIEW" ? "No genres awaiting review."
+                    : "No genres yet. Add one to get started."}
                 </td>
               </tr>
             ) : (
@@ -293,6 +339,17 @@ export default function ManageGenresPage() {
                         <Tags size={12} />
                         {type.genreName}
                       </span>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      {type.status === "PENDING_REVIEW" ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-medium">
+                          <Clock size={11} /> Pending Review
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-medium">
+                          <ShieldCheck size={11} /> Active
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">
@@ -317,6 +374,19 @@ export default function ManageGenresPage() {
                       <span style={{ fontSize: "12px", color: "var(--text-sub)", fontFamily: "monospace" }}>
                         #{type.genreId}
                       </span>
+                    </td>
+                    <td className="px-5 py-3.5 text-right">
+                      {type.status === "PENDING_REVIEW" && (
+                        <button
+                          onClick={() => handleApprove(type.genreId)}
+                          disabled={approvingId === type.genreId}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-60"
+                          style={{ fontSize: "12px", fontWeight: 500 }}
+                        >
+                          <ShieldCheck size={13} />
+                          {approvingId === type.genreId ? "Approving…" : "Approve"}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );

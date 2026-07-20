@@ -219,6 +219,10 @@ public enum MovieErrorCode implements BaseErrorCode {
                         HttpStatus.FORBIDDEN),
         CLUSTER_HAS_MOVIE_AVAILABILITY(2090,
                         "Cannot permanently delete a cinema cluster referenced by movie availability history.",
+                        HttpStatus.CONFLICT),
+
+        GENRE_NOT_PENDING_REVIEW(2091,
+                        "Only a genre in PENDING_REVIEW status can be approved.",
                         HttpStatus.CONFLICT);
 
         int code;
