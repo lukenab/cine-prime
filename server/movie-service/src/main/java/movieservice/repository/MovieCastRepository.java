@@ -10,4 +10,5 @@ import java.util.List;
 public interface MovieCastRepository extends JpaRepository<MovieCast, Long> {
     List<MovieCast> findByMovie_MovieId(Long movieId);
     void deleteByMovie_MovieId(Long movieId);
+    boolean existsByPerson_PersonId(Long personId);
 }

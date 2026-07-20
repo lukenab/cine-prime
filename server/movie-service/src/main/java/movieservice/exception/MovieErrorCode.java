@@ -223,6 +223,13 @@ public enum MovieErrorCode implements BaseErrorCode {
 
         GENRE_NOT_PENDING_REVIEW(2091,
                         "Only a genre in PENDING_REVIEW status can be approved.",
+                        HttpStatus.CONFLICT),
+
+        PERSON_NAME_ALREADY_EXISTS(2092,
+                        "A person with this name already exists. Search for them instead of creating a duplicate.",
+                        HttpStatus.CONFLICT),
+        PERSON_STILL_REFERENCED(2093,
+                        "Cannot delete a person who is still credited as cast/crew on one or more movies.",
                         HttpStatus.CONFLICT);
 
         int code;
