@@ -62,21 +62,19 @@ SET demand_tier = EXCLUDED.demand_tier,
     updated_by = EXCLUDED.updated_by;
 
 INSERT INTO cinema_room
-    (cinema_room_name, room_code, room_type, presentation_system,
+    (cinema_room_name, room_code, presentation_system,
      total_seat_capacity, status, cluster_id, number_of_rows, seats_per_row,
-     standard_row_count, vip_row_count, couple_row_count, created_by, updated_by)
-SELECT seed.cinema_room_name, seed.room_code, seed.room_type,
-       seed.presentation_system, seed.total_seat_capacity, 'ACTIVE',
+     created_by, updated_by)
+SELECT seed.cinema_room_name, seed.room_code, seed.presentation_system,
+       seed.total_seat_capacity, 'ACTIVE',
        cluster.cluster_id, seed.number_of_rows, seed.seats_per_row,
-       seed.standard_row_count, seed.vip_row_count, seed.couple_row_count,
        'migration:R', 'migration:R'
 FROM (
     VALUES
-        ('CP-Q9', 'IMAX 01', 'Q9-IMAX-01', 'IMAX', 'IMAX', 220, 10, 22, 8, 2, 0),
-        ('CP-LA', 'Standard 01', 'LA-STD-01', 'STANDARD', 'STANDARD', 100, 10, 10, 8, 2, 0)
-) AS seed(cluster_code, cinema_room_name, room_code, room_type, presentation_system,
-          total_seat_capacity, number_of_rows, seats_per_row,
-          standard_row_count, vip_row_count, couple_row_count)
+        ('CP-Q9', 'IMAX 01', 'Q9-IMAX-01', 'IMAX', 220, 10, 22),
+        ('CP-LA', 'Standard 01', 'LA-STD-01', 'STANDARD', 100, 10, 10)
+) AS seed(cluster_code, cinema_room_name, room_code, presentation_system,
+          total_seat_capacity, number_of_rows, seats_per_row)
 JOIN cinema_cluster cluster ON LOWER(cluster.cluster_code) = LOWER(seed.cluster_code)
 WHERE NOT EXISTS (
     SELECT 1 FROM cinema_room room
