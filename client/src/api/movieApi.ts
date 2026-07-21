@@ -546,6 +546,29 @@ export type CreateMovieAvailabilityPayload = {
 
 export type UpdateMovieAvailabilityPayload = Partial<Omit<CreateMovieAvailabilityPayload, 'movieId' | 'clusterId'>>;
 
+/** "Wide release" - one call to plan many clusters (or every ACTIVE one) instead of
+ *  CreateMovieAvailabilityPayload one cluster at a time. allActiveClusters wins over
+ *  clusterIds if both are set. */
+export type BulkCreateMovieAvailabilityPayload = {
+  movieId: number;
+  clusterIds?: number[];
+  allActiveClusters?: boolean;
+  salesStartAt?: string;
+  showingStartDate: string;
+  showingEndDate?: string;
+};
+
+export type SkippedCluster = {
+  clusterId: number;
+  clusterName?: string;
+  reason: string;
+};
+
+export type BulkCreateMovieAvailabilityResponse = {
+  created: MovieAvailabilityResponse[];
+  skipped: SkippedCluster[];
+};
+
 export type TmdbSearchItem = {
   tmdbId: number;
   title: string;
@@ -1031,6 +1054,10 @@ export const movieApi = {
 
   createAvailability: (payload: CreateMovieAvailabilityPayload) =>
     axiosClient.post('/api/movie-availabilities', payload) as Promise<ApiWrapper<MovieAvailabilityResponse>>,
+
+  /** "Wide release" - plan many clusters (or every ACTIVE one) in a single call. */
+  bulkCreateAvailability: (payload: BulkCreateMovieAvailabilityPayload) =>
+    axiosClient.post('/api/movie-availabilities/bulk', payload) as Promise<ApiWrapper<BulkCreateMovieAvailabilityResponse>>,
 
   updateAvailability: (id: number, payload: UpdateMovieAvailabilityPayload) =>
     axiosClient.put(`/api/movie-availabilities/${id}`, payload) as Promise<ApiWrapper<MovieAvailabilityResponse>>,
