@@ -3,6 +3,7 @@ import { Film, Search, Menu, X, LogOut, User, ChevronDown, LayoutDashboard } fro
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { userApi } from "../api/userApi";
+import { movieApi } from "../api/movieApi";
 
 const ACCENT = "#3b82f6";
 const navItems: { label: string; to: string; children?: { label: string; to: string }[] }[] = [
@@ -14,7 +15,7 @@ const navItems: { label: string; to: string; children?: { label: string; to: str
       { label: "Coming Soon", to: "/movies#coming-soon" },
     ],
   },
-  { label: "Cinemas", to: "/cinemas" },
+  { label: "Cinemas", to: "/cinemas", children: [] },
   { label: "Events", to: "/events" },
   { label: "Offers", to: "/offers" },
 ];
@@ -30,6 +31,7 @@ export function Navbar() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [cinemaClusters, setCinemaClusters] = useState<{ label: string; to: string }[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -49,6 +51,22 @@ export function Navbar() {
       })
       .catch(() => setAvatarUrl(null));
   }, [user?.accountId]);
+
+  // Load danh sách chi nhánh rạp đang hoạt động cho dropdown "Cinemas"
+  useEffect(() => {
+    movieApi.getClusters()
+      .then((res) => {
+        const clusters = (res.result ?? [])
+          .filter((c) => c.status === "ACTIVE")
+          .map((c) => ({ label: c.clusterName, to: `/cinemas?q=${encodeURIComponent(c.clusterName)}` }));
+        setCinemaClusters(clusters);
+      })
+      .catch(() => setCinemaClusters([]));
+  }, []);
+
+  const resolvedNavItems = navItems.map((item) =>
+    item.label === "Cinemas" ? { ...item, children: cinemaClusters } : item
+  );
 
   // Đóng dropdown khi click ra ngoài
   useEffect(() => {
@@ -119,8 +137,8 @@ export function Navbar() {
         </Link>
 
         <div className="hidden md:flex items-center gap-8">
-          {navItems.map((item) =>
-            item.children ? (
+          {resolvedNavItems.map((item) =>
+            item.children && item.children.length > 0 ? (
               <div key={item.to} className="relative group">
                 <NavLink
                   to={item.to}
@@ -135,17 +153,31 @@ export function Navbar() {
                 {/* pt-3 bridges the gap to the panel below so the hover state survives moving the
                     mouse from the link down into the dropdown, instead of closing mid-transit. */}
                 <div className="absolute left-0 top-full pt-3 opacity-0 invisible -translate-y-1 transition-all duration-150 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0">
-                  <div style={{ background: "#0f1117", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,0.6)", padding: 6, minWidth: 170 }}>
-                    {item.children.map((child) => (
-                      <Link
-                        key={child.to}
-                        to={child.to}
-                        className="block rounded-lg px-3 py-2.5 text-white/70 hover:text-white hover:bg-white/[0.06] transition-colors"
-                        style={{ fontSize: "0.85rem" }}
-                      >
-                        {child.label}
-                      </Link>
-                    ))}
+                  <div style={{ background: "#0f1117", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,0.6)", padding: 6, minWidth: 220 }}>
+                    <div style={{ maxHeight: 320, overflowY: "auto" }}>
+                      {item.children.map((child) => (
+                        <Link
+                          key={child.to}
+                          to={child.to}
+                          className="block whitespace-nowrap rounded-lg px-3 py-2.5 text-white/70 hover:text-white hover:bg-white/[0.06] transition-colors"
+                          style={{ fontSize: "0.85rem" }}
+                        >
+                          {child.label}
+                        </Link>
+                      ))}
+                    </div>
+                    {item.label === "Cinemas" && (
+                      <>
+                        <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "4px 6px" }} />
+                        <Link
+                          to="/cinemas"
+                          className="block rounded-lg px-3 py-2.5 hover:bg-white/[0.06] transition-colors"
+                          style={{ fontSize: "0.85rem", color: "#60a5fa", fontWeight: 600 }}
+                        >
+                          View all cinemas →
+                        </Link>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -326,7 +358,7 @@ export function Navbar() {
             />
           </form>
 
-          {navItems.map((item) => (
+          {resolvedNavItems.map((item) => (
             <div key={item.to}>
               <NavLink
                 to={item.to}
@@ -337,8 +369,11 @@ export function Navbar() {
               >
                 {item.label}
               </NavLink>
-              {item.children && (
-                <div className="flex flex-col gap-1 pl-4 mt-1 border-l border-white/10">
+              {item.children && item.children.length > 0 && (
+                <div
+                  className="flex flex-col gap-1 pl-4 mt-1 border-l border-white/10"
+                  style={item.label === "Cinemas" ? { maxHeight: 200, overflowY: "auto" } : undefined}
+                >
                   {item.children.map((child) => (
                     <Link
                       key={child.to}
@@ -349,6 +384,16 @@ export function Navbar() {
                       {child.label}
                     </Link>
                   ))}
+                  {item.label === "Cinemas" && (
+                    <Link
+                      to="/cinemas"
+                      onClick={() => setMenuOpen(false)}
+                      className="text-sm py-1 font-semibold"
+                      style={{ color: "#60a5fa" }}
+                    >
+                      View all cinemas →
+                    </Link>
+                  )}
                 </div>
               )}
             </div>
