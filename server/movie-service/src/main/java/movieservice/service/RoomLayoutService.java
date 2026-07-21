@@ -353,15 +353,11 @@ public class RoomLayoutService {
 
         room.setStatus(CinemaRoomStatus.ACTIVE);
         room.setTotalSeatCapacity(layout.getPersonCapacity());
-        // Legacy row-zone columns are meaningless for wizard rooms, but chk_room_row_allocation_total
-        // requires standardRowCount+vipRowCount+coupleRowCount == numberOfRows at all times — keep the
-        // invariant satisfied (all rows nominally "standard") so ClusterDetailPage's legacy room-list
-        // display (which reads numberOfRows/seatsPerRow) still shows a sensible row range.
+        // numberOfRows/seatsPerRow are kept in sync for aisle-detection (MovieMapper) and
+        // ClusterDetailPage's room-list display; per-seat-type distribution lives on
+        // RoomLayoutPosition.seatType, not at the room level.
         room.setNumberOfRows(layout.getNumberOfRows());
         room.setSeatsPerRow(layout.getMaxPositionsPerRow());
-        room.setStandardRowCount(layout.getNumberOfRows());
-        room.setVipRowCount(0);
-        room.setCoupleRowCount(0);
         room.setUpdatedBy(actor);
         cinemaRoomRepository.save(room);
 

@@ -22,7 +22,6 @@ import movieservice.enums.CinemaRoomStatus;
 import movieservice.enums.ClusterStatus;
 import movieservice.enums.LayoutStatus;
 import movieservice.enums.PresentationSystem;
-import movieservice.enums.RoomType;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.AudioFormatRepository;
@@ -117,21 +116,11 @@ public class CinemaRoomService {
         CinemaRoom room = CinemaRoom.builder()
                 .cinemaRoomName(request.getCinemaRoomName())
                 .roomCode(roomCode)
-                .roomType(RoomType.STANDARD) // legacy NOT NULL column — wizard rooms no longer derive
-                                              // seat-type ratios from this; auditoriumClass carries the
-                                              // real "phân hạng phòng" going forward.
                 .totalSeatCapacity(0)
-                // Legacy row-zone columns are meaningless for wizard rooms (the real layout lives in
-                // RoomLayout/RoomLayoutPosition) but are still NOT NULL and covered by pre-existing DB
-                // CHECK constraints from V13/V14 (chk_room_row_allocation_total requires
-                // standardRowCount+vipRowCount+coupleRowCount == numberOfRows;
-                // chk_room_has_single_seat_row requires standardRowCount+vipRowCount > 0) — use the
-                // smallest placeholder set that satisfies both rather than all-zeros.
+                // Placeholder until a RoomLayout is authored and activated (RoomLayoutService
+                // .activate() overwrites both with the real values from the approved layout).
                 .numberOfRows(1)
                 .seatsPerRow(1)
-                .standardRowCount(1)
-                .vipRowCount(0)
-                .coupleRowCount(0)
                 .status(CinemaRoomStatus.DRAFT)
                 .lengthM(request.getLengthM())
                 .widthM(request.getWidthM())
