@@ -1,7 +1,9 @@
 package movieservice.service;
 
 import movie.theater.common.exception.AppException;
+import movieservice.dto.request.BulkCreateMovieAvailabilityRequest;
 import movieservice.dto.request.CreateMovieAvailabilityRequest;
+import movieservice.dto.response.BulkCreateMovieAvailabilityResponse;
 import movieservice.dto.response.MovieAvailabilityResponse;
 import movieservice.entity.CinemaCluster;
 import movieservice.entity.Movie;
@@ -23,11 +25,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -55,6 +60,11 @@ class MovieAvailabilityServiceTest {
         lenient().when(movieAvailabilityRepository.save(any(MovieAvailability.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
         lenient().when(movieMapper.toMovieAvailabilityResponse(any())).thenReturn(new MovieAvailabilityResponse());
+        lenient().when(movieAvailabilityRepository.saveAll(anyList()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(movieMapper.toMovieAvailabilityResponseList(anyList()))
+                .thenAnswer(inv -> ((List<?>) inv.getArgument(0)).stream()
+                        .map(x -> new MovieAvailabilityResponse()).toList());
     }
 
     private CreateMovieAvailabilityRequest createRequest(LocalDate start, LocalDate end) {
@@ -117,6 +127,75 @@ class MovieAvailabilityServiceTest {
         ArgumentCaptor<MovieAvailability> captor = ArgumentCaptor.forClass(MovieAvailability.class);
         verify(movieAvailabilityRepository).save(captor.capture());
         assertEquals(AvailabilityStatus.PLANNED, captor.getValue().getStatus());
+    }
+
+    // ── bulkCreate ("wide release") ──────────────────────────────────────
+
+    private BulkCreateMovieAvailabilityRequest.BulkCreateMovieAvailabilityRequestBuilder bulkRequest() {
+        return BulkCreateMovieAvailabilityRequest.builder()
+                .movieId(1L)
+                .showingStartDate(LocalDate.now());
+    }
+
+    @Test
+    void bulkCreateRejectsWhenMovieNotApproved() {
+        approvedMovie.setStatus(MovieStatus.DRAFT);
+        when(movieRepository.findById(1L)).thenReturn(Optional.of(approvedMovie));
+
+        AppException ex = assertThrows(AppException.class,
+                () -> service.bulkCreate(bulkRequest().allActiveClusters(true).build(), "admin"));
+
+        assertEquals(MovieErrorCode.AVAILABILITY_MOVIE_NOT_APPROVED, ex.getErrorCode());
+        verify(movieAvailabilityRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void bulkCreateRejectsWhenNoClustersResolve() {
+        when(movieRepository.findById(1L)).thenReturn(Optional.of(approvedMovie));
+        when(cinemaClusterRepository.findAllById(anyList())).thenReturn(List.of());
+
+        AppException ex = assertThrows(AppException.class,
+                () -> service.bulkCreate(bulkRequest().clusterIds(List.of(99L)).build(), "admin"));
+
+        assertEquals(MovieErrorCode.CLUSTER_NOT_FOUND, ex.getErrorCode());
+    }
+
+    @Test
+    void bulkCreateWithAllActiveClustersPlansEveryActiveCluster() {
+        CinemaCluster clusterA = CinemaCluster.builder().clusterId(1L).clusterName("A").status(ClusterStatus.ACTIVE).build();
+        CinemaCluster clusterB = CinemaCluster.builder().clusterId(2L).clusterName("B").status(ClusterStatus.ACTIVE).build();
+        when(movieRepository.findById(1L)).thenReturn(Optional.of(approvedMovie));
+        when(cinemaClusterRepository.findByStatus(ClusterStatus.ACTIVE)).thenReturn(List.of(clusterA, clusterB));
+        when(movieAvailabilityRepository.findClusterIdsWithExistingWindow(eq(1L), any(), anyList()))
+                .thenReturn(List.of());
+
+        BulkCreateMovieAvailabilityResponse result =
+                service.bulkCreate(bulkRequest().allActiveClusters(true).build(), "admin");
+
+        assertEquals(2, result.getCreated().size());
+        assertTrue(result.getSkipped().isEmpty());
+        ArgumentCaptor<List<MovieAvailability>> captor = ArgumentCaptor.forClass(List.class);
+        verify(movieAvailabilityRepository).saveAll(captor.capture());
+        assertTrue(captor.getValue().stream().allMatch(a -> a.getStatus() == AvailabilityStatus.PLANNED));
+    }
+
+    @Test
+    void bulkCreateSkipsInactiveClustersAndClustersWithExistingWindow() {
+        CinemaCluster active = CinemaCluster.builder().clusterId(1L).clusterName("Active").status(ClusterStatus.ACTIVE).build();
+        CinemaCluster inactive = CinemaCluster.builder().clusterId(2L).clusterName("Inactive").status(ClusterStatus.INACTIVE).build();
+        CinemaCluster alreadyPlanned = CinemaCluster.builder().clusterId(3L).clusterName("AlreadyPlanned").status(ClusterStatus.ACTIVE).build();
+        when(movieRepository.findById(1L)).thenReturn(Optional.of(approvedMovie));
+        when(cinemaClusterRepository.findAllById(anyList())).thenReturn(List.of(active, inactive, alreadyPlanned));
+        when(movieAvailabilityRepository.findClusterIdsWithExistingWindow(eq(1L), any(), anyList()))
+                .thenReturn(List.of(3L));
+
+        BulkCreateMovieAvailabilityResponse result = service.bulkCreate(
+                bulkRequest().clusterIds(List.of(1L, 2L, 3L)).build(), "admin");
+
+        assertEquals(1, result.getCreated().size());
+        assertEquals(2, result.getSkipped().size());
+        assertTrue(result.getSkipped().stream().anyMatch(s -> s.getClusterId().equals(2L) && s.getReason().contains("not ACTIVE")));
+        assertTrue(result.getSkipped().stream().anyMatch(s -> s.getClusterId().equals(3L) && s.getReason().contains("already exists")));
     }
 
     // ── transition matrix ────────────────────────────────────────────────

@@ -5,8 +5,10 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import movie.theater.common.exception.AppException;
+import movieservice.dto.request.BulkCreateMovieAvailabilityRequest;
 import movieservice.dto.request.CreateMovieAvailabilityRequest;
 import movieservice.dto.request.UpdateMovieAvailabilityRequest;
+import movieservice.dto.response.BulkCreateMovieAvailabilityResponse;
 import movieservice.dto.response.MovieAvailabilityResponse;
 import movieservice.entity.CinemaCluster;
 import movieservice.entity.Movie;
@@ -24,6 +26,7 @@ import movieservice.repository.MovieRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -76,6 +79,81 @@ public class MovieAvailabilityService {
         } catch (DataIntegrityViolationException e) {
             throw new AppException(MovieErrorCode.AVAILABILITY_WINDOW_ALREADY_EXISTS);
         }
+    }
+
+    /** "Wide release" — create a PLANNED window for many clusters in one call (MOV-LC-06 bulk
+     *  variant). Best-effort per cluster rather than all-or-nothing: a cluster that isn't
+     *  ACTIVE, or already has a window for this movie/date, is skipped with a reason instead of
+     *  aborting the whole batch — the caller (an admin releasing wide) cares about "which
+     *  clusters actually got provisioned", not a single failure blocking every other cluster. */
+    @Transactional
+    public BulkCreateMovieAvailabilityResponse bulkCreate(BulkCreateMovieAvailabilityRequest request, String actor) {
+        Movie movie = movieRepository.findById(request.getMovieId())
+                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
+        if (movie.getStatus() != MovieStatus.APPROVED) {
+            throw new AppException(MovieErrorCode.AVAILABILITY_MOVIE_NOT_APPROVED);
+        }
+        validateDateRange(request.getShowingStartDate(), request.getShowingEndDate());
+
+        List<CinemaCluster> targetClusters = Boolean.TRUE.equals(request.getAllActiveClusters())
+                ? cinemaClusterRepository.findByStatus(ClusterStatus.ACTIVE)
+                : cinemaClusterRepository.findAllById(
+                        request.getClusterIds() == null ? List.of() : request.getClusterIds());
+        if (targetClusters.isEmpty()) {
+            throw new AppException(MovieErrorCode.CLUSTER_NOT_FOUND);
+        }
+
+        List<Long> clusterIds = targetClusters.stream().map(CinemaCluster::getClusterId).toList();
+        List<Long> alreadyPlanned = movieAvailabilityRepository.findClusterIdsWithExistingWindow(
+                movie.getMovieId(), request.getShowingStartDate(), clusterIds);
+
+        List<BulkCreateMovieAvailabilityResponse.SkippedCluster> skipped = new ArrayList<>();
+        List<MovieAvailability> toInsert = new ArrayList<>();
+        for (CinemaCluster cluster : targetClusters) {
+            if (cluster.getStatus() != ClusterStatus.ACTIVE) {
+                skipped.add(skip(cluster, "Cluster is not ACTIVE"));
+            } else if (alreadyPlanned.contains(cluster.getClusterId())) {
+                skipped.add(skip(cluster, "A release plan for this movie/cluster/date already exists"));
+            } else {
+                toInsert.add(MovieAvailability.builder()
+                        .movie(movie)
+                        .cluster(cluster)
+                        .status(AvailabilityStatus.PLANNED)
+                        .salesStartAt(request.getSalesStartAt())
+                        .showingStartDate(request.getShowingStartDate())
+                        .showingEndDate(request.getShowingEndDate())
+                        .createdBy(actor)
+                        .updatedBy(actor)
+                        .build());
+            }
+        }
+
+        List<MovieAvailability> saved;
+        try {
+            saved = movieAvailabilityRepository.saveAll(toInsert);
+        } catch (DataIntegrityViolationException e) {
+            // Only reachable via a genuine race after the pre-check above (another request
+            // planned the same movie/cluster/date in between) - rare enough that failing the
+            // whole batch and asking the admin to retry is an acceptable trade-off against the
+            // complexity of per-cluster transactions.
+            throw new AppException(MovieErrorCode.AVAILABILITY_WINDOW_ALREADY_EXISTS);
+        }
+        for (MovieAvailability availability : saved) {
+            recordHistory(availability.getAvailabilityId(), null, AvailabilityStatus.PLANNED, actor, null);
+        }
+
+        return BulkCreateMovieAvailabilityResponse.builder()
+                .created(movieMapper.toMovieAvailabilityResponseList(saved))
+                .skipped(skipped)
+                .build();
+    }
+
+    private BulkCreateMovieAvailabilityResponse.SkippedCluster skip(CinemaCluster cluster, String reason) {
+        return BulkCreateMovieAvailabilityResponse.SkippedCluster.builder()
+                .clusterId(cluster.getClusterId())
+                .clusterName(cluster.getClusterName())
+                .reason(reason)
+                .build();
     }
 
     @Transactional

@@ -35,4 +35,18 @@ public interface MovieAvailabilityRepository extends JpaRepository<MovieAvailabi
 
     /** Nightly scheduler: OPEN/PLANNED/SUSPENDED windows whose showing_end_date has passed. */
     List<MovieAvailability> findByStatusInAndShowingEndDateBefore(List<AvailabilityStatus> statuses, LocalDate date);
+
+    /** Bulk create: pre-check which of the candidate clusters already have a window for this
+     *  movie/date, so the batch insert skips them cleanly instead of tripping the unique
+     *  constraint mid-batch (which would poison the whole @Transactional call). */
+    @Query("""
+            SELECT a.cluster.clusterId FROM MovieAvailability a
+            WHERE a.movie.movieId = :movieId
+              AND a.showingStartDate = :showingStartDate
+              AND a.cluster.clusterId IN :clusterIds
+            """)
+    List<Long> findClusterIdsWithExistingWindow(
+            @Param("movieId") Long movieId,
+            @Param("showingStartDate") LocalDate showingStartDate,
+            @Param("clusterIds") List<Long> clusterIds);
 }

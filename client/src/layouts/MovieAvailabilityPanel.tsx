@@ -20,8 +20,8 @@ import {
 import {
   movieApi,
   type AvailabilityStatus,
+  type BulkCreateMovieAvailabilityResponse,
   type ClusterResponse,
-  type CreateMovieAvailabilityPayload,
   type MovieAvailabilityResponse,
 } from "../api/movieApi";
 import { useRole } from "../hooks/useRole";
@@ -252,34 +252,53 @@ function CreatePlanDialog({
   onCreated: () => Promise<void>;
   onClose: () => void;
 }) {
-  const [clusterId, setClusterId] = useState<number | "">("");
+  const [allActive, setAllActive] = useState(false);
+  const [selectedClusterIds, setSelectedClusterIds] = useState<Set<number>>(new Set());
   const [showingStartDate, setShowingStartDate] = useState("");
   const [showingEndDate, setShowingEndDate] = useState("");
   const [salesStartAt, setSalesStartAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<BulkCreateMovieAvailabilityResponse | null>(null);
+
+  const toggleCluster = (id: number) => {
+    setSelectedClusterIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   const invalidDateRange = Boolean(
     showingStartDate && showingEndDate && showingEndDate < showingStartDate,
   );
-  const canSubmit = Boolean(clusterId && showingStartDate && !invalidDateRange && !submitting);
+  const hasTarget = allActive || selectedClusterIds.size > 0;
+  const canSubmit = Boolean(hasTarget && showingStartDate && !invalidDateRange && !submitting);
+  const targetCount = allActive ? clusters.length : selectedClusterIds.size;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     setError(null);
-    const payload: CreateMovieAvailabilityPayload = {
-      movieId,
-      clusterId: Number(clusterId),
-      showingStartDate,
-      showingEndDate: showingEndDate || undefined,
-      salesStartAt: salesStartAt || undefined,
-    };
 
     try {
-      await movieApi.createAvailability(payload);
+      const res = await movieApi.bulkCreateAvailability({
+        movieId,
+        allActiveClusters: allActive || undefined,
+        clusterIds: allActive ? undefined : Array.from(selectedClusterIds),
+        showingStartDate,
+        showingEndDate: showingEndDate || undefined,
+        salesStartAt: salesStartAt || undefined,
+      });
       await onCreated();
-      onClose();
+      if (res.result.skipped.length === 0) {
+        onClose();
+      } else {
+        // Partial success (e.g. one cluster already had a window for this date) - show what
+        // actually happened instead of silently closing, so the admin isn't left assuming
+        // every selected cluster got a plan when some didn't.
+        setResult(res.result);
+      }
     } catch (requestError: unknown) {
       const message = (requestError as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(message ?? "The release plan could not be created.");
@@ -287,6 +306,56 @@ function CreatePlanDialog({
       setSubmitting(false);
     }
   };
+
+  if (result) {
+    return (
+      <div className="fixed inset-0 z-[65] flex items-center justify-center px-4" onClick={onClose}>
+        <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]" />
+        <div
+          className="relative w-full max-w-lg overflow-hidden rounded-2xl border shadow-2xl"
+          style={{ background: "var(--bg-main)", borderColor: "var(--border-color)" }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="border-b px-6 py-5" style={{ borderColor: "var(--border-color)" }}>
+            <h2 style={{ color: "var(--text-main)", fontSize: "17px", fontWeight: 700 }}>Release plan results</h2>
+          </div>
+          <div className="space-y-4 px-6 py-5">
+            <div className="flex items-center gap-2 rounded-xl border px-3 py-2.5" style={{ borderColor: "rgba(5,150,105,0.24)", background: "rgba(5,150,105,0.08)" }}>
+              <CheckCircle2 size={15} style={{ color: "#059669" }} />
+              <p style={{ fontSize: "12.5px", color: "#059669" }}>
+                Created for {result.created.length} cluster{result.created.length === 1 ? "" : "s"}.
+              </p>
+            </div>
+            <div>
+              <p className="mb-2" style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-main)" }}>
+                Skipped ({result.skipped.length})
+              </p>
+              <ul className="space-y-1.5">
+                {result.skipped.map((s) => (
+                  <li key={s.clusterId} className="flex items-start gap-2 rounded-lg border px-2.5 py-2" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+                    <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" style={{ color: "#d97706" }} />
+                    <div>
+                      <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-main)" }}>{s.clusterName ?? `Cluster #${s.clusterId}`}</p>
+                      <p style={{ fontSize: "11.5px", color: "var(--text-sub)" }}>{s.reason}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <div className="flex justify-end border-t px-6 py-4" style={{ borderColor: "var(--border-color)" }}>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[65] flex items-center justify-center px-4" onClick={onClose}>
@@ -303,10 +372,10 @@ function CreatePlanDialog({
             </div>
             <div>
               <h2 style={{ color: "var(--text-main)", fontSize: "17px", fontWeight: 700 }}>
-                Create a release plan
+                Create release plan(s)
               </h2>
               <p className="mt-1" style={{ color: "var(--text-sub)", fontSize: "12px" }}>
-                Decide where and when this approved movie may be exhibited. Showtimes are scheduled afterward.
+                Decide where and when this approved movie may be exhibited — pick one or more clusters, or release wide to every active cluster at once. Showtimes are scheduled afterward.
               </p>
             </div>
           </div>
@@ -330,21 +399,39 @@ function CreatePlanDialog({
 
           <div>
             <label className="mb-1.5 block" style={{ color: "var(--text-main)", fontSize: "12px", fontWeight: 600 }}>
-              Cinema cluster <span className="text-rose-500">*</span>
+              Cinema cluster(s) <span className="text-rose-500">*</span>
             </label>
-            <select
-              value={clusterId}
-              onChange={(event) => setClusterId(event.target.value ? Number(event.target.value) : "")}
-              className="w-full rounded-xl border px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500/20"
-              style={{ background: "var(--bg-card)", borderColor: "var(--border-color)", color: "var(--text-main)", fontSize: "13px" }}
+
+            <label
+              className="mb-2 flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5"
+              style={{ borderColor: allActive ? "rgba(37,99,235,0.35)" : "var(--border-color)", background: allActive ? "rgba(37,99,235,0.06)" : "var(--bg-card)" }}
             >
-              <option value="">Select an active cinema cluster</option>
+              <input
+                type="checkbox"
+                checked={allActive}
+                onChange={(event) => { setAllActive(event.target.checked); setSelectedClusterIds(new Set()); }}
+              />
+              <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-main)" }}>
+                Release wide — all active clusters ({clusters.length})
+              </span>
+            </label>
+
+            <div
+              className="max-h-40 space-y-1 overflow-y-auto rounded-xl border p-2"
+              style={{ borderColor: "var(--border-color)", background: "var(--bg-card)", opacity: allActive ? 0.5 : 1 }}
+            >
               {clusters.map((cluster) => (
-                <option key={cluster.clusterId} value={cluster.clusterId}>
-                  {cluster.clusterName}
-                </option>
+                <label key={cluster.clusterId} className="flex items-center gap-2 rounded-lg px-2 py-1.5" style={{ cursor: allActive ? "not-allowed" : "pointer" }}>
+                  <input
+                    type="checkbox"
+                    disabled={allActive}
+                    checked={allActive || selectedClusterIds.has(cluster.clusterId)}
+                    onChange={() => toggleCluster(cluster.clusterId)}
+                  />
+                  <span style={{ fontSize: "13px", color: "var(--text-main)" }}>{cluster.clusterName}</span>
+                </label>
               ))}
-            </select>
+            </div>
             {clusters.length === 0 && (
               <p className="mt-1.5 text-amber-600" style={{ fontSize: "11px" }}>
                 No active cinema cluster is available. Approve and activate a cluster first.
@@ -424,7 +511,11 @@ function CreatePlanDialog({
             onClick={handleSubmit}
             className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {submitting ? "Creating..." : "Create release plan"}
+            {submitting
+              ? "Creating..."
+              : targetCount > 1
+                ? `Create ${targetCount} release plans`
+                : "Create release plan"}
             {!submitting && <ArrowRight size={14} />}
           </button>
         </div>

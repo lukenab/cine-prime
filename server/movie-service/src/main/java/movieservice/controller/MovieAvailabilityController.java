@@ -5,10 +5,12 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import movie.theater.common.dto.ApiResponse;
+import movieservice.dto.request.BulkCreateMovieAvailabilityRequest;
 import movieservice.dto.request.CloseRequest;
 import movieservice.dto.request.CreateMovieAvailabilityRequest;
 import movieservice.dto.request.SuspendRequest;
 import movieservice.dto.request.UpdateMovieAvailabilityRequest;
+import movieservice.dto.response.BulkCreateMovieAvailabilityResponse;
 import movieservice.dto.response.MovieAvailabilityResponse;
 import movieservice.enums.AvailabilityStatus;
 import movieservice.service.MovieAvailabilityService;
@@ -45,6 +47,18 @@ public class MovieAvailabilityController {
         return ApiResponse.<MovieAvailabilityResponse>builder()
                 .code(200)
                 .result(movieAvailabilityService.create(request, actor()))
+                .build();
+    }
+
+    /** "Wide release" — plan for many clusters (or every ACTIVE cluster) in one call. Same role
+     *  as the single create() since it's still just scheduling metadata (MOV-LC-06). */
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
+    @PostMapping("/bulk")
+    public ApiResponse<BulkCreateMovieAvailabilityResponse> bulkCreate(
+            @Valid @RequestBody BulkCreateMovieAvailabilityRequest request) {
+        return ApiResponse.<BulkCreateMovieAvailabilityResponse>builder()
+                .code(200)
+                .result(movieAvailabilityService.bulkCreate(request, actor()))
                 .build();
     }
 
