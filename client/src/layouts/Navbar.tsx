@@ -153,14 +153,24 @@ export function Navbar() {
                 {/* pt-3 bridges the gap to the panel below so the hover state survives moving the
                     mouse from the link down into the dropdown, instead of closing mid-transit. */}
                 <div className="absolute left-0 top-full pt-3 opacity-0 invisible -translate-y-1 transition-all duration-150 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0">
-                  <div style={{ background: "#0f1117", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,0.6)", padding: 6, minWidth: 220 }}>
-                    <div style={{ maxHeight: 320, overflowY: "auto" }}>
+                  <div style={{ background: "#0f1117", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,0.6)", padding: 5, minWidth: 190 }}>
+                    <div className="nav-dropdown-scroll" style={{ maxHeight: 240, overflowY: "auto" }}>
                       {item.children.map((child) => (
                         <Link
                           key={child.to}
                           to={child.to}
-                          className="block whitespace-nowrap rounded-lg px-3 py-2.5 text-white/70 hover:text-white hover:bg-white/[0.06] transition-colors"
-                          style={{ fontSize: "0.85rem" }}
+                          className="block whitespace-nowrap rounded-lg px-2.5 py-1.5 text-white/70 transition-colors duration-150"
+                          style={{ fontSize: "0.78rem" }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = "rgba(59,130,246,0.14)";
+                            e.currentTarget.style.color = "#fff";
+                            e.currentTarget.style.boxShadow = "inset 3px 0 0 0 #3b82f6";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = "transparent";
+                            e.currentTarget.style.color = "rgba(255,255,255,0.7)";
+                            e.currentTarget.style.boxShadow = "none";
+                          }}
                         >
                           {child.label}
                         </Link>
@@ -168,11 +178,19 @@ export function Navbar() {
                     </div>
                     {item.label === "Cinemas" && (
                       <>
-                        <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "4px 6px" }} />
+                        <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "4px 5px" }} />
                         <Link
                           to="/cinemas"
-                          className="block rounded-lg px-3 py-2.5 hover:bg-white/[0.06] transition-colors"
-                          style={{ fontSize: "0.85rem", color: "#60a5fa", fontWeight: 600 }}
+                          className="block rounded-lg px-2.5 py-1.5 transition-colors duration-150"
+                          style={{ fontSize: "0.78rem", color: "#60a5fa", fontWeight: 600 }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = "rgba(59,130,246,0.14)";
+                            e.currentTarget.style.boxShadow = "inset 3px 0 0 0 #3b82f6";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = "transparent";
+                            e.currentTarget.style.boxShadow = "none";
+                          }}
                         >
                           View all cinemas →
                         </Link>
@@ -371,7 +389,7 @@ export function Navbar() {
               </NavLink>
               {item.children && item.children.length > 0 && (
                 <div
-                  className="flex flex-col gap-1 pl-4 mt-1 border-l border-white/10"
+                  className={`flex flex-col gap-1 pl-4 mt-1 border-l border-white/10 ${item.label === "Cinemas" ? "nav-dropdown-scroll" : ""}`}
                   style={item.label === "Cinemas" ? { maxHeight: 200, overflowY: "auto" } : undefined}
                 >
                   {item.children.map((child) => (
@@ -432,6 +450,23 @@ export function Navbar() {
         @keyframes navDropdown {
           from { opacity: 0; transform: translateY(-8px) scale(0.97); }
           to   { opacity: 1; transform: translateY(0)    scale(1); }
+        }
+        .nav-dropdown-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(255,255,255,0.15) transparent;
+        }
+        .nav-dropdown-scroll::-webkit-scrollbar {
+          width: 5px;
+        }
+        .nav-dropdown-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .nav-dropdown-scroll::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.15);
+          border-radius: 999px;
+        }
+        .nav-dropdown-scroll::-webkit-scrollbar-thumb:hover {
+          background: rgba(255,255,255,0.28);
         }
       `}</style>
     </nav>
