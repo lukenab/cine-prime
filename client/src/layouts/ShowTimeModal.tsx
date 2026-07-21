@@ -217,7 +217,7 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime }: Props) {
                 <option value={0} disabled>Choose a room…</option>
                 {rooms.map(r => (
                   <option key={r.cinemaRoomId} value={r.cinemaRoomId} style={{ background: "var(--bg-card)" }}>
-                    {r.cinemaRoomName} · {r.roomType} · {r.seatQuantity} seats
+                    {r.cinemaRoomName} · {r.seatQuantity} seats
                   </option>
                 ))}
               </select>

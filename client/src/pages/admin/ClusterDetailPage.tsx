@@ -11,7 +11,6 @@ import {
   type ClusterStatus,
   type ClusterOperatingHour,
   type RoomResponse,
-  ROOM_TYPE_CONFIG,
 } from "../../api/movieApi";
 import { useRole } from "../../hooks/useRole";
 import { RoomCreationMethodDialog } from "./cinemaRoomEditor/RoomCreationMethodDialog";
@@ -554,7 +553,7 @@ export default function ClusterDetailPage() {
         <table className="w-full">
           <thead>
             <tr className="border-b" style={{ borderColor: "var(--border-color)", backgroundColor: "rgba(128,128,128,0.04)" }}>
-              {["#", "Room Name", "Type", "Seat Quantity", "Seat Layout", ""].map((h) => (
+              {["#", "Room Name", "Seat Quantity", "Seat Layout", ""].map((h) => (
                 <th key={h} className="px-5 py-3.5 text-left">
                   <span style={{ color: "var(--text-sub)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>{h}</span>
                 </th>
@@ -564,14 +563,14 @@ export default function ClusterDetailPage() {
           <tbody>
             {roomsLoading ? (
               <tr>
-                <td colSpan={6} className="px-5 py-16 text-center">
+                <td colSpan={5} className="px-5 py-16 text-center">
                   <RefreshCw size={18} className="animate-spin mx-auto mb-2" style={{ color: "var(--text-sub)" }} />
                   <p style={{ fontSize: "14px", color: "var(--text-sub)" }}>Loading rooms…</p>
                 </td>
               </tr>
             ) : roomsError ? (
               <tr>
-                <td colSpan={6} className="px-5 py-12 text-center">
+                <td colSpan={5} className="px-5 py-12 text-center">
                   <div role="alert" className="mx-auto flex max-w-lg flex-col items-center gap-2">
                     <div className="flex h-10 w-10 items-center justify-center rounded-full" style={{ background: "rgba(239,68,68,0.10)" }}>
                       <AlertCircle size={20} style={{ color: "#ef4444" }} />
@@ -612,7 +611,7 @@ export default function ClusterDetailPage() {
               </tr>
             ) : filteredRooms.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>
+                <td colSpan={5} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>
                   {searchQuery ? "No rooms match your search." : "No rooms in this cluster yet. Add one to get started."}
                 </td>
               </tr>
@@ -639,20 +638,6 @@ export default function ClusterDetailPage() {
                           <p style={{ fontSize: "11px", color: "var(--text-sub)" }}>ID: {room.cinemaRoomId}</p>
                         </div>
                       </div>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      {room.roomType && (() => {
-                        const colors: Record<string, string> = {
-                          STANDARD: "bg-blue-50 text-blue-700",
-                          LARGE: "bg-emerald-50 text-emerald-700",
-                          IMAX: "bg-purple-50 text-purple-700",
-                        };
-                        return (
-                          <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${colors[room.roomType] ?? "bg-gray-100 text-gray-600"}`}>
-                            {ROOM_TYPE_CONFIG[room.roomType]?.label ?? room.roomType}
-                          </span>
-                        );
-                      })()}
                     </td>
                     <td className="px-5 py-3.5">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">

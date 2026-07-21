@@ -6,7 +6,6 @@ import movieservice.entity.RoomLayoutPosition;
 import movieservice.enums.CinemaRoomStatus;
 import movieservice.enums.LayoutPositionType;
 import movieservice.enums.LayoutStatus;
-import movieservice.enums.RoomType;
 import movieservice.enums.SeatStatus;
 import movieservice.enums.SeatType;
 import movieservice.repository.CinemaRoomRepository;
@@ -74,13 +73,9 @@ class CinemaRoomDeletionConcurrencyIntegrationTest {
         CinemaRoom room = CinemaRoom.builder()
                 .cinemaRoomName("Delete race room")
                 .roomCode("R-DELETE-RACE")
-                .roomType(RoomType.STANDARD)
                 .totalSeatCapacity(0)
                 .numberOfRows(1)
                 .seatsPerRow(1)
-                .standardRowCount(1)
-                .vipRowCount(0)
-                .coupleRowCount(0)
                 .status(CinemaRoomStatus.DRAFT)
                 .createdBy("employee.one")
                 .updatedBy("employee.one")

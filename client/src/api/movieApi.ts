@@ -43,25 +43,13 @@ export type MovieApiResponse = {
   releaseDate?: string;
 };
 
-export type RoomType = "STANDARD" | "LARGE" | "IMAX";
-
-export const ROOM_TYPE_CONFIG: Record<RoomType, { maxSeats: number; seatsPerRow: number; label: string; description: string }> = {
-  STANDARD: { maxSeats: 100, seatsPerRow: 10, label: "Standard",  description: "Up to 100 seats · 10 per row" },
-  LARGE:    { maxSeats: 200, seatsPerRow: 10, label: "Large",     description: "Up to 200 seats · 10 per row" },
-  IMAX:     { maxSeats: 300, seatsPerRow: 15, label: "IMAX",      description: "Up to 300 seats · 15 per row" },
-};
-
 export type RoomResponse = {
   cinemaRoomId: number;
   cinemaRoomName: string;
   roomCode?: string;
-  roomType: RoomType;
   seatQuantity: number;
   numberOfRows: number;
   seatsPerRow: number;
-  standardRowCount: number;
-  vipRowCount: number;
-  coupleRowCount: number;
   status?: string;
   createdBy?: string;
   clusterId: number;
@@ -75,13 +63,9 @@ export type RoomApiResponse = {
   cinemaRoomId: number;
   cinemaRoomName: string;
   roomCode?: string;
-  roomType: RoomType;
   totalSeatCapacity: number;
   numberOfRows: number;
   seatsPerRow: number;
-  standardRowCount: number;
-  vipRowCount: number;
-  coupleRowCount: number;
   status?: string;
   maintenanceNote?: string;
   createdBy?: string;
@@ -863,13 +847,9 @@ const toLegacyRoom = (room: RoomApiResponse): RoomResponse => ({
   cinemaRoomId: room.cinemaRoomId,
   cinemaRoomName: room.cinemaRoomName,
   roomCode: room.roomCode,
-  roomType: room.roomType,
   seatQuantity: room.totalSeatCapacity,
   numberOfRows: room.numberOfRows,
   seatsPerRow: room.seatsPerRow,
-  standardRowCount: room.standardRowCount,
-  vipRowCount: room.vipRowCount,
-  coupleRowCount: room.coupleRowCount,
   status: room.status,
   createdBy: room.createdBy,
   clusterId: room.clusterId,

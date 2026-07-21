@@ -6,7 +6,6 @@ import movieservice.entity.CinemaRoom;
 import movieservice.entity.Movie;
 import movieservice.enums.CinemaRoomStatus;
 import movieservice.enums.MovieStatus;
-import movieservice.enums.RoomType;
 import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.MovieRepository;
 import movieservice.repository.ShowTimeRepository;
@@ -77,13 +76,9 @@ class BulkShowTimeConcurrencyIntegrationTest {
 
         CinemaRoom room = new CinemaRoom();
         room.setCinemaRoomName("Concurrency Room");
-        room.setRoomType(RoomType.STANDARD);
         room.setTotalSeatCapacity(100);
         room.setNumberOfRows(10);
         room.setSeatsPerRow(10);
-        room.setStandardRowCount(10);
-        room.setVipRowCount(0);
-        room.setCoupleRowCount(0);
         room.setStatus(CinemaRoomStatus.ACTIVE);
         roomId = cinemaRoomRepository.saveAndFlush(room).getCinemaRoomId();
     }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation, useOutletContext } from "react-router-dom";
 import { Armchair, RefreshCw, AlertCircle, X, Check, SendHorizonal, CheckCircle, XCircle, Rocket, Clock } from "lucide-react";
-import { movieApi, type SeatResponse, type RoomResponse, type CinemaRoomDetail, type SeatTypeValue, type RoomLayoutDetail, ROOM_TYPE_CONFIG } from "../../api/movieApi";
+import { movieApi, type SeatResponse, type RoomResponse, type CinemaRoomDetail, type SeatTypeValue, type RoomLayoutDetail } from "../../api/movieApi";
 import { useRole } from "../../hooks/useRole";
 import { Toast } from "../../components/shared/Toast";
 import { CinemaRoomHeader } from "./cinemaRoomEditor/CinemaRoomHeader";
@@ -378,20 +378,6 @@ export default function RoomDetailPage() {
         roomName={roomName}
         clusterName={clusterName}
         onBack={() => navigate(backTarget)}
-        badges={passedRoom?.roomType && (() => {
-          const cfg = ROOM_TYPE_CONFIG[passedRoom.roomType];
-          const colors: Record<string, { bg: string; text: string }> = {
-            STANDARD: { bg: "rgba(59,130,246,0.12)",  text: "#3b82f6" },
-            LARGE:    { bg: "rgba(16,185,129,0.12)",  text: "#059669" },
-            IMAX:     { bg: "rgba(139,92,246,0.12)",  text: "#7c3aed" },
-          };
-          const c = colors[passedRoom.roomType] ?? { bg: "rgba(128,128,128,0.1)", text: "#6b7280" };
-          return (
-            <span style={{ padding: "2px 10px", borderRadius: "999px", fontSize: "11px", fontWeight: 700, background: c.bg, color: c.text, letterSpacing: "0.04em" }}>
-              {cfg?.label ?? passedRoom.roomType}
-            </span>
-          );
-        })()}
         subtitle={
           <p style={{ color: "var(--text-sub)", fontSize: "13px" }}>
             {clusterName && <>{clusterName} · </>}

@@ -5,7 +5,6 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 import movieservice.enums.CinemaRoomStatus;
 import movieservice.enums.PresentationSystem;
-import movieservice.enums.RoomType;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -37,10 +36,6 @@ public class CinemaRoom {
     // qua flow nhanh cu (AddCinemaRoomModal). Trim + uppercase o CinemaRoomService.
     @Column(name = "room_code", length = 20)
     String roomCode;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "room_type", nullable = false, length = 20)
-    RoomType roomType;
 
     // ── Wizard fields (nullable — chi duoc dien khi tao/sua phong qua wizard) ──
 
@@ -93,24 +88,15 @@ public class CinemaRoom {
     @Column(name = "total_seat_capacity", nullable = false)
     Integer totalSeatCapacity;
 
-    // So hang va so ghe/hang do admin chon khi tao phong (RoomType chi cung cap gia tri
-    // mac dinh goi y + gioi han maxSeats, khong con ep cung seatsPerRow theo loai phong nua).
+    // So hang va so ghe/hang - dong bo tu RoomLayout dang ACTIVE luc activate() (xem
+    // RoomLayoutService), dung cho aisle-detection (MovieMapper) va hien thi danh sach phong
+    // (ClusterDetailPage). Phan bo seat-type that (Standard/VIP/Couple) nam o
+    // RoomLayoutPosition.seatType, khong con o cap phong nua.
     @Column(name = "number_of_rows", nullable = false)
     Integer numberOfRows;
 
     @Column(name = "seats_per_row", nullable = false)
     Integer seatsPerRow;
-
-    // Seat-zone allocation is persisted so the generated seat map can be audited or
-    // regenerated without falling back to RoomType-specific assumptions.
-    @Column(name = "standard_row_count", nullable = false)
-    Integer standardRowCount;
-
-    @Column(name = "vip_row_count", nullable = false)
-    Integer vipRowCount;
-
-    @Column(name = "couple_row_count", nullable = false)
-    Integer coupleRowCount;
 
     // Boolean status → CinemaRoomStatus enum
     @Enumerated(EnumType.STRING)

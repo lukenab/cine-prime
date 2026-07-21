@@ -4,7 +4,6 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 import movieservice.enums.CinemaRoomStatus;
 import movieservice.enums.PresentationSystem;
-import movieservice.enums.RoomType;
 
 import java.math.BigDecimal;
 
@@ -16,13 +15,9 @@ import java.math.BigDecimal;
 public class CinemaRoomResponse {
     Long cinemaRoomId;
     String cinemaRoomName;
-    RoomType roomType;
     Integer totalSeatCapacity;
     Integer numberOfRows;
     Integer seatsPerRow;
-    Integer standardRowCount;
-    Integer vipRowCount;
-    Integer coupleRowCount;
     CinemaRoomStatus status;
     String maintenanceNote;
     String createdBy;
