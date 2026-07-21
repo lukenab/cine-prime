@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { MapPin, Building2, Armchair, Phone, ArrowRight, Search } from "lucide-react";
 import { movieApi, type ClusterResponse } from "../../api/movieApi";
 
 export default function CinemasPage() {
   const navigate = useNavigate();
-  const [query, setQuery] = useState("");
+  const [searchParams] = useSearchParams();
+  const [query, setQuery] = useState(searchParams.get("q") ?? "");
   const [activeProvince, setActiveProvince] = useState("All");
   const [clusters, setClusters] = useState<ClusterResponse[]>([]);
   const [loading, setLoading] = useState(true);
