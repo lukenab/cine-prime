@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation, useOutletContext } from "react-router-dom";
 import { Armchair, RefreshCw, AlertCircle, X, Check, SendHorizonal, CheckCircle, XCircle, Rocket, Clock } from "lucide-react";
-import { movieApi, type SeatResponse, type RoomResponse, type CinemaRoomDetail, type SeatTypeValue, ROOM_TYPE_CONFIG } from "../../api/movieApi";
+import { movieApi, type SeatResponse, type RoomResponse, type CinemaRoomDetail, type SeatTypeValue, type RoomLayoutDetail, ROOM_TYPE_CONFIG } from "../../api/movieApi";
 import { useRole } from "../../hooks/useRole";
 import { Toast } from "../../components/shared/Toast";
 import { CinemaRoomHeader } from "./cinemaRoomEditor/CinemaRoomHeader";
 import { AudioCoverageFrame, ProjectionBeamOverlay, ProjectionScreenVisualization } from "./cinemaRoomEditor/AuditoriumVisualization";
 import { ProjectorLegendMarker, SpeakerLegendMarker } from "./cinemaRoomEditor/SeatLegend";
+import { SeatGrid } from "./cinemaRoomEditor/SeatGrid";
 import type { AuditoriumVisualizationConfig } from "./cinemaRoomEditor/cinemaRoomEditor.types";
 
 // ── Layout workflow status config ───────────────────────────────────────────
@@ -62,6 +63,10 @@ function RejectLayoutModal({ onConfirm, onCancel }: { onConfirm: (note: string) 
 // ── Seat type config ─────────────────────────────────────────────────────────
 
 const SEAT_TYPES = ["STANDARD", "VIP", "COUPLE", "ACCESSIBLE"] as const;
+
+/** Stable empty selection for the read-only pre-activation layout preview -
+ *  SeatGrid always needs a Set, but nothing is ever selectable there. */
+const EMPTY_SELECTION = new Set<string>();
 
 const seatTypeStyle: Record<string, { bg: string; border: string; text: string; badge: string }> = {
   STANDARD: {
@@ -285,6 +290,22 @@ export default function RoomDetailPage() {
 
   const layout = room?.activeLayout;
   const layoutCfg = layout ? LAYOUT_STATUS_CONFIG[layout.status] : null;
+
+  // PENDING_APPROVAL/APPROVED layouts have no Seat rows yet (those are only
+  // created on Activate - see RoomLayoutService.activate()), so the seat grid
+  // below would otherwise render nothing for an admin trying to review what
+  // they're about to approve/activate. The layout's own positions already
+  // carry the full seat map design - fetch it once we know which layout is
+  // active so we can preview from that instead of from real seats.
+  const [layoutDetail, setLayoutDetail] = useState<RoomLayoutDetail | null>(null);
+  useEffect(() => {
+    if (!id || !layout || layout.status === "ACTIVE") { setLayoutDetail(null); return; }
+    let cancelled = false;
+    movieApi.getRoomLayout(Number(id), layout.roomLayoutId)
+      .then((res) => { if (!cancelled) setLayoutDetail(res.result); })
+      .catch(() => { if (!cancelled) setLayoutDetail(null); });
+    return () => { cancelled = true; };
+  }, [id, layout?.roomLayoutId, layout?.status]);
 
   const doLayoutWorkflow = async (fn: () => Promise<unknown>, successMessage: string) => {
     if (!room || !layout) return;
@@ -510,6 +531,27 @@ export default function RoomDetailPage() {
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <RefreshCw size={20} className="animate-spin" style={{ color: "var(--text-sub)" }} />
             <p style={{ fontSize: "14px", color: "var(--text-sub)" }}>Loading seats…</p>
+          </div>
+        ) : seats.length === 0 && layoutDetail && layoutDetail.positions.length > 0 ? (
+          <div>
+            <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-xl" style={{ background: "rgba(37,99,235,0.08)", color: "#2563eb" }}>
+              <AlertCircle size={14} className="flex-shrink-0" />
+              <p style={{ fontSize: "12.5px" }}>
+                Preview of the submitted layout — no real seats exist yet. Real, bookable seats are created once this layout is Activated.
+              </p>
+            </div>
+            <div className="w-full min-w-0" style={{ overflow: "auto", maxHeight: "70vh", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "16px" }}>
+              <div style={{ width: "fit-content", margin: "0 auto" }}>
+                <SeatGrid
+                  positions={layoutDetail.positions}
+                  mode="SELECT"
+                  selected={EMPTY_SELECTION}
+                  onSelectionChange={() => {}}
+                  onCommit={() => {}}
+                  readOnly
+                />
+              </div>
+            </div>
           </div>
         ) : seats.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-2">
