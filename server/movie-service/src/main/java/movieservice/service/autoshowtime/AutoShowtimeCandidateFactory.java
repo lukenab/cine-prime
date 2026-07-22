@@ -6,15 +6,15 @@ import movieservice.enums.GenerationReason;
 import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.CinemaRoomFormatRepository;
 import movieservice.repository.MovieAvailabilityRepository;
+import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeAllocationFormatPriorityRepository;
-import org.springframework.boot.autoconfigure.data.redis.RedisConnectionDetails;
-import org.springframework.boot.autoconfigure.data.redis.RedisProperties;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.*;
 
@@ -25,6 +25,7 @@ public class AutoShowtimeCandidateFactory {
     private final CinemaRoomFormatRepository cinemaRoomFormatRepository;
     private final MovieAvailabilityRepository movieAvailabilityRepository;
     private final ShowtimeAllocationFormatPriorityRepository formatPriorityRepository;
+    private final ShowTimeRepository showTimeRepository;
 
     @Transactional(readOnly = true)
     public List<ShowtimeCandidate> buildRawCandidates(ShowtimeGenerationRun run){
@@ -118,7 +119,7 @@ public class AutoShowtimeCandidateFactory {
             }
         }
 
-        return candidates;
+        return removeCandidatesConflictingWithExistingShowtimes(candidates, run, policy);
     }
 
     /// Tạo slot thời gian cho một movie+cluster+room+format+ngày
@@ -143,13 +144,14 @@ public class AutoShowtimeCandidateFactory {
                     movie.getDurationMinutes()
             );
 
-            ///  Phòng chỉ sẵn sàng sau khi phim kết thúc và hết clean buffer là endTime + cleanup(15p)
-            LocalTime roomAvailableAgain = endTime.minusMinutes(
-                    policy.getCleanupBufferMinutes()
-            );
+            /// Phòng chỉ sẵn sàng sau khi phim kết thúc và hết cleanup buffer.
+            /// Dùng LocalDateTime để không bị sai khi endTime + buffer đi qua mốc nửa đêm.
+            LocalDateTime roomAvailableAgain = LocalDateTime.of(showDate, endTime)
+                    .plusMinutes(policy.getCleanupBufferMinutes());
+            LocalDateTime closingTime = LocalDateTime.of(showDate, operatingHour.getClosesAt());
 
             ///  Nếu cả phim + cleanup không kịp trước giờ đóng cửa -> break
-            if (roomAvailableAgain.isAfter(operatingHour.getClosesAt())){
+            if (roomAvailableAgain.isAfter(closingTime)){
                 break;
             }
 
@@ -178,6 +180,66 @@ public class AutoShowtimeCandidateFactory {
         return candidates;
     }
 
+    /// Lấy toàn bộ showtime đang hoạt động trong scope bằng một query, rồi loại candidate đã xung đột
+    /// trước khi chấm điểm/chọn quota. Persistence vẫn kiểm tra lần cuối để chống race condition.
+    private List<ShowtimeCandidate> removeCandidatesConflictingWithExistingShowtimes(
+            List<ShowtimeCandidate> candidates,
+            ShowtimeGenerationRun run,
+            ShowtimeAllocationPolicy policy
+    ) {
+        if (candidates.isEmpty()) {
+            return candidates;
+        }
+
+        List<Long> roomIds = candidates.stream()
+                .map(ShowtimeCandidate::getCinemaRoomId)
+                .distinct()
+                .toList();
+
+        Map<RoomDateKey, List<ShowTime>> existingShowtimesByRoomAndDate = new HashMap<>();
+        showTimeRepository.findActiveByRoomsAndDateRange(roomIds, run.getStartDate(), run.getEndDate())
+                .forEach(showtime -> existingShowtimesByRoomAndDate
+                        .computeIfAbsent(
+                                new RoomDateKey(
+                                        showtime.getCinemaRoom().getCinemaRoomId(),
+                                        showtime.getShowDate()
+                                ),
+                                ignored -> new ArrayList<>()
+                        )
+                        .add(showtime));
+
+        return candidates.stream()
+                .filter(candidate -> !hasExistingShowtimeConflict(
+                        candidate,
+                        existingShowtimesByRoomAndDate.getOrDefault(
+                                new RoomDateKey(candidate.getCinemaRoomId(), candidate.getShowDate()),
+                                List.of()
+                        ),
+                        policy.getCleanupBufferMinutes()
+                ))
+                .toList();
+    }
+
+    /// Hai khoảng thời gian không được chồng lên nhau sau khi mỗi suất cộng cleanup buffer.
+    private boolean hasExistingShowtimeConflict(
+            ShowtimeCandidate candidate,
+            List<ShowTime> existingShowtimes,
+            Integer cleanupBufferMinutes
+    ) {
+        LocalDateTime candidateStart = LocalDateTime.of(candidate.getShowDate(), candidate.getStartTime());
+        LocalDateTime candidateAvailableAgain = LocalDateTime.of(candidate.getShowDate(), candidate.getEndTime())
+                .plusMinutes(cleanupBufferMinutes);
+
+        return existingShowtimes.stream().anyMatch(existing -> {
+            LocalDateTime existingStart = LocalDateTime.of(existing.getShowDate(), existing.getStartTime());
+            LocalDateTime existingAvailableAgain = LocalDateTime.of(existing.getShowDate(), existing.getEndTime())
+                    .plusMinutes(cleanupBufferMinutes);
+
+            return candidateStart.isBefore(existingAvailableAgain)
+                    && existingStart.isBefore(candidateAvailableAgain);
+        });
+    }
+
     ///  Lấy giờ vận hành của cluster cho một thứ cụ thể VD: dayOfWeek = MONDAY -> return về record MONDAY của cluster đó
     private CinemaClusterOperatingHour findOperatingHour(CinemaCluster cluster, DayOfWeek dayOfWeek){
         return cluster.getOperatingHours().stream()
@@ -197,5 +259,8 @@ public class AutoShowtimeCandidateFactory {
                 ));
 
         return result;
+    }
+
+    private record RoomDateKey(Long roomId, LocalDate showDate) {
     }
 }

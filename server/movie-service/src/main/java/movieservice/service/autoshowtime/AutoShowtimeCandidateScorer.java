@@ -94,8 +94,13 @@ public class AutoShowtimeCandidateScorer {
                             this::resolveClusterDemandScore
                     );
 
-                    // Điểm khung giờ: peak = 1.00, off-peak = 0.40.
+                    /// Peak chỉ boost thành phần timeScore. Không nhân toàn bộ score để không
+                    /// vô tình boost cả movie/cluster/format/capacity vốn không liên quan khung giờ.
+                    boolean peakSlot = isPeakSlot(candidate.getStartTime(), policy);
                     BigDecimal timeScore = resolveTimeScore(candidate.getStartTime(), policy);
+                    if (peakSlot) {
+                        timeScore = timeScore.multiply(policy.getPeakDemandWeight());
+                    }
 
                     /// Điểm format được chuẩn hoá theo format có allocation priority cao nhất.
                     BigDecimal formatScore = resolveFormatScore(
@@ -117,13 +122,6 @@ public class AutoShowtimeCandidateScorer {
                             .add(timeScore.multiply(policy.getTimeSlotDemandWeight()))
                             .add(formatScore.multiply(policy.getFormatDemandWeight()))
                             .add(roomCapacityScore.multiply(policy.getRoomCapacityWeight()));
-
-                    /// Peak slot nhận thêm hệ số boost, ví dụ peakDemandWeight = 1.20
-                    /// thì tổng điểm peak được tăng thêm 20%.
-                    boolean peakSlot = isPeakSlot(candidate.getStartTime(), policy);
-                    if (peakSlot) {
-                        score = score.multiply(policy.getPeakDemandWeight());
-                    }
 
                     /// Candidate là object immutable, dùng toBuilder để giữ toàn bộ dữ liệu cũ và chỉ bổ sung score cùng lý do được ưu tiên.
                     return candidate.toBuilder()
