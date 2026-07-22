@@ -40,10 +40,9 @@ public class AutoShowtimeCandidateSelector {
     ) {
         ShowtimeAllocationPolicy policy = run.getPolicy();
 
-        /// Chắc chắn đầu vào luôn được xét từ score cao đến thấp, dù caller có truyền list chưa sort.
-        List<ShowtimeCandidate> sortedCandidates = rankedCandidates.stream()
-                .sorted(Comparator.comparing(ShowtimeCandidate::getScore).reversed())
-                .toList();
+        // The scorer/compliance-prioritizer owns ranking. Preserve that deterministic order here;
+        // sorting by score again would erase the reserved-capacity ordering for hard share policy.
+        List<ShowtimeCandidate> sortedCandidates = List.copyOf(rankedCandidates);
 
         /// Cache demand profile theo cluster để không query lại cho từng candidate.
         Map<Long, Optional<CinemaClusterDemandProfile>> profileByClusterId = new HashMap<>();
