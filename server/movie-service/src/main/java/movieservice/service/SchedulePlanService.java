@@ -48,6 +48,9 @@ public class SchedulePlanService {
         if (plan.getStatus() != SchedulePlanStatus.IN_REVIEW) {
             throw new AppException(MovieErrorCode.SCHEDULE_PLAN_INVALID_TRANSITION);
         }
+        if (plan.getBlockerCount() != null && plan.getBlockerCount() > 0) {
+            throw new AppException(MovieErrorCode.SCHEDULE_PLAN_PUBLISH_CONFLICT);
+        }
         plan.setStatus(SchedulePlanStatus.CHANGES_REQUESTED);
         plan.setReviewNote(note == null ? "Changes requested by " + actor : note);
         return toResponse(plan);
@@ -107,6 +110,8 @@ public class SchedulePlanService {
                 plan.getSchedulePlanId(),
                 plan.getGenerationRun().getGenerationRunId(),
                 plan.getStatus().name(),
+                plan.getBlockerCount(),
+                plan.getValidationSummary(),
                 plan.getSlots().stream().map(this::toSlotResponse).toList(),
                 plan.getSubmittedAt(), plan.getSubmittedBy(),
                 plan.getPublishedAt(), plan.getPublishedBy(), plan.getReviewNote());
@@ -129,4 +134,3 @@ public class SchedulePlanService {
                 slot.getPublishedShowtime() == null ? null : slot.getPublishedShowtime().getShowTimeId());
     }
 }
-

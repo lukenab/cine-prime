@@ -25,7 +25,8 @@ public class SchedulePlanDraftService {
     private final MovieScreeningVersionRepository screeningVersionRepository;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public SchedulePlan createDraft(Long generationRunId, List<ShowtimeCandidate> candidates) {
+    public SchedulePlan createDraft(Long generationRunId, List<ShowtimeCandidate> candidates,
+                                    AutoShowtimePlanValidationResult validation) {
         Optional<SchedulePlan> existing = schedulePlanRepository
                 .findByGenerationRun_GenerationRunId(generationRunId);
         if (existing.isPresent()) {
@@ -34,7 +35,11 @@ public class SchedulePlanDraftService {
 
         ShowtimeGenerationRun run = generationRunRepository.findById(generationRunId)
                 .orElseThrow(() -> new AppException(MovieErrorCode.GENERATION_RUN_NOT_FOUND));
-        SchedulePlan plan = SchedulePlan.builder().generationRun(run).build();
+        SchedulePlan plan = SchedulePlan.builder()
+                .generationRun(run)
+                .blockerCount(validation.blockers().size())
+                .validationSummary(validation.summary())
+                .build();
 
         for (ShowtimeCandidate candidate : candidates) {
             CinemaRoom room = cinemaRoomRepository.findById(candidate.getCinemaRoomId())
@@ -66,4 +71,3 @@ public class SchedulePlanDraftService {
                 .orElse(ShowtimePricingDefaults.DEFAULT_SEAT_PRICE);
     }
 }
-

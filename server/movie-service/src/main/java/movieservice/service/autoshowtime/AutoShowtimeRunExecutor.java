@@ -40,6 +40,7 @@ public class AutoShowtimeRunExecutor {
     private final AutoShowtimeCandidateFactory candidateFactory;
     private final AutoShowtimeCandidateScorer candidateScorer;
     private final AutoShowtimeCandidateSelector candidateSelector;
+    private final AutoShowtimePlanValidator planValidator;
     private final SchedulePlanDraftService schedulePlanDraftService;
 
     /// Chạy toàn bộ pipeline Factory -> Scorer -> Selector -> Persist cho một generation run đã ACCEPTED.
@@ -75,7 +76,10 @@ public class AutoShowtimeRunExecutor {
         }
 
         // Generation produces a reviewable draft. Only the publish command materializes ShowTime rows.
-        schedulePlanDraftService.createDraft(run.getGenerationRunId(), selection.selectedCandidates());
+        AutoShowtimePlanValidationResult validation = planValidator.validate(
+                run, rankedCandidates, selection.selectedCandidates());
+        schedulePlanDraftService.createDraft(
+                run.getGenerationRunId(), selection.selectedCandidates(), validation);
         createdCount = selection.selectedCandidates().size();
 
         persistSkipAggregates(run, skipAggregates);

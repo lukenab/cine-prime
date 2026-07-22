@@ -42,6 +42,10 @@ public class SchedulePlan {
     @Column(name = "published_by", length = 100) String publishedBy;
     @Column(name = "review_note", columnDefinition = "TEXT") String reviewNote;
 
+    @Builder.Default
+    @Column(name = "blocker_count", nullable = false) Integer blockerCount = 0;
+    @Column(name = "validation_summary", columnDefinition = "TEXT") String validationSummary;
+
     @Version
     @Column(name = "version", nullable = false)
     Long version;
@@ -66,4 +70,3 @@ public class SchedulePlan {
     @PreUpdate
     void preUpdate() { updatedAt = LocalDateTime.now(); }
 }
-
