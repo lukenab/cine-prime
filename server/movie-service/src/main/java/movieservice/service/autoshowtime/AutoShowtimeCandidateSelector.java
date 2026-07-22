@@ -18,6 +18,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -63,7 +64,7 @@ public class AutoShowtimeCandidateSelector {
         List<AutoShowtimeCandidateRejection> rejected = new ArrayList<>();
         List<ShowtimeCandidate> candidatesForExtraAllocation = new ArrayList<>();
 
-        /// Vòng 1: coverage trước. Nhờ vậy phim không bị một phim score cao chiếm toàn bộ room ngay từ đầu.
+        Map<MovieClusterDayKey, List<ShowtimeCandidate>> candidatesByCoverageKey = new LinkedHashMap<>();
         for (ShowtimeCandidate candidate : sortedCandidates) {
             Optional<CinemaClusterDemandProfile> profile = profileByClusterId.computeIfAbsent(
                     candidate.getClusterId(),
@@ -76,27 +77,42 @@ public class AutoShowtimeCandidateSelector {
                 continue;
             }
 
-            MovieClusterDayKey quotaKey = MovieClusterDayKey.from(candidate);
-            int currentShowCount = selectedShowCountByMovieClusterDay.getOrDefault(quotaKey, 0);
-            int minimumShowCount = minimumShowCount(policy, profile.get());
-
-            if (currentShowCount >= minimumShowCount) {
-                /// Candidate này chưa cần ở vòng coverage, giữ lại để xét cấp thêm suất ở vòng 2.
-                candidatesForExtraAllocation.add(candidate);
-                continue;
-            }
-
-            attemptSelection(
-                    candidate,
-                    policy,
-                    availableRoomCountByClusterDay,
-                    selectedShowCountByMovieClusterDay,
-                    selectedRoomIdsByMovieClusterDay,
-                    selectedCandidatesByRoomDay,
-                    selected,
-                    rejected
-            );
+            candidatesByCoverageKey
+                    .computeIfAbsent(MovieClusterDayKey.from(candidate), ignored -> new ArrayList<>())
+                    .add(candidate);
         }
+
+        // Allocate at most one slot per movie/cluster/day on each pass. This prevents the
+        // highest-scoring title from consuming all compatible rooms before another title is seen.
+        Map<MovieClusterDayKey, Integer> nextCandidateIndex = new HashMap<>();
+        boolean madeProgress;
+        do {
+            madeProgress = false;
+            for (Map.Entry<MovieClusterDayKey, List<ShowtimeCandidate>> entry : candidatesByCoverageKey.entrySet()) {
+                MovieClusterDayKey key = entry.getKey();
+                CinemaClusterDemandProfile profile = profileByClusterId.get(key.clusterId()).orElseThrow();
+                int minimum = minimumShowCount(policy, profile);
+                if (selectedShowCountByMovieClusterDay.getOrDefault(key, 0) >= minimum) continue;
+
+                int index = nextCandidateIndex.getOrDefault(key, 0);
+                while (index < entry.getValue().size()) {
+                    ShowtimeCandidate candidate = entry.getValue().get(index++);
+                    nextCandidateIndex.put(key, index);
+                    if (attemptSelection(candidate, policy, availableRoomCountByClusterDay,
+                            selectedShowCountByMovieClusterDay, selectedRoomIdsByMovieClusterDay,
+                            selectedCandidatesByRoomDay, selected, rejected)) {
+                        madeProgress = true;
+                        break;
+                    }
+                }
+            }
+        } while (madeProgress);
+
+        for (Map.Entry<MovieClusterDayKey, List<ShowtimeCandidate>> entry : candidatesByCoverageKey.entrySet()) {
+            int index = nextCandidateIndex.getOrDefault(entry.getKey(), 0);
+            candidatesForExtraAllocation.addAll(entry.getValue().subList(index, entry.getValue().size()));
+        }
+        candidatesForExtraAllocation.sort(Comparator.comparing(ShowtimeCandidate::getScore).reversed());
 
         /// Vòng 2: candidate score cao được cấp thêm suất, nhưng không vượt max_daily_shows_per_movie.
         for (ShowtimeCandidate candidate : candidatesForExtraAllocation) {
@@ -129,7 +145,7 @@ public class AutoShowtimeCandidateSelector {
     }
 
     /// Thử chọn một candidate sau khi kiểm tra room share và conflict trong room.
-    private void attemptSelection(
+    private boolean attemptSelection(
             ShowtimeCandidate candidate,
             ShowtimeAllocationPolicy policy,
             Map<ClusterDayKey, Integer> availableRoomCountByClusterDay,
@@ -153,7 +169,7 @@ public class AutoShowtimeCandidateSelector {
         if (usesNewRoom && roomIdsUsedByMovie.size() >= maximumRoomsForMovie(policy, availableRoomCount)) {
             rejected.add(reject(candidate, GenerationSkipReason.MAXIMUM_ROOM_SHARE_REACHED,
                     "Candidate would exceed maximum_room_share in this cluster and date."));
-            return;
+            return false;
         }
 
         List<ShowtimeCandidate> selectedInSameRoom = selectedCandidatesByRoomDay
@@ -162,7 +178,7 @@ public class AutoShowtimeCandidateSelector {
         if (hasCleanupBufferConflict(candidate, selectedInSameRoom, policy)) {
             rejected.add(reject(candidate, GenerationSkipReason.CLEANUP_BUFFER_CONFLICT,
                     "Candidate overlaps a selected candidate in the same room after cleanup buffer is applied."));
-            return;
+            return false;
         }
 
         /// Candidate vượt qua hard constraint trong bộ nhớ, nên được chọn để bước persist xử lý tiếp.
@@ -170,6 +186,7 @@ public class AutoShowtimeCandidateSelector {
         selectedInSameRoom.add(candidate);
         roomIdsUsedByMovie.add(candidate.getCinemaRoomId());
         selectedShowCountByMovieClusterDay.merge(movieClusterDayKey, 1, Integer::sum);
+        return true;
     }
 
     /// Deadline rule: min_daily_shows là baseline cho mỗi movie + cluster + ngày.

@@ -1,0 +1,3 @@
+ALTER TABLE schedule_plan
+    ADD COLUMN IF NOT EXISTS blocker_count INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS validation_summary TEXT;

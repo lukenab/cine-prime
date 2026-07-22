@@ -10,6 +10,8 @@ public record SchedulePlanResponse(
         Long schedulePlanId,
         Long generationRunId,
         String status,
+        Integer blockerCount,
+        String validationSummary,
         List<Slot> slots,
         LocalDateTime submittedAt,
         String submittedBy,
@@ -39,4 +41,3 @@ public record SchedulePlanResponse(
     ) {
     }
 }
-
