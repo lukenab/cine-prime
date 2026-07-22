@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { movieApi, type MovieApiResponse } from "../../api/movieApi";
 import { HeroSection } from "../../components/shared/HeroSection";
-import { SearchBar } from "../../components/shared/SearchBar";
-import { NowShowing } from "../../components/shared/NowShowing";
+import { QuickBooking } from "../../components/shared/QuickBooking";
+import { MovieShowcase } from "../../components/shared/MovieShowcase";
+import { OffersTeaser } from "../../components/shared/OffersTeaser";
+import { UpcomingEvents } from "../../components/shared/UpcomingEvents";
 import { CinemaLocations } from "../../components/shared/CinemaLocations";
 import { ExperienceBanner } from "../../components/shared/ExperienceBanner";
-import { ComingSoon } from "../../components/shared/ComingSoon";
+import { Testimonials } from "../../components/shared/Testimonials";
 
 export default function HomePage() {
   const [movies, setMovies] = useState<MovieApiResponse[]>([]);
@@ -38,11 +40,13 @@ export default function HomePage() {
   return (
     <>
       <HeroSection />
-      <SearchBar />
-      <NowShowing movies={movies} loading={loadingMovies} error={movieError} />
+      <QuickBooking />
+      <MovieShowcase movies={movies} loading={loadingMovies} error={movieError} />
+      <OffersTeaser />
+      <UpcomingEvents />
       <CinemaLocations />
       <ExperienceBanner />
-      <ComingSoon movies={movies} />
+      <Testimonials />
     </>
   );
 }

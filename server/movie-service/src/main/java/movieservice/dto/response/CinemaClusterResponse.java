@@ -16,6 +16,7 @@ public class CinemaClusterResponse {
     Long clusterId;
     String clusterCode;
     String clusterName;
+    String coverImageUrl;
     String venueType;
     LocalDate openingDate;
     String publicEmail;

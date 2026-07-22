@@ -179,6 +179,8 @@ class CinemaClusterServiceTest {
     @Test
     void createClusterUsesAuthenticatedPrincipalForClusterAndAuditLog() {
         CinemaCluster cluster = CinemaCluster.builder().build();
+        CinemaClusterRequest request = validRequest("Audit Cluster");
+        request.setCoverImageUrl("https://res.cloudinary.com/cineprime/cluster-cover.webp");
         when(cinemaClusterRepository.existsByClusterNameIgnoreCase("Audit Cluster")).thenReturn(false);
         when(cinemaClusterRepository.existsByClusterCodeIgnoreCase("CP-TEST")).thenReturn(false);
         when(movieMapper.toCinemaCluster(any(CinemaClusterRequest.class))).thenReturn(cluster);
@@ -188,10 +190,11 @@ class CinemaClusterServiceTest {
         });
         when(movieMapper.toCinemaClusterResponse(cluster)).thenReturn(new CinemaClusterResponse());
 
-        cinemaClusterService.createCluster(validRequest("Audit Cluster"), authentication("jwt.admin"));
+        cinemaClusterService.createCluster(request, authentication("jwt.admin"));
 
         assertEquals("jwt.admin", cluster.getCreatedBy());
         assertEquals(ClusterStatus.DRAFT, cluster.getStatus());
+        assertEquals("https://res.cloudinary.com/cineprime/cluster-cover.webp", cluster.getCoverImageUrl());
 
         ArgumentCaptor<ClusterAuditLog> auditCaptor = ArgumentCaptor.forClass(ClusterAuditLog.class);
         verify(clusterAuditLogRepository).save(auditCaptor.capture());

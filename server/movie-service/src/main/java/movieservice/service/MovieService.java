@@ -214,11 +214,34 @@ public class MovieService {
             throw new AppException(MovieErrorCode.MOVIE_NOT_FOUND);
         }
 
+        PublicMovieResponse response;
         if (clusterId != null) {
-            return toPublicMovieResponse(movie, clusterId, visible.get(0), today, now);
+            response = toPublicMovieResponse(movie, clusterId, visible.get(0), today, now);
+        } else {
+            boolean anyOpen = visible.stream().anyMatch(a -> a.getStatus() == AvailabilityStatus.OPEN);
+            response = toPublicMovieResponse(movie, anyOpen);
         }
-        boolean anyOpen = visible.stream().anyMatch(a -> a.getStatus() == AvailabilityStatus.OPEN);
-        return toPublicMovieResponse(movie, anyOpen);
+        applyDetailFields(response, movie);
+        return response;
+    }
+
+    /** Detail-only enrichment for getPublicMovieDetail() - see PublicMovieResponse javadoc
+     *  for why findAllPublic() (list) deliberately skips this. */
+    private void applyDetailFields(PublicMovieResponse response, Movie movie) {
+        response.setTagline(movie.getTagline());
+        response.setCountry(movie.getCountry());
+        response.setOriginalLanguage(movie.getOriginalLanguage());
+        response.setAgeRating(movie.getAgeRating() != null ? movieMapper.toAgeRatingResponse(movie.getAgeRating()) : null);
+        response.setFormats(movie.getFormats() == null ? List.of()
+                : movie.getFormats().stream().map(movieMapper::toScreeningFormatResponse).collect(Collectors.toList()));
+        response.setCompanies(movie.getCompanies() == null ? List.of()
+                : movie.getCompanies().stream().map(movieMapper::toProductionCompanyResponse).collect(Collectors.toList()));
+        response.setTranslations(movie.getTranslations() == null ? List.of()
+                : movie.getTranslations().stream().map(movieMapper::toTranslationResponse).collect(Collectors.toList()));
+        response.setCast(movie.getCast() == null ? List.of()
+                : movie.getCast().stream().map(movieMapper::toCastResponse).collect(Collectors.toList()));
+        response.setImages(movie.getImages() == null ? List.of()
+                : movie.getImages().stream().map(movieMapper::toMovieImageResponse).collect(Collectors.toList()));
     }
 
     /** Single source of truth for "can an anonymous/customer request see this availability

@@ -28,7 +28,10 @@ import java.time.DateTimeException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -259,6 +262,7 @@ public class CinemaClusterService {
     }
 
     private void applyClusterDetails(CinemaCluster cluster, CinemaClusterRequest req) {
+        cluster.setCoverImageUrl(normalizeOptional(req.getCoverImageUrl(), false));
         cluster.setVenueType(req.getVenueType());
         cluster.setOpeningDate(req.getOpeningDate());
         cluster.setCountryCode(req.getCountryCode().trim().toUpperCase(Locale.ROOT));
@@ -293,19 +297,35 @@ public class CinemaClusterService {
         }
     }
 
+    /**
+     * Updates existing rows in place (keyed by dayOfWeek) instead of clear()-then-recreate.
+     * validateOperationalConfiguration() guarantees requests always covers exactly the 7
+     * DayOfWeek values with no duplicates, so every existing row always has a matching
+     * request entry - no adds/removes are ever actually needed on update, only field
+     * mutation. clear()-then-add() previously caused a transient uq_cluster_operating_day
+     * (cluster_id, day_of_week) violation: with IDENTITY-generated rows, Hibernate issues
+     * the INSERT for the re-added Monday row immediately on add(), before the DELETE for
+     * the orphan-removed old Monday row is flushed - a well-known Hibernate flush-ordering
+     * hazard for @OneToMany+orphanRemoval collections reusing a unique business key.
+     */
     private void replaceOperatingHours(CinemaCluster cluster, List<ClusterOperatingHourRequest> requests) {
-        cluster.getOperatingHours().clear();
-        requests.stream()
-                .sorted((left, right) -> Integer.compare(left.getDayOfWeek().getValue(), right.getDayOfWeek().getValue()))
-                .map(request -> CinemaClusterOperatingHour.builder()
+        Map<DayOfWeek, CinemaClusterOperatingHour> existingByDay = cluster.getOperatingHours().stream()
+                .collect(Collectors.toMap(CinemaClusterOperatingHour::getDayOfWeek, Function.identity()));
+
+        for (ClusterOperatingHourRequest request : requests) {
+            CinemaClusterOperatingHour hour = existingByDay.get(request.getDayOfWeek());
+            if (hour == null) {
+                hour = CinemaClusterOperatingHour.builder()
                         .cluster(cluster)
                         .dayOfWeek(request.getDayOfWeek())
-                        .opensAt(request.getOpensAt())
-                        .closesAt(request.getClosesAt())
-                        .closesNextDay(request.isClosesNextDay())
-                        .closed(request.isClosed())
-                        .build())
-                .forEach(cluster.getOperatingHours()::add);
+                        .build();
+                cluster.getOperatingHours().add(hour);
+            }
+            hour.setOpensAt(request.getOpensAt());
+            hour.setClosesAt(request.getClosesAt());
+            hour.setClosesNextDay(request.isClosesNextDay());
+            hour.setClosed(request.isClosed());
+        }
     }
 
     private String normalizeCode(String value) {

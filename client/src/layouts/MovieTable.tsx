@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Eye, Pencil, Trash2, ChevronLeft, ChevronRight, Clapperboard, Clock,
+  Eye, Pencil, Archive, ChevronLeft, ChevronRight, Clapperboard, Clock,
   SendHorizonal, ClipboardCheck, RotateCcw, AlertCircle,
 } from "lucide-react";
 import type { MovieApiResponse } from "../api/movieApi";
@@ -108,7 +108,7 @@ function MovieActions({
       </>}
 
       {status === "APPROVED" && <>
-        {can.archive && <ActionBtn icon={Trash2} title="Archive" onClick={onDelete} color="#ef4444" />}
+        {can.archive && <ActionBtn icon={Archive} title="Archive movie" onClick={onDelete} color="#d97706" />}
       </>}
 
       {status === "CHANGES_REQUESTED" && <>
@@ -146,14 +146,20 @@ export function MovieTable({
 
   return (
     <>
-      {/* ── Delete confirmation ── */}
+      {/* ── Archive confirmation ── */}
       {deleteTarget && (
         <ConfirmModal
-          icon={Trash2}
-          title="Archive Movie"
-          body={<>Archive <strong style={{ color: "var(--text-main)" }}>{deleteTarget.movieNameEnglish}</strong>?<br />The record is kept for reporting.</>}
-          confirmLabel="Archive"
-          confirmColor="#ef4444"
+          icon={Archive}
+          title="Archive movie"
+          body={
+            <>
+              <strong style={{ color: "var(--text-main)" }}>{deleteTarget.movieNameEnglish}</strong>
+              <br />
+              Movie will be removed from the active catalog but retained for audit and reporting.
+            </>
+          }
+          confirmLabel="Archive movie"
+          confirmColor="#d97706"
           onConfirm={() => { onDelete(deleteTarget.movieId); setDeleteTarget(null); }}
           onCancel={() => setDeleteTarget(null)}
         />

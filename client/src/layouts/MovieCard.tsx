@@ -1,4 +1,4 @@
-import { Star, Clock, Ticket } from "lucide-react";
+import { Star, Clock, Ticket, Calendar } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 interface Movie {
@@ -10,6 +10,9 @@ interface Movie {
   image: string;
   badge?: string;
   badgeColor?: string;
+  /** When set, the top-right badge shows this release-date label with a calendar icon
+   *  instead of the star rating — a numeric rating doesn't make sense for an unreleased film. */
+  releaseLabel?: string;
 }
 
 interface MovieCardProps {
@@ -75,13 +78,22 @@ export function MovieCard({ movie, onBook }: MovieCardProps) {
           </div>
         )}
 
-        {/* Rating */}
+        {/* Rating / release date */}
         <div
           className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 rounded-lg"
           style={{ backgroundColor: "rgba(5,5,5,0.75)", backdropFilter: "blur(8px)" }}
         >
-          <Star size={10} fill="#FFD700" style={{ color: "#FFD700" }} />
-          <span style={{ color: "#FFD700", fontSize: "0.7rem", fontWeight: 700 }}>{movie.rating}</span>
+          {movie.releaseLabel ? (
+            <>
+              <Calendar size={10} style={{ color: "#FFD700" }} />
+              <span style={{ color: "#FFD700", fontSize: "0.65rem", fontWeight: 700 }}>{movie.releaseLabel}</span>
+            </>
+          ) : (
+            <>
+              <Star size={10} fill="#FFD700" style={{ color: "#FFD700" }} />
+              <span style={{ color: "#FFD700", fontSize: "0.7rem", fontWeight: 700 }}>{movie.rating}</span>
+            </>
+          )}
         </div>
 
         {/* Bottom info */}
