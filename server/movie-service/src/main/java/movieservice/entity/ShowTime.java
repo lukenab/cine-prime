@@ -43,6 +43,10 @@ public class ShowTime {
     @JoinColumn(name = "format_id")
     ScreeningFormat format;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "screening_version_id")
+    MovieScreeningVersion screeningVersion;
+
     @Column(name = "show_date", nullable = false)
     LocalDate showDate;
 

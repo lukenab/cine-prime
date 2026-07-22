@@ -42,6 +42,12 @@ public class ShowTimeResponse {
 
     String status;
 
+    Long screeningVersionId;
+
+    String audioLanguageCode;
+
+    String subtitleLanguageCode;
+
     // = CinemaRoom.totalSeatCapacity tai thoi diem tao suat (snapshot, khong doi theo
     // sua doi phong sau nay) va availableSeats = totalSeats - soldSeats.
     Integer totalSeats;

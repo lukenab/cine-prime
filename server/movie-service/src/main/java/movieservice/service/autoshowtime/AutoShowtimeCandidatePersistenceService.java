@@ -3,6 +3,7 @@ package movieservice.service.autoshowtime;
 import lombok.RequiredArgsConstructor;
 import movieservice.entity.CinemaRoom;
 import movieservice.entity.Movie;
+import movieservice.entity.MovieScreeningVersion;
 import movieservice.entity.ScreeningFormat;
 import movieservice.entity.Seat;
 import movieservice.entity.ShowTime;
@@ -13,6 +14,7 @@ import movieservice.enums.ShowTimeStatus;
 import movieservice.enums.ShowtimeSource;
 import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.MovieRepository;
+import movieservice.repository.MovieScreeningVersionRepository;
 import movieservice.repository.ScreeningFormatRepository;
 import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeGenerationRunRepository;
@@ -32,6 +34,7 @@ public class AutoShowtimeCandidatePersistenceService {
 
     private final CinemaRoomRepository cinemaRoomRepository;
     private final MovieRepository movieRepository;
+    private final MovieScreeningVersionRepository movieScreeningVersionRepository;
     private final ScreeningFormatRepository screeningFormatRepository;
     private final ShowtimeGenerationRunRepository generationRunRepository;
     private final ShowTimeRepository showTimeRepository;
@@ -78,6 +81,8 @@ public class AutoShowtimeCandidatePersistenceService {
         /// getReferenceById chỉ tạo JPA reference; candidate đã được Factory validate từ trước.
         Movie movie = movieRepository.getReferenceById(candidate.getMovieId());
         ScreeningFormat format = screeningFormatRepository.getReferenceById(candidate.getFormatId());
+        MovieScreeningVersion screeningVersion = movieScreeningVersionRepository
+                .getReferenceById(candidate.getScreeningVersionId());
         ShowtimeGenerationRun run = generationRunRepository.getReferenceById(generationRunId);
 
         ShowTime showTime = ShowTime.builder()
@@ -85,12 +90,14 @@ public class AutoShowtimeCandidatePersistenceService {
                 .cinemaRoom(room)
                 /// Showtime.format phải là format đã được candidate chọn, không suy ra từ RoomType.
                 .format(format)
+                .screeningVersion(screeningVersion)
                 .showDate(candidate.getShowDate())
                 .startTime(candidate.getStartTime())
                 .endTime(candidate.getEndTime())
                 .startAt(candidate.temporalStartAt())
                 .endAt(candidate.temporalEndAt())
-                .languageCode("vi")
+                .languageCode(screeningVersion.getAudioLanguageCode())
+                .subtitleCode(screeningVersion.getSubtitleLanguageCode())
                 /// Không hardcode giá; lấy base seat price thấp nhất đã cấu hình trong room.
                 .basePrice(resolveBasePrice(room))
                 .totalSeats(room.getTotalSeatCapacity())

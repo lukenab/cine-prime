@@ -146,6 +146,9 @@ public class Movie {
     )
     List<ScreeningFormat> formats;
 
+    @OneToMany(mappedBy = "movie", fetch = FetchType.LAZY)
+    List<MovieScreeningVersion> screeningVersions;
+
     @OneToMany(mappedBy = "movie", cascade = CascadeType.ALL, orphanRemoval = true)
     List<MovieTranslation> translations;
 
