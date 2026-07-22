@@ -41,6 +41,7 @@ public class AutoShowtimeRunExecutor {
     private final AutoShowtimeCandidateScorer candidateScorer;
     private final AutoShowtimeCandidateSelector candidateSelector;
     private final AutoShowtimePlanValidator planValidator;
+    private final VietnameseFilmShareService vietnameseFilmShareService;
     private final SchedulePlanDraftService schedulePlanDraftService;
 
     /// Chạy toàn bộ pipeline Factory -> Scorer -> Selector -> Persist cho một generation run đã ACCEPTED.
@@ -62,7 +63,8 @@ public class AutoShowtimeRunExecutor {
         List<ShowtimeCandidate> rawCandidates = candidateFactory.buildRawCandidates(run);
 
         /// Scorer gắn score; Selector áp quota, room share và conflict nội bộ giữa candidate.
-        List<ShowtimeCandidate> rankedCandidates = candidateScorer.scoreAndRank(run, rawCandidates);
+        List<ShowtimeCandidate> rankedCandidates = vietnameseFilmShareService.prioritize(
+                run, candidateScorer.scoreAndRank(run, rawCandidates));
         AutoShowtimeSelectionResult selection = candidateSelector.select(run, rankedCandidates);
 
         int createdCount = 0;
@@ -77,7 +79,8 @@ public class AutoShowtimeRunExecutor {
 
         // Generation produces a reviewable draft. Only the publish command materializes ShowTime rows.
         AutoShowtimePlanValidationResult validation = planValidator.validate(
-                run, rankedCandidates, selection.selectedCandidates());
+                run, rankedCandidates, selection.selectedCandidates())
+                .plus(vietnameseFilmShareService.validate(run, selection.selectedCandidates()));
         schedulePlanDraftService.createDraft(
                 run.getGenerationRunId(), selection.selectedCandidates(), validation);
         createdCount = selection.selectedCandidates().size();
