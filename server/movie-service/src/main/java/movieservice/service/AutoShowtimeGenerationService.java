@@ -354,7 +354,9 @@ public class AutoShowtimeGenerationService {
                 new AutoShowtimeGenerationRunResponse.Summary(
                         run.getCandidateCount(),
                         run.getCreatedCount(),
-                        run.getSkippedCount()
+                        run.getSkippedCount(),
+                        run.getSuccessfulPartitionCount(),
+                        run.getFailedPartitionCount()
                 ),
                 buildMovieResults(run.getMovies(), allGeneratedShowtimes, skips),
                 new AutoShowtimeGenerationRunResponse.ShowtimePage(

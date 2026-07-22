@@ -5,6 +5,7 @@ import movie.theater.common.exception.AppException;
 import movieservice.entity.*;
 import movieservice.exception.MovieErrorCode;
 import movieservice.repository.*;
+import movieservice.enums.GenerationPartitionStatus;
 import movieservice.service.ShowtimePricingDefaults;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -23,14 +24,18 @@ public class SchedulePlanDraftService {
     private final MovieRepository movieRepository;
     private final CinemaRoomRepository cinemaRoomRepository;
     private final MovieScreeningVersionRepository screeningVersionRepository;
+    private final ShowtimeGenerationPartitionRepository partitionRepository;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public SchedulePlan createDraft(Long generationRunId, List<ShowtimeCandidate> candidates,
-                                    AutoShowtimePlanValidationResult validation) {
+    public SchedulePlan createDraftShell(Long generationRunId,
+                                         AutoShowtimePlanValidationResult validation) {
         Optional<SchedulePlan> existing = schedulePlanRepository
                 .findByGenerationRun_GenerationRunId(generationRunId);
         if (existing.isPresent()) {
-            return existing.get();
+            SchedulePlan plan = existing.get();
+            plan.setBlockerCount(validation.blockers().size());
+            plan.setValidationSummary(validation.summary());
+            return plan;
         }
 
         ShowtimeGenerationRun run = generationRunRepository.findById(generationRunId)
@@ -41,6 +46,23 @@ public class SchedulePlanDraftService {
                 .validationSummary(validation.summary())
                 .build();
 
+        return schedulePlanRepository.save(plan);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public int persistPartition(Long schedulePlanId, Long clusterId,
+                                java.time.LocalDate businessDate,
+                                List<ShowtimeCandidate> candidates) {
+        Optional<ShowtimeGenerationPartition> previous = partitionRepository
+                .findByGenerationRun_GenerationRunIdAndClusterIdAndBusinessDate(
+                        planRunId(schedulePlanId), clusterId, businessDate);
+        if (previous.filter(partition -> partition.getStatus() == GenerationPartitionStatus.SUCCEEDED)
+                .isPresent()) {
+            return previous.get().getSlotCount();
+        }
+
+        SchedulePlan plan = schedulePlanRepository.findById(schedulePlanId)
+                .orElseThrow(() -> new AppException(MovieErrorCode.SCHEDULE_PLAN_NOT_FOUND));
         for (ShowtimeCandidate candidate : candidates) {
             CinemaRoom room = cinemaRoomRepository.findById(candidate.getCinemaRoomId())
                     .orElseThrow(() -> new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND));
@@ -60,7 +82,41 @@ public class SchedulePlanDraftService {
                     .generationReason(candidate.getGenerationReason())
                     .build());
         }
-        return schedulePlanRepository.save(plan);
+        schedulePlanRepository.saveAndFlush(plan);
+
+        ShowtimeGenerationPartition partition = previous.orElseGet(() -> ShowtimeGenerationPartition.builder()
+                .generationRun(plan.getGenerationRun()).clusterId(clusterId).businessDate(businessDate).build());
+        partition.setStatus(GenerationPartitionStatus.SUCCEEDED);
+        partition.setSlotCount(candidates.size());
+        partition.setFailureCode(null);
+        partition.setFailureDetail(null);
+        partition.setAttemptCount(previous.map(value -> value.getAttemptCount() + 1).orElse(1));
+        partitionRepository.save(partition);
+        return candidates.size();
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordPartitionFailure(Long generationRunId, Long clusterId,
+                                       java.time.LocalDate businessDate,
+                                       String failureCode, String failureDetail) {
+        ShowtimeGenerationPartition partition = partitionRepository
+                .findByGenerationRun_GenerationRunIdAndClusterIdAndBusinessDate(
+                        generationRunId, clusterId, businessDate)
+                .orElseGet(() -> ShowtimeGenerationPartition.builder()
+                        .generationRun(generationRunRepository.getReferenceById(generationRunId))
+                        .clusterId(clusterId).businessDate(businessDate).build());
+        partition.setStatus(GenerationPartitionStatus.FAILED);
+        partition.setSlotCount(0);
+        partition.setFailureCode(failureCode);
+        partition.setFailureDetail(failureDetail);
+        partition.setAttemptCount(partition.getPartitionId() == null ? 1 : partition.getAttemptCount() + 1);
+        partitionRepository.save(partition);
+    }
+
+    private Long planRunId(Long schedulePlanId) {
+        return schedulePlanRepository.findById(schedulePlanId)
+                .orElseThrow(() -> new AppException(MovieErrorCode.SCHEDULE_PLAN_NOT_FOUND))
+                .getGenerationRun().getGenerationRunId();
     }
 
     private BigDecimal resolveBasePrice(CinemaRoom room) {

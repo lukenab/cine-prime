@@ -26,7 +26,9 @@ public record AutoShowtimeGenerationRunResponse(
     public record Summary(
             Integer candidateCount,
             Integer createdCount,
-            Integer skippedCount
+            Integer skippedCount,
+            Integer successfulPartitionCount,
+            Integer failedPartitionCount
     ) {
     }
 
