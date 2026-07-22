@@ -36,4 +36,19 @@ public class PublicMovieResponse {
 
     LocalDateTime nextShowtimeAt;
     boolean bookingAvailable;
+
+    /** Detail-only fields — populated by getPublicMovieDetail() (single-movie fetch),
+     *  left null by findAllPublic() (list) to avoid N+1 loading cast/images/companies
+     *  for every movie in a catalogue page. Deliberately excludes editorial-only data
+     *  the admin MovieResponse carries (tmdbId, imdbId, rejectionNote, status, trailerSource,
+     *  taglineSource, createdAt/updatedAt/createdBy) — none of that is customer-facing. */
+    String tagline;
+    String country;
+    String originalLanguage;
+    AgeRatingResponse ageRating;
+    List<ScreeningFormatResponse> formats;
+    List<ProductionCompanyResponse> companies;
+    List<TranslationResponse> translations;
+    List<CastResponse> cast;
+    List<MovieImageResponse> images;
 }

@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { Tag, Calendar, ArrowRight } from "lucide-react";
-import { mockOffers } from "../../../../../../../CinePrime/hcm26_cpl_java_05_group1-develop/client/src/data/mockOffers";
+import { mockOffers } from "../../data/mockOffers";
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");

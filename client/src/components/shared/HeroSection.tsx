@@ -1,6 +1,6 @@
 import { Ticket, Play, ChevronDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import trailerVideo from "../../assets/GattoTeaser.mp4";
+import trailerVideo from "../../assets/The_Odyssey.mp4";
 
 export function HeroSection() {
   const navigate = useNavigate();

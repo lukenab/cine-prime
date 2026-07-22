@@ -27,6 +27,10 @@ public class CinemaClusterRequest {
     @Size(min = 2, max = 100, message = "Cluster name must be between 2 and 100 characters")
     String clusterName;
 
+    @Size(max = 1000, message = "Cover image URL must not exceed 1000 characters")
+    @Pattern(regexp = "^$|^https?://\\S+$", message = "Cover image URL must be a valid HTTP(S) URL")
+    String coverImageUrl;
+
     @NotNull(message = "Venue type is required")
     CinemaVenueType venueType;
 

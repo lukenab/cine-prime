@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   X, Building2, MapPin, Mail, Phone, Timer, Globe2, Clock, AlertCircle, Check,
+  Image as ImageIcon, Upload, Trash2, Loader2,
 } from "lucide-react";
 import {
   movieApi,
@@ -332,6 +333,7 @@ const summarizeWeek = (hours: ClusterOperatingHour[]): string => {
 const createEmptyForm = (clusterCode: string): CreateClusterPayload => ({
   clusterCode,
   clusterName: "",
+  coverImageUrl: "",
   venueType: "MALL",
   openingDate: "",
   countryCode: "VN",
@@ -351,6 +353,7 @@ function toFormState(cluster: ClusterResponse): CreateClusterPayload {
   return {
     clusterCode: cluster.clusterCode ?? "",
     clusterName: cluster.clusterName,
+    coverImageUrl: cluster.coverImageUrl ?? "",
     venueType: cluster.venueType ?? "MALL",
     openingDate: cluster.openingDate ?? "",
     countryCode: cluster.countryCode ?? "VN",
@@ -468,6 +471,7 @@ type ClusterWizardModalProps = {
 
 export function ClusterWizardModal({ open, mode, clusterId, onClose, onSaved }: ClusterWizardModalProps) {
   const { isAdmin } = useRole();
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   const [initial, setInitial] = useState<ClusterResponse | null>(null);
   const [form, setForm] = useState<CreateClusterPayload>(() => createEmptyForm(""));
@@ -475,6 +479,8 @@ export function ClusterWizardModal({ open, mode, clusterId, onClose, onSaved }: 
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [coverUploadError, setCoverUploadError] = useState<string | null>(null);
   const [uniformHours, setUniformHours] = useState(true);
 
   // Create mode gates steps progressively — the stepper only lets you jump to a step
@@ -525,6 +531,7 @@ export function ClusterWizardModal({ open, mode, clusterId, onClose, onSaved }: 
     setStep(0);
     setStepError(null);
     setSaveError(null);
+    setCoverUploadError(null);
     setInitial(null);
     setLoadError(null);
     if (!clusterId) {
@@ -548,6 +555,30 @@ export function ClusterWizardModal({ open, mode, clusterId, onClose, onSaved }: 
       setForm((prev) => ({ ...prev, address, latitude: lat, longitude: lng }));
     } else {
       setForm((prev) => ({ ...prev, address, latitude: undefined, longitude: undefined }));
+    }
+  };
+
+  const handleCoverUpload = async (file?: File) => {
+    if (!file) return;
+    const acceptedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!acceptedTypes.includes(file.type) || file.size > 5 * 1024 * 1024) {
+      setCoverUploadError("Image must be JPG, PNG or WebP and no larger than 5 MB.");
+      if (coverInputRef.current) coverInputRef.current.value = "";
+      return;
+    }
+
+    setCoverUploadError(null);
+    setUploadingCover(true);
+    try {
+      const response = await movieApi.uploadImage(file);
+      const imageUrl = response.result?.secureUrl || response.result?.url;
+      if (!imageUrl) throw new Error("Upload response did not contain an image URL.");
+      setForm((current) => ({ ...current, coverImageUrl: imageUrl }));
+    } catch (error: any) {
+      setCoverUploadError(error?.response?.data?.message ?? "Image upload failed. Please try again.");
+    } finally {
+      setUploadingCover(false);
+      if (coverInputRef.current) coverInputRef.current.value = "";
     }
   };
 
@@ -671,7 +702,7 @@ export function ClusterWizardModal({ open, mode, clusterId, onClose, onSaved }: 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={uploadingCover ? undefined : onClose} />
       <div
         className="relative mx-4 flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl shadow-2xl"
         style={{ background: "var(--bg-main)", border: "1px solid var(--border-color)" }}
@@ -687,8 +718,8 @@ export function ClusterWizardModal({ open, mode, clusterId, onClose, onSaved }: 
             </h2>
           </div>
           <button
-            type="button" onClick={onClose}
-            className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors"
+            type="button" onClick={onClose} disabled={uploadingCover}
+            className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors disabled:cursor-not-allowed disabled:opacity-40"
             style={{ color: "var(--text-sub)" }}
           >
             <X size={16} />
@@ -724,6 +755,75 @@ export function ClusterWizardModal({ open, mode, clusterId, onClose, onSaved }: 
             {step === 0 && (
             <FormSection title="Cluster identity" description="Stable identifiers used by scheduling, reporting and integrations.">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <FieldLabel>Cluster cover image</FieldLabel>
+                  <div
+                    className="flex flex-col gap-4 rounded-xl border p-3 sm:flex-row sm:items-center"
+                    style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}
+                  >
+                    <div
+                      className="flex h-28 w-full shrink-0 items-center justify-center overflow-hidden rounded-lg sm:w-44"
+                      style={{ background: "var(--bg-main)", border: "1px dashed var(--border-color)" }}
+                    >
+                      {form.coverImageUrl ? (
+                        <img
+                          src={form.coverImageUrl}
+                          alt={`${form.clusterName || "Cinema cluster"} cover preview`}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center gap-1.5" style={{ color: "var(--text-sub)" }}>
+                          <ImageIcon size={24} />
+                          <span style={{ fontSize: "11px" }}>No cover selected</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-main)" }}>
+                        {form.coverImageUrl ? "Cover image ready" : "Add a public-facing cover"}
+                      </p>
+                      <p className="mt-1" style={{ fontSize: "11.5px", lineHeight: 1.45, color: "var(--text-sub)" }}>
+                        JPG, PNG or WebP up to 5 MB. A 16:9 landscape image is recommended.
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <input
+                          ref={coverInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="hidden"
+                          onChange={(event) => handleCoverUpload(event.target.files?.[0])}
+                          disabled={uploadingCover}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => coverInputRef.current?.click()}
+                          disabled={uploadingCover}
+                          className="inline-flex h-9 items-center gap-2 rounded-lg bg-blue-600 px-3 text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
+                          style={{ fontSize: "12px", fontWeight: 600 }}
+                        >
+                          {uploadingCover ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                          {uploadingCover ? "Uploading…" : form.coverImageUrl ? "Replace image" : "Upload image"}
+                        </button>
+                        {form.coverImageUrl && !uploadingCover && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setForm((current) => ({ ...current, coverImageUrl: "" }));
+                              setCoverUploadError(null);
+                            }}
+                            className="inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-rose-600 transition-colors hover:bg-rose-50"
+                            style={{ fontSize: "12px", fontWeight: 600, borderColor: "rgba(244,63,94,0.3)" }}
+                          >
+                            <Trash2 size={14} /> Remove
+                          </button>
+                        )}
+                      </div>
+                      {coverUploadError && (
+                        <p className="mt-2 text-rose-500" style={{ fontSize: "11.5px" }}>{coverUploadError}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
                 <div><FieldLabel required>Cluster code</FieldLabel><input required pattern="[A-Z0-9][A-Z0-9-]{1,19}" value={form.clusterCode} disabled={mode === "edit" && initial?.status !== "DRAFT"} onChange={(e) => setForm({ ...form, clusterCode: e.target.value.toUpperCase() })} placeholder="CP-HCM-01" className="h-11 w-full rounded-lg border px-3 outline-none focus:border-blue-400 disabled:opacity-60" style={inputStyle} /></div>
                 <div><FieldLabel required>Cluster name</FieldLabel><input required minLength={2} maxLength={100} value={form.clusterName} onChange={(e) => setForm({ ...form, clusterName: e.target.value })} placeholder="CinePrime Landmark 81" className="h-11 w-full rounded-lg border px-3 outline-none focus:border-blue-400" style={inputStyle} /></div>
                 <div><FieldLabel>Opening date</FieldLabel><input type="date" value={form.openingDate ?? ""} onChange={(e) => setForm({ ...form, openingDate: e.target.value })} className="h-11 w-full rounded-lg border px-3 outline-none focus:border-blue-400" style={inputStyle} /></div>
@@ -936,7 +1036,7 @@ export function ClusterWizardModal({ open, mode, clusterId, onClose, onSaved }: 
 
           <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t px-6 py-4" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
             <button
-              type="button" onClick={onClose} disabled={submitting}
+              type="button" onClick={onClose} disabled={submitting || uploadingCover}
               className="px-4 py-2.5 rounded-xl border transition-colors hover:opacity-80 disabled:opacity-50"
               style={{ fontSize: "13.5px", color: "var(--text-sub)", borderColor: "var(--border-color)" }}
             >
@@ -945,7 +1045,7 @@ export function ClusterWizardModal({ open, mode, clusterId, onClose, onSaved }: 
             <div className="flex gap-3">
               {step > 0 && (
                 <button
-                  type="button" onClick={goPrev} disabled={submitting}
+                  type="button" onClick={goPrev} disabled={submitting || uploadingCover}
                   className="px-5 py-2.5 rounded-xl border transition-colors hover:opacity-80 disabled:opacity-50"
                   style={{ fontSize: "14px", borderColor: "var(--border-color)", color: "var(--text-main)" }}
                 >
@@ -955,8 +1055,8 @@ export function ClusterWizardModal({ open, mode, clusterId, onClose, onSaved }: 
               {step < WIZARD_STEPS.length - 1 ? (
                 <button
                   key="next-button"
-                  type="button" onClick={goNext}
-                  className="px-5 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                  type="button" onClick={goNext} disabled={uploadingCover}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-60"
                   style={{ fontSize: "14px", fontWeight: 600 }}
                 >
                   Next →
@@ -964,7 +1064,7 @@ export function ClusterWizardModal({ open, mode, clusterId, onClose, onSaved }: 
               ) : (
                 <button
                   key="submit-button"
-                  type="submit" disabled={submitting}
+                  type="submit" disabled={submitting || uploadingCover}
                   className="px-5 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-60"
                   style={{ fontSize: "14px", fontWeight: 600 }}
                 >

@@ -264,6 +264,7 @@ export type ClusterResponse = {
   clusterId: number;
   clusterCode: string;
   clusterName: string;
+  coverImageUrl?: string;
   venueType: ClusterVenueType;
   openingDate?: string;
   publicEmail?: string;
@@ -290,6 +291,7 @@ export type ClusterResponse = {
 export type CreateClusterPayload = {
   clusterCode: string;
   clusterName: string;
+  coverImageUrl?: string;
   venueType: ClusterVenueType;
   openingDate?: string;
   countryCode: string;
@@ -500,6 +502,18 @@ export type PublicMovieResponse = {
   clusterName?: string;
   nextShowtimeAt?: string;
   bookingAvailable: boolean;
+
+  /** Detail-only — only set by getPublicMovieDetail()/GET /api/movies/public/{id};
+   *  left undefined on list results (getPublicMovies()) to keep catalogue pages light. */
+  tagline?: string;
+  country?: string;
+  originalLanguage?: string;
+  ageRating?: AgeRatingResponse;
+  formats?: ScreeningFormatResponse[];
+  companies?: ProductionCompanyResponse[];
+  translations?: TranslationResponse[];
+  cast?: CastResponse[];
+  images?: MovieImageResponse[];
 };
 
 export type MovieAvailabilityResponse = {
@@ -891,6 +905,16 @@ export const movieApi = {
       : `/api/movies/public/${movieId}`;
     const response = await axiosClient.get(url) as ApiWrapper<PublicMovieResponse>;
     return { ...response, result: toLegacyPublicMovie(response.result) } as ApiWrapper<MovieApiResponse>;
+  },
+
+  /** Same endpoint as getPublicMovieById(), returned raw (not squashed onto the legacy flat
+   *  MovieApiResponse shape) — carries cast/gallery/age-rating/formats/companies/translations
+   *  that toLegacyPublicMovie() drops. Use from the customer movie detail modal. */
+  getPublicMovieDetail: (movieId: number, clusterId?: number) => {
+    const url = clusterId
+      ? `/api/movies/public/${movieId}?clusterId=${clusterId}`
+      : `/api/movies/public/${movieId}`;
+    return axiosClient.get(url) as Promise<ApiWrapper<PublicMovieResponse>>;
   },
 
   uploadImage: (file: File) => {

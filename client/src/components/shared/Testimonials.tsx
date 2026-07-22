@@ -1,5 +1,5 @@
 import { Star, Quote } from "lucide-react";
-import { mockTestimonials } from "../../../../../../../CinePrime/hcm26_cpl_java_05_group1-develop/client/src/data/mockTestimonials";
+import { mockTestimonials } from "../../data/mockTestimonials";
 
 export function Testimonials() {
   return (

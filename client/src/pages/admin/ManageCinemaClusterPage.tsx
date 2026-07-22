@@ -371,9 +371,18 @@ export default function ManageCinemaClusterPage() {
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                          <MapPin size={16} className="text-blue-600" />
-                        </div>
+                        {cluster.coverImageUrl ? (
+                          <img
+                            src={cluster.coverImageUrl}
+                            alt=""
+                            loading="lazy"
+                            className="h-10 w-14 flex-shrink-0 rounded-lg object-cover"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                            <MapPin size={16} className="text-blue-600" />
+                          </div>
+                        )}
                         <div>
                           <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-main)" }}>{cluster.clusterName}</p>
                           <p style={{ fontSize: "11px", color: "var(--text-sub)" }}>
@@ -395,10 +404,36 @@ export default function ManageCinemaClusterPage() {
                         <span style={{ fontSize: "13px", color: "var(--text-sub)", maxWidth: "200px", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {cluster.address}
                         </span>
-                        {cluster.latitude != null && cluster.longitude != null && (
-                          <span className="inline-flex items-center gap-1 mt-0.5" style={{ fontSize: "10px", color: "#10b981" }}>
-                            <MapPin size={8} />
-                            {cluster.latitude.toFixed(4)}, {cluster.longitude.toFixed(4)}
+                        {cluster.latitude != null && cluster.longitude != null ? (
+                          <a
+                            href={`https://www.openstreetmap.org/?mlat=${cluster.latitude}&mlon=${cluster.longitude}#map=16/${cluster.latitude}/${cluster.longitude}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(event) => event.stopPropagation()}
+                            className="mt-0.5 inline-flex items-center gap-1 hover:underline"
+                            style={{ fontSize: "10.5px", color: "#059669" }}
+                            title="Open the verified cluster location on a map"
+                          >
+                            <CheckCircle size={9} /> Map verified ↗
+                          </a>
+                        ) : can.edit ? (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setWizardMode("edit");
+                              setWizardClusterId(cluster.clusterId);
+                              setWizardOpen(true);
+                            }}
+                            className="mt-0.5 inline-flex items-center gap-1 hover:underline"
+                            style={{ fontSize: "10.5px", color: "#d97706" }}
+                            title="Edit this cluster and select an address suggestion to verify its location"
+                          >
+                            <Edit2 size={9} /> Update location
+                          </button>
+                        ) : (
+                          <span className="mt-0.5 inline-flex items-center gap-1" style={{ fontSize: "10.5px", color: "#d97706" }}>
+                            <AlertCircle size={9} /> Location not verified
                           </span>
                         )}
                       </div>

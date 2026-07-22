@@ -1,0 +1,19 @@
+/* Thin, theme-matching scrollbar for dark scrollable panels (modals, dropdowns) —
+   replaces the default thick browser scrollbar which looks out of place on dark UI. */
+.nice-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+.nice-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.nice-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.nice-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+}
+.nice-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+}

@@ -33,6 +33,9 @@ public class CinemaCluster {
     @Column(name = "cluster_name", nullable = false, length = 100)
     String clusterName;
 
+    @Column(name = "cover_image_url", length = 1000)
+    String coverImageUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "venue_type", nullable = false, length = 20)
     CinemaVenueType venueType;
