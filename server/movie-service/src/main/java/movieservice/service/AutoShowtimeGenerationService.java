@@ -8,10 +8,15 @@ import movieservice.dto.response.AutoShowtimeIneligibleMovie;
 import movieservice.dto.response.AutoShowtimeGenerationRunResponse;
 import movieservice.entity.*;
 import movieservice.enums.MovieStatus;
+import movieservice.enums.CinemaRoomStatus;
+import movieservice.enums.ClusterStatus;
+import movieservice.enums.LayoutStatus;
 import movieservice.exception.AutoShowtimePreflightException;
 import movieservice.exception.MovieErrorCode;
 import movieservice.repository.CinemaClusterRepository;
+import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.MovieRepository;
+import movieservice.repository.RoomLayoutRepository;
 import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeAllocationPolicyRepository;
 import movieservice.repository.ShowtimeGenerationSkipRepository;
@@ -48,6 +53,8 @@ public class AutoShowtimeGenerationService {
     private final ShowtimeGenerationRunRepository generationRunRepository;
     private final MovieRepository  movieRepository;
     private final CinemaClusterRepository cinemaClusterRepository;
+    private final CinemaRoomRepository cinemaRoomRepository;
+    private final RoomLayoutRepository roomLayoutRepository;
     private final ShowTimeRepository showTimeRepository;
     private final ShowtimeGenerationSkipRepository showtimeGenerationSkipRepository;
     private final AutoShowtimeCandidateFactory candidateFactory;
@@ -219,9 +226,25 @@ public class AutoShowtimeGenerationService {
         /// Cluster không tồn tại thì không tạo run nửa chừng với scope thiếu dữ liệu.
         return clusterIds.stream()
                 .distinct()
-                .map(clusterId -> cinemaClusterRepository.findById(clusterId)
-                        .orElseThrow(()-> new AppException(MovieErrorCode.CLUSTER_NOT_FOUND
-                        )))
+                .map(clusterId -> {
+                    CinemaCluster cluster = cinemaClusterRepository.findById(clusterId)
+                            .orElseThrow(() -> new AppException(MovieErrorCode.CLUSTER_NOT_FOUND));
+                    if (cluster.getStatus() != ClusterStatus.ACTIVE) {
+                        throw new AppException(MovieErrorCode.CLUSTER_NOT_ACTIVE);
+                    }
+                    boolean hasSchedulableRoom = cinemaRoomRepository.findByCluster_ClusterId(clusterId).stream()
+                            .filter(room -> room.getStatus() == CinemaRoomStatus.ACTIVE)
+                            .filter(room -> room.getTotalSeatCapacity() != null && room.getTotalSeatCapacity() > 0)
+                            .anyMatch(room -> roomLayoutRepository
+                                    .findByCinemaRoomCinemaRoomIdAndStatus(room.getCinemaRoomId(), LayoutStatus.ACTIVE)
+                                    .filter(layout -> layout.getPersonCapacity() != null && layout.getPersonCapacity() > 0)
+                                    .filter(layout -> layout.getSellableUnitCount() != null && layout.getSellableUnitCount() > 0)
+                                    .isPresent());
+                    if (!hasSchedulableRoom) {
+                        throw new AppException(MovieErrorCode.AUTO_SHOWTIME_CLUSTER_NOT_SCHEDULABLE);
+                    }
+                    return cluster;
+                })
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 

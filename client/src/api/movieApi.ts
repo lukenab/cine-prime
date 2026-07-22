@@ -41,6 +41,8 @@ export type MovieApiResponse = {
   backdrops?: string[];
   trailerUrl?: string;
   releaseDate?: string;
+  country?: string;
+  ageRatingCode?: string;
 };
 
 export type RoomResponse = {
@@ -54,6 +56,7 @@ export type RoomResponse = {
   createdBy?: string;
   clusterId: number;
   clusterName?: string;
+  activeLayout?: RoomLayoutSummary;
 };
 
 /** Raw shape returned by the backend (movieservice.dto.response.CinemaRoomResponse) —
@@ -71,6 +74,7 @@ export type RoomApiResponse = {
   createdBy?: string;
   clusterId: number;
   clusterName?: string;
+  activeLayout?: RoomLayoutSummary;
 };
 
 // ── Cinema Room creation wizard (layout versioning / approval workflow) ────────
@@ -819,6 +823,8 @@ const toLegacyMovie = (movie: MovieResponse): MovieApiResponse => {
     showTimes: [],
     createAt: movie.createdAt ?? '',
     releaseDate: movie.releaseDate,
+    country: movie.country,
+    ageRatingCode: movie.ageRating?.ratingCode,
   };
 };
 
@@ -868,6 +874,7 @@ const toLegacyRoom = (room: RoomApiResponse): RoomResponse => ({
   createdBy: room.createdBy,
   clusterId: room.clusterId,
   clusterName: room.clusterName,
+  activeLayout: room.activeLayout,
 });
 
 export const movieApi = {

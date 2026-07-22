@@ -248,6 +248,12 @@ public enum MovieErrorCode implements BaseErrorCode {
                         HttpStatus.BAD_REQUEST),
         AUTO_SHOWTIME_SELECTED_MOVIE_NOT_ELIGIBLE(2100,
                         "Every selected movie must have at least one eligible showtime candidate.",
+                        HttpStatus.BAD_REQUEST),
+        AUTO_SHOWTIME_CLUSTER_NOT_SCHEDULABLE(2101,
+                        "Every selected cinema cluster must have at least one ACTIVE room with an ACTIVE sellable seat layout.",
+                        HttpStatus.BAD_REQUEST),
+        SHOWTIME_ROOM_NOT_SCHEDULABLE(2102,
+                        "The selected room must belong to an ACTIVE cinema cluster and have an ACTIVE sellable seat layout.",
                         HttpStatus.BAD_REQUEST);
 
         int code;

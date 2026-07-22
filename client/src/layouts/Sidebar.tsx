@@ -35,7 +35,7 @@ const navItems: NavItem[] = [
     ],
   },
   { icon: Building2, label: "Cinemas", id: "cinemas", path: "/admin/clusters", group: "catalog", roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"] },
-  { icon: Calendar,    label: "Showtimes",    id: "showtimes",  path: "/admin/showtimes",  group: "ops" },
+  { icon: Calendar, label: "Showtimes", id: "showtimes", path: "/admin/showtimes", group: "ops" },
   { icon: Ticket,      label: "Bookings",     id: "bookings",   path: "/admin/bookings",   group: "ops" },
   { icon: ShoppingCart,label: "Sell Tickets", id: "sell",       path: "/admin/sell",       group: "ops", roles: ["ROLE_EMPLOYEE"] },
   { icon: UserCog,     label: "Employees",    id: "employees",  path: "/admin/employees",  group: "ops",    roles: ["ROLE_ADMIN"] },
