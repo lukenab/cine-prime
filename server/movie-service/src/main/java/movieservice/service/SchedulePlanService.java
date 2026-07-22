@@ -11,6 +11,7 @@ import movieservice.repository.SchedulePlanRepository;
 import movieservice.service.autoshowtime.AutoShowtimeCandidatePersistenceService;
 import movieservice.service.autoshowtime.AutoShowtimePersistenceResult;
 import movieservice.service.autoshowtime.ShowtimeCandidate;
+import movieservice.service.autoshowtime.SchedulingEligibilityService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +22,7 @@ import java.time.LocalDateTime;
 public class SchedulePlanService {
     private final SchedulePlanRepository schedulePlanRepository;
     private final AutoShowtimeCandidatePersistenceService persistenceService;
+    private final SchedulingEligibilityService eligibilityService;
 
     @Transactional(readOnly = true)
     public SchedulePlanResponse get(Long planId) {
@@ -35,6 +37,7 @@ public class SchedulePlanService {
                 && plan.getStatus() != SchedulePlanStatus.CHANGES_REQUESTED) {
             throw new AppException(MovieErrorCode.SCHEDULE_PLAN_INVALID_TRANSITION);
         }
+        validateCurrentEligibility(plan);
         plan.setStatus(SchedulePlanStatus.IN_REVIEW);
         plan.setSubmittedAt(LocalDateTime.now());
         plan.setSubmittedBy(actor);
@@ -47,9 +50,6 @@ public class SchedulePlanService {
         SchedulePlan plan = loadForUpdate(planId);
         if (plan.getStatus() != SchedulePlanStatus.IN_REVIEW) {
             throw new AppException(MovieErrorCode.SCHEDULE_PLAN_INVALID_TRANSITION);
-        }
-        if (plan.getBlockerCount() != null && plan.getBlockerCount() > 0) {
-            throw new AppException(MovieErrorCode.SCHEDULE_PLAN_PUBLISH_CONFLICT);
         }
         plan.setStatus(SchedulePlanStatus.CHANGES_REQUESTED);
         plan.setReviewNote(note == null ? "Changes requested by " + actor : note);
@@ -65,6 +65,10 @@ public class SchedulePlanService {
         if (plan.getStatus() != SchedulePlanStatus.IN_REVIEW) {
             throw new AppException(MovieErrorCode.SCHEDULE_PLAN_INVALID_TRANSITION);
         }
+        if (plan.getBlockerCount() != null && plan.getBlockerCount() > 0) {
+            throw new AppException(MovieErrorCode.SCHEDULE_PLAN_PUBLISH_CONFLICT);
+        }
+        validateCurrentEligibility(plan);
 
         for (SchedulePlanSlot slot : plan.getSlots()) {
             if (slot.getPublishedShowtime() != null) continue;
@@ -86,6 +90,15 @@ public class SchedulePlanService {
     private SchedulePlan loadForUpdate(Long planId) {
         return schedulePlanRepository.findByIdForUpdate(planId)
                 .orElseThrow(() -> new AppException(MovieErrorCode.SCHEDULE_PLAN_NOT_FOUND));
+    }
+
+    private void validateCurrentEligibility(SchedulePlan plan) {
+        boolean invalid = plan.getSlots().stream().anyMatch(slot -> !eligibilityService.evaluate(
+                slot.getMovie(), slot.getCinemaRoom().getCluster(),
+                slot.getScreeningVersion(), slot.getBusinessDate()).eligible());
+        if (invalid) {
+            throw new AppException(MovieErrorCode.SCHEDULE_PLAN_ELIGIBILITY_CHANGED);
+        }
     }
 
     private ShowtimeCandidate toCandidate(SchedulePlanSlot slot) {

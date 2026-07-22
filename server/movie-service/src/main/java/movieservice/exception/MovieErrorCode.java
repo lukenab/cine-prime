@@ -260,6 +260,9 @@ public enum MovieErrorCode implements BaseErrorCode {
                         "The requested schedule plan transition is not allowed.", HttpStatus.CONFLICT),
         SCHEDULE_PLAN_PUBLISH_CONFLICT(2105,
                         "Schedule plan cannot be published because one or more slots are no longer valid.",
+                        HttpStatus.CONFLICT),
+        SCHEDULE_PLAN_ELIGIBILITY_CHANGED(2106,
+                        "Schedule plan rights, classification, or availability eligibility has changed.",
                         HttpStatus.CONFLICT);
 
         int code;
