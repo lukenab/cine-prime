@@ -14,8 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.*;
 
 @Service
@@ -54,7 +55,6 @@ public class AutoShowtimeCandidateFactory {
                 /// Deadline scope: không generate suất qua ngày mới
                 if (operatingHour == null
                         || operatingHour.isClosed() /// cluster đóng cửa
-                        || operatingHour.isClosesNextDay() /// cluster đóng qua ngày mới
                         || operatingHour.getOpensAt() == null /// cluster thiếu giờ mở hoặc đóng
                         || operatingHour.getClosesAt() == null
                 ) {
@@ -136,24 +136,28 @@ public class AutoShowtimeCandidateFactory {
         List<ShowtimeCandidate> candidates = new ArrayList<>();
 
         /// Slot đầu tiên phải đúng giờ mở cửa VD opentAt = 8h
-        LocalTime startTime = operatingHour.getOpensAt();
+        ZoneId businessZone = ZoneId.of(cluster.getTimezone());
+        ZonedDateTime startAt = ZonedDateTime.of(showDate, operatingHour.getOpensAt(), businessZone);
+        ZonedDateTime closingAt = ZonedDateTime.of(showDate, operatingHour.getClosesAt(), businessZone);
+        if (operatingHour.isClosesNextDay() || !closingAt.isAfter(startAt)) {
+            closingAt = closingAt.plusDays(1);
+        }
 
         while (true) {
             /// endtime là giờ phim kế thúc của thực tế
-            LocalTime endTime = startTime.plusMinutes(
-                    movie.getDurationMinutes()
-            );
+            ZonedDateTime endAt = startAt.plusMinutes(movie.getDurationMinutes());
 
             /// Phòng chỉ sẵn sàng sau khi phim kết thúc và hết cleanup buffer.
             /// Dùng LocalDateTime để không bị sai khi endTime + buffer đi qua mốc nửa đêm.
-            LocalDateTime roomAvailableAgain = LocalDateTime.of(showDate, endTime)
-                    .plusMinutes(policy.getCleanupBufferMinutes());
-            LocalDateTime closingTime = LocalDateTime.of(showDate, operatingHour.getClosesAt());
+            ZonedDateTime roomAvailableAgain = endAt.plusMinutes(policy.getCleanupBufferMinutes());
 
             ///  Nếu cả phim + cleanup không kịp trước giờ đóng cửa -> break
-            if (roomAvailableAgain.isAfter(closingTime)){
+            if (roomAvailableAgain.isAfter(closingAt)){
                 break;
             }
+
+            OffsetDateTime candidateStartAt = startAt.toOffsetDateTime();
+            OffsetDateTime candidateEndAt = endAt.toOffsetDateTime();
 
             candidates.add(
                     ShowtimeCandidate.builder()
@@ -163,8 +167,10 @@ public class AutoShowtimeCandidateFactory {
                             .cinemaRoomId(room.getCinemaRoomId())
                             .formatId(format.getFormatId())
                             .showDate(showDate)
-                            .startTime(startTime)
-                            .endTime(endTime)
+                            .startTime(candidateStartAt.toLocalTime())
+                            .endTime(candidateEndAt.toLocalTime())
+                            .startAt(candidateStartAt)
+                            .endAt(candidateEndAt)
                             .score(BigDecimal.ZERO)
                             .generationReason(
                                     GenerationReason.DEMAND_QUOTA_ALLOCATION
@@ -173,9 +179,7 @@ public class AutoShowtimeCandidateFactory {
             );
 
             ///  Chuyển sang slot kế tiếp
-            startTime = startTime.plusMinutes(
-                    policy.getTimeSlotIntervalMinutes()
-            );
+            startAt = startAt.plusMinutes(policy.getTimeSlotIntervalMinutes());
         }
         return candidates;
     }
@@ -196,25 +200,22 @@ public class AutoShowtimeCandidateFactory {
                 .distinct()
                 .toList();
 
-        Map<RoomDateKey, List<ShowTime>> existingShowtimesByRoomAndDate = new HashMap<>();
-        showTimeRepository.findActiveByRoomsAndDateRange(roomIds, run.getStartDate(), run.getEndDate())
-                .forEach(showtime -> existingShowtimesByRoomAndDate
-                        .computeIfAbsent(
-                                new RoomDateKey(
-                                        showtime.getCinemaRoom().getCinemaRoomId(),
-                                        showtime.getShowDate()
-                                ),
-                                ignored -> new ArrayList<>()
-                        )
+        OffsetDateTime fromInclusive = run.getStartDate()
+                .atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh"))
+                .toOffsetDateTime();
+        OffsetDateTime toExclusive = run.getEndDate().plusDays(2)
+                .atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh"))
+                .toOffsetDateTime();
+        Map<Long, List<ShowTime>> existingShowtimesByRoom = new HashMap<>();
+        showTimeRepository.findActiveByRoomsAndTemporalRange(roomIds, fromInclusive, toExclusive)
+                .forEach(showtime -> existingShowtimesByRoom
+                        .computeIfAbsent(showtime.getCinemaRoom().getCinemaRoomId(), ignored -> new ArrayList<>())
                         .add(showtime));
 
         return candidates.stream()
                 .filter(candidate -> !hasExistingShowtimeConflict(
                         candidate,
-                        existingShowtimesByRoomAndDate.getOrDefault(
-                                new RoomDateKey(candidate.getCinemaRoomId(), candidate.getShowDate()),
-                                List.of()
-                        ),
+                        existingShowtimesByRoom.getOrDefault(candidate.getCinemaRoomId(), List.of()),
                         policy.getCleanupBufferMinutes()
                 ))
                 .toList();
@@ -226,13 +227,13 @@ public class AutoShowtimeCandidateFactory {
             List<ShowTime> existingShowtimes,
             Integer cleanupBufferMinutes
     ) {
-        LocalDateTime candidateStart = LocalDateTime.of(candidate.getShowDate(), candidate.getStartTime());
-        LocalDateTime candidateAvailableAgain = LocalDateTime.of(candidate.getShowDate(), candidate.getEndTime())
+        OffsetDateTime candidateStart = candidate.temporalStartAt();
+        OffsetDateTime candidateAvailableAgain = candidate.temporalEndAt()
                 .plusMinutes(cleanupBufferMinutes);
 
         return existingShowtimes.stream().anyMatch(existing -> {
-            LocalDateTime existingStart = LocalDateTime.of(existing.getShowDate(), existing.getStartTime());
-            LocalDateTime existingAvailableAgain = LocalDateTime.of(existing.getShowDate(), existing.getEndTime())
+            OffsetDateTime existingStart = existing.getStartAt();
+            OffsetDateTime existingAvailableAgain = existing.getEndAt()
                     .plusMinutes(cleanupBufferMinutes);
 
             return candidateStart.isBefore(existingAvailableAgain)
@@ -261,6 +262,4 @@ public class AutoShowtimeCandidateFactory {
         return result;
     }
 
-    private record RoomDateKey(Long roomId, LocalDate showDate) {
-    }
 }

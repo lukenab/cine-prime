@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 
 @Data
 @FieldDefaults(level = AccessLevel.PRIVATE)
@@ -20,6 +21,10 @@ public class ShowTimeResponse {
     LocalTime startTime;
 
     LocalTime endTime;
+
+    OffsetDateTime startAt;
+
+    OffsetDateTime endAt;
 
     Long movieId;
 

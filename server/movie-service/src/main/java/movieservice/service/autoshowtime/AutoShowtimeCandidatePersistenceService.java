@@ -55,22 +55,20 @@ public class AutoShowtimeCandidatePersistenceService {
         }
 
         /// Check actual overlap trước để audit phân biệt conflict showtime thật với cleanup buffer conflict.
-        if (showTimeRepository.existsByCinemaRoomAndOverlappingTime(
+        if (showTimeRepository.existsByCinemaRoomAndOverlappingWindow(
                 room.getCinemaRoomId(),
-                candidate.getShowDate(),
-                candidate.getStartTime(),
-                candidate.getEndTime()
+                candidate.temporalStartAt(),
+                candidate.temporalEndAt()
         )) {
             return Optional.of(reject(candidate, GenerationSkipReason.EXISTING_SHOWTIME_CONFLICT,
                     "An existing non-cancelled showtime overlaps this candidate."));
         }
 
         /// Check thêm cleanup buffer vì DB exclusion constraint chỉ bảo vệ actual start/end time.
-        if (showTimeRepository.existsByCinemaRoomAndCleanupBufferConflict(
+        if (showTimeRepository.existsByCinemaRoomAndCleanupBufferWindowConflict(
                 room.getCinemaRoomId(),
-                candidate.getShowDate(),
-                candidate.getStartTime(),
-                candidate.getEndTime(),
+                candidate.temporalStartAt(),
+                candidate.temporalEndAt(),
                 cleanupBufferMinutes
         )) {
             return Optional.of(reject(candidate, GenerationSkipReason.CLEANUP_BUFFER_CONFLICT,
@@ -90,6 +88,8 @@ public class AutoShowtimeCandidatePersistenceService {
                 .showDate(candidate.getShowDate())
                 .startTime(candidate.getStartTime())
                 .endTime(candidate.getEndTime())
+                .startAt(candidate.temporalStartAt())
+                .endAt(candidate.temporalEndAt())
                 .languageCode("vi")
                 /// Không hardcode giá; lấy base seat price thấp nhất đã cấu hình trong room.
                 .basePrice(resolveBasePrice(room))

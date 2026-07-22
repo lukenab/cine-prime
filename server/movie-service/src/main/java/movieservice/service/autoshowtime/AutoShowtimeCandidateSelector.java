@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -206,15 +206,15 @@ public class AutoShowtimeCandidateSelector {
             List<ShowtimeCandidate> selectedInSameRoom,
             ShowtimeAllocationPolicy policy
     ) {
-        LocalTime candidateEndWithCleanup = candidate.getEndTime()
+        OffsetDateTime candidateEndWithCleanup = candidate.temporalEndAt()
                 .plusMinutes(policy.getCleanupBufferMinutes());
 
         return selectedInSameRoom.stream().anyMatch(selectedCandidate -> {
-            LocalTime selectedEndWithCleanup = selectedCandidate.getEndTime()
+            OffsetDateTime selectedEndWithCleanup = selectedCandidate.temporalEndAt()
                     .plusMinutes(policy.getCleanupBufferMinutes());
 
-            return candidate.getStartTime().isBefore(selectedEndWithCleanup)
-                    && selectedCandidate.getStartTime().isBefore(candidateEndWithCleanup);
+            return candidate.temporalStartAt().isBefore(selectedEndWithCleanup)
+                    && selectedCandidate.temporalStartAt().isBefore(candidateEndWithCleanup);
         });
     }
 

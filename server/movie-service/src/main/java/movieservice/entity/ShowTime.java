@@ -11,6 +11,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 
 @Getter
 @Setter
@@ -48,6 +51,13 @@ public class ShowTime {
 
     @Column(name = "end_time", nullable = false)
     LocalTime endTime;
+
+    /** Canonical time window. Legacy showDate/startTime/endTime remain during API migration only. */
+    @Column(name = "start_at", nullable = false)
+    OffsetDateTime startAt;
+
+    @Column(name = "end_at", nullable = false)
+    OffsetDateTime endAt;
 
     /** Ngôn ngữ âm thanh, e.g. "vi", "en" */
     @Column(name = "language_code", length = 10)
@@ -111,6 +121,7 @@ public class ShowTime {
 
     @PrePersist
     void prePersist() {
+        synchronizeTemporalWindow();
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
         if (status == null) status = ShowTimeStatus.SCHEDULED;
@@ -121,6 +132,41 @@ public class ShowTime {
 
     @PreUpdate
     void preUpdate() {
+        synchronizeTemporalWindow();
         updatedAt = LocalDateTime.now();
+    }
+
+    public void synchronizeTemporalWindow() {
+        ZoneId businessZone = resolveBusinessZone();
+
+        if (startAt == null && showDate != null && startTime != null) {
+            startAt = ZonedDateTime.of(showDate, startTime, businessZone).toOffsetDateTime();
+        }
+
+        if (endAt == null && showDate != null && startTime != null && endTime != null) {
+            LocalDate endDate = !endTime.isAfter(startTime) ? showDate.plusDays(1) : showDate;
+            endAt = ZonedDateTime.of(endDate, endTime, businessZone).toOffsetDateTime();
+        }
+
+        if (startAt != null && endAt != null) {
+            if (!endAt.isAfter(startAt)) {
+                throw new IllegalStateException("Showtime endAt must be after startAt");
+            }
+
+            ZonedDateTime localStart = startAt.atZoneSameInstant(businessZone);
+            ZonedDateTime localEnd = endAt.atZoneSameInstant(businessZone);
+            showDate = localStart.toLocalDate();
+            startTime = localStart.toLocalTime();
+            endTime = localEnd.toLocalTime();
+        }
+    }
+
+    private ZoneId resolveBusinessZone() {
+        String zone = cinemaRoom != null
+                && cinemaRoom.getCluster() != null
+                && cinemaRoom.getCluster().getTimezone() != null
+                ? cinemaRoom.getCluster().getTimezone()
+                : "Asia/Ho_Chi_Minh";
+        return ZoneId.of(zone);
     }
 }

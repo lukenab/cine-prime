@@ -623,6 +623,8 @@ public class ShowTimeService {
         r.setShowDate(s.getShowDate());
         r.setStartTime(s.getStartTime());
         r.setEndTime(s.getEndTime());
+        r.setStartAt(s.getStartAt());
+        r.setEndAt(s.getEndAt());
         r.setStatus(s.getStatus() != null ? s.getStatus().name() : null);
         if (s.getMovie() != null) {
             r.setMovieId(s.getMovie().getMovieId());
@@ -650,6 +652,8 @@ public class ShowTimeService {
         response.setShowDate(showTime.getShowDate());
         response.setStartTime(showTime.getStartTime());
         response.setEndTime(showTime.getEndTime());
+        response.setStartAt(showTime.getStartAt());
+        response.setEndAt(showTime.getEndAt());
         response.setStatus(showTime.getStatus() != null ? showTime.getStatus().name() : null);
         response.setUpdatedAt(showTime.getUpdatedAt());
         response.setBasePrice(showTime.getBasePrice());
