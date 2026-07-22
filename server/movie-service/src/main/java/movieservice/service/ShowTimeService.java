@@ -625,6 +625,10 @@ public class ShowTimeService {
         r.setEndTime(s.getEndTime());
         r.setStartAt(s.getStartAt());
         r.setEndAt(s.getEndAt());
+        r.setScreeningVersionId(s.getScreeningVersion() != null
+                ? s.getScreeningVersion().getScreeningVersionId() : null);
+        r.setAudioLanguageCode(s.getLanguageCode());
+        r.setSubtitleLanguageCode(s.getSubtitleCode());
         r.setStatus(s.getStatus() != null ? s.getStatus().name() : null);
         if (s.getMovie() != null) {
             r.setMovieId(s.getMovie().getMovieId());

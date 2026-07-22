@@ -4,6 +4,7 @@ import movieservice.entity.CinemaCluster;
 import movieservice.entity.CinemaClusterOperatingHour;
 import movieservice.entity.CinemaRoom;
 import movieservice.entity.Movie;
+import movieservice.entity.MovieScreeningVersion;
 import movieservice.entity.ScreeningFormat;
 import movieservice.entity.ShowTime;
 import movieservice.entity.ShowtimeAllocationPolicy;
@@ -11,6 +12,7 @@ import movieservice.entity.ShowtimeGenerationRun;
 import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.CinemaRoomFormatRepository;
 import movieservice.repository.MovieAvailabilityRepository;
+import movieservice.repository.MovieScreeningVersionRepository;
 import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeAllocationFormatPriorityRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import movieservice.enums.ScreeningVersionStatus;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -40,6 +43,7 @@ class AutoShowtimeCandidateFactoryTest {
     @Mock CinemaClusterRepository cinemaClusterRepository;
     @Mock CinemaRoomFormatRepository cinemaRoomFormatRepository;
     @Mock MovieAvailabilityRepository movieAvailabilityRepository;
+    @Mock MovieScreeningVersionRepository movieScreeningVersionRepository;
     @Mock ShowtimeAllocationFormatPriorityRepository formatPriorityRepository;
     @Mock ShowTimeRepository showTimeRepository;
 
@@ -54,20 +58,30 @@ class AutoShowtimeCandidateFactoryTest {
                 cinemaClusterRepository,
                 cinemaRoomFormatRepository,
                 movieAvailabilityRepository,
+                movieScreeningVersionRepository,
                 formatPriorityRepository,
                 showTimeRepository
         );
 
-        cluster = CinemaCluster.builder().clusterId(1L).build();
+        cluster = CinemaCluster.builder().clusterId(1L).timezone("Asia/Ho_Chi_Minh").build();
         room = CinemaRoom.builder().cinemaRoomId(10L).cluster(cluster).totalSeatCapacity(100).build();
         movie = Movie.builder()
                 .movieId(1L)
                 .durationMinutes(60)
                 .formats(List.of(ScreeningFormat.builder().formatId(1).build()))
                 .build();
+        MovieScreeningVersion version = MovieScreeningVersion.builder()
+                .screeningVersionId(100L)
+                .movie(movie)
+                .format(movie.getFormats().getFirst())
+                .audioLanguageCode("en")
+                .status(ScreeningVersionStatus.ACTIVE)
+                .build();
 
         when(cinemaClusterRepository.findById(1L)).thenReturn(Optional.of(cluster));
         when(movieAvailabilityRepository.existsSchedulableForDate(anyLong(), anyLong(), any())).thenReturn(true);
+        when(movieScreeningVersionRepository.findEffectiveVersions(anyLong(), any(), any()))
+                .thenReturn(List.of(version));
         when(cinemaRoomFormatRepository.findEligibleActiveRoomsByMovieIdAndFormatId(anyLong(), anyInt()))
                 .thenReturn(List.of(room));
         when(formatPriorityRepository.findAllByPolicyIdWithFormat(1L)).thenReturn(List.of());
@@ -76,7 +90,7 @@ class AutoShowtimeCandidateFactoryTest {
     @Test
     void buildRawCandidatesStopsWhenMovieAndCleanupWouldPassClosingTime() {
         cluster.setOperatingHours(List.of(operatingHour(LocalTime.of(8, 0), LocalTime.of(10, 0))));
-        when(showTimeRepository.findActiveByRoomsAndDateRange(any(), any(), any())).thenReturn(List.of());
+        when(showTimeRepository.findActiveByRoomsAndTemporalRange(any(), any(), any())).thenReturn(List.of());
 
         List<ShowtimeCandidate> candidates = factory.buildRawCandidates(run(15));
 
@@ -96,7 +110,8 @@ class AutoShowtimeCandidateFactoryTest {
                 .startTime(LocalTime.of(9, 30))
                 .endTime(LocalTime.of(10, 30))
                 .build();
-        when(showTimeRepository.findActiveByRoomsAndDateRange(any(), any(), any()))
+        manualShowtime.synchronizeTemporalWindow();
+        when(showTimeRepository.findActiveByRoomsAndTemporalRange(any(), any(), any()))
                 .thenReturn(List.of(manualShowtime));
 
         List<ShowtimeCandidate> candidates = factory.buildRawCandidates(run(60));

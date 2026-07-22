@@ -19,6 +19,7 @@ public class ShowtimeCandidate {
     Long clusterId;
     Long cinemaRoomId;
     Integer formatId;
+    Long screeningVersionId;
 
     LocalDate showDate;
     LocalTime startTime;

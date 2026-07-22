@@ -425,6 +425,10 @@ public class AutoShowtimeGenerationService {
                 showtime.getCinemaRoom().getCinemaRoomName(),
                 showtime.getFormat() == null ? null : showtime.getFormat().getFormatId(),
                 showtime.getFormat() == null ? null : showtime.getFormat().getFormatName(),
+                showtime.getScreeningVersion() == null ? null
+                        : showtime.getScreeningVersion().getScreeningVersionId(),
+                showtime.getLanguageCode(),
+                showtime.getSubtitleCode(),
                 showtime.getShowDate(),
                 showtime.getStartTime(),
                 showtime.getEndTime(),

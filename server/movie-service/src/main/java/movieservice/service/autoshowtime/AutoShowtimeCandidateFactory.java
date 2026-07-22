@@ -6,10 +6,12 @@ import movieservice.enums.GenerationReason;
 import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.CinemaRoomFormatRepository;
 import movieservice.repository.MovieAvailabilityRepository;
+import movieservice.repository.MovieScreeningVersionRepository;
 import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeAllocationFormatPriorityRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import movieservice.enums.ScreeningVersionStatus;
 
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
@@ -25,6 +27,7 @@ public class AutoShowtimeCandidateFactory {
     private final CinemaClusterRepository cinemaClusterRepository;
     private final CinemaRoomFormatRepository cinemaRoomFormatRepository;
     private final MovieAvailabilityRepository movieAvailabilityRepository;
+    private final MovieScreeningVersionRepository movieScreeningVersionRepository;
     private final ShowtimeAllocationFormatPriorityRepository formatPriorityRepository;
     private final ShowTimeRepository showTimeRepository;
 
@@ -76,19 +79,20 @@ public class AutoShowtimeCandidateFactory {
                     }
 
                     /// Format cho movie, có thể có nhiều format 2D, 3D, IMAX
-                    List<ScreeningFormat> formats = movie.getFormats().stream().sorted(
+                    List<MovieScreeningVersion> versions = movieScreeningVersionRepository
+                            .findEffectiveVersions(movie.getMovieId(), showDate, ScreeningVersionStatus.ACTIVE)
+                            .stream().sorted(
                             Comparator.comparing(
-                                    (ScreeningFormat format) -> formatPriorityById.getOrDefault(
-                                            format.getFormatId(),
+                                    (MovieScreeningVersion version) -> formatPriorityById.getOrDefault(
+                                            version.getFormat().getFormatId(),
                                             0
-                                    ) /// Format ko có config priority nhận value là 0
+                                    )
                             )
                                     .reversed()
-                    )
-                            .toList();
+                            ).toList();
 
-                    /// Loop qua từng format movie hỗ trợ
-                    for (ScreeningFormat format : formats) {
+                    for (MovieScreeningVersion version : versions) {
+                        ScreeningFormat format = version.getFormat();
                         List<CinemaRoom> rooms = cinemaRoomFormatRepository.findEligibleActiveRoomsByMovieIdAndFormatId(
                                 movie.getMovieId(),
                                 format.getFormatId()
@@ -108,6 +112,7 @@ public class AutoShowtimeCandidateFactory {
                                             cluster,
                                             room,
                                             format,
+                                            version,
                                             showDate,
                                             operatingHour,
                                             policy
@@ -129,6 +134,7 @@ public class AutoShowtimeCandidateFactory {
             CinemaCluster cluster,
             CinemaRoom room,
             ScreeningFormat format,
+            MovieScreeningVersion screeningVersion,
             LocalDate showDate,
             CinemaClusterOperatingHour operatingHour,
             ShowtimeAllocationPolicy policy
@@ -166,6 +172,7 @@ public class AutoShowtimeCandidateFactory {
                             .clusterId(cluster.getClusterId())
                             .cinemaRoomId(room.getCinemaRoomId())
                             .formatId(format.getFormatId())
+                            .screeningVersionId(screeningVersion.getScreeningVersionId())
                             .showDate(showDate)
                             .startTime(candidateStartAt.toLocalTime())
                             .endTime(candidateEndAt.toLocalTime())
