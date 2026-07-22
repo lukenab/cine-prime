@@ -27,6 +27,7 @@ import {
   type AutoShowtimeGenerationRunResponse,
   type AutoShowtimeIneligibleMovie,
   type GenerationRunStatus,
+  type SchedulePlanResponse,
 } from "../../api/showtimeApi";
 
 type StepKey = "scope" | "review" | "running" | "results";
@@ -139,6 +140,10 @@ export default function AutoScheduleShowtimePage({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [ineligibleMovies, setIneligibleMovies] = useState<AutoShowtimeIneligibleMovie[]>([]);
   const [run, setRun] = useState<AutoShowtimeGenerationRunResponse | null>(null);
+  const [plan, setPlan] = useState<SchedulePlanResponse | null>(null);
+  const [planBusy, setPlanBusy] = useState(false);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [reviewNote, setReviewNote] = useState("");
   const [runningSince, setRunningSince] = useState<number | null>(null);
   const [resultsPage, setResultsPage] = useState(0);
   const [recentRuns, setRecentRuns] = useState<RecentAutoScheduleRun[]>([]);
@@ -217,9 +222,9 @@ export default function AutoScheduleShowtimePage({
       if (data.status === "COMPLETED" || data.status === "PARTIALLY_COMPLETED" || data.status === "FAILED") {
         stopPolling();
         setStep("results");
-        if (data.status !== "FAILED" && notifiedTerminalRun.current !== data.generationRunId) {
-          notifiedTerminalRun.current = data.generationRunId;
-          onShowtimesChanged?.();
+        if (data.schedulePlanId) {
+          const planResponse = await showtimeApi.getSchedulePlan(data.schedulePlanId);
+          setPlan(planResponse.result);
         }
       }
     } catch {
@@ -283,6 +288,9 @@ export default function AutoScheduleShowtimePage({
   const resetWizard = () => {
     stopPolling();
     setRun(null);
+    setPlan(null);
+    setPlanError(null);
+    setReviewNote("");
     setRunningSince(null);
     setSubmitError(null);
     setIneligibleMovies([]);
@@ -297,6 +305,29 @@ export default function AutoScheduleShowtimePage({
     if (!run) return;
     setResultsPage(page);
     void pollRun(run.generationRunId, page);
+  };
+
+  const transitionPlan = async (action: "submit" | "changes" | "publish") => {
+    if (!plan) return;
+    setPlanBusy(true);
+    setPlanError(null);
+    try {
+      const response = action === "submit"
+        ? await showtimeApi.submitSchedulePlanReview(plan.schedulePlanId, reviewNote || undefined)
+        : action === "changes"
+          ? await showtimeApi.requestSchedulePlanChanges(plan.schedulePlanId, reviewNote || undefined)
+          : await showtimeApi.publishSchedulePlan(plan.schedulePlanId);
+      setPlan(response.result);
+      if (action === "publish" && run) {
+        notifiedTerminalRun.current = run.generationRunId;
+        onShowtimesChanged?.();
+        await pollRun(run.generationRunId, resultsPage);
+      }
+    } catch (error) {
+      setPlanError(extractErrorMessage(error).message);
+    } finally {
+      setPlanBusy(false);
+    }
   };
 
   return (
@@ -668,11 +699,12 @@ export default function AutoScheduleShowtimePage({
             </div>
           )}
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
               ["Candidates", run.summary.candidateCount, "var(--text-main)"],
-              ["Created", run.summary.createdCount, "#059669"],
+              ["Draft slots", run.summary.createdCount, "#059669"],
               ["Skipped", run.summary.skippedCount, "#d97706"],
+              ["Partitions", `${run.summary.successfulPartitionCount}/${run.summary.successfulPartitionCount + run.summary.failedPartitionCount}`, run.summary.failedPartitionCount ? "#d97706" : "#059669"],
             ].map(([label, value, color]) => (
               <div key={String(label)} className="rounded-2xl border p-3.5" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
                 <p style={{ color: "var(--text-sub)", fontSize: "10.5px", fontWeight: 650, textTransform: "uppercase" }}>{label}</p>
@@ -680,6 +712,71 @@ export default function AutoScheduleShowtimePage({
               </div>
             ))}
           </div>
+
+          {plan && (
+            <section className="overflow-hidden rounded-2xl border" style={{ borderColor: plan.blockerCount ? "rgba(225,29,72,.3)" : "var(--border-color)", background: "var(--bg-card)" }}>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3" style={{ borderColor: "var(--border-color)" }}>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p style={{ color: "var(--text-main)", fontSize: "13px", fontWeight: 750 }}>Schedule plan #{plan.schedulePlanId}</p>
+                    <span className="rounded-md px-2 py-0.5 text-[10px] font-bold" style={{ color: plan.status === "PUBLISHED" ? "#059669" : "#2563eb", background: plan.status === "PUBLISHED" ? "rgba(5,150,105,.1)" : "rgba(37,99,235,.1)" }}>
+                      {plan.status.replace(/_/g, " ")}
+                    </span>
+                  </div>
+                  <p className="mt-0.5" style={{ color: "var(--text-sub)", fontSize: "11px" }}>
+                    Generation creates a draft. Only publishing materializes customer-facing showtimes.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {(plan.status === "DRAFT_GENERATED" || plan.status === "CHANGES_REQUESTED") && (
+                    <button type="button" disabled={planBusy} onClick={() => void transitionPlan("submit")} className="rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-50">
+                      Submit for review
+                    </button>
+                  )}
+                  {plan.status === "IN_REVIEW" && <>
+                    <button type="button" disabled={planBusy} onClick={() => void transitionPlan("changes")} className="rounded-xl border px-3.5 py-2 text-xs font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }}>
+                      Request changes
+                    </button>
+                    <button type="button" disabled={planBusy || plan.blockerCount > 0} onClick={() => void transitionPlan("publish")} className="rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">
+                      {planBusy ? "Publishing…" : "Publish schedule"}
+                    </button>
+                  </>}
+                </div>
+              </div>
+
+              {plan.blockerCount > 0 && (
+                <div className="border-b bg-rose-500/10 px-4 py-3" style={{ borderColor: "rgba(225,29,72,.2)" }}>
+                  <div className="flex items-center gap-2 text-rose-500"><AlertTriangle size={14} /><p className="text-xs font-bold">{plan.blockerCount} publishing blocker{plan.blockerCount === 1 ? "" : "s"}</p></div>
+                  <pre className="mt-2 whitespace-pre-wrap font-sans text-[11px] leading-5 text-rose-500/90">{plan.validationSummary}</pre>
+                </div>
+              )}
+              {planError && <p className="border-b bg-rose-500/10 px-4 py-2.5 text-xs text-rose-500" style={{ borderColor: "rgba(225,29,72,.2)" }}>{planError}</p>}
+
+              {plan.status !== "PUBLISHED" && (
+                <div className="border-b px-4 py-3" style={{ borderColor: "var(--border-color)" }}>
+                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--text-sub)" }}>Review note</label>
+                  <textarea value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} rows={2} placeholder="Optional for submission; explain required changes when returning a plan."
+                    className="w-full resize-none rounded-xl border bg-transparent px-3 py-2 text-xs outline-none" style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }} />
+                </div>
+              )}
+
+              <div className="max-h-72 overflow-auto">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0" style={{ background: "var(--bg-card)", color: "var(--text-sub)" }}>
+                    <tr><th className="px-4 py-2 text-left">Movie</th><th className="px-4 py-2 text-left">Cinema / room</th><th className="px-4 py-2 text-left">Version</th><th className="px-4 py-2 text-left">Business time</th></tr>
+                  </thead>
+                  <tbody>
+                    {plan.slots.map((slot) => <tr key={slot.schedulePlanSlotId} className="border-t" style={{ borderColor: "var(--border-color)" }}>
+                      <td className="px-4 py-2.5 font-semibold" style={{ color: "var(--text-main)" }}>{slot.movieTitle}</td>
+                      <td className="px-4 py-2.5" style={{ color: "var(--text-sub)" }}>{slot.clusterName} · {slot.cinemaRoomName}</td>
+                      <td className="px-4 py-2.5" style={{ color: "var(--text-sub)" }}>{slot.formatCode} · {slot.audioLanguageCode}{slot.subtitleLanguageCode ? ` / ${slot.subtitleLanguageCode}` : ""}</td>
+                      <td className="px-4 py-2.5" style={{ color: "var(--text-sub)" }}>{slot.businessDate} · {new Date(slot.startAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}–{new Date(slot.endAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</td>
+                    </tr>)}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
           <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
             <p className="border-b px-4 py-3" style={{ borderColor: "var(--border-color)", fontSize: "13px", fontWeight: 700, color: "var(--text-main)" }}>Per-movie breakdown</p>
@@ -718,7 +815,7 @@ export default function AutoScheduleShowtimePage({
 
           <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
             <p className="border-b px-4 py-3" style={{ borderColor: "var(--border-color)", fontSize: "13px", fontWeight: 700, color: "var(--text-main)" }}>
-              Generated showtimes ({run.showtimes.totalElements})
+              Published showtimes ({run.showtimes.totalElements})
             </p>
             <div className="overflow-x-auto">
               <table className="w-full" style={{ fontSize: "12.5px" }}>
@@ -746,7 +843,7 @@ export default function AutoScheduleShowtimePage({
                     </tr>
                   ))}
                   {run.showtimes.items.length === 0 && (
-                    <tr><td colSpan={7} className="px-4 py-4 text-center" style={{ color: "var(--text-sub)" }}>No showtimes were created.</td></tr>
+                    <tr><td colSpan={7} className="px-4 py-4 text-center" style={{ color: "var(--text-sub)" }}>No showtimes are published yet. Review and publish the generated plan first.</td></tr>
                   )}
                 </tbody>
               </table>
