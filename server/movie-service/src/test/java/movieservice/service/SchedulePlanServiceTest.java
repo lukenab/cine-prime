@@ -6,6 +6,7 @@ import movieservice.entity.ShowtimeGenerationRun;
 import movieservice.enums.SchedulePlanStatus;
 import movieservice.repository.SchedulePlanRepository;
 import movieservice.service.autoshowtime.AutoShowtimeCandidatePersistenceService;
+import movieservice.service.autoshowtime.SchedulingEligibilityService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,12 +23,13 @@ import static org.mockito.Mockito.*;
 class SchedulePlanServiceTest {
     @Mock SchedulePlanRepository schedulePlanRepository;
     @Mock AutoShowtimeCandidatePersistenceService persistenceService;
+    @Mock SchedulingEligibilityService eligibilityService;
 
     private SchedulePlanService service;
 
     @BeforeEach
     void setUp() {
-        service = new SchedulePlanService(schedulePlanRepository, persistenceService);
+        service = new SchedulePlanService(schedulePlanRepository, persistenceService, eligibilityService);
     }
 
     @Test
@@ -61,6 +63,27 @@ class SchedulePlanServiceTest {
 
         assertEquals("PUBLISHED", response.status());
         verifyNoInteractions(persistenceService);
+    }
+
+    @Test
+    void publishingAPlanWithValidationBlockersIsRejected() {
+        SchedulePlan plan = plan(SchedulePlanStatus.IN_REVIEW);
+        plan.setBlockerCount(2);
+        when(schedulePlanRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(plan));
+
+        assertThrows(AppException.class, () -> service.publish(10L, "admin-2"));
+        verifyNoInteractions(persistenceService);
+    }
+
+    @Test
+    void blockedPlanCanStillBeReturnedForChanges() {
+        SchedulePlan plan = plan(SchedulePlanStatus.IN_REVIEW);
+        plan.setBlockerCount(2);
+        when(schedulePlanRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(plan));
+
+        var response = service.requestChanges(10L, "admin-2", "Resolve blockers");
+
+        assertEquals("CHANGES_REQUESTED", response.status());
     }
 
     private SchedulePlan plan(SchedulePlanStatus status) {
