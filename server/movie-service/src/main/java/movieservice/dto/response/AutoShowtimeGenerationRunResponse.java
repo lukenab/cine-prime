@@ -3,6 +3,7 @@ package movieservice.dto.response;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 /// DTO cho API GET generation run: vừa cho client poll trạng thái, vừa trả danh sách kết quả đã persist.
@@ -51,6 +52,8 @@ public record AutoShowtimeGenerationRunResponse(
             LocalDate showDate,
             LocalTime startTime,
             LocalTime endTime,
+            OffsetDateTime startAt,
+            OffsetDateTime endAt,
             String status,
             String generationReason
     ) {

@@ -2,6 +2,7 @@ package movieservice.repository;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 import org.springframework.data.domain.Page;
@@ -13,6 +14,32 @@ import org.springframework.data.repository.query.Param;
 import movieservice.entity.ShowTime;
 
 public interface ShowTimeRepository extends JpaRepository<ShowTime, Long> {
+
+        @Query("SELECT COUNT(s) > 0 FROM ShowTime s WHERE s.cinemaRoom.cinemaRoomId = :roomId " +
+                        "AND s.status <> movieservice.enums.ShowTimeStatus.CANCELLED " +
+                        "AND :startAt < s.endAt AND :endAt > s.startAt")
+        boolean existsByCinemaRoomAndOverlappingWindow(
+                        @Param("roomId") Long roomId,
+                        @Param("startAt") OffsetDateTime startAt,
+                        @Param("endAt") OffsetDateTime endAt);
+
+        @Query(value = """
+                        SELECT EXISTS (
+                            SELECT 1
+                            FROM show_time s
+                            WHERE s.cinema_room_id = :roomId
+                              AND s.status <> 'CANCELLED'
+                              AND CAST(:startAt AS timestamptz) < s.end_at
+                                  + (CAST(:cleanupBufferMinutes AS integer) * INTERVAL '1 minute')
+                              AND s.start_at < CAST(:endAt AS timestamptz)
+                                  + (CAST(:cleanupBufferMinutes AS integer) * INTERVAL '1 minute')
+                        )
+                        """, nativeQuery = true)
+        boolean existsByCinemaRoomAndCleanupBufferWindowConflict(
+                        @Param("roomId") Long roomId,
+                        @Param("startAt") OffsetDateTime startAt,
+                        @Param("endAt") OffsetDateTime endAt,
+                        @Param("cleanupBufferMinutes") Integer cleanupBufferMinutes);
 
         @Query("SELECT COUNT(s) > 0 FROM ShowTime s WHERE s.cinemaRoom.cinemaRoomId = :roomId " +
                         "AND s.showDate = :showDate " +
@@ -119,6 +146,16 @@ public interface ShowTimeRepository extends JpaRepository<ShowTime, Long> {
                         @Param("roomIds") List<Long> roomIds,
                         @Param("fromDate") LocalDate fromDate,
                         @Param("toDate") LocalDate toDate);
+
+        @Query("SELECT s FROM ShowTime s " +
+                        "WHERE s.cinemaRoom.cinemaRoomId IN :roomIds " +
+                        "AND s.startAt < :toExclusive AND s.endAt > :fromInclusive " +
+                        "AND s.status <> movieservice.enums.ShowTimeStatus.CANCELLED " +
+                        "ORDER BY s.cinemaRoom.cinemaRoomId, s.startAt")
+        List<ShowTime> findActiveByRoomsAndTemporalRange(
+                        @Param("roomIds") List<Long> roomIds,
+                        @Param("fromInclusive") OffsetDateTime fromInclusive,
+                        @Param("toExclusive") OffsetDateTime toExclusive);
 
         Page<ShowTime> findByGenerationRun_GenerationRunIdOrderByShowDateAscStartTimeAsc(
             Long generationRunId,

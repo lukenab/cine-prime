@@ -428,6 +428,8 @@ public class AutoShowtimeGenerationService {
                 showtime.getShowDate(),
                 showtime.getStartTime(),
                 showtime.getEndTime(),
+                showtime.getStartAt(),
+                showtime.getEndAt(),
                 showtime.getStatus().name(),
                 showtime.getGenerationReason() == null ? null : showtime.getGenerationReason().name()
         );
