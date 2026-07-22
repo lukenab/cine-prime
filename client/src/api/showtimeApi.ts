@@ -99,14 +99,53 @@ export interface AutoShowtimeMovieResult {
 export interface AutoShowtimeGenerationRunResponse {
   generationRunId: number;
   status: GenerationRunStatus;
+  schedulePlanId?: number;
+  schedulePlanStatus?: SchedulePlanStatus;
   startDate: string;
   endDate: string;
-  summary: { candidateCount: number; createdCount: number; skippedCount: number };
+  summary: { candidateCount: number; createdCount: number; skippedCount: number; successfulPartitionCount: number; failedPartitionCount: number };
   movieResults: AutoShowtimeMovieResult[];
   showtimes: { items: GeneratedShowtime[]; page: number; size: number; totalElements: number; totalPages: number };
   startedAt?: string;
   completedAt?: string;
   failureDetail?: string;
+}
+
+export type SchedulePlanStatus = 'DRAFT_GENERATED' | 'IN_REVIEW' | 'CHANGES_REQUESTED' | 'PUBLISHED';
+
+export interface SchedulePlanSlot {
+  schedulePlanSlotId: number;
+  movieId: number;
+  movieTitle: string;
+  clusterId: number;
+  clusterName: string;
+  cinemaRoomId: number;
+  cinemaRoomName: string;
+  screeningVersionId: number;
+  formatCode: string;
+  audioLanguageCode: string;
+  subtitleLanguageCode?: string;
+  businessDate: string;
+  startAt: string;
+  endAt: string;
+  basePrice?: number;
+  totalSeats?: number;
+  generationReason?: string;
+  publishedShowtimeId?: number;
+}
+
+export interface SchedulePlanResponse {
+  schedulePlanId: number;
+  generationRunId: number;
+  status: SchedulePlanStatus;
+  blockerCount: number;
+  validationSummary?: string;
+  slots: SchedulePlanSlot[];
+  submittedAt?: string;
+  submittedBy?: string;
+  publishedAt?: string;
+  publishedBy?: string;
+  reviewNote?: string;
 }
 
 export interface AutoShowtimeIneligibleMovie {
@@ -157,4 +196,16 @@ export const showtimeApi = {
    *  run isn't ACCEPTED anymore (already running/done) — safe to call speculatively. */
   executeAutoGenerationRun: (id: number) =>
     axiosClient.post(`/api/schedules/auto-generation-runs/${id}/execute`) as Promise<ApiWrapper<unknown>>,
+
+  getSchedulePlan: (id: number) =>
+    axiosClient.get(`/api/schedule-plans/${id}`) as Promise<ApiWrapper<SchedulePlanResponse>>,
+
+  submitSchedulePlanReview: (id: number, note?: string) =>
+    axiosClient.post(`/api/schedule-plans/${id}/submit-review`, { note }) as Promise<ApiWrapper<SchedulePlanResponse>>,
+
+  requestSchedulePlanChanges: (id: number, note?: string) =>
+    axiosClient.post(`/api/schedule-plans/${id}/request-changes`, { note }) as Promise<ApiWrapper<SchedulePlanResponse>>,
+
+  publishSchedulePlan: (id: number) =>
+    axiosClient.post(`/api/schedule-plans/${id}/publish`) as Promise<ApiWrapper<SchedulePlanResponse>>,
 };
