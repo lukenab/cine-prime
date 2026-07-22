@@ -5,7 +5,6 @@ import movieservice.entity.*;
 import movieservice.enums.GenerationReason;
 import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.CinemaRoomFormatRepository;
-import movieservice.repository.MovieAvailabilityRepository;
 import movieservice.repository.MovieScreeningVersionRepository;
 import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeAllocationFormatPriorityRepository;
@@ -26,8 +25,8 @@ import java.util.*;
 public class AutoShowtimeCandidateFactory {
     private final CinemaClusterRepository cinemaClusterRepository;
     private final CinemaRoomFormatRepository cinemaRoomFormatRepository;
-    private final MovieAvailabilityRepository movieAvailabilityRepository;
     private final MovieScreeningVersionRepository movieScreeningVersionRepository;
+    private final SchedulingEligibilityService schedulingEligibilityService;
     private final ShowtimeAllocationFormatPriorityRepository formatPriorityRepository;
     private final ShowTimeRepository showTimeRepository;
 
@@ -66,18 +65,6 @@ public class AutoShowtimeCandidateFactory {
 
                 // Loop qua các movie thuộc scope run
                 for (Movie movie : run.getMovies()){
-                    /// Kiểm tra movie có được phép chiếu ở : cluster hiện tại, ngày hiện tại
-                    boolean schedulable = movieAvailabilityRepository.existsSchedulableForDate(
-                            movie.getMovieId(),
-                            cluster.getClusterId(),
-                            showDate
-                    );
-
-                    /// Nếu ko có MovieAvailability hợp lệ, ko tạo candidate cho movie đó tại cluster/ ngày đó
-                    if (!schedulable){
-                        continue;
-                    }
-
                     /// Format cho movie, có thể có nhiều format 2D, 3D, IMAX
                     List<MovieScreeningVersion> versions = movieScreeningVersionRepository
                             .findEffectiveVersions(movie.getMovieId(), showDate, ScreeningVersionStatus.ACTIVE)
@@ -92,6 +79,11 @@ public class AutoShowtimeCandidateFactory {
                             ).toList();
 
                     for (MovieScreeningVersion version : versions) {
+                        if (!schedulingEligibilityService
+                                .evaluate(movie, cluster, version, showDate)
+                                .eligible()) {
+                            continue;
+                        }
                         ScreeningFormat format = version.getFormat();
                         List<CinemaRoom> rooms = cinemaRoomFormatRepository.findEligibleActiveRoomsByMovieIdAndFormatId(
                                 movie.getMovieId(),

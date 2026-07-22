@@ -11,7 +11,6 @@ import movieservice.entity.ShowtimeAllocationPolicy;
 import movieservice.entity.ShowtimeGenerationRun;
 import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.CinemaRoomFormatRepository;
-import movieservice.repository.MovieAvailabilityRepository;
 import movieservice.repository.MovieScreeningVersionRepository;
 import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeAllocationFormatPriorityRepository;
@@ -42,8 +41,8 @@ class AutoShowtimeCandidateFactoryTest {
 
     @Mock CinemaClusterRepository cinemaClusterRepository;
     @Mock CinemaRoomFormatRepository cinemaRoomFormatRepository;
-    @Mock MovieAvailabilityRepository movieAvailabilityRepository;
     @Mock MovieScreeningVersionRepository movieScreeningVersionRepository;
+    @Mock SchedulingEligibilityService schedulingEligibilityService;
     @Mock ShowtimeAllocationFormatPriorityRepository formatPriorityRepository;
     @Mock ShowTimeRepository showTimeRepository;
 
@@ -57,8 +56,8 @@ class AutoShowtimeCandidateFactoryTest {
         factory = new AutoShowtimeCandidateFactory(
                 cinemaClusterRepository,
                 cinemaRoomFormatRepository,
-                movieAvailabilityRepository,
                 movieScreeningVersionRepository,
+                schedulingEligibilityService,
                 formatPriorityRepository,
                 showTimeRepository
         );
@@ -79,7 +78,8 @@ class AutoShowtimeCandidateFactoryTest {
                 .build();
 
         when(cinemaClusterRepository.findById(1L)).thenReturn(Optional.of(cluster));
-        when(movieAvailabilityRepository.existsSchedulableForDate(anyLong(), anyLong(), any())).thenReturn(true);
+        when(schedulingEligibilityService.evaluate(any(), any(), any(), any()))
+                .thenReturn(SchedulingEligibilityResult.allowed());
         when(movieScreeningVersionRepository.findEffectiveVersions(anyLong(), any(), any()))
                 .thenReturn(List.of(version));
         when(cinemaRoomFormatRepository.findEligibleActiveRoomsByMovieIdAndFormatId(anyLong(), anyInt()))
