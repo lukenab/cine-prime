@@ -254,7 +254,13 @@ public enum MovieErrorCode implements BaseErrorCode {
                         HttpStatus.BAD_REQUEST),
         SHOWTIME_ROOM_NOT_SCHEDULABLE(2102,
                         "The selected room must belong to an ACTIVE cinema cluster and have an ACTIVE sellable seat layout.",
-                        HttpStatus.BAD_REQUEST);
+                        HttpStatus.BAD_REQUEST),
+        SCHEDULE_PLAN_NOT_FOUND(2103, "Schedule plan was not found.", HttpStatus.NOT_FOUND),
+        SCHEDULE_PLAN_INVALID_TRANSITION(2104,
+                        "The requested schedule plan transition is not allowed.", HttpStatus.CONFLICT),
+        SCHEDULE_PLAN_PUBLISH_CONFLICT(2105,
+                        "Schedule plan cannot be published because one or more slots are no longer valid.",
+                        HttpStatus.CONFLICT);
 
         int code;
         String message;

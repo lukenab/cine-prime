@@ -101,6 +101,9 @@ public class ShowtimeGenerationRun {
     @OrderBy("createdAt ASC")
     List<ShowtimeGenerationSkip> skips;
 
+    @OneToOne(mappedBy = "generationRun", fetch = FetchType.LAZY)
+    SchedulePlan schedulePlan;
+
     @PrePersist
     void prePersist(){
         LocalDateTime now = LocalDateTime.now();
