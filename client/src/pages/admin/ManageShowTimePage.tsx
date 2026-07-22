@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Search, Plus, SlidersHorizontal, RefreshCw, AlertCircle } from "lucide-react";
+import { Search, Plus, SlidersHorizontal, RefreshCw, AlertCircle, CalendarDays, History, List } from "lucide-react";
 import { useOutletContext } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 
 import { ShowtimeStatsCards } from "../../layouts/ShowTimeStatsCards";
 import { ShowtimeTable } from "../../layouts/ShowTimeTable";
@@ -11,9 +12,18 @@ import {
   type ShowtimeAssignPayload,
   type ShowtimeUpdatePayload,
 } from "../../api/showtimeApi";
+import {
+  AutoScheduleWorkspaceModal,
+  GenerationRunsView,
+  ShowtimeCalendarView,
+  ShowtimeCreateChoiceDialog,
+} from "./showtimeWorkspace/ShowtimeWorkspaceViews";
+
+type WorkspaceView = "calendar" | "list" | "runs";
 
 export default function ManageShowtimePage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
+  const { user } = useAuth();
 
   const [showtimes, setShowtimes]   = useState<ShowtimeResponse[]>([]);
   const [loading, setLoading]       = useState(false);
@@ -27,6 +37,10 @@ export default function ManageShowtimePage() {
   const [modalOpen, setModalOpen]       = useState(false);
   const [editShowtime, setEditShowtime] = useState<ShowtimeResponse | null>(null);
   const [showFilters, setShowFilters]   = useState(false);
+  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>("calendar");
+  const [createChoiceOpen, setCreateChoiceOpen] = useState(false);
+  const [autoScheduleOpen, setAutoScheduleOpen] = useState(false);
+  const [selectedGenerationRunId, setSelectedGenerationRunId] = useState<number | null>(null);
 
   const loadShowtimes = useCallback(async () => {
     setLoading(true);
@@ -81,15 +95,61 @@ export default function ManageShowtimePage() {
 
   const hasActiveFilters = !!(statusFilter || dateFilter || roomFilter);
 
+  const filteredShowtimes = useMemo(() => showtimes.filter((showtime) => {
+    const query = searchQuery.trim().toLowerCase();
+    return (
+      (!query || showtime.movieName.toLowerCase().includes(query) || showtime.cinemaRoomName.toLowerCase().includes(query)) &&
+      (!statusFilter || showtime.status === statusFilter) &&
+      (!dateFilter || showtime.showDate === dateFilter) &&
+      (!roomFilter || showtime.cinemaRoomId === roomFilter)
+    );
+  }), [dateFilter, roomFilter, searchQuery, showtimes, statusFilter]);
+
+  const openManualCreate = () => {
+    setCreateChoiceOpen(false);
+    setEditShowtime(null);
+    setModalOpen(true);
+  };
+
+  const openAutomaticCreate = (runId: number | null = null) => {
+    setCreateChoiceOpen(false);
+    setSelectedGenerationRunId(runId);
+    setAutoScheduleOpen(true);
+  };
+
   return (
     <>
-      <div style={{ marginBottom: "28px" }}>
-        <h1 style={{ color: "var(--text-main)", fontWeight: 600, fontSize: "22px", letterSpacing: "-0.01em", marginBottom: "5px" }}>
-          Showtime Scheduling
-        </h1>
-        <p style={{ color: "var(--text-sub)", fontSize: "13px" }}>
-          Manage daily schedules, screening rooms, and time slots
-        </p>
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 style={{ color: "var(--text-main)", fontWeight: 600, fontSize: "22px", letterSpacing: "-0.01em", marginBottom: "5px" }}>
+            Showtime Workspace
+          </h1>
+          <p style={{ color: "var(--text-sub)", fontSize: "13px" }}>
+            Plan, generate, and manage cinema schedules in one workspace
+          </p>
+        </div>
+        <div className="flex items-center rounded-xl border p-1" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+          {([
+            ["calendar", CalendarDays, "Calendar"],
+            ["list", List, "List"],
+            ["runs", History, "Generation Runs"],
+          ] as const).map(([value, Icon, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setWorkspaceView(value)}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 transition-colors"
+              style={{
+                background: workspaceView === value ? "rgba(37,99,235,.10)" : "transparent",
+                color: workspaceView === value ? "#2563eb" : "var(--text-sub)",
+                fontSize: "12px",
+                fontWeight: workspaceView === value ? 650 : 500,
+              }}
+            >
+              <Icon size={14} /> {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {error && (
@@ -110,7 +170,7 @@ export default function ManageShowtimePage() {
 
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap mb-6">
-        <div className="relative flex-1 min-w-64">
+        {workspaceView !== "runs" && <div className="relative flex-1 min-w-64">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-sub)" }} />
           <input
             type="text"
@@ -120,16 +180,16 @@ export default function ManageShowtimePage() {
             className="w-full pl-9 pr-4 py-2.5 rounded-xl outline-none focus:ring-2 focus:ring-purple-500/20 transition-all"
             style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", border: "1px solid var(--border-color)" }}
           />
-        </div>
+        </div>}
 
-        <button
+        {workspaceView !== "runs" && <button
           onClick={() => setShowFilters((v) => !v)}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all hover:opacity-80"
           style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
         >
           <SlidersHorizontal size={15} /> Filters
           {hasActiveFilters && <span className="w-2 h-2 bg-purple-600 rounded-full ml-0.5" />}
-        </button>
+        </button>}
 
         <button
           onClick={loadShowtimes}
@@ -141,16 +201,16 @@ export default function ManageShowtimePage() {
         </button>
 
         <button
-          onClick={() => { setEditShowtime(null); setModalOpen(true); }}
+          onClick={() => setCreateChoiceOpen(true)}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all shadow-sm"
           style={{ fontSize: "14px", fontWeight: 500, background: isDarkMode ? "#9333ea" : "#7e22ce" }}
         >
-          <Plus size={16} /> Schedule Show
+          <Plus size={16} /> Create Schedule
         </button>
       </div>
 
       {/* Filter panel */}
-      {showFilters && (
+      {showFilters && workspaceView !== "runs" && (
         <div className="p-4 rounded-xl border mb-6 space-y-4" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
           <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: "var(--border-color)" }}>
             <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-main)" }}>Filter Showtimes</p>
@@ -208,12 +268,17 @@ export default function ManageShowtimePage() {
         </div>
       )}
 
-      {loading && showtimes.length === 0 ? (
+      {loading && showtimes.length === 0 && workspaceView !== "runs" ? (
         <div className="rounded-2xl border p-12 text-center" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
           <RefreshCw size={24} className="animate-spin mx-auto mb-3 text-purple-600" />
           <p style={{ fontSize: "14px", color: "var(--text-sub)" }}>Loading schedules...</p>
         </div>
-      ) : (
+      ) : workspaceView === "calendar" ? (
+        <ShowtimeCalendarView
+          showtimes={filteredShowtimes}
+          onEdit={(showtime) => { setEditShowtime(showtime); setModalOpen(true); }}
+        />
+      ) : workspaceView === "list" ? (
         <ShowtimeTable
           showtimes={showtimes}
           onEdit={(s) => { setEditShowtime(s); setModalOpen(true); }}
@@ -223,6 +288,11 @@ export default function ManageShowtimePage() {
           dateFilter={dateFilter}
           roomFilter={roomFilter}
         />
+      ) : (
+        <GenerationRunsView
+          onCreate={() => openAutomaticCreate()}
+          onOpenRun={(runId) => openAutomaticCreate(runId)}
+        />
       )}
 
       <ShowtimeModal
@@ -230,6 +300,21 @@ export default function ManageShowtimePage() {
         onClose={() => setModalOpen(false)}
         onSave={handleSaveShowtime}
         editShowtime={editShowtime}
+      />
+
+      <ShowtimeCreateChoiceDialog
+        open={createChoiceOpen}
+        canGenerate={user?.role === "ROLE_ADMIN"}
+        onClose={() => setCreateChoiceOpen(false)}
+        onManual={openManualCreate}
+        onAutomatic={() => openAutomaticCreate()}
+      />
+
+      <AutoScheduleWorkspaceModal
+        open={autoScheduleOpen}
+        runId={selectedGenerationRunId}
+        onClose={() => { setAutoScheduleOpen(false); setSelectedGenerationRunId(null); }}
+        onShowtimesChanged={loadShowtimes}
       />
 
       <style>{`

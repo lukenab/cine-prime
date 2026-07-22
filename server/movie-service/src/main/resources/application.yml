@@ -36,6 +36,12 @@ spring:
     # A genuinely empty/fresh database has no schema for baseline-on-migrate to
     # detect, so Flyway just runs every migration from V1 normally in that case.
     baseline-on-migrate: true
+    # Two parallel feature branches each independently picked V18 before merging;
+    # renumbering the collision (see V22__add_cinema_cluster_cover_image.sql) left
+    # some already-migrated dev databases with a higher version (22) applied before
+    # lower ones (18-21) that were never run. out-of-order lets Flyway backfill
+    # those lower versions instead of refusing to start.
+    out-of-order: true
     baseline-version: 1
     baseline-description: "Pre-Flyway schema (docs/database/movie-service/V3-V34, applied by hand)"
 

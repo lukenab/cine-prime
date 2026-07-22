@@ -42,12 +42,16 @@ import movieservice.entity.ShowTime;
 import movieservice.entity.ShowtimeSeat;
 import movieservice.enums.SeatStatus;
 import movieservice.enums.SeatType;
+import movieservice.enums.CinemaRoomStatus;
+import movieservice.enums.ClusterStatus;
+import movieservice.enums.LayoutStatus;
 import movieservice.enums.ShowTimeStatus;
 import movieservice.enums.ShowtimeSeatStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.MovieRepository;
+import movieservice.repository.RoomLayoutRepository;
 import movieservice.util.SeatLayoutUtil;
 import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeSeatRepository;
@@ -63,6 +67,7 @@ public class ShowTimeService {
     SeatRepository seatRepository;
     MovieRepository movieRepository;
     CinemaRoomRepository cinemaRoomRepository;
+    RoomLayoutRepository roomLayoutRepository;
     MovieMapper movieMapper;
 
     @Transactional
@@ -301,6 +306,7 @@ public class ShowTimeService {
         // 2. Room exists
         CinemaRoom room = cinemaRoomRepository.findByCinemaRoomId(request.getCinemaRoomId());
         if (room == null) throw new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND);
+        validateSchedulableRoom(room);
 
         // 3. showDate >= today + 3
         if (request.getShowDate().isBefore(LocalDate.now().plusDays(3))) {
@@ -340,12 +346,14 @@ public class ShowTimeService {
      * POST /api/schedules/generate-preview
      * Dry-run: generates candidate showtimes and detects conflicts without saving anything.
      */
+    @Transactional(readOnly = true)
     public BulkShowTimePreviewResponse generatePreview(BulkShowTimeRequest request) {
         NormalizedBulkInput input = validateAndNormalizeBulkRequest(request);
         Movie movie = movieRepository.findById(request.getMovieId())
                 .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
 
         Map<Long, CinemaRoom> roomById = indexRooms(cinemaRoomRepository.findAllById(input.roomIds()));
+        validateSchedulableRooms(input.roomIds(), roomById);
         List<ShowTime> existing = showTimeRepository.findActiveByRoomsAndDateRange(
                 input.roomIds(), request.getFromDate(), request.getToDate());
         CandidateResult result = buildCandidateResult(request, input, movie, roomById, existing);
@@ -372,6 +380,7 @@ public class ShowTimeService {
         // same rooms are serialized before the final conflict check and save.
         Map<Long, CinemaRoom> roomById = indexRooms(
                 cinemaRoomRepository.findAllByIdForUpdate(input.roomIds()));
+        validateSchedulableRooms(input.roomIds(), roomById);
         List<ShowTime> existing = showTimeRepository.findActiveByRoomsAndDateRange(
                 input.roomIds(), request.getFromDate(), request.getToDate());
         CandidateResult result = buildCandidateResult(request, input, movie, roomById, existing);
@@ -554,6 +563,7 @@ public class ShowTimeService {
         if (request.getCinemaRoomId() != null) {
             CinemaRoom room = cinemaRoomRepository.findByCinemaRoomId(request.getCinemaRoomId());
             if (room == null) throw new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND);
+            validateSchedulableRoom(room);
             showTime.setCinemaRoom(room);
         }
 
@@ -671,6 +681,30 @@ public class ShowTimeService {
                 .toList();
         if (!mutableSeats.isEmpty()) {
             showtimeSeatRepository.saveAll(mutableSeats);
+        }
+    }
+
+    private void validateSchedulableRooms(List<Long> requestedRoomIds, Map<Long, CinemaRoom> roomById) {
+        if (roomById.size() != requestedRoomIds.size()) {
+            throw new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND);
+        }
+        roomById.values().forEach(this::validateSchedulableRoom);
+    }
+
+    private void validateSchedulableRoom(CinemaRoom room) {
+        boolean clusterIsActive = room.getCluster() != null
+                && room.getCluster().getStatus() == ClusterStatus.ACTIVE;
+        boolean roomIsActive = room.getStatus() == CinemaRoomStatus.ACTIVE;
+        boolean hasCapacity = room.getTotalSeatCapacity() != null
+                && room.getTotalSeatCapacity() > 0;
+        boolean hasSellableActiveLayout = roomLayoutRepository
+                .findByCinemaRoomCinemaRoomIdAndStatus(room.getCinemaRoomId(), LayoutStatus.ACTIVE)
+                .filter(layout -> layout.getPersonCapacity() != null && layout.getPersonCapacity() > 0)
+                .filter(layout -> layout.getSellableUnitCount() != null && layout.getSellableUnitCount() > 0)
+                .isPresent();
+
+        if (!clusterIsActive || !roomIsActive || !hasCapacity || !hasSellableActiveLayout) {
+            throw new AppException(MovieErrorCode.SHOWTIME_ROOM_NOT_SCHEDULABLE);
         }
     }
 }
