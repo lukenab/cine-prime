@@ -10,6 +10,8 @@ import java.util.List;
 public record AutoShowtimeGenerationRunResponse(
         Long generationRunId,
         String status,
+        Long schedulePlanId,
+        String schedulePlanStatus,
         LocalDate startDate,
         LocalDate endDate,
         Summary summary,

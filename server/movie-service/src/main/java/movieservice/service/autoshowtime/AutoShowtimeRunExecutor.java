@@ -40,7 +40,7 @@ public class AutoShowtimeRunExecutor {
     private final AutoShowtimeCandidateFactory candidateFactory;
     private final AutoShowtimeCandidateScorer candidateScorer;
     private final AutoShowtimeCandidateSelector candidateSelector;
-    private final AutoShowtimeCandidatePersistenceService candidatePersistenceService;
+    private final SchedulePlanDraftService schedulePlanDraftService;
 
     /// Chạy toàn bộ pipeline Factory -> Scorer -> Selector -> Persist cho một generation run đã ACCEPTED.
     @Transactional
@@ -74,31 +74,9 @@ public class AutoShowtimeRunExecutor {
             skippedCount++;
         }
 
-        /// Mỗi selected candidate được persist trong REQUIRES_NEW transaction riêng.
-        for (ShowtimeCandidate candidate : selection.selectedCandidates()) {
-            try {
-                Optional<AutoShowtimeCandidateRejection> persistenceRejection = candidatePersistenceService.persist(
-                        run.getGenerationRunId(),
-                        candidate,
-                        run.getPolicy().getCleanupBufferMinutes()
-                );
-
-                if (persistenceRejection.isPresent()) {
-                    aggregateSkip(skipAggregates, persistenceRejection.get());
-                    skippedCount++;
-                } else {
-                    createdCount++;
-                }
-            } catch (DataIntegrityViolationException exception) {
-                /// Race condition còn sót được DB exclusion constraint chặn; run vẫn tiếp tục candidate khác.
-                aggregateSkip(skipAggregates, new AutoShowtimeCandidateRejection(
-                        candidate,
-                        GenerationSkipReason.DATABASE_OVERLAP_CONFLICT,
-                        "Database rejected this candidate: " + rootCauseMessage(exception)
-                ));
-                skippedCount++;
-            }
-        }
+        // Generation produces a reviewable draft. Only the publish command materializes ShowTime rows.
+        schedulePlanDraftService.createDraft(run.getGenerationRunId(), selection.selectedCandidates());
+        createdCount = selection.selectedCandidates().size();
 
         persistSkipAggregates(run, skipAggregates);
 

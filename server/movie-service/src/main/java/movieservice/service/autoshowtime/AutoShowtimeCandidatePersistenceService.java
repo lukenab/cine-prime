@@ -20,7 +20,6 @@ import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeGenerationRunRepository;
 import movieservice.service.ShowtimePricingDefaults;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -40,8 +39,8 @@ public class AutoShowtimeCandidatePersistenceService {
     private final ShowTimeRepository showTimeRepository;
 
     /// Mỗi candidate chạy transaction độc lập để conflict của một suất không rollback cả generation run.
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Optional<AutoShowtimeCandidateRejection> persist(
+    @Transactional
+    public AutoShowtimePersistenceResult persist(
             Long generationRunId,
             ShowtimeCandidate candidate,
             Integer cleanupBufferMinutes
@@ -53,7 +52,7 @@ public class AutoShowtimeCandidatePersistenceService {
                 .orElse(null);
 
         if (room == null) {
-            return Optional.of(reject(candidate, GenerationSkipReason.NO_ELIGIBLE_ROOM,
+            return AutoShowtimePersistenceResult.rejected(reject(candidate, GenerationSkipReason.NO_ELIGIBLE_ROOM,
                     "Cinema room no longer exists when the candidate is persisted."));
         }
 
@@ -63,7 +62,7 @@ public class AutoShowtimeCandidatePersistenceService {
                 candidate.temporalStartAt(),
                 candidate.temporalEndAt()
         )) {
-            return Optional.of(reject(candidate, GenerationSkipReason.EXISTING_SHOWTIME_CONFLICT,
+            return AutoShowtimePersistenceResult.rejected(reject(candidate, GenerationSkipReason.EXISTING_SHOWTIME_CONFLICT,
                     "An existing non-cancelled showtime overlaps this candidate."));
         }
 
@@ -74,7 +73,7 @@ public class AutoShowtimeCandidatePersistenceService {
                 candidate.temporalEndAt(),
                 cleanupBufferMinutes
         )) {
-            return Optional.of(reject(candidate, GenerationSkipReason.CLEANUP_BUFFER_CONFLICT,
+            return AutoShowtimePersistenceResult.rejected(reject(candidate, GenerationSkipReason.CLEANUP_BUFFER_CONFLICT,
                     "Candidate conflicts with an existing showtime after cleanup buffer is applied."));
         }
 
@@ -110,8 +109,8 @@ public class AutoShowtimeCandidatePersistenceService {
                 .build();
 
         /// saveAndFlush để DB exclusion constraint phát hiện race condition ngay tại candidate này.
-        showTimeRepository.saveAndFlush(showTime);
-        return Optional.empty();
+        ShowTime persisted = showTimeRepository.saveAndFlush(showTime);
+        return AutoShowtimePersistenceResult.created(persisted);
     }
 
     /// Base price ưu tiên giá seat rẻ nhất; room chưa có seat config dùng default chung của module.

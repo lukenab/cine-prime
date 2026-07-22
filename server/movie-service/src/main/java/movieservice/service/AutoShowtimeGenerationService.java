@@ -17,6 +17,7 @@ import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.MovieRepository;
 import movieservice.repository.RoomLayoutRepository;
+import movieservice.repository.SchedulePlanRepository;
 import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeAllocationPolicyRepository;
 import movieservice.repository.ShowtimeGenerationSkipRepository;
@@ -51,6 +52,7 @@ public class AutoShowtimeGenerationService {
 
     private final ShowtimeAllocationPolicyRepository  policyRepository;
     private final ShowtimeGenerationRunRepository generationRunRepository;
+    private final SchedulePlanRepository schedulePlanRepository;
     private final MovieRepository  movieRepository;
     private final CinemaClusterRepository cinemaClusterRepository;
     private final CinemaRoomRepository cinemaRoomRepository;
@@ -309,7 +311,6 @@ public class AutoShowtimeGenerationService {
         /// Scoring, quota selection và persist ShowTime là các bước riêng sau method này.
         ShowtimeGenerationRun run = generationRunRepository.findByGenerationRunId(generationRunId)
                 .orElseThrow(() -> new AppException(MovieErrorCode.GENERATION_RUN_NOT_FOUND));
-
         return candidateFactory.buildRawCandidates(run);
     }
 
@@ -325,6 +326,9 @@ public class AutoShowtimeGenerationService {
     public AutoShowtimeGenerationRunResponse getRun(Long generationRunId, int page, int size) {
         ShowtimeGenerationRun run = generationRunRepository.findByGenerationRunId(generationRunId)
                 .orElseThrow(() -> new AppException(MovieErrorCode.GENERATION_RUN_NOT_FOUND));
+        SchedulePlan schedulePlan = schedulePlanRepository
+                .findByGenerationRun_GenerationRunId(generationRunId)
+                .orElse(null);
 
         /// Giới hạn page size để một request không vô tình tải quá nhiều showtime vào response.
         int safePage = Math.max(page, 0);
@@ -343,6 +347,8 @@ public class AutoShowtimeGenerationService {
         return new AutoShowtimeGenerationRunResponse(
                 run.getGenerationRunId(),
                 run.getStatus().name(),
+                schedulePlan == null ? null : schedulePlan.getSchedulePlanId(),
+                schedulePlan == null ? null : schedulePlan.getStatus().name(),
                 run.getStartDate(),
                 run.getEndDate(),
                 new AutoShowtimeGenerationRunResponse.Summary(
