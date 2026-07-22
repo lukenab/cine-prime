@@ -5,12 +5,18 @@ import movieservice.dto.request.BulkShowTimeRequest;
 import movieservice.dto.response.BulkShowTimeCreateResponse;
 import movieservice.dto.response.BulkShowTimePreviewResponse;
 import movieservice.entity.CinemaRoom;
+import movieservice.entity.CinemaCluster;
 import movieservice.entity.Movie;
+import movieservice.entity.RoomLayout;
 import movieservice.entity.ShowTime;
+import movieservice.enums.CinemaRoomStatus;
+import movieservice.enums.ClusterStatus;
+import movieservice.enums.LayoutStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.MovieRepository;
+import movieservice.repository.RoomLayoutRepository;
 import movieservice.repository.SeatRepository;
 import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeSeatRepository;
@@ -44,6 +50,7 @@ class ShowTimeServiceBulkTest {
     @Mock SeatRepository seatRepository;
     @Mock MovieRepository movieRepository;
     @Mock CinemaRoomRepository cinemaRoomRepository;
+    @Mock RoomLayoutRepository roomLayoutRepository;
     @Mock MovieMapper movieMapper;
 
     @InjectMocks
@@ -58,6 +65,7 @@ class ShowTimeServiceBulkTest {
 
         when(movieRepository.findById(1L)).thenReturn(Optional.of(movie));
         when(cinemaRoomRepository.findAllById(List.of(1L))).thenReturn(List.of(room));
+        allowActiveLayout(1L);
         when(showTimeRepository.findActiveByRoomsAndDateRange(
                 List.of(1L), request.getFromDate(), request.getToDate())).thenReturn(List.of());
 
@@ -92,6 +100,7 @@ class ShowTimeServiceBulkTest {
 
         when(movieRepository.findById(1L)).thenReturn(Optional.of(movie));
         when(cinemaRoomRepository.findAllById(List.of(1L))).thenReturn(List.of(room()));
+        allowActiveLayout(1L);
         when(showTimeRepository.findActiveByRoomsAndDateRange(
                 List.of(1L), request.getFromDate(), request.getToDate())).thenReturn(List.of());
 
@@ -111,6 +120,7 @@ class ShowTimeServiceBulkTest {
 
         when(movieRepository.findById(1L)).thenReturn(Optional.of(movie));
         when(cinemaRoomRepository.findAllByIdForUpdate(List.of(1L))).thenReturn(List.of(room));
+        allowActiveLayout(1L);
         when(showTimeRepository.findActiveByRoomsAndDateRange(
                 List.of(1L), request.getFromDate(), request.getToDate())).thenReturn(List.of());
         when(showTimeRepository.saveAllAndFlush(anyList())).thenAnswer(invocation -> {
@@ -151,6 +161,18 @@ class ShowTimeServiceBulkTest {
                 .cinemaRoomId(1L)
                 .cinemaRoomName("Room 1")
                 .totalSeatCapacity(100)
+                .status(CinemaRoomStatus.ACTIVE)
+                .cluster(CinemaCluster.builder().clusterId(1L).status(ClusterStatus.ACTIVE).build())
                 .build();
+    }
+
+    private void allowActiveLayout(Long roomId) {
+        RoomLayout layout = RoomLayout.builder()
+                .status(LayoutStatus.ACTIVE)
+                .personCapacity(100)
+                .sellableUnitCount(100)
+                .build();
+        when(roomLayoutRepository.findByCinemaRoomCinemaRoomIdAndStatus(roomId, LayoutStatus.ACTIVE))
+                .thenReturn(Optional.of(layout));
     }
 }

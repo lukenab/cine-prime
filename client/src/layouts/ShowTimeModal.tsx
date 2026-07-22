@@ -6,6 +6,7 @@ import {
   type ShowtimeUpdatePayload,
 } from "../api/showtimeApi";
 import { movieApi, type MovieApiResponse, type RoomResponse } from "../api/movieApi";
+import { isRoomSchedulable } from "../utils/showtimeEligibility";
 
 type FormState = {
   movieId: number;
@@ -50,9 +51,10 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime }: Props) {
       movieApi.getRooms().catch(() => ({ result: [] as RoomResponse[] })),
     ]).then(([movRes, roomRes]) => {
       const movList  = (movRes as any)?.result ?? [];
-      const roomList = (roomRes as any)?.result ?? [];
+      const roomList: RoomResponse[] = (roomRes as any)?.result ?? [];
+      const schedulableRooms = roomList.filter(isRoomSchedulable);
       setMovies(movList);
-      setRooms(roomList);
+      setRooms(schedulableRooms);
 
       // Populate form
       if (editShowtime) {
@@ -67,7 +69,7 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime }: Props) {
         setForm({
           ...EMPTY_FORM,
           movieId:     movList[0]?.movieId ?? 0,
-          cinemaRoomId: roomList[0]?.cinemaRoomId ?? 0,
+          cinemaRoomId: schedulableRooms[0]?.cinemaRoomId ?? 0,
         });
       }
     }).finally(() => setLoadingData(false));
@@ -221,6 +223,15 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime }: Props) {
                   </option>
                 ))}
               </select>
+              {rooms.length === 0 ? (
+                <p className="mt-1.5 text-xs text-amber-600">
+                  No schedulable room is available. Activate a room and its sellable seat layout first.
+                </p>
+              ) : (
+                <p className="mt-1.5" style={{ fontSize: "11px", color: "var(--text-sub)" }}>
+                  Only ACTIVE rooms with an ACTIVE sellable seat layout are shown.
+                </p>
+              )}
             </div>
 
             {/* Show Date + Start Time */}

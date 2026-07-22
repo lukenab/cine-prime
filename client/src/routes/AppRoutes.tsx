@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 
 import AuthLayout from "../layouts/AuthLayout";
 import CustomerLayout from "../layouts/CustomerLayout";
@@ -101,6 +101,7 @@ export default function AppRoutes() {
           <Route path="sell"      element={<TicketSalePage />} />
 
           <Route element={<ProtectedRoute allowedRoles={["ROLE_ADMIN"]} />}>
+            <Route path="showtimes/auto"     element={<Navigate to="/admin/showtimes" replace />} />
             <Route path="employees"          element={<ManageEmployeePage />} />
             <Route path="employees/create"   element={<CreateEmployeePage />} />
             <Route path="employees/:id"      element={<EmployeeDetailPage />} />

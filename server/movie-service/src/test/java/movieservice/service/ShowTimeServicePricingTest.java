@@ -1,20 +1,28 @@
 package movieservice.service;
 
+import movie.theater.common.exception.AppException;
 import movieservice.dto.request.CreateShowTimeRequest;
 import movieservice.dto.request.UpdateShowTimeRequest;
 import movieservice.dto.response.ShowTimePricingResponse;
 import movieservice.dto.response.ShowtimeSeatDto;
 import movieservice.entity.CinemaRoom;
+import movieservice.entity.CinemaCluster;
 import movieservice.entity.Movie;
+import movieservice.entity.RoomLayout;
 import movieservice.entity.Seat;
 import movieservice.entity.ShowTime;
 import movieservice.entity.ShowtimeSeat;
 import movieservice.enums.SeatType;
+import movieservice.enums.CinemaRoomStatus;
+import movieservice.enums.ClusterStatus;
+import movieservice.enums.LayoutStatus;
 import movieservice.enums.ShowTimeStatus;
 import movieservice.enums.ShowtimeSeatStatus;
 import movieservice.mapper.MovieMapper;
+import movieservice.exception.MovieErrorCode;
 import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.MovieRepository;
+import movieservice.repository.RoomLayoutRepository;
 import movieservice.repository.SeatRepository;
 import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeSeatRepository;
@@ -32,6 +40,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.never;
@@ -46,6 +55,7 @@ class ShowTimeServicePricingTest {
     @Mock SeatRepository seatRepository;
     @Mock MovieRepository movieRepository;
     @Mock CinemaRoomRepository cinemaRoomRepository;
+    @Mock RoomLayoutRepository roomLayoutRepository;
     @Mock MovieMapper movieMapper;
 
     @InjectMocks
@@ -75,6 +85,8 @@ class ShowTimeServicePricingTest {
                 .cinemaRoomId(3L)
                 .cinemaRoomName("Room 3")
                 .totalSeatCapacity(20)
+                .status(CinemaRoomStatus.ACTIVE)
+                .cluster(activeCluster())
                 .build();
         CreateShowTimeRequest request = new CreateShowTimeRequest();
         request.setMovieId(1L);
@@ -85,6 +97,7 @@ class ShowTimeServicePricingTest {
 
         when(movieRepository.findById(1L)).thenReturn(Optional.of(movie));
         when(cinemaRoomRepository.findByCinemaRoomId(3L)).thenReturn(room);
+        allowActiveLayout(3L);
         when(showTimeRepository.existsByCinemaRoomAndOverlappingTime(
                 any(), any(), any(), any())).thenReturn(false);
         when(showTimeRepository.save(any(ShowTime.class))).thenAnswer(invocation -> {
@@ -105,6 +118,8 @@ class ShowTimeServicePricingTest {
         CinemaRoom room = CinemaRoom.builder()
                 .cinemaRoomId(3L)
                 .totalSeatCapacity(20)
+                .status(CinemaRoomStatus.ACTIVE)
+                .cluster(activeCluster())
                 .build();
         CreateShowTimeRequest request = new CreateShowTimeRequest();
         request.setMovieId(1L);
@@ -114,6 +129,7 @@ class ShowTimeServicePricingTest {
 
         when(movieRepository.findById(1L)).thenReturn(Optional.of(movie));
         when(cinemaRoomRepository.findByCinemaRoomId(3L)).thenReturn(room);
+        allowActiveLayout(3L);
         when(showTimeRepository.existsByCinemaRoomAndOverlappingTime(
                 any(), any(), any(), any())).thenReturn(false);
         when(showTimeRepository.save(any(ShowTime.class)))
@@ -122,6 +138,31 @@ class ShowTimeServicePricingTest {
         ShowTimePricingResponse response = showTimeService.createStandalone(request);
 
         assertNull(response.getBasePrice());
+    }
+
+    @Test
+    void createRejectsRoomWithoutActiveSellableLayout() {
+        Movie movie = Movie.builder().movieId(1L).durationMinutes(90).build();
+        CinemaRoom room = CinemaRoom.builder()
+                .cinemaRoomId(3L)
+                .totalSeatCapacity(20)
+                .status(CinemaRoomStatus.ACTIVE)
+                .cluster(activeCluster())
+                .build();
+        CreateShowTimeRequest request = new CreateShowTimeRequest();
+        request.setMovieId(1L);
+        request.setCinemaRoomId(3L);
+        request.setShowDate(LocalDate.now().plusDays(3));
+        request.setStartTime(LocalTime.of(14, 30));
+
+        when(movieRepository.findById(1L)).thenReturn(Optional.of(movie));
+        when(cinemaRoomRepository.findByCinemaRoomId(3L)).thenReturn(room);
+
+        AppException exception = assertThrows(
+                AppException.class, () -> showTimeService.createStandalone(request));
+
+        assertEquals(MovieErrorCode.SHOWTIME_ROOM_NOT_SCHEDULABLE, exception.getErrorCode());
+        verify(showTimeRepository, never()).save(any(ShowTime.class));
     }
 
     @Test
@@ -230,5 +271,19 @@ class ShowTimeServicePricingTest {
                 .seatCode("A1")
                 .seatType(SeatType.STANDARD)
                 .build();
+    }
+
+    private CinemaCluster activeCluster() {
+        return CinemaCluster.builder().clusterId(1L).status(ClusterStatus.ACTIVE).build();
+    }
+
+    private void allowActiveLayout(Long roomId) {
+        RoomLayout layout = RoomLayout.builder()
+                .status(LayoutStatus.ACTIVE)
+                .personCapacity(20)
+                .sellableUnitCount(20)
+                .build();
+        when(roomLayoutRepository.findByCinemaRoomCinemaRoomIdAndStatus(roomId, LayoutStatus.ACTIVE))
+                .thenReturn(Optional.of(layout));
     }
 }
