@@ -29,7 +29,110 @@ INSERT INTO screening_format (format_code, format_name, surcharge) VALUES
     ('ATMOS',   'Dolby Atmos',         20000)
 ON CONFLICT (format_code) DO NOTHING;
 
+-- Auto Showtime simulated demand data. These are configuration rows for the
+-- allocation engine; code must never branch on these cluster names or IDs.
+INSERT INTO cinema_cluster
+    (cluster_code, cluster_name, venue_type, country_code, province, address,
+     phone_number, status, latitude, longitude, timezone, created_by, updated_by)
+VALUES
+    ('CP-Q9', 'CinePrime Vincom Grand Park', 'MALL', 'VN', 'TP. Ho Chi Minh',
+     'Vincom Mega Mall Grand Park, District 9', '19001000', 'ACTIVE',
+     10.8413000, 106.8274000, 'Asia/Ho_Chi_Minh', 'migration:R', 'migration:R'),
+    ('CP-LA', 'CinePrime Long An', 'MALL', 'VN', 'Long An',
+     '1 National Route 1A, Tan An', '19001000', 'ACTIVE',
+     10.5359000, 106.4137000, 'Asia/Ho_Chi_Minh', 'migration:R', 'migration:R')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO cinema_cluster_demand_profile
+    (cluster_id, demand_tier, demand_score, min_daily_shows,
+     max_daily_shows_per_movie, created_by, updated_by)
+SELECT cluster_id, demand_tier, demand_score, min_daily_shows,
+       max_daily_shows_per_movie, 'migration:R', 'migration:R'
+FROM (
+    VALUES
+        ('CP-Q9', 'HIGH', 90.00::NUMERIC, 3, 12),
+        ('CP-LA', 'LOW', 25.00::NUMERIC, 1, 3)
+) AS seed(cluster_code, demand_tier, demand_score, min_daily_shows, max_daily_shows_per_movie)
+JOIN cinema_cluster cluster ON LOWER(cluster.cluster_code) = LOWER(seed.cluster_code)
+ON CONFLICT (cluster_id) DO UPDATE
+SET demand_tier = EXCLUDED.demand_tier,
+    demand_score = EXCLUDED.demand_score,
+    min_daily_shows = EXCLUDED.min_daily_shows,
+    max_daily_shows_per_movie = EXCLUDED.max_daily_shows_per_movie,
+    updated_by = EXCLUDED.updated_by;
+
+INSERT INTO cinema_room
+    (cinema_room_name, room_code, presentation_system,
+     total_seat_capacity, status, cluster_id, number_of_rows, seats_per_row,
+     created_by, updated_by)
+SELECT seed.cinema_room_name, seed.room_code, seed.presentation_system,
+       seed.total_seat_capacity, 'ACTIVE',
+       cluster.cluster_id, seed.number_of_rows, seed.seats_per_row,
+       'migration:R', 'migration:R'
+FROM (
+    VALUES
+        ('CP-Q9', 'IMAX 01', 'Q9-IMAX-01', 'IMAX', 220, 10, 22),
+        ('CP-LA', 'Standard 01', 'LA-STD-01', 'STANDARD', 100, 10, 10)
+) AS seed(cluster_code, cinema_room_name, room_code, presentation_system,
+          total_seat_capacity, number_of_rows, seats_per_row)
+JOIN cinema_cluster cluster ON LOWER(cluster.cluster_code) = LOWER(seed.cluster_code)
+WHERE NOT EXISTS (
+    SELECT 1 FROM cinema_room room
+    WHERE room.cluster_id = cluster.cluster_id
+      AND room.cinema_room_name = seed.cinema_room_name
+);
+
+INSERT INTO cinema_room_format
+    (cinema_room_id, format_id, enabled, created_by, updated_by)
+SELECT room.cinema_room_id, format.format_id, TRUE, 'migration:R', 'migration:R'
+FROM (
+    VALUES
+        ('CP-Q9', 'IMAX 01', '2D'),
+        ('CP-Q9', 'IMAX 01', '3D'),
+        ('CP-Q9', 'IMAX 01', 'IMAX'),
+        ('CP-LA', 'Standard 01', '2D')
+) AS seed(cluster_code, cinema_room_name, format_code)
+JOIN cinema_cluster cluster ON LOWER(cluster.cluster_code) = LOWER(seed.cluster_code)
+JOIN cinema_room room ON room.cluster_id = cluster.cluster_id
+    AND room.cinema_room_name = seed.cinema_room_name
+JOIN screening_format format ON format.format_code = seed.format_code
+ON CONFLICT (cinema_room_id, format_id) DO UPDATE
+SET enabled = EXCLUDED.enabled,
+    updated_by = EXCLUDED.updated_by;
+
+INSERT INTO showtime_allocation_policy
+    (policy_code, peak_demand_weight, movie_demand_weight, cluster_demand_weight,
+     time_slot_demand_weight, format_demand_weight, room_capacity_weight,
+     minimum_coverage, maximum_room_share, active, created_by, updated_by)
+VALUES
+    ('DEFAULT', 1.2000, 0.4000, 0.2500, 0.1500, 0.1000, 0.1000,
+     1, 0.6000, TRUE, 'migration:R', 'migration:R')
+ON CONFLICT (policy_code) DO UPDATE
+SET peak_demand_weight = EXCLUDED.peak_demand_weight,
+    movie_demand_weight = EXCLUDED.movie_demand_weight,
+    cluster_demand_weight = EXCLUDED.cluster_demand_weight,
+    time_slot_demand_weight = EXCLUDED.time_slot_demand_weight,
+    format_demand_weight = EXCLUDED.format_demand_weight,
+    room_capacity_weight = EXCLUDED.room_capacity_weight,
+    minimum_coverage = EXCLUDED.minimum_coverage,
+    maximum_room_share = EXCLUDED.maximum_room_share,
+    active = EXCLUDED.active,
+    updated_by = EXCLUDED.updated_by;
+
 -- ── genre ────────────────────────────────────────────────────────────────────
+INSERT INTO showtime_allocation_format_priority
+    (policy_id, format_id, allocation_priority, created_by, updated_by)
+SELECT policy.policy_id, format.format_id, seed.allocation_priority,
+       'migration:R', 'migration:R'
+FROM (
+    VALUES ('IMAX', 100), ('4DX', 90), ('SCREENX', 80), ('3D', 70), ('2D', 10)
+) AS seed(format_code, allocation_priority)
+JOIN showtime_allocation_policy policy ON policy.policy_code = 'DEFAULT'
+JOIN screening_format format ON format.format_code = seed.format_code
+ON CONFLICT (policy_id, format_id) DO UPDATE
+SET allocation_priority = EXCLUDED.allocation_priority,
+    updated_by = EXCLUDED.updated_by;
+
 INSERT INTO genre (genre_name, genre_code) VALUES
     ('Action',          'action'),
     ('Adventure',       'adventure'),

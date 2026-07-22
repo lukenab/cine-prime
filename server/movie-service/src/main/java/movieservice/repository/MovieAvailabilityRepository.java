@@ -49,4 +49,26 @@ public interface MovieAvailabilityRepository extends JpaRepository<MovieAvailabi
             @Param("movieId") Long movieId,
             @Param("showingStartDate") LocalDate showingStartDate,
             @Param("clusterIds") List<Long> clusterIds);
+
+    @Query("""
+        SELECT COUNT(availability) > 0
+        FROM MovieAvailability availability
+        WHERE availability.movie.movieId = :movieId
+          AND availability.cluster.clusterId = :clusterId
+          AND availability.movie.status = movieservice.enums.MovieStatus.APPROVED
+          AND availability.status IN (
+                movieservice.enums.AvailabilityStatus.PLANNED,
+                movieservice.enums.AvailabilityStatus.OPEN
+          )
+          AND availability.showingStartDate <= :showDate
+          AND (
+                availability.showingEndDate IS NULL
+                OR availability.showingEndDate >= :showDate
+          )
+        """)
+    boolean existsSchedulableForDate(
+            @Param("movieId") Long movieId,
+            @Param("clusterId") Long clusterId,
+            @Param("showDate") LocalDate showDate
+    );
 }

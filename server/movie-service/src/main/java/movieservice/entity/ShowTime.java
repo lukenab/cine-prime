@@ -3,7 +3,9 @@ package movieservice.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import movieservice.enums.GenerationReason;
 import movieservice.enums.ShowTimeStatus;
+import movieservice.enums.ShowtimeSource;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -76,6 +78,19 @@ public class ShowTime {
     @Column(name = "cancellation_reason", columnDefinition = "TEXT")
     String cancellationReason;
 
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    ShowtimeSource source = ShowtimeSource.MANUAL;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "generation_run_id")
+    ShowtimeGenerationRun generationRun;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "generation_reason", length = 100)
+    GenerationReason generationReason;
+
     @Column(name = "cancelled_at")
     LocalDateTime cancelledAt;
 
@@ -101,6 +116,7 @@ public class ShowTime {
         if (status == null) status = ShowTimeStatus.SCHEDULED;
         if (soldSeats == null) soldSeats = 0;
         if (languageCode == null) languageCode = "vi";
+        if (source == null) source = ShowtimeSource.MANUAL;
     }
 
     @PreUpdate

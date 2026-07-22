@@ -6,6 +6,7 @@ import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "screening_format")
@@ -55,4 +56,7 @@ public class ScreeningFormat {
     void preUpdate() {
         updatedAt = LocalDateTime.now();
     }
+
+    @OneToMany(mappedBy = "screeningFormat", fetch = FetchType.LAZY)
+    List<CinemaRoomFormat> roomFormatCapabilities;
 }

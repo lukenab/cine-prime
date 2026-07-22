@@ -4,6 +4,8 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -21,6 +23,28 @@ public interface ShowTimeRepository extends JpaRepository<ShowTime, Long> {
                         @Param("showDate") LocalDate showDate,
                         @Param("startTime") LocalTime startTime,
                         @Param("endTime") LocalTime endTime);
+
+        /// Kiểm tra buffer giữa showtime đã tồn tại và candidate AUTO bằng native PostgreSQL.
+        /// JPQL không hỗ trợ cộng interval vào TIME một cách portable.
+        @Query(value = """
+                        SELECT EXISTS (
+                            SELECT 1
+                            FROM show_time s
+                            WHERE s.cinema_room_id = :roomId
+                              AND s.show_date = :showDate
+                              AND s.status <> 'CANCELLED'
+                              AND CAST(:startTime AS time) < s.end_time
+                                  + (CAST(:cleanupBufferMinutes AS integer) * INTERVAL '1 minute')
+                              AND s.start_time < CAST(:endTime AS time)
+                                  + (CAST(:cleanupBufferMinutes AS integer) * INTERVAL '1 minute')
+                        )
+                        """, nativeQuery = true)
+        boolean existsByCinemaRoomAndCleanupBufferConflict(
+                        @Param("roomId") Long roomId,
+                        @Param("showDate") LocalDate showDate,
+                        @Param("startTime") LocalTime startTime,
+                        @Param("endTime") LocalTime endTime,
+                        @Param("cleanupBufferMinutes") Integer cleanupBufferMinutes);
 
         @Query("SELECT COUNT(s) > 0 FROM ShowTime s WHERE s.movie.movieId = :movieId " +
                         "AND (s.showDate > :currentDate OR (s.showDate = :currentDate AND s.startTime > :currentTime))")
@@ -95,4 +119,14 @@ public interface ShowTimeRepository extends JpaRepository<ShowTime, Long> {
                         @Param("roomIds") List<Long> roomIds,
                         @Param("fromDate") LocalDate fromDate,
                         @Param("toDate") LocalDate toDate);
+
+        Page<ShowTime> findByGenerationRun_GenerationRunIdOrderByShowDateAscStartTimeAsc(
+            Long generationRunId,
+            Pageable pageable
+        );
+
+        /// Lấy toàn bộ showtime của run để tính thống kê created theo từng movie trong response.
+        List<ShowTime> findAllByGenerationRun_GenerationRunIdOrderByShowDateAscStartTimeAsc(
+            Long generationRunId
+        );
 }
