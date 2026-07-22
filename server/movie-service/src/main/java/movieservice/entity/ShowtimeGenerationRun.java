@@ -56,6 +56,14 @@ public class ShowtimeGenerationRun {
     @Column(name = "skipped_count", nullable = false)
     Integer skippedCount = 0;
 
+    @Builder.Default
+    @Column(name = "successful_partition_count", nullable = false)
+    Integer successfulPartitionCount = 0;
+
+    @Builder.Default
+    @Column(name = "failed_partition_count", nullable = false)
+    Integer failedPartitionCount = 0;
+
     @Column(name = "requested_by", nullable = false, length = 100)
     String requestedBy;
 
@@ -114,6 +122,8 @@ public class ShowtimeGenerationRun {
         if(candidateCount == null) candidateCount = 0;
         if(skippedCount == null) skippedCount = 0;
         if(createdCount == null) createdCount = 0;
+        if(successfulPartitionCount == null) successfulPartitionCount = 0;
+        if(failedPartitionCount == null) failedPartitionCount = 0;
     }
 
     @PreUpdate
