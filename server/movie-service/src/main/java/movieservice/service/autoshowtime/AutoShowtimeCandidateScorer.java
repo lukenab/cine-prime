@@ -3,18 +3,22 @@ package movieservice.service.autoshowtime;
 import lombok.RequiredArgsConstructor;
 import movieservice.entity.CinemaRoom;
 import movieservice.entity.ShowtimeAllocationPolicy;
+import movieservice.entity.ShowtimeDaypartPolicy;
 import movieservice.entity.ShowtimeGenerationRun;
 import movieservice.enums.GenerationReason;
 import movieservice.repository.CinemaClusterDemandProfileRepository;
 import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.MovieSchedulingProfileRepository;
 import movieservice.repository.ShowtimeAllocationFormatPriorityRepository;
+import movieservice.repository.ShowtimeDaypartPolicyRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalTime;
+import java.time.DayOfWeek;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +33,7 @@ public class AutoShowtimeCandidateScorer {
     private final CinemaClusterDemandProfileRepository clusterDemandProfileRepository;
     private final CinemaRoomRepository cinemaRoomRepository;
     private final ShowtimeAllocationFormatPriorityRepository formatPriorityRepository;
+    private final ShowtimeDaypartPolicyRepository daypartPolicyRepository;
 
     /**
      * Chấm điểm các candidate hợp lệ rồi sắp xếp từ điểm cao xuống thấp.
@@ -63,6 +68,8 @@ public class AutoShowtimeCandidateScorer {
         }
 
         Map<Integer, Integer> formatPriorityById = loadFormatPriorities(policy.getPolicyId());
+        List<ShowtimeDaypartPolicy> dayparts = daypartPolicyRepository
+                .findByPolicy_PolicyIdAndActiveTrueOrderByStartTime(policy.getPolicyId());
         int maximumFormatPriority = formatPriorityById.values().stream()
                 .max(Integer::compareTo)
                 .orElse(1);
@@ -94,13 +101,8 @@ public class AutoShowtimeCandidateScorer {
                             this::resolveClusterDemandScore
                     );
 
-                    /// Peak chỉ boost thành phần timeScore. Không nhân toàn bộ score để không
-                    /// vô tình boost cả movie/cluster/format/capacity vốn không liên quan khung giờ.
-                    boolean peakSlot = isPeakSlot(candidate.getStartTime(), policy);
-                    BigDecimal timeScore = resolveTimeScore(candidate.getStartTime(), policy);
-                    if (peakSlot) {
-                        timeScore = timeScore.multiply(policy.getPeakDemandWeight());
-                    }
+                    ResolvedDaypart daypart = resolveDaypart(candidate, policy, dayparts);
+                    BigDecimal timeScore = daypart.demandMultiplier();
 
                     /// Điểm format được chuẩn hoá theo format có allocation priority cao nhất.
                     BigDecimal formatScore = resolveFormatScore(
@@ -109,11 +111,12 @@ public class AutoShowtimeCandidateScorer {
                             maximumFormatPriority
                     );
 
-                    /// Điểm sức chứa: capacity phòng hiện tại / capacity phòng lớn nhất trong cluster.
-                    BigDecimal roomCapacityScore = resolveRoomCapacityScore(
-                            room.getTotalSeatCapacity(),
-                            maxCapacityByCluster.get(candidate.getClusterId())
-                    );
+                    int expectedAttendance = resolveExpectedAttendance(
+                            movieScore, clusterScore, timeScore, formatScore,
+                            maxCapacityByCluster.get(candidate.getClusterId()));
+                    BigDecimal roomCapacityScore = resolveRoomCapacityFitScore(
+                            room.getTotalSeatCapacity(), expectedAttendance,
+                            maxCapacityByCluster.get(candidate.getClusterId()));
 
                     /// Tính điểm nền bằng công thức có trọng số lấy từ policy database.
                     // Không hardcode trọng số trong service.
@@ -126,14 +129,30 @@ public class AutoShowtimeCandidateScorer {
                     /// Candidate là object immutable, dùng toBuilder để giữ toàn bộ dữ liệu cũ và chỉ bổ sung score cùng lý do được ưu tiên.
                     return candidate.toBuilder()
                             .score(score.setScale(4, RoundingMode.HALF_UP))
-                            .generationReason(peakSlot
+                            .scoreBreakdown(new ShowtimeScoreBreakdown(
+                                    daypart.code(),
+                                    movieScore.setScale(4, RoundingMode.HALF_UP),
+                                    clusterScore.setScale(4, RoundingMode.HALF_UP),
+                                    timeScore.setScale(4, RoundingMode.HALF_UP),
+                                    formatScore.setScale(4, RoundingMode.HALF_UP),
+                                    roomCapacityScore.setScale(4, RoundingMode.HALF_UP),
+                                    expectedAttendance,
+                                    room.getTotalSeatCapacity()))
+                            .generationReason(daypart.peak()
                                     ? GenerationReason.HIGH_DEMAND_PEAK_SLOT
                                     : GenerationReason.DEMAND_QUOTA_ALLOCATION)
                             .build();
                 })
 
                 /// Xếp candidate điểm cao trước để bước allocation chọn suất tốt nhất trước.
-                .sorted((left, right) -> right.getScore().compareTo(left.getScore()))
+                .sorted(Comparator
+                        .comparing(ShowtimeCandidate::getScore).reversed()
+                        .thenComparing(ShowtimeCandidate::getClusterId)
+                        .thenComparing(ShowtimeCandidate::getShowDate)
+                        .thenComparing(ShowtimeCandidate::temporalStartAt)
+                        .thenComparing(ShowtimeCandidate::getCinemaRoomId)
+                        .thenComparing(ShowtimeCandidate::getMovieId)
+                        .thenComparing(ShowtimeCandidate::getFormatId))
 
                 .toList();
     }
@@ -158,14 +177,35 @@ public class AutoShowtimeCandidateScorer {
         return normalizeScore(rawScore);
     }
 
-    /// Peak slot có time score chuẩn hoá cao nhất; off-peak vẫn hợp lệ nhưng điểm thấp hơn.
-    private BigDecimal resolveTimeScore(
-            LocalTime startTime,
-            ShowtimeAllocationPolicy policy
+    private ResolvedDaypart resolveDaypart(
+            ShowtimeCandidate candidate,
+            ShowtimeAllocationPolicy policy,
+            List<ShowtimeDaypartPolicy> dayparts
     ) {
-        return isPeakSlot(startTime, policy)
-                ? BigDecimal.ONE
-                : BigDecimal.valueOf(0.40);
+        for (ShowtimeDaypartPolicy daypart : dayparts) {
+            if (contains(daypart.getStartTime(), daypart.getEndTime(), candidate.getStartTime())) {
+                DayOfWeek day = candidate.getShowDate().getDayOfWeek();
+                boolean weekend = day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY;
+                BigDecimal multiplier = weekend
+                        ? daypart.getWeekendDemandMultiplier()
+                        : daypart.getWeekdayDemandMultiplier();
+                boolean peak = daypart.getDaypartCode() == movieservice.enums.ShowtimeDaypart.EVENING;
+                return new ResolvedDaypart(daypart.getDaypartCode().name(), multiplier, peak);
+            }
+        }
+
+        boolean peak = isPeakSlot(candidate.getStartTime(), policy);
+        return new ResolvedDaypart(
+                peak ? "PEAK" : "OFF_PEAK",
+                peak ? policy.getPeakDemandWeight() : BigDecimal.valueOf(0.40),
+                peak);
+    }
+
+    private boolean contains(LocalTime start, LocalTime end, LocalTime value) {
+        if (end.isAfter(start)) {
+            return !value.isBefore(start) && value.isBefore(end);
+        }
+        return !value.isBefore(start) || value.isBefore(end);
     }
 
     /// Khung giờ peak là [peakStartTime, peakEndTime): có lấy mốc đầu, không lấy mốc cuối.
@@ -192,20 +232,54 @@ public class AutoShowtimeCandidateScorer {
         );
     }
 
-    /// Chuẩn hoá sức chứa phòng theo phòng lớn nhất trong cùng cluster.
-    private BigDecimal resolveRoomCapacityScore(
-            Integer roomCapacity,
+    /**
+     * Estimate an absolute audience from the current rule-based inputs. This is deliberately
+     * deterministic and replaceable by a forecast snapshot later; it must not depend on the
+     * candidate room, otherwise every room would appear to be a perfect fit.
+     */
+    private int resolveExpectedAttendance(
+            BigDecimal movieScore,
+            BigDecimal clusterScore,
+            BigDecimal timeScore,
+            BigDecimal formatScore,
             Integer maximumClusterCapacity
     ) {
-        if (roomCapacity == null || maximumClusterCapacity == null || maximumClusterCapacity == 0) {
+        if (maximumClusterCapacity == null || maximumClusterCapacity <= 0) {
+            return 0;
+        }
+        BigDecimal baseDemand = movieScore.multiply(BigDecimal.valueOf(0.70))
+                .add(clusterScore.multiply(BigDecimal.valueOf(0.30)));
+        BigDecimal formatMultiplier = BigDecimal.valueOf(0.85)
+                .add(formatScore.multiply(BigDecimal.valueOf(0.15)));
+        BigDecimal demandRatio = clamp(baseDemand.multiply(timeScore).multiply(formatMultiplier),
+                BigDecimal.valueOf(0.05), BigDecimal.ONE);
+        return demandRatio.multiply(BigDecimal.valueOf(maximumClusterCapacity))
+                .setScale(0, RoundingMode.HALF_UP).intValue();
+    }
+
+    /**
+     * Penalise lost demand more heavily than empty capacity. This replaces the old
+     * capacity/maxCapacity ratio which always rewarded the largest auditorium.
+     */
+    private BigDecimal resolveRoomCapacityFitScore(
+            Integer roomCapacity,
+            Integer expectedAttendance,
+            Integer maximumClusterCapacity
+    ) {
+        if (roomCapacity == null || expectedAttendance == null
+                || maximumClusterCapacity == null || maximumClusterCapacity == 0) {
             return BigDecimal.ZERO;
         }
+        int overflowDemand = Math.max(0, expectedAttendance - roomCapacity);
+        int emptyCapacity = Math.max(0, roomCapacity - expectedAttendance);
+        BigDecimal penalty = BigDecimal.valueOf(overflowDemand)
+                .add(BigDecimal.valueOf(emptyCapacity).multiply(BigDecimal.valueOf(0.50)))
+                .divide(BigDecimal.valueOf(maximumClusterCapacity), 4, RoundingMode.HALF_UP);
+        return clamp(BigDecimal.ONE.subtract(penalty), BigDecimal.ZERO, BigDecimal.ONE);
+    }
 
-        return BigDecimal.valueOf(roomCapacity).divide(
-                BigDecimal.valueOf(maximumClusterCapacity),
-                4,
-                RoundingMode.HALF_UP
-        );
+    private BigDecimal clamp(BigDecimal value, BigDecimal minimum, BigDecimal maximum) {
+        return value.max(minimum).min(maximum);
     }
 
     /// Giới hạn score cấu hình trong 0..100 trước khi chuẩn hoá thành khoảng 0..1.
@@ -228,5 +302,8 @@ public class AutoShowtimeCandidateScorer {
                 ));
 
         return formatPriorityById;
+    }
+
+    private record ResolvedDaypart(String code, BigDecimal demandMultiplier, boolean peak) {
     }
 }

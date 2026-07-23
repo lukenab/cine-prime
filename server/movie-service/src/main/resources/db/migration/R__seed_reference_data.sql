@@ -103,10 +103,11 @@ SET enabled = EXCLUDED.enabled,
 INSERT INTO showtime_allocation_policy
     (policy_code, peak_demand_weight, movie_demand_weight, cluster_demand_weight,
      time_slot_demand_weight, format_demand_weight, room_capacity_weight,
-     minimum_coverage, maximum_room_share, active, created_by, updated_by)
+     minimum_coverage, maximum_room_share, same_movie_stagger_minutes,
+     active, created_by, updated_by)
 VALUES
     ('DEFAULT', 1.2000, 0.4000, 0.2500, 0.1500, 0.1000, 0.1000,
-     1, 0.6000, TRUE, 'migration:R', 'migration:R')
+     1, 0.6000, 20, TRUE, 'migration:R', 'migration:R')
 ON CONFLICT (policy_code) DO UPDATE
 SET peak_demand_weight = EXCLUDED.peak_demand_weight,
     movie_demand_weight = EXCLUDED.movie_demand_weight,
@@ -116,8 +117,29 @@ SET peak_demand_weight = EXCLUDED.peak_demand_weight,
     room_capacity_weight = EXCLUDED.room_capacity_weight,
     minimum_coverage = EXCLUDED.minimum_coverage,
     maximum_room_share = EXCLUDED.maximum_room_share,
+    same_movie_stagger_minutes = EXCLUDED.same_movie_stagger_minutes,
     active = EXCLUDED.active,
     updated_by = EXCLUDED.updated_by;
+
+INSERT INTO showtime_daypart_policy
+    (policy_id, daypart_code, start_time, end_time,
+     weekday_demand_multiplier, weekend_demand_multiplier, active)
+SELECT policy.policy_id, seed.daypart_code, seed.start_time, seed.end_time,
+       seed.weekday_multiplier, seed.weekend_multiplier, TRUE
+FROM (
+    VALUES
+        ('MORNING',    '06:00'::TIME, '12:00'::TIME, 0.5500::NUMERIC, 0.7500::NUMERIC),
+        ('AFTERNOON',  '12:00'::TIME, '17:00'::TIME, 0.7000::NUMERIC, 0.9000::NUMERIC),
+        ('EVENING',    '17:00'::TIME, '22:00'::TIME, 1.0000::NUMERIC, 1.1000::NUMERIC),
+        ('LATE_NIGHT', '22:00'::TIME, '06:00'::TIME, 0.6000::NUMERIC, 0.7500::NUMERIC)
+) AS seed(daypart_code, start_time, end_time, weekday_multiplier, weekend_multiplier)
+JOIN showtime_allocation_policy policy ON policy.policy_code = 'DEFAULT'
+ON CONFLICT (policy_id, daypart_code) DO UPDATE
+SET start_time = EXCLUDED.start_time,
+    end_time = EXCLUDED.end_time,
+    weekday_demand_multiplier = EXCLUDED.weekday_demand_multiplier,
+    weekend_demand_multiplier = EXCLUDED.weekend_demand_multiplier,
+    active = EXCLUDED.active;
 
 -- ── genre ────────────────────────────────────────────────────────────────────
 INSERT INTO showtime_allocation_format_priority

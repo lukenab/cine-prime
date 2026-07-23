@@ -8,6 +8,7 @@ import movieservice.repository.CinemaRoomFormatRepository;
 import movieservice.repository.MovieScreeningVersionRepository;
 import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeAllocationFormatPriorityRepository;
+import movieservice.repository.CinemaRoomMaintenanceRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import movieservice.enums.ScreeningVersionStatus;
@@ -15,20 +16,24 @@ import movieservice.enums.ScreeningVersionStatus;
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.*;
 
 @Service
 @RequiredArgsConstructor
 public class AutoShowtimeCandidateFactory {
+    private static final ZoneId DEFAULT_BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private final CinemaClusterRepository cinemaClusterRepository;
     private final CinemaRoomFormatRepository cinemaRoomFormatRepository;
     private final MovieScreeningVersionRepository movieScreeningVersionRepository;
     private final SchedulingEligibilityService schedulingEligibilityService;
     private final ShowtimeAllocationFormatPriorityRepository formatPriorityRepository;
     private final ShowTimeRepository showTimeRepository;
+    private final CinemaRoomMaintenanceRepository maintenanceRepository;
 
     @Transactional(readOnly = true)
     public List<ShowtimeCandidate> buildRawCandidates(ShowtimeGenerationRun run){
@@ -116,7 +121,58 @@ public class AutoShowtimeCandidateFactory {
             }
         }
 
-        return removeCandidatesConflictingWithExistingShowtimes(candidates, run, policy);
+        List<ShowtimeCandidate> withoutMaintenance = removeCandidatesConflictingWithMaintenance(candidates, run);
+        return removeCandidatesConflictingWithExistingShowtimes(withoutMaintenance, run, policy);
+    }
+
+    /**
+     * Maintenance is stored as a local operational window. Load it once for the whole run and
+     * filter in memory instead of issuing one database query for every generated candidate.
+     */
+    private List<ShowtimeCandidate> removeCandidatesConflictingWithMaintenance(
+            List<ShowtimeCandidate> candidates,
+            ShowtimeGenerationRun run
+    ) {
+        if (candidates.isEmpty()) {
+            return candidates;
+        }
+
+        List<Long> roomIds = candidates.stream()
+                .map(ShowtimeCandidate::getCinemaRoomId)
+                .distinct()
+                .toList();
+        LocalDateTime fromInclusive = run.getStartDate().minusDays(1).atStartOfDay();
+        LocalDateTime toExclusive = run.getEndDate().plusDays(2).atStartOfDay();
+
+        Map<Long, List<CinemaRoomMaintenance>> maintenanceByRoom = new HashMap<>();
+        maintenanceRepository.findBlockingMaintenanceInRange(roomIds, fromInclusive, toExclusive)
+                .forEach(maintenance -> maintenanceByRoom
+                        .computeIfAbsent(
+                                maintenance.getCinemaRoom().getCinemaRoomId(),
+                                ignored -> new ArrayList<>())
+                        .add(maintenance));
+
+        return candidates.stream().filter(candidate -> maintenanceByRoom
+                .getOrDefault(candidate.getCinemaRoomId(), List.of())
+                .stream()
+                .noneMatch(maintenance -> overlapsMaintenance(candidate, maintenance)))
+                .toList();
+    }
+
+    private boolean overlapsMaintenance(
+            ShowtimeCandidate candidate,
+            CinemaRoomMaintenance maintenance
+    ) {
+        String timezone = maintenance.getCinemaRoom().getCluster().getTimezone();
+        ZoneId zone = timezone == null ? DEFAULT_BUSINESS_ZONE : ZoneId.of(timezone);
+        LocalDateTime candidateStart = candidate.temporalStartAt()
+                .atZoneSameInstant(zone).toLocalDateTime();
+        LocalDateTime candidateEnd = candidate.temporalEndAt()
+                .atZoneSameInstant(zone).toLocalDateTime();
+        LocalDateTime maintenanceEnd = maintenance.getResolvedAt();
+
+        return maintenance.getStartedAt().isBefore(candidateEnd)
+                && (maintenanceEnd == null || maintenanceEnd.isAfter(candidateStart));
     }
 
     /// Tạo slot thời gian cho một movie+cluster+room+format+ngày
@@ -134,7 +190,9 @@ public class AutoShowtimeCandidateFactory {
         List<ShowtimeCandidate> candidates = new ArrayList<>();
 
         /// Slot đầu tiên phải đúng giờ mở cửa VD opentAt = 8h
-        ZoneId businessZone = ZoneId.of(cluster.getTimezone());
+        ZoneId businessZone = cluster.getTimezone() == null
+                ? DEFAULT_BUSINESS_ZONE
+                : ZoneId.of(cluster.getTimezone());
         ZonedDateTime startAt = ZonedDateTime.of(showDate, operatingHour.getOpensAt(), businessZone);
         ZonedDateTime closingAt = ZonedDateTime.of(showDate, operatingHour.getClosesAt(), businessZone);
         if (operatingHour.isClosesNextDay() || !closingAt.isAfter(startAt)) {
@@ -199,11 +257,14 @@ public class AutoShowtimeCandidateFactory {
                 .distinct()
                 .toList();
 
-        OffsetDateTime fromInclusive = run.getStartDate()
-                .atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh"))
+        // Query a deliberately broad UTC envelope. A run may contain clusters in different
+        // timezones, including UTC+14, so a single Asia/Ho_Chi_Minh boundary can miss the
+        // first local hours of the planning date.
+        OffsetDateTime fromInclusive = run.getStartDate().minusDays(1)
+                .atStartOfDay(ZoneOffset.UTC)
                 .toOffsetDateTime();
         OffsetDateTime toExclusive = run.getEndDate().plusDays(2)
-                .atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh"))
+                .atStartOfDay(ZoneOffset.UTC)
                 .toOffsetDateTime();
         Map<Long, List<ShowTime>> existingShowtimesByRoom = new HashMap<>();
         showTimeRepository.findActiveByRoomsAndTemporalRange(roomIds, fromInclusive, toExclusive)

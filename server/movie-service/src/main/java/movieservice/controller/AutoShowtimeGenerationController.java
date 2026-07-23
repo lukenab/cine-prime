@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import movie.theater.common.dto.ApiResponse;
 import movieservice.dto.request.AutoShowtimeGenerationRequest;
 import movieservice.dto.response.AutoShowtimeGenerationAcceptedResponse;
+import movieservice.dto.response.AutoShowtimeGenerationPolicyResponse;
 import movieservice.dto.response.AutoShowtimeGenerationRunResponse;
 import movieservice.service.AutoShowtimeGenerationService;
 import movieservice.service.autoshowtime.AutoShowtimeExecutionResult;
@@ -46,14 +47,25 @@ public class AutoShowtimeGenerationController {
     /// Endpoint vận hành/test để thực thi một run ACCEPTED ngay lập tức.
     /// Sau này scheduled job có thể gọi đúng executeRun() này mà không lặp business logic.
     @PostMapping("/{generationRunId}/execute")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@autoShowtimeManualExecutionAccess.canExecute(authentication)")
     public ApiResponse<AutoShowtimeExecutionResult> execute(
             @PathVariable Long generationRunId
     ) {
         return ApiResponse.<AutoShowtimeExecutionResult>builder()
                 .code(HttpStatus.OK.value())
-                .message("Auto showtime generation run executed")
+                .message("Auto showtime generation run processed")
                 .result(autoShowtimeGenerationService.executeRun(generationRunId))
+                .build();
+    }
+
+    /// Client gọi endpoint này để hiển thị khoảng ngày hợp lệ (D+start ~ D+end) ngay ở bước
+    /// chọn Planning window, thay vì chỉ biết được sau khi submit bị INVALID_GENERATION_RANGE.
+    @GetMapping("/policy")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<AutoShowtimeGenerationPolicyResponse> getActivePolicy() {
+        return ApiResponse.<AutoShowtimeGenerationPolicyResponse>builder()
+                .code(HttpStatus.OK.value())
+                .result(autoShowtimeGenerationService.getActivePolicySummary())
                 .build();
     }
 

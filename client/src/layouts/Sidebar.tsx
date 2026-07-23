@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { movieApi } from "../api/movieApi";
 
 const roleLabels: Record<string, string> = {
+  ROLE_SUPER_ADMIN: "Super Admin",
   ROLE_ADMIN: "Admin",
   ROLE_EMPLOYEE: "Employee",
   ROLE_MEMBER: "Member",
@@ -66,7 +67,7 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
   // Badge: số phim đang PENDING_REVIEW (chỉ fetch cho ADMIN)
   const [pendingMovies, setPendingMovies] = useState(0);
   useEffect(() => {
-    if (user?.role !== "ROLE_ADMIN") return;
+    if (user?.role !== "ROLE_ADMIN" && user?.role !== "ROLE_SUPER_ADMIN") return;
     movieApi.getAllMovies()
       .then(res => {
         const count = (res.result ?? []).filter(m => m.movieStatus === "PENDING_REVIEW").length;

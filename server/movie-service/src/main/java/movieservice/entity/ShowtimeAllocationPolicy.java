@@ -73,6 +73,10 @@ public class ShowtimeAllocationPolicy {
     Integer timeSlotIntervalMinutes = 15;
 
     @Builder.Default
+    @Column(name = "same_movie_stagger_minutes", nullable = false)
+    Integer sameMovieStaggerMinutes = 20;
+
+    @Builder.Default
     @Column(name = "business_timezone", nullable = false, length = 50)
     String businessTimezone = "Asia/Ho_Chi_Minh";
 

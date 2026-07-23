@@ -23,6 +23,7 @@ public record SchedulePlanResponse(
             Long schedulePlanSlotId,
             Long movieId,
             String movieTitle,
+            String moviePosterUrl,
             Long clusterId,
             String clusterName,
             Long cinemaRoomId,
@@ -37,7 +38,21 @@ public record SchedulePlanResponse(
             BigDecimal basePrice,
             Integer totalSeats,
             String generationReason,
+            ScoreBreakdown scoreBreakdown,
             Long publishedShowtimeId
+    ) {
+    }
+
+    public record ScoreBreakdown(
+            BigDecimal allocationScore,
+            String daypart,
+            BigDecimal movieDemandScore,
+            BigDecimal clusterDemandScore,
+            BigDecimal timeDemandScore,
+            BigDecimal formatDemandScore,
+            BigDecimal capacityFitScore,
+            Integer expectedAttendance,
+            Integer roomCapacity
     ) {
     }
 }

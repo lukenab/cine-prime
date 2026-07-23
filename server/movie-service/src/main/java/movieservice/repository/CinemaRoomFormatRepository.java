@@ -17,6 +17,8 @@ public interface CinemaRoomFormatRepository extends JpaRepository<CinemaRoomForm
     Optional<CinemaRoomFormat> findByCinemaRoom_CinemaRoomIdAndScreeningFormat_FormatId(
             Long cinemaRoomId, Integer formatId);
 
+    List<CinemaRoomFormat> findByCinemaRoom_CinemaRoomId(Long cinemaRoomId);
+
     /**
      * The reusable eligibility query for auto allocation. A candidate must have
      * an enabled capability, an active room and an active cluster.
@@ -30,6 +32,15 @@ public interface CinemaRoomFormatRepository extends JpaRepository<CinemaRoomForm
               AND roomFormat.screeningFormat.formatId = :formatId
               AND room.status = movieservice.enums.CinemaRoomStatus.ACTIVE
               AND cluster.status = movieservice.enums.ClusterStatus.ACTIVE
+              AND room.totalSeatCapacity > 0
+              AND EXISTS (
+                    SELECT layout.roomLayoutId
+                    FROM RoomLayout layout
+                    WHERE layout.cinemaRoom = room
+                      AND layout.status = movieservice.enums.LayoutStatus.ACTIVE
+                      AND layout.personCapacity > 0
+                      AND layout.sellableUnitCount > 0
+              )
             ORDER BY cluster.clusterId, room.cinemaRoomId
             """)
     List<CinemaRoom> findEligibleActiveRoomsByFormatId(@Param("formatId") Integer formatId);
@@ -48,6 +59,15 @@ public interface CinemaRoomFormatRepository extends JpaRepository<CinemaRoomForm
               AND roomFormat.screeningFormat.formatId = :formatId
               AND room.status = movieservice.enums.CinemaRoomStatus.ACTIVE
               AND cluster.status = movieservice.enums.ClusterStatus.ACTIVE
+              AND room.totalSeatCapacity > 0
+              AND EXISTS (
+                    SELECT layout.roomLayoutId
+                    FROM RoomLayout layout
+                    WHERE layout.cinemaRoom = room
+                      AND layout.status = movieservice.enums.LayoutStatus.ACTIVE
+                      AND layout.personCapacity > 0
+                      AND layout.sellableUnitCount > 0
+              )
               AND EXISTS (
                     SELECT 1
                     FROM Movie movie
@@ -60,4 +80,7 @@ public interface CinemaRoomFormatRepository extends JpaRepository<CinemaRoomForm
     List<CinemaRoom> findEligibleActiveRoomsByMovieIdAndFormatId(
             @Param("movieId") Long movieId,
             @Param("formatId") Integer formatId);
+
+    boolean existsByCinemaRoom_CinemaRoomIdAndScreeningFormat_FormatIdAndEnabledTrue(
+            Long cinemaRoomId, Integer formatId);
 }

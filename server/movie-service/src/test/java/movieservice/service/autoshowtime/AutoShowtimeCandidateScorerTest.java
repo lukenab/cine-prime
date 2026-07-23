@@ -11,6 +11,7 @@ import movieservice.repository.CinemaClusterDemandProfileRepository;
 import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.MovieSchedulingProfileRepository;
 import movieservice.repository.ShowtimeAllocationFormatPriorityRepository;
+import movieservice.repository.ShowtimeDaypartPolicyRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,6 +36,7 @@ class AutoShowtimeCandidateScorerTest {
     @Mock CinemaClusterDemandProfileRepository clusterDemandProfileRepository;
     @Mock CinemaRoomRepository cinemaRoomRepository;
     @Mock ShowtimeAllocationFormatPriorityRepository formatPriorityRepository;
+    @Mock ShowtimeDaypartPolicyRepository daypartPolicyRepository;
 
     private AutoShowtimeCandidateScorer scorer;
 
@@ -44,7 +46,8 @@ class AutoShowtimeCandidateScorerTest {
                 movieSchedulingProfileRepository,
                 clusterDemandProfileRepository,
                 cinemaRoomRepository,
-                formatPriorityRepository
+                formatPriorityRepository,
+                daypartPolicyRepository
         );
     }
 
@@ -67,6 +70,8 @@ class AutoShowtimeCandidateScorerTest {
                         .allocationPriority(10)
                         .build()
         ));
+        when(daypartPolicyRepository.findByPolicy_PolicyIdAndActiveTrueOrderByStartTime(1L))
+                .thenReturn(List.of());
 
         List<ShowtimeCandidate> ranked = scorer.scoreAndRank(run, List.of(
                 candidate(LocalTime.of(10, 0)),
@@ -78,10 +83,38 @@ class AutoShowtimeCandidateScorerTest {
                         ShowtimeCandidate::getScore
                 ));
 
-        /// Peak: .9*.40 + .5*.25 + (1*.15*1.20) + 1*.10 + 1*.10 = .8650.
-        /// Nếu nhân toàn bộ score như logic cũ thì kết quả sai thành .8820.
-        assertEquals(new BigDecimal("0.8650"), scoreByStartTime.get(LocalTime.of(19, 0)));
-        assertEquals(new BigDecimal("0.7450"), scoreByStartTime.get(LocalTime.of(10, 0)));
+        /// Expected attendance is independent of the candidate room; capacity fit now
+        /// penalises empty seats instead of blindly rewarding the largest room.
+        assertEquals(new BigDecimal("0.8620"), scoreByStartTime.get(LocalTime.of(19, 0)));
+        assertEquals(new BigDecimal("0.7105"), scoreByStartTime.get(LocalTime.of(10, 0)));
+        assertEquals(94, ranked.getFirst().getScoreBreakdown().expectedAttendance());
+    }
+
+    @Test
+    void scoreAndRankUsesCapacityFitInsteadOfAlwaysChoosingLargestRoom() {
+        ShowtimeAllocationPolicy policy = policy();
+        ShowtimeGenerationRun run = ShowtimeGenerationRun.builder().policy(policy).build();
+        CinemaRoom smallRoom = CinemaRoom.builder().cinemaRoomId(10L).totalSeatCapacity(50).build();
+        CinemaRoom largeRoom = CinemaRoom.builder().cinemaRoomId(20L).totalSeatCapacity(200).build();
+
+        when(cinemaRoomRepository.findAllById(any())).thenReturn(List.of(smallRoom, largeRoom));
+        when(movieSchedulingProfileRepository.findByMovie_MovieId(1L)).thenReturn(Optional.of(
+                MovieSchedulingProfile.builder().popularityScore(new BigDecimal("20")).build()));
+        when(clusterDemandProfileRepository.findByCluster_ClusterId(1L)).thenReturn(Optional.of(
+                CinemaClusterDemandProfile.builder().demandScore(new BigDecimal("20")).build()));
+        when(formatPriorityRepository.findAllByPolicyIdWithFormat(1L)).thenReturn(List.of(
+                ShowtimeAllocationFormatPriority.builder()
+                        .screeningFormat(ScreeningFormat.builder().formatId(1).build())
+                        .allocationPriority(10).build()));
+        when(daypartPolicyRepository.findByPolicy_PolicyIdAndActiveTrueOrderByStartTime(1L))
+                .thenReturn(List.of());
+
+        ShowtimeCandidate small = candidate(LocalTime.of(10, 0)).toBuilder().cinemaRoomId(10L).build();
+        ShowtimeCandidate large = candidate(LocalTime.of(10, 0)).toBuilder().cinemaRoomId(20L).build();
+        List<ShowtimeCandidate> ranked = scorer.scoreAndRank(run, List.of(large, small));
+
+        assertEquals(10L, ranked.getFirst().getCinemaRoomId());
+        assertEquals(16, ranked.getFirst().getScoreBreakdown().expectedAttendance());
     }
 
     private ShowtimeAllocationPolicy policy() {

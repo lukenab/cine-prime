@@ -61,11 +61,6 @@ public class Movie {
     @Column(name = "country", length = 100)
     String country;
 
-    // Compliance taxonomy verified by catalog operations; never inferred from language alone.
-    @Builder.Default
-    @Column(name = "domestic_production_verified", nullable = false)
-    Boolean domesticProductionVerified = false;
-
     // ── Media ─────────────────────────────────────────────────
     @Column(name = "poster_url", length = 500)
     String posterUrl;

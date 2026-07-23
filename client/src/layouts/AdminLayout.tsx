@@ -18,6 +18,26 @@ export default function AdminLayout() {
     localStorage.setItem("admin-theme", isDarkMode ? "dark" : "light");
   }, [isDarkMode]);
 
+  useEffect(() => {
+    const background = isDarkMode ? "#050505" : "#f4f5f7";
+    const root = document.getElementById("root");
+    const previous = {
+      htmlBackground: document.documentElement.style.backgroundColor,
+      bodyBackground: document.body.style.backgroundColor,
+      rootBackground: root?.style.backgroundColor ?? "",
+    };
+
+    document.documentElement.style.backgroundColor = background;
+    document.body.style.backgroundColor = background;
+    if (root) root.style.backgroundColor = background;
+
+    return () => {
+      document.documentElement.style.backgroundColor = previous.htmlBackground;
+      document.body.style.backgroundColor = previous.bodyBackground;
+      if (root) root.style.backgroundColor = previous.rootBackground;
+    };
+  }, [isDarkMode]);
+
   return (
     <div
       className={isDarkMode ? "theme-dark" : "theme-light"}
@@ -108,7 +128,8 @@ export default function AdminLayout() {
         *:focus-within::-webkit-scrollbar-thumb,
         *:active::-webkit-scrollbar-thumb { background: rgba(59,130,246,0.35); }
         *::-webkit-scrollbar-thumb:hover { background: rgba(59,130,246,0.6); }
-        body { margin: 0; background: var(--bg-main); }
+        html, body, #root { min-height: 100%; }
+        body { margin: 0; }
         input::placeholder { color: var(--text-sub); }
       `}</style>
     </div>

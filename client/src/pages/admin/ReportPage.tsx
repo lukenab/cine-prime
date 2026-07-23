@@ -202,7 +202,7 @@ export default function ReportPage() {
 
         {/* Revenue trend */}
         <ChartCard title="Revenue Trend">
-          <ResponsiveContainer width="100%" height={240}>
+          <ResponsiveContainer width="100%" height={240} minWidth={0} minHeight={240}>
             <LineChart data={revenueData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: axisColor }} tickLine={false} axisLine={false}
@@ -218,7 +218,7 @@ export default function ReportPage() {
 
         {/* Booking status donut */}
         <ChartCard title="Booking Status">
-          <ResponsiveContainer width="100%" height={240}>
+          <ResponsiveContainer width="100%" height={240} minWidth={0} minHeight={240}>
             <PieChart>
               <Pie data={BOOKING_STATUS} cx="50%" cy="50%" innerRadius={60} outerRadius={90}
                 paddingAngle={3} dataKey="value">
@@ -283,7 +283,7 @@ export default function ReportPage() {
 
         {/* Room Occupancy */}
         <ChartCard title="Room Occupancy Rate (%)">
-          <ResponsiveContainer width="100%" height={240}>
+          <ResponsiveContainer width="100%" height={240} minWidth={0} minHeight={240}>
             <BarChart data={ROOM_OCCUPANCY} layout="vertical" margin={{ top: 0, right: 40, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={gridColor} horizontal={false} />
               <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: axisColor }}

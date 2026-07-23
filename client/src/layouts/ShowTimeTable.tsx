@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pencil, Trash2, ChevronLeft, ChevronRight, Monitor, Clock } from "lucide-react";
+import { Pencil, Trash2, ChevronLeft, ChevronRight, Monitor, Clock, PlayCircle, PauseCircle, XCircle } from "lucide-react";
 import type { ShowtimeResponse, ShowtimeStatus } from "../api/showtimeApi";
 
 type Props = {
@@ -10,6 +10,7 @@ type Props = {
   statusFilter: string;
   dateFilter: string;
   roomFilter: number | "";
+  onBulkStatusChange: (ids: number[], status: ShowtimeStatus, reason?: string) => Promise<void>;
 };
 
 const ITEMS_PER_PAGE = 8;
@@ -41,9 +42,14 @@ export function ShowtimeTable({
   statusFilter,
   dateFilter,
   roomFilter,
+  onBulkStatusChange,
 }: Props) {
   const [page, setPage] = useState(1);
   const [confirmDelete, setConfirmDelete] = useState<ShowtimeResponse | null>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const filtered = showtimes.filter((s) => {
     const q = searchQuery.toLowerCase();
@@ -60,6 +66,23 @@ export function ShowtimeTable({
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
   const safePage   = Math.min(page, totalPages);
   const pageItems  = filtered.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE);
+  const actionablePageIds = pageItems
+    .filter((item) => item.status !== "CANCELLED" && item.status !== "COMPLETED")
+    .map((item) => item.showTimeId);
+  const allPageSelected = actionablePageIds.length > 0 && actionablePageIds.every((id) => selectedIds.includes(id));
+
+  const runBulkAction = async (status: ShowtimeStatus, reason?: string) => {
+    if (selectedIds.length === 0) return;
+    setBulkBusy(true);
+    try {
+      await onBulkStatusChange(selectedIds, status, reason);
+      setSelectedIds([]);
+      setCancelOpen(false);
+      setCancelReason("");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   return (
     <>
@@ -106,11 +129,48 @@ export function ShowtimeTable({
         </div>
       )}
 
+      {cancelOpen && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 p-4" onMouseDown={(event) => event.target === event.currentTarget && setCancelOpen(false)}>
+          <div className="w-full max-w-md rounded-2xl border p-5 shadow-2xl" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/10 text-rose-500"><XCircle size={19} /></div>
+              <div><h3 className="text-base font-bold" style={{ color: "var(--text-main)" }}>Cancel selected showtimes</h3><p className="mt-0.5 text-xs" style={{ color: "var(--text-sub)" }}>{selectedIds.length} sessions will be removed from sale.</p></div>
+            </div>
+            <label className="mt-5 block text-xs font-semibold" style={{ color: "var(--text-main)" }}>Operational reason</label>
+            <textarea value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} rows={4} placeholder="For example: room maintenance or distributor request" className="mt-2 w-full resize-none rounded-xl border bg-transparent px-3 py-2.5 text-sm outline-none" style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }} />
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setCancelOpen(false)} className="rounded-xl border px-4 py-2 text-sm font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }}>Keep showtimes</button>
+              <button type="button" disabled={!cancelReason.trim() || bulkBusy} onClick={() => void runBulkAction("CANCELLED", cancelReason.trim())} className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-40">Confirm cancellation</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedIds.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+          <strong className="mr-auto text-sm" style={{ color: "var(--text-main)" }}>{selectedIds.length} selected</strong>
+          <button type="button" disabled={bulkBusy} onClick={() => void runBulkAction("ON_SALE")} className="flex items-center gap-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-600"><PlayCircle size={14} /> Open sales</button>
+          <button type="button" disabled={bulkBusy} onClick={() => void runBulkAction("SUSPENDED")} className="flex items-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-600"><PauseCircle size={14} /> Suspend</button>
+          <button type="button" disabled={bulkBusy} onClick={() => setCancelOpen(true)} className="flex items-center gap-1.5 rounded-lg border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-600"><XCircle size={14} /> Cancel</button>
+          <button type="button" onClick={() => setSelectedIds([])} className="px-2 py-2 text-xs font-semibold" style={{ color: "var(--text-sub)" }}>Clear</button>
+        </div>
+      )}
+
       <div className="rounded-2xl border overflow-hidden" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b" style={{ borderColor: "var(--border-color)", backgroundColor: "rgba(128,128,128,0.04)" }}>
+                <th className="w-12 px-5 py-3.5 text-left">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all actionable showtimes on this page"
+                    checked={allPageSelected}
+                    onChange={() => setSelectedIds((current) => allPageSelected
+                      ? current.filter((id) => !actionablePageIds.includes(id))
+                      : Array.from(new Set([...current, ...actionablePageIds])))}
+                  />
+                </th>
                 {["Movie & Room", "Date", "Time", "Status", "Actions"].map((h) => (
                   <th key={h} className={`px-5 py-3.5 ${h === "Actions" ? "text-right" : "text-left"}`}>
                     <span style={{ color: "var(--text-sub)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>
@@ -124,7 +184,7 @@ export function ShowtimeTable({
             <tbody>
               {pageItems.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>
+                  <td colSpan={6} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>
                     No showtimes found matching your filters.
                   </td>
                 </tr>
@@ -133,6 +193,17 @@ export function ShowtimeTable({
                   const st = STATUS_STYLE[item.status] ?? STATUS_STYLE.COMPLETED;
                   return (
                     <tr key={item.showTimeId} className="border-b last:border-none hover-row transition-colors" style={{ borderColor: "var(--border-color)" }}>
+                      <td className="px-5 py-3.5">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${item.movieName}`}
+                          disabled={item.status === "CANCELLED" || item.status === "COMPLETED"}
+                          checked={selectedIds.includes(item.showTimeId)}
+                          onChange={() => setSelectedIds((current) => current.includes(item.showTimeId)
+                            ? current.filter((id) => id !== item.showTimeId)
+                            : [...current, item.showTimeId])}
+                        />
+                      </td>
                       <td className="px-5 py-3.5">
                         <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-main)" }}>{item.movieName}</p>
                         <div className="flex items-center gap-1.5 mt-1" style={{ color: "var(--text-sub)" }}>

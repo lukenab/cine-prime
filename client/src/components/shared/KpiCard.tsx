@@ -128,8 +128,8 @@ export function KpiCard({
       </div>
 
       {/* Sparkline Chart */}
-      <div style={{ height: "44px", margin: "0 -4px 12px" }}>
-        <ResponsiveContainer width="100%" height="100%">
+      <div style={{ height: "44px", minWidth: 0, margin: "0 -4px 12px" }}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={44}>
           <AreaChart data={chartData} margin={{ top: 2, right: 4, left: 4, bottom: 0 }}>
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">

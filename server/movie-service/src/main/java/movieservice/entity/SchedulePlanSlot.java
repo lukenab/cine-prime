@@ -46,6 +46,15 @@ public class SchedulePlanSlot {
     @Column(name = "base_price", precision = 12, scale = 2) BigDecimal basePrice;
     @Column(name = "total_seats") Integer totalSeats;
 
+    @Column(name = "allocation_score", precision = 10, scale = 4) BigDecimal allocationScore;
+    @Column(name = "daypart_code", length = 20) String daypartCode;
+    @Column(name = "movie_demand_score", precision = 6, scale = 4) BigDecimal movieDemandScore;
+    @Column(name = "cluster_demand_score", precision = 6, scale = 4) BigDecimal clusterDemandScore;
+    @Column(name = "time_demand_score", precision = 6, scale = 4) BigDecimal timeDemandScore;
+    @Column(name = "format_demand_score", precision = 6, scale = 4) BigDecimal formatDemandScore;
+    @Column(name = "capacity_fit_score", precision = 6, scale = 4) BigDecimal capacityFitScore;
+    @Column(name = "expected_attendance") Integer expectedAttendance;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "generation_reason", length = 100)
     GenerationReason generationReason;

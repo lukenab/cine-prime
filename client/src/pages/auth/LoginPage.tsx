@@ -54,7 +54,7 @@ export default function LoginPage() {
   // Redirect nếu user đã login sẵn (ví dụ: vào /login khi đang có token)
   useEffect(() => {
     if (user) {
-      if (user.role === "ROLE_ADMIN")    navigate("/admin", { replace: true });
+      if (user.role === "ROLE_ADMIN" || user.role === "ROLE_SUPER_ADMIN") navigate("/admin", { replace: true });
       else if (user.role === "ROLE_EMPLOYEE") navigate("/admin/movies", { replace: true });
       else navigate("/", { replace: true });
     }
@@ -75,7 +75,7 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       const { role } = await login({ username, password });
-      if (role === "ROLE_ADMIN")         navigate("/admin",         { replace: true });
+      if (role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN") navigate("/admin", { replace: true });
       else if (role === "ROLE_EMPLOYEE") navigate("/admin/movies",  { replace: true });
       else                               navigate("/",              { replace: true });
     } catch (err: any) {

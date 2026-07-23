@@ -16,6 +16,7 @@ import movieservice.entity.*;
 import movieservice.enums.AvailabilityStatus;
 import movieservice.enums.GenreStatus;
 import movieservice.enums.MovieStatus;
+import movieservice.enums.ScreeningVersionStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.dto.response.ImageUploadResponse;
@@ -60,6 +61,7 @@ public class MovieService {
     MovieReadinessValidator movieReadinessValidator;
     MovieAvailabilityRepository movieAvailabilityRepository;
     MovieStatusHistoryRepository movieStatusHistoryRepository;
+    MovieScreeningVersionRepository movieScreeningVersionRepository;
 
     private static final long MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 
@@ -100,6 +102,7 @@ public class MovieService {
         movie.setFormats(formats);
 
         Movie saved = movieRepository.save(movie);
+        syncScreeningVersions(saved);
 
         // Translations — save và set thẳng vào entity để mapper có data
         if (request.getTranslations() != null) {
@@ -413,7 +416,9 @@ public class MovieService {
             reconcileCast(movie, request.getCast());
         }
 
-        return movieMapper.toMovieResponse(movieRepository.save(movie));
+        Movie saved = movieRepository.save(movie);
+        syncScreeningVersions(saved);
+        return movieMapper.toMovieResponse(saved);
     }
 
     /**
@@ -431,6 +436,59 @@ public class MovieService {
         } else {
             target.clear();
             target.addAll(replacement);
+        }
+    }
+
+    /**
+     * The auto-showtime engine only ever reads movie_screening_version (via
+     * findEffectiveVersions) - never movie_format directly - so without this sync a movie
+     * saved with formats but no matching screening version row is permanently ineligible for
+     * auto-generation despite looking complete in the catalog UI. Mirrors
+     * CinemaRoomService#syncRoomFormatCapabilities: keeps existing rows (audit trail / FK from
+     * show_time), only flips status rather than deleting when a format is no longer selected.
+     */
+    private void syncScreeningVersions(Movie movie) {
+        List<ScreeningFormat> formats = movie.getFormats() == null ? List.of() : movie.getFormats();
+
+        String audioLanguage = (movie.getOriginalLanguage() == null || movie.getOriginalLanguage().isBlank())
+                ? "und" : movie.getOriginalLanguage();
+        Set<Integer> desiredFormatIds = formats.stream()
+                .map(ScreeningFormat::getFormatId)
+                .collect(Collectors.toSet());
+
+        Map<Integer, List<MovieScreeningVersion>> existingByFormatId = movieScreeningVersionRepository
+                .findByMovie_MovieId(movie.getMovieId()).stream()
+                .collect(Collectors.groupingBy(version -> version.getFormat().getFormatId()));
+
+        for (ScreeningFormat format : formats) {
+            List<MovieScreeningVersion> versionsForFormat = existingByFormatId.getOrDefault(format.getFormatId(), List.of());
+            MovieScreeningVersion matching = versionsForFormat.stream()
+                    .filter(version -> audioLanguage.equals(version.getAudioLanguageCode())
+                            && version.getSubtitleLanguageCode() == null)
+                    .findFirst()
+                    .orElse(null);
+            if (matching == null) {
+                movieScreeningVersionRepository.save(MovieScreeningVersion.builder()
+                        .movie(movie)
+                        .format(format)
+                        .audioLanguageCode(audioLanguage)
+                        .subtitleLanguageCode(null)
+                        .status(ScreeningVersionStatus.ACTIVE)
+                        .build());
+            } else if (matching.getStatus() != ScreeningVersionStatus.ACTIVE) {
+                matching.setStatus(ScreeningVersionStatus.ACTIVE);
+                movieScreeningVersionRepository.save(matching);
+            }
+        }
+
+        for (Map.Entry<Integer, List<MovieScreeningVersion>> entry : existingByFormatId.entrySet()) {
+            if (desiredFormatIds.contains(entry.getKey())) continue;
+            for (MovieScreeningVersion stale : entry.getValue()) {
+                if (stale.getStatus() == ScreeningVersionStatus.ACTIVE) {
+                    stale.setStatus(ScreeningVersionStatus.INACTIVE);
+                    movieScreeningVersionRepository.save(stale);
+                }
+            }
         }
     }
 
