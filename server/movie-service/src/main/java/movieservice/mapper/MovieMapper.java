@@ -134,10 +134,13 @@ public interface MovieMapper {
     @Mapping(source = "cinemaRoom.cinemaRoomName", target = "cinemaRoomName")
     @Mapping(source = "movie.movieId", target = "movieId")
     @Mapping(source = "movie.originalTitle", target = "movieName")
+    @Mapping(source = "movie.posterUrl", target = "moviePosterUrl")
+    @Mapping(source = "format.formatCode", target = "formatCode")
     @Mapping(target = "status", expression = "java(showTime.getStatus() != null ? showTime.getStatus().name() : null)")
+    @Mapping(target = "source", expression = "java(showTime.getSource() != null ? showTime.getSource().name() : null)")
     @Mapping(target = "clusterId", expression = "java(showTime.getCinemaRoom() != null && showTime.getCinemaRoom().getCluster() != null ? showTime.getCinemaRoom().getCluster().getClusterId() : null)")
     @Mapping(target = "clusterName", expression = "java(showTime.getCinemaRoom() != null && showTime.getCinemaRoom().getCluster() != null ? showTime.getCinemaRoom().getCluster().getClusterName() : null)")
-    @Mapping(target = "availableSeats", expression = "java(showTime.getTotalSeats() != null && showTime.getSoldSeats() != null ? showTime.getTotalSeats() - showTime.getSoldSeats() : showTime.getTotalSeats())")
+    @Mapping(target = "availableSeats", expression = "java(Math.max(0, (showTime.getTotalSeats() != null ? showTime.getTotalSeats() : 0) - (showTime.getSoldSeats() != null ? showTime.getSoldSeats() : 0)))")
     // price khong map o day — SeatRepository can duoc goi tu service (xem ShowTimeService.enrichPrice),
     // MapStruct expression khong the inject repository ma khong dung @Context/default method.
     ShowTimeResponse toShowTimeResponse(ShowTime showTime);

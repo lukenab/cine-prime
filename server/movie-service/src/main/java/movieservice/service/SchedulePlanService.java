@@ -3,6 +3,7 @@ package movieservice.service;
 import lombok.RequiredArgsConstructor;
 import movie.theater.common.exception.AppException;
 import movieservice.dto.response.SchedulePlanResponse;
+import movieservice.dto.response.SchedulePlanSummaryResponse;
 import movieservice.entity.SchedulePlan;
 import movieservice.entity.SchedulePlanSlot;
 import movieservice.enums.SchedulePlanStatus;
@@ -12,8 +13,11 @@ import movieservice.service.autoshowtime.AutoShowtimeCandidatePersistenceService
 import movieservice.service.autoshowtime.AutoShowtimePersistenceResult;
 import movieservice.service.autoshowtime.ShowtimeCandidate;
 import movieservice.service.autoshowtime.SchedulingEligibilityService;
+import movieservice.service.autoshowtime.SchedulingOperationalConstraintService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDateTime;
 
@@ -23,6 +27,19 @@ public class SchedulePlanService {
     private final SchedulePlanRepository schedulePlanRepository;
     private final AutoShowtimeCandidatePersistenceService persistenceService;
     private final SchedulingEligibilityService eligibilityService;
+    private final SchedulingOperationalConstraintService operationalConstraintService;
+
+    @Transactional(readOnly = true)
+    public Page<SchedulePlanSummaryResponse> list(
+            SchedulePlanStatus status,
+            int page,
+            int size) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(50, Math.max(1, size));
+        return schedulePlanRepository.findSummaries(
+                status,
+                PageRequest.of(safePage, safeSize));
+    }
 
     @Transactional(readOnly = true)
     public SchedulePlanResponse get(Long planId) {
@@ -93,9 +110,13 @@ public class SchedulePlanService {
     }
 
     private void validateCurrentEligibility(SchedulePlan plan) {
-        boolean invalid = plan.getSlots().stream().anyMatch(slot -> !eligibilityService.evaluate(
-                slot.getMovie(), slot.getCinemaRoom().getCluster(),
-                slot.getScreeningVersion(), slot.getBusinessDate()).eligible());
+        boolean invalid = plan.getSlots().stream().anyMatch(slot ->
+                !eligibilityService.evaluate(
+                        slot.getMovie(), slot.getCinemaRoom().getCluster(),
+                        slot.getScreeningVersion(), slot.getBusinessDate()).eligible()
+                || !operationalConstraintService.evaluate(
+                        slot.getCinemaRoom(), slot.getScreeningVersion(),
+                        slot.getStartAt(), slot.getEndAt()).eligible());
         if (invalid) {
             throw new AppException(MovieErrorCode.SCHEDULE_PLAN_ELIGIBILITY_CHANGED);
         }
@@ -133,7 +154,9 @@ public class SchedulePlanService {
     private SchedulePlanResponse.Slot toSlotResponse(SchedulePlanSlot slot) {
         return new SchedulePlanResponse.Slot(
                 slot.getSchedulePlanSlotId(),
-                slot.getMovie().getMovieId(), slot.getMovie().getOriginalTitle(),
+                slot.getMovie().getMovieId(),
+                slot.getMovie().getOriginalTitle(),
+                slot.getMovie().getPosterUrl(),
                 slot.getCinemaRoom().getCluster().getClusterId(),
                 slot.getCinemaRoom().getCluster().getClusterName(),
                 slot.getCinemaRoom().getCinemaRoomId(), slot.getCinemaRoom().getCinemaRoomName(),
@@ -144,6 +167,25 @@ public class SchedulePlanService {
                 slot.getBusinessDate(), slot.getStartAt(), slot.getEndAt(),
                 slot.getBasePrice(), slot.getTotalSeats(),
                 slot.getGenerationReason() == null ? null : slot.getGenerationReason().name(),
+                toScoreBreakdown(slot),
                 slot.getPublishedShowtime() == null ? null : slot.getPublishedShowtime().getShowTimeId());
+    }
+
+    private SchedulePlanResponse.ScoreBreakdown toScoreBreakdown(SchedulePlanSlot slot) {
+        if (slot.getAllocationScore() == null
+                && slot.getMovieDemandScore() == null
+                && slot.getClusterDemandScore() == null
+                && slot.getTimeDemandScore() == null
+                && slot.getFormatDemandScore() == null
+                && slot.getCapacityFitScore() == null
+                && slot.getExpectedAttendance() == null) {
+            return null;
+        }
+        return new SchedulePlanResponse.ScoreBreakdown(
+                slot.getAllocationScore(), slot.getDaypartCode(),
+                slot.getMovieDemandScore(), slot.getClusterDemandScore(),
+                slot.getTimeDemandScore(), slot.getFormatDemandScore(),
+                slot.getCapacityFitScore(), slot.getExpectedAttendance(),
+                slot.getTotalSeats());
     }
 }

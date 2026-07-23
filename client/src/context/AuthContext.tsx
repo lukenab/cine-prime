@@ -3,7 +3,7 @@ import { userApi } from "../api/userApi";
 import { jwtDecode } from "jwt-decode";
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
-const ROLE_PRIORITY = ["ROLE_ADMIN", "ROLE_EMPLOYEE", "ROLE_MEMBER"];
+const ROLE_PRIORITY = ["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_EMPLOYEE", "ROLE_MEMBER"];
 
 function extractPrimaryRole(rolesClaim: string): string {
     const roles = (rolesClaim || "").split(" ").filter(r => r.startsWith("ROLE_"));

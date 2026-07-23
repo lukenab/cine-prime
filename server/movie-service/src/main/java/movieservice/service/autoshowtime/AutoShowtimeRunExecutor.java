@@ -43,7 +43,6 @@ public class AutoShowtimeRunExecutor {
     private final AutoShowtimeCandidateScorer candidateScorer;
     private final AutoShowtimeCandidateSelector candidateSelector;
     private final AutoShowtimePlanValidator planValidator;
-    private final VietnameseFilmShareService vietnameseFilmShareService;
     private final SchedulePlanDraftService schedulePlanDraftService;
     private final AutoShowtimeRunStateService runStateService;
 
@@ -59,8 +58,7 @@ public class AutoShowtimeRunExecutor {
             ShowtimeGenerationRun run = generationRunRepository.findByGenerationRunId(generationRunId)
                     .orElseThrow(() -> new AppException(MovieErrorCode.GENERATION_RUN_NOT_FOUND));
             List<ShowtimeCandidate> rawCandidates = candidateFactory.buildRawCandidates(run);
-            List<ShowtimeCandidate> rankedCandidates = vietnameseFilmShareService.prioritize(
-                    run, candidateScorer.scoreAndRank(run, rawCandidates));
+            List<ShowtimeCandidate> rankedCandidates = candidateScorer.scoreAndRank(run, rawCandidates);
             AutoShowtimeSelectionResult selection = candidateSelector.select(run, rankedCandidates);
 
             Map<SkipAggregateKey, SkipAggregate> skipAggregates = new LinkedHashMap<>();
@@ -68,8 +66,7 @@ public class AutoShowtimeRunExecutor {
             persistSkipAggregates(run, skipAggregates);
 
             AutoShowtimePlanValidationResult validation = planValidator.validate(
-                    run, rankedCandidates, selection.selectedCandidates())
-                    .plus(vietnameseFilmShareService.validate(run, selection.selectedCandidates()));
+                    run, rankedCandidates, selection.selectedCandidates());
             Long planId = schedulePlanDraftService.createDraftShell(generationRunId, validation)
                     .getSchedulePlanId();
 

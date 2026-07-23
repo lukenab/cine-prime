@@ -30,6 +30,8 @@ public class ShowTimeResponse {
 
     String movieName;
 
+    String moviePosterUrl;
+
     Long cinemaRoomId;
 
     String cinemaRoomName;
@@ -42,6 +44,10 @@ public class ShowTimeResponse {
 
     String status;
 
+    String formatCode;
+
+    String source;
+
     Long screeningVersionId;
 
     String audioLanguageCode;
@@ -52,7 +58,11 @@ public class ShowTimeResponse {
     // sua doi phong sau nay) va availableSeats = totalSeats - soldSeats.
     Integer totalSeats;
 
+    Integer soldSeats;
+
     Integer availableSeats;
+
+    String cancellationReason;
 
     // Gia ve thap nhat cua phong (MIN(seat.price) trong cac ghe ACTIVE) — dung de hien
     // thi "tu X d" o danh sach suat chieu; gia chi tiet tung ghe van lay o trang dat ve.

@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 
 import AuthLayout from "../layouts/AuthLayout";
 import CustomerLayout from "../layouts/CustomerLayout";
@@ -33,6 +33,7 @@ import CreateUserPage from "../pages/admin/CreateUserPage";
 import EditUserPage from "../pages/admin/EditUserPage";
 import UserDetailPage from "../pages/admin/UserDetailPage";
 import ManageShowtimePage from "../pages/admin/ManageShowTimePage";
+import AutoScheduleWorkspacePage from "../pages/admin/AutoScheduleWorkspacePage";
 import ManageBookingPage from "../pages/admin/ManageBookingPage";
 import ManageEmployeePage from "../pages/admin/ManageEmployeePage";
 import CreateEmployeePage from "../pages/admin/CreateEmployeePage";
@@ -80,7 +81,7 @@ export default function AppRoutes() {
       <Route path="/profile-setup" element={<CompleteProfilePage />} />
 
       {/* Admin + Employee */}
-      <Route element={<ProtectedRoute allowedRoles={["ROLE_ADMIN", "ROLE_EMPLOYEE"]} />}>
+      <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_EMPLOYEE"]} />}>
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
 
@@ -100,8 +101,8 @@ export default function AppRoutes() {
           <Route path="bookings"  element={<ManageBookingPage />} />
           <Route path="sell"      element={<TicketSalePage />} />
 
-          <Route element={<ProtectedRoute allowedRoles={["ROLE_ADMIN"]} />}>
-            <Route path="showtimes/auto"     element={<Navigate to="/admin/showtimes" replace />} />
+          <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN"]} />}>
+            <Route path="showtimes/auto"     element={<AutoScheduleWorkspacePage />} />
             <Route path="employees"          element={<ManageEmployeePage />} />
             <Route path="employees/create"   element={<CreateEmployeePage />} />
             <Route path="employees/:id"      element={<EmployeeDetailPage />} />

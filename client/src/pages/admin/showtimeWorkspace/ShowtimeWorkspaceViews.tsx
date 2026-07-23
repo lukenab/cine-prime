@@ -14,10 +14,7 @@ import {
 } from "lucide-react";
 import type { AutoShowtimeGenerationRunResponse, ShowtimeResponse } from "../../../api/showtimeApi";
 import { showtimeApi } from "../../../api/showtimeApi";
-import AutoScheduleShowtimePage, {
-  loadRecentAutoScheduleRuns,
-  type RecentAutoScheduleRun,
-} from "../AutoScheduleShowtimePage";
+import { loadRecentAutoScheduleRuns, type RecentAutoScheduleRun } from "../AutoScheduleShowtimePage";
 
 type CreateChoiceProps = {
   open: boolean;
@@ -72,7 +69,6 @@ function ChoiceCard({ icon: Icon, title, description, bullets, accent, iconBackg
     </button>
   );
 }
-
 export function ShowtimeCreateChoiceDialog({ open, canGenerate, onClose, onManual, onAutomatic }: CreateChoiceProps) {
   useEffect(() => {
     if (!open) return;
@@ -149,7 +145,6 @@ export function ShowtimeCreateChoiceDialog({ open, canGenerate, onClose, onManua
     </div>
   );
 }
-
 const formatTime = (time?: string) => time?.slice(0, 5) || "—";
 
 export function ShowtimeCalendarView({ showtimes, onEdit }: { showtimes: ShowtimeResponse[]; onEdit: (showtime: ShowtimeResponse) => void }) {
@@ -305,43 +300,3 @@ export function GenerationRunsView({ onOpenRun, onCreate }: { onOpenRun: (id: nu
   );
 }
 
-export function AutoScheduleWorkspaceModal({ open, runId, onClose, onShowtimesChanged }: { open: boolean; runId: number | null; onClose: () => void; onShowtimesChanged: () => void }) {
-  useEffect(() => {
-    if (!open) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKeyDown = (event: KeyboardEvent) => event.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open, onClose]);
-
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/60 p-2 backdrop-blur-sm sm:p-4" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="auto-schedule-workspace-title"
-        className="flex h-[calc(100vh-1rem)] w-full max-w-[1480px] flex-col overflow-hidden rounded-2xl border shadow-2xl sm:h-[calc(100vh-2rem)] sm:rounded-3xl"
-        style={{ background: "var(--bg-main)", borderColor: "var(--border-color)" }}
-      >
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4 sm:px-6" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600"><Sparkles size={18} /></div>
-            <div>
-              <h2 id="auto-schedule-workspace-title" style={{ color: "var(--text-main)", fontSize: "16px", fontWeight: 750 }}>{runId ? `Generation run #${runId}` : "Automatic schedule workspace"}</h2>
-              <p style={{ color: "var(--text-sub)", fontSize: "11.5px" }}>Select the planning scope visually, review the allocation, then track the generation result.</p>
-            </div>
-          </div>
-          <button type="button" aria-label="Close schedule generator" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-xl border" style={{ color: "var(--text-sub)", borderColor: "var(--border-color)" }}><X size={17} /></button>
-        </header>
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-          <AutoScheduleShowtimePage embedded initialRunId={runId} onShowtimesChanged={onShowtimesChanged} />
-        </div>
-      </section>
-    </div>
-  );
-}

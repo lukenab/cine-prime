@@ -30,6 +30,8 @@ public class ShowtimeCandidate {
 
     BigDecimal score;
 
+    ShowtimeScoreBreakdown scoreBreakdown;
+
     GenerationReason generationReason;
 
     public OffsetDateTime temporalStartAt() {

@@ -52,10 +52,10 @@ class FlywayMigrationIntegrationTest {
         MigrateResult result = flywayFor(FRESH_DB).migrate();
 
         assertTrue(result.success);
-        // V1..V10, V12..V22 (versioned - V11 is reserved on a sibling branch not yet merged)
+        // V1..V10, V12..V39 (versioned - V11 is reserved on a sibling branch not yet merged)
         // + R (repeatable seed) all actually executed — a fresh DB has no prior state for
         // baselineOnMigrate to kick in on.
-        assertEquals(22, result.migrationsExecuted);
+        assertEquals(39, result.migrationsExecuted);
 
         try (Connection conn = DriverManager.getConnection(
                 FRESH_DB.getJdbcUrl(), FRESH_DB.getUsername(), FRESH_DB.getPassword());
@@ -65,6 +65,7 @@ class FlywayMigrationIntegrationTest {
             assertTrue(tableExists(st, "cinema_cluster"));
             assertTrue(tableExists(st, "movie_availability"));
             assertTrue(tableExists(st, "auditorium_class"));
+            assertTrue(tableExists(st, "showtime_daypart_policy"));
             assertFalse(tableExists(st, "type"), "legacy 'type' table must never be created fresh");
 
             try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM genre")) {

@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -22,6 +23,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AutoShowtimeCoverageTest {
     @Mock CinemaClusterDemandProfileRepository profileRepository;
+    @Mock SchedulingOperationalConstraintService operationalConstraintService;
 
     private ShowtimeGenerationRun run;
     private CinemaClusterDemandProfile profile;
@@ -54,8 +56,39 @@ class AutoShowtimeCoverageTest {
     }
 
     @Test
+    void roomShareOnlyCountsRoomsUsedAtTheSameTime() {
+        run.getPolicy().setMaximumRoomShare(new BigDecimal("0.5000"));
+        AutoShowtimeCandidateSelector selector = new AutoShowtimeCandidateSelector(profileRepository);
+        List<ShowtimeCandidate> ranked = List.of(
+                candidate(1L, 10L, LocalTime.of(9, 0), 100),
+                candidate(1L, 20L, LocalTime.of(11, 0), 90));
+
+        AutoShowtimeSelectionResult result = selector.select(run, ranked);
+
+        assertEquals(2, result.selectedCandidates().size());
+    }
+
+    @Test
+    void selectorPreventsCrossBusinessDateOverlapInTheSameRoom() {
+        AutoShowtimeCandidateSelector selector = new AutoShowtimeCandidateSelector(profileRepository);
+        ShowtimeCandidate lateNight = candidateAt(1L, 10L,
+                "2026-07-25T23:00:00+07:00", "2026-07-26T01:00:00+07:00", 100);
+        ShowtimeCandidate nextBusinessDate = candidateAt(2L, 10L,
+                "2026-07-26T00:30:00+07:00", "2026-07-26T02:00:00+07:00", 90);
+
+        AutoShowtimeSelectionResult result = selector.select(run, List.of(lateNight, nextBusinessDate));
+
+        assertEquals(1, result.selectedCandidates().size());
+        assertTrue(result.rejectedCandidates().stream()
+                .anyMatch(rejection -> rejection.reason() == movieservice.enums.GenerationSkipReason.CLEANUP_BUFFER_CONFLICT));
+    }
+
+    @Test
     void postValidatorReportsMinimumCoverageDeficit() {
-        AutoShowtimePlanValidator validator = new AutoShowtimePlanValidator(profileRepository);
+        when(operationalConstraintService.evaluate(org.mockito.ArgumentMatchers.any(ShowtimeCandidate.class)))
+                .thenReturn(SchedulingEligibilityResult.allowed());
+        AutoShowtimePlanValidator validator = new AutoShowtimePlanValidator(
+                profileRepository, operationalConstraintService);
         List<ShowtimeCandidate> eligible = List.of(
                 candidate(1L, 10L, LocalTime.of(9, 0), 100),
                 candidate(1L, 10L, LocalTime.of(11, 0), 90));
@@ -72,6 +105,24 @@ class AutoShowtimeCoverageTest {
                 .formatId(1).screeningVersionId(1L)
                 .showDate(LocalDate.of(2026, 7, 25))
                 .startTime(start).endTime(start.plusMinutes(90))
+                .score(BigDecimal.valueOf(score)).build();
+    }
+
+    private ShowtimeCandidate candidateAt(
+            Long movieId,
+            Long roomId,
+            String start,
+            String end,
+            int score
+    ) {
+        OffsetDateTime startAt = OffsetDateTime.parse(start);
+        OffsetDateTime endAt = OffsetDateTime.parse(end);
+        return ShowtimeCandidate.builder()
+                .movieId(movieId).clusterId(1L).cinemaRoomId(roomId)
+                .formatId(1).screeningVersionId(1L)
+                .showDate(startAt.toLocalDate())
+                .startTime(startAt.toLocalTime()).endTime(endAt.toLocalTime())
+                .startAt(startAt).endAt(endAt)
                 .score(BigDecimal.valueOf(score)).build();
     }
 }

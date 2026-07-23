@@ -16,12 +16,12 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.time.Duration;
 import java.util.stream.Collectors;
 
 @Service
@@ -53,11 +53,9 @@ public class AutoShowtimeCandidateSelector {
         /// Đếm số suất đã chọn cho từng movie trong một cluster tại một ngày.
         Map<MovieClusterDayKey, Integer> selectedShowCountByMovieClusterDay = new HashMap<>();
 
-        /// Theo dõi các room mà một movie đang dùng để kiểm soát maximum_room_share.
-        Map<MovieClusterDayKey, Set<Long>> selectedRoomIdsByMovieClusterDay = new HashMap<>();
-
-        /// Theo dõi các suất đã chọn trong room/ngày để không tự tạo suất chồng giờ.
-        Map<RoomDayKey, List<ShowtimeCandidate>> selectedCandidatesByRoomDay = new HashMap<>();
+        /// Theo dõi các suất đã chọn theo physical room. Không key theo business date vì
+        /// một suất late-night có thể kết thúc ở ngày dương lịch kế tiếp.
+        Map<Long, List<ShowtimeCandidate>> selectedCandidatesByRoom = new HashMap<>();
 
         List<ShowtimeCandidate> selected = new ArrayList<>();
         List<AutoShowtimeCandidateRejection> rejected = new ArrayList<>();
@@ -98,8 +96,8 @@ public class AutoShowtimeCandidateSelector {
                     ShowtimeCandidate candidate = entry.getValue().get(index++);
                     nextCandidateIndex.put(key, index);
                     if (attemptSelection(candidate, policy, availableRoomCountByClusterDay,
-                            selectedShowCountByMovieClusterDay, selectedRoomIdsByMovieClusterDay,
-                            selectedCandidatesByRoomDay, selected, rejected)) {
+                            selectedShowCountByMovieClusterDay,
+                            selectedCandidatesByRoom, selected, rejected)) {
                         madeProgress = true;
                         break;
                     }
@@ -133,8 +131,7 @@ public class AutoShowtimeCandidateSelector {
                     policy,
                     availableRoomCountByClusterDay,
                     selectedShowCountByMovieClusterDay,
-                    selectedRoomIdsByMovieClusterDay,
-                    selectedCandidatesByRoomDay,
+                    selectedCandidatesByRoom,
                     selected,
                     rejected
             );
@@ -149,30 +146,30 @@ public class AutoShowtimeCandidateSelector {
             ShowtimeAllocationPolicy policy,
             Map<ClusterDayKey, Integer> availableRoomCountByClusterDay,
             Map<MovieClusterDayKey, Integer> selectedShowCountByMovieClusterDay,
-            Map<MovieClusterDayKey, Set<Long>> selectedRoomIdsByMovieClusterDay,
-            Map<RoomDayKey, List<ShowtimeCandidate>> selectedCandidatesByRoomDay,
+            Map<Long, List<ShowtimeCandidate>> selectedCandidatesByRoom,
             List<ShowtimeCandidate> selected,
             List<AutoShowtimeCandidateRejection> rejected
     ) {
         MovieClusterDayKey movieClusterDayKey = MovieClusterDayKey.from(candidate);
-        RoomDayKey roomDayKey = RoomDayKey.from(candidate);
-        Set<Long> roomIdsUsedByMovie = selectedRoomIdsByMovieClusterDay
-                .computeIfAbsent(movieClusterDayKey, ignored -> new HashSet<>());
-
-        boolean usesNewRoom = !roomIdsUsedByMovie.contains(candidate.getCinemaRoomId());
         int availableRoomCount = availableRoomCountByClusterDay.getOrDefault(
                 ClusterDayKey.from(candidate),
                 0
         );
 
-        if (usesNewRoom && roomIdsUsedByMovie.size() >= maximumRoomsForMovie(policy, availableRoomCount)) {
+        if (exceedsConcurrentRoomShare(candidate, selected, policy, availableRoomCount)) {
             rejected.add(reject(candidate, GenerationSkipReason.MAXIMUM_ROOM_SHARE_REACHED,
-                    "Candidate would exceed maximum_room_share in this cluster and date."));
+                    "Candidate would exceed the concurrent maximum_room_share for this movie."));
             return false;
         }
 
-        List<ShowtimeCandidate> selectedInSameRoom = selectedCandidatesByRoomDay
-                .computeIfAbsent(roomDayKey, ignored -> new ArrayList<>());
+        if (hasSameMovieStartStaggerConflict(candidate, selected, policy)) {
+            rejected.add(reject(candidate, GenerationSkipReason.SAME_MOVIE_START_STAGGER_CONFLICT,
+                    "The same movie already starts too close to this candidate in the cluster."));
+            return false;
+        }
+
+        List<ShowtimeCandidate> selectedInSameRoom = selectedCandidatesByRoom
+                .computeIfAbsent(candidate.getCinemaRoomId(), ignored -> new ArrayList<>());
 
         if (hasCleanupBufferConflict(candidate, selectedInSameRoom, policy)) {
             rejected.add(reject(candidate, GenerationSkipReason.CLEANUP_BUFFER_CONFLICT,
@@ -183,9 +180,54 @@ public class AutoShowtimeCandidateSelector {
         /// Candidate vượt qua hard constraint trong bộ nhớ, nên được chọn để bước persist xử lý tiếp.
         selected.add(candidate);
         selectedInSameRoom.add(candidate);
-        roomIdsUsedByMovie.add(candidate.getCinemaRoomId());
         selectedShowCountByMovieClusterDay.merge(movieClusterDayKey, 1, Integer::sum);
         return true;
+    }
+
+    /** maximum_room_share applies to rooms occupied at the same time, not every room a movie
+     * touched at any point during the day. */
+    private boolean exceedsConcurrentRoomShare(
+            ShowtimeCandidate candidate,
+            List<ShowtimeCandidate> selected,
+            ShowtimeAllocationPolicy policy,
+            int availableRoomCount
+    ) {
+        Set<Long> simultaneouslyUsedRooms = selected.stream()
+                .filter(existing -> existing.getMovieId().equals(candidate.getMovieId()))
+                .filter(existing -> existing.getClusterId().equals(candidate.getClusterId()))
+                .filter(existing -> existing.getShowDate().equals(candidate.getShowDate()))
+                .filter(existing -> intervalsOverlap(existing, candidate))
+                .map(ShowtimeCandidate::getCinemaRoomId)
+                .collect(Collectors.toSet());
+
+        if (simultaneouslyUsedRooms.contains(candidate.getCinemaRoomId())) {
+            return false;
+        }
+        return simultaneouslyUsedRooms.size() >= maximumRoomsForMovie(policy, availableRoomCount);
+    }
+
+    private boolean hasSameMovieStartStaggerConflict(
+            ShowtimeCandidate candidate,
+            List<ShowtimeCandidate> selected,
+            ShowtimeAllocationPolicy policy
+    ) {
+        int requiredMinutes = policy.getSameMovieStaggerMinutes() == null
+                ? 0 : policy.getSameMovieStaggerMinutes();
+        if (requiredMinutes <= 0) {
+            return false;
+        }
+        return selected.stream()
+                .filter(existing -> existing.getMovieId().equals(candidate.getMovieId()))
+                .filter(existing -> existing.getClusterId().equals(candidate.getClusterId()))
+                .filter(existing -> existing.getShowDate().equals(candidate.getShowDate()))
+                .filter(existing -> !existing.getCinemaRoomId().equals(candidate.getCinemaRoomId()))
+                .anyMatch(existing -> Math.abs(Duration.between(
+                        existing.temporalStartAt(), candidate.temporalStartAt()).toMinutes()) < requiredMinutes);
+    }
+
+    private boolean intervalsOverlap(ShowtimeCandidate left, ShowtimeCandidate right) {
+        return left.temporalStartAt().isBefore(right.temporalEndAt())
+                && right.temporalStartAt().isBefore(left.temporalEndAt());
     }
 
     /// Deadline rule: min_daily_shows là baseline cho mỗi movie + cluster + ngày.
@@ -274,10 +316,4 @@ public class AutoShowtimeCandidateSelector {
         }
     }
 
-    /// Key chống xung đột: một phòng trong một ngày.
-    private record RoomDayKey(Long cinemaRoomId, LocalDate showDate) {
-        private static RoomDayKey from(ShowtimeCandidate candidate) {
-            return new RoomDayKey(candidate.getCinemaRoomId(), candidate.getShowDate());
-        }
-    }
 }

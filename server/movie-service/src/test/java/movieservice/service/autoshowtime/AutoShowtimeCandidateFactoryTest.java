@@ -9,11 +9,13 @@ import movieservice.entity.ScreeningFormat;
 import movieservice.entity.ShowTime;
 import movieservice.entity.ShowtimeAllocationPolicy;
 import movieservice.entity.ShowtimeGenerationRun;
+import movieservice.entity.CinemaRoomMaintenance;
 import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.CinemaRoomFormatRepository;
 import movieservice.repository.MovieScreeningVersionRepository;
 import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeAllocationFormatPriorityRepository;
+import movieservice.repository.CinemaRoomMaintenanceRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +25,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.LocalDateTime;
 import movieservice.enums.ScreeningVersionStatus;
 import java.util.List;
 import java.util.Optional;
@@ -45,6 +48,7 @@ class AutoShowtimeCandidateFactoryTest {
     @Mock SchedulingEligibilityService schedulingEligibilityService;
     @Mock ShowtimeAllocationFormatPriorityRepository formatPriorityRepository;
     @Mock ShowTimeRepository showTimeRepository;
+    @Mock CinemaRoomMaintenanceRepository maintenanceRepository;
 
     private AutoShowtimeCandidateFactory factory;
     private CinemaCluster cluster;
@@ -59,7 +63,8 @@ class AutoShowtimeCandidateFactoryTest {
                 movieScreeningVersionRepository,
                 schedulingEligibilityService,
                 formatPriorityRepository,
-                showTimeRepository
+                showTimeRepository,
+                maintenanceRepository
         );
 
         cluster = CinemaCluster.builder().clusterId(1L).timezone("Asia/Ho_Chi_Minh").build();
@@ -85,6 +90,8 @@ class AutoShowtimeCandidateFactoryTest {
         when(cinemaRoomFormatRepository.findEligibleActiveRoomsByMovieIdAndFormatId(anyLong(), anyInt()))
                 .thenReturn(List.of(room));
         when(formatPriorityRepository.findAllByPolicyIdWithFormat(1L)).thenReturn(List.of());
+        when(maintenanceRepository.findBlockingMaintenanceInRange(any(), any(), any()))
+                .thenReturn(List.of());
     }
 
     @Test
@@ -121,6 +128,27 @@ class AutoShowtimeCandidateFactoryTest {
         assertEquals(List.of(LocalTime.of(8, 0)), candidates.stream()
                 .map(ShowtimeCandidate::getStartTime)
                 .toList());
+    }
+
+    @Test
+    void buildRawCandidatesExcludesSlotsOverlappingRoomMaintenance() {
+        cluster.setOperatingHours(List.of(operatingHour(LocalTime.of(8, 0), LocalTime.of(12, 0))));
+        CinemaRoomMaintenance maintenance = CinemaRoomMaintenance.builder()
+                .cinemaRoom(room)
+                .reason("Projector maintenance")
+                .startedAt(LocalDateTime.of(SHOW_DATE, LocalTime.of(8, 30)))
+                .resolvedAt(LocalDateTime.of(SHOW_DATE, LocalTime.of(9, 30)))
+                .resolved(true)
+                .build();
+        when(maintenanceRepository.findBlockingMaintenanceInRange(any(), any(), any()))
+                .thenReturn(List.of(maintenance));
+        when(showTimeRepository.findActiveByRoomsAndTemporalRange(any(), any(), any()))
+                .thenReturn(List.of());
+
+        List<ShowtimeCandidate> candidates = factory.buildRawCandidates(run(60));
+
+        assertEquals(List.of(LocalTime.of(10, 0)), candidates.stream()
+                .map(ShowtimeCandidate::getStartTime).toList());
     }
 
     private ShowtimeGenerationRun run(int timeSlotIntervalMinutes) {

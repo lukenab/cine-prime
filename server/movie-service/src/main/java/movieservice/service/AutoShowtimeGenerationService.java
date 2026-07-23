@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import movie.theater.common.exception.AppException;
 import movieservice.dto.request.AutoShowtimeGenerationRequest;
 import movieservice.dto.response.AutoShowtimeGenerationAcceptedResponse;
+import movieservice.dto.response.AutoShowtimeGenerationPolicyResponse;
 import movieservice.dto.response.AutoShowtimeIneligibleMovie;
 import movieservice.dto.response.AutoShowtimeGenerationRunResponse;
 import movieservice.entity.*;
@@ -24,8 +25,10 @@ import movieservice.repository.ShowtimeGenerationSkipRepository;
 import movieservice.repository.ShowtimeGenerationRunRepository;
 import movieservice.service.autoshowtime.AutoShowtimeCandidateFactory;
 import movieservice.service.autoshowtime.AutoShowtimeExecutionResult;
+import movieservice.service.autoshowtime.AutoShowtimeRunAcceptedEvent;
 import movieservice.service.autoshowtime.AutoShowtimeRunExecutor;
 import movieservice.service.autoshowtime.ShowtimeCandidate;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -61,6 +64,7 @@ public class AutoShowtimeGenerationService {
     private final ShowtimeGenerationSkipRepository showtimeGenerationSkipRepository;
     private final AutoShowtimeCandidateFactory candidateFactory;
     private final AutoShowtimeRunExecutor runExecutor;
+    private final ApplicationEventPublisher eventPublisher;
 
     /// API entry-point: chỉ tạo hoặc lấy lại generation run đã nhận.
     /// Chưa tạo ShowTime ở đây; việc tạo candidate và persist sẽ diễn ra ở execute step sau.
@@ -133,7 +137,9 @@ public class AutoShowtimeGenerationService {
 
         try {
             /// saveAndFlush ép DB kiểm tra unique idempotency_key ngay trong transaction hiện tại.
-            return toAcceptedResponse(generationRunRepository.saveAndFlush(run));
+            ShowtimeGenerationRun savedRun = generationRunRepository.saveAndFlush(run);
+            eventPublisher.publishEvent(new AutoShowtimeRunAcceptedEvent(savedRun.getGenerationRunId()));
+            return toAcceptedResponse(savedRun);
         } catch (DataIntegrityViolationException exception){
             /// Hai request có thể cùng lúc thấy key chưa tồn tại rồi cùng insert.
             /// Unique constraint sẽ cho một request thắng; request còn lại đọc lại run đã được tạo.
@@ -177,6 +183,27 @@ public class AutoShowtimeGenerationService {
                     ineligibleMovies
             );
         }
+    }
+
+    /// Cho phép client tự hiển thị khoảng ngày hợp lệ ở bước chọn Planning window, thay vì
+    /// chỉ biết được sau khi submit bị INVALID_GENERATION_RANGE.
+    @Transactional(readOnly = true)
+    public AutoShowtimeGenerationPolicyResponse getActivePolicySummary() {
+        ShowtimeAllocationPolicy policy = policyRepository
+                .findByPolicyCodeAndActiveTrue(DEFAULT_POLICY_CODE)
+                .orElseThrow(() -> new AppException(
+                        MovieErrorCode.AUTO_SHOWTIME_POLICY_NOT_FOUND
+                ));
+        ZoneId zone = ZoneId.of(policy.getBusinessTimezone());
+        LocalDate today = LocalDate.now(zone);
+        return new AutoShowtimeGenerationPolicyResponse(
+                policy.getPolicyCode(),
+                policy.getBusinessTimezone(),
+                policy.getPlanningHorizonStartDays(),
+                policy.getPlanningHorizonEndDays(),
+                today.plusDays(policy.getPlanningHorizonStartDays()),
+                today.plusDays(policy.getPlanningHorizonEndDays())
+        );
     }
 
     private void validateGenerationRange(

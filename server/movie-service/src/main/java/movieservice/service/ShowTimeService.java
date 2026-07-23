@@ -25,8 +25,10 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.exception.AppException;
 import movieservice.dto.request.BulkShowTimeRequest;
+import movieservice.dto.request.BulkUpdateShowTimeStatusRequest;
 import movieservice.dto.request.CreateShowTimeRequest;
 import movieservice.dto.request.ShowTimeRequest;
+import movieservice.dto.request.UpdateShowTimeStatusRequest;
 import movieservice.dto.request.UpdateShowTimeRequest;
 import movieservice.dto.response.BulkShowTimeCreateResponse;
 import movieservice.dto.response.BulkShowTimePreviewResponse;
@@ -607,6 +609,82 @@ public class ShowTimeService {
     }
 
     @Transactional
+    public ShowTimeResponse updateStatus(Long id, UpdateShowTimeStatusRequest request, String actor) {
+        ShowTime showTime = showTimeRepository.findById(id)
+                .orElseThrow(() -> new AppException(MovieErrorCode.SHOWTIME_NOT_FOUND));
+        applyStatusTransition(showTime, request.status(), request.reason(), actor);
+        return toShowTimeResponse(showTimeRepository.save(showTime));
+    }
+
+    @Transactional
+    public List<ShowTimeResponse> bulkUpdateStatus(
+            BulkUpdateShowTimeStatusRequest request,
+            String actor) {
+        List<Long> ids = request.showtimeIds().stream().distinct().sorted().toList();
+        List<ShowTime> showTimes = showTimeRepository.findAllById(ids);
+        if (showTimes.size() != ids.size()) {
+            throw new AppException(MovieErrorCode.SHOWTIME_NOT_FOUND);
+        }
+        showTimes.forEach(showTime ->
+                applyStatusTransition(showTime, request.status(), request.reason(), actor));
+        List<ShowTimeResponse> responses = movieMapper.toShowTimeResponseList(
+                showTimeRepository.saveAll(showTimes));
+        enrichPrices(responses);
+        return responses;
+    }
+
+    private void applyStatusTransition(
+            ShowTime showTime,
+            ShowTimeStatus target,
+            String reason,
+            String actor) {
+        ShowTimeStatus current = showTime.getStatus();
+        if (current == target) {
+            return;
+        }
+        if (current == ShowTimeStatus.CANCELLED || current == ShowTimeStatus.COMPLETED) {
+            throw new AppException(MovieErrorCode.SHOWTIME_TERMINAL_STATUS);
+        }
+
+        boolean allowed = switch (current) {
+            case SCHEDULED -> target == ShowTimeStatus.ON_SALE
+                    || target == ShowTimeStatus.SUSPENDED
+                    || target == ShowTimeStatus.CANCELLED;
+            case ON_SALE -> target == ShowTimeStatus.SUSPENDED
+                    || target == ShowTimeStatus.CANCELLED;
+            case SUSPENDED -> target == ShowTimeStatus.SCHEDULED
+                    || target == ShowTimeStatus.ON_SALE
+                    || target == ShowTimeStatus.CANCELLED;
+            case CANCELLED, COMPLETED -> false;
+        };
+        if (!allowed) {
+            throw new AppException(MovieErrorCode.INVALID_STATUS_TRANSITION);
+        }
+
+        if (target == ShowTimeStatus.CANCELLED) {
+            if (reason == null || reason.isBlank()) {
+                throw new AppException(MovieErrorCode.SHOWTIME_CANCELLATION_REASON_REQUIRED);
+            }
+            showTime.setCancellationReason(reason.trim());
+            showTime.setCancelledAt(LocalDateTime.now());
+            showTime.setCancelledBy(actor);
+            List<ShowtimeSeat> seats = showtimeSeatRepository
+                    .findByShowTime_ShowTimeId(showTime.getShowTimeId());
+            seats.forEach(seat -> {
+                seat.setStatus(ShowtimeSeatStatus.CANCELLED);
+                seat.setReservedAt(null);
+                seat.setReservedExpiresAt(null);
+            });
+            if (!seats.isEmpty()) {
+                showtimeSeatRepository.saveAll(seats);
+            }
+        }
+
+        showTime.setStatus(target);
+        showTime.setUpdatedBy(actor);
+    }
+
+    @Transactional
     public void deleteById(Long id) {
         if (!showTimeRepository.existsById(id)) {
             throw new AppException(MovieErrorCode.SHOWTIME_NOT_FOUND);
@@ -630,9 +708,13 @@ public class ShowTimeService {
         r.setAudioLanguageCode(s.getLanguageCode());
         r.setSubtitleLanguageCode(s.getSubtitleCode());
         r.setStatus(s.getStatus() != null ? s.getStatus().name() : null);
+        r.setSource(s.getSource() != null ? s.getSource().name() : null);
+        r.setFormatCode(s.getFormat() != null ? s.getFormat().getFormatCode() : null);
+        r.setCancellationReason(s.getCancellationReason());
         if (s.getMovie() != null) {
             r.setMovieId(s.getMovie().getMovieId());
             r.setMovieName(s.getMovie().getOriginalTitle());
+            r.setMoviePosterUrl(s.getMovie().getPosterUrl());
         }
         if (s.getCinemaRoom() != null) {
             r.setCinemaRoomId(s.getCinemaRoom().getCinemaRoomId());
@@ -642,9 +724,11 @@ public class ShowTimeService {
                 r.setClusterName(s.getCinemaRoom().getCluster().getClusterName());
             }
         }
-        r.setTotalSeats(s.getTotalSeats());
-        r.setAvailableSeats(s.getTotalSeats() != null && s.getSoldSeats() != null
-                ? s.getTotalSeats() - s.getSoldSeats() : s.getTotalSeats());
+        int totalSeats = s.getTotalSeats() != null ? s.getTotalSeats() : 0;
+        int soldSeats = s.getSoldSeats() != null ? s.getSoldSeats() : 0;
+        r.setTotalSeats(totalSeats);
+        r.setSoldSeats(soldSeats);
+        r.setAvailableSeats(Math.max(0, totalSeats - soldSeats));
         r.setUpdatedAt(s.getUpdatedAt());
         enrichPrices(List.of(r));
         return r;

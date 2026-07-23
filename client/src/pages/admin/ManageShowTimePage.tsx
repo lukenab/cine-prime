@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Search, Plus, SlidersHorizontal, RefreshCw, AlertCircle, CalendarDays, History, List } from "lucide-react";
-import { useOutletContext } from "react-router-dom";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
 import { ShowtimeStatsCards } from "../../layouts/ShowTimeStatsCards";
@@ -11,19 +11,21 @@ import {
   type ShowtimeResponse,
   type ShowtimeAssignPayload,
   type ShowtimeUpdatePayload,
+  type ShowtimeStatus,
+  type SchedulePlanResponse,
 } from "../../api/showtimeApi";
 import {
-  AutoScheduleWorkspaceModal,
   GenerationRunsView,
-  ShowtimeCalendarView,
   ShowtimeCreateChoiceDialog,
 } from "./showtimeWorkspace/ShowtimeWorkspaceViews";
+import ShowtimeOperationsBoard from "./showtimeWorkspace/ShowtimeOperationsBoard";
 
-type WorkspaceView = "calendar" | "list" | "runs";
+type WorkspaceView = "operations" | "list" | "runs";
 
 export default function ManageShowtimePage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const [showtimes, setShowtimes]   = useState<ShowtimeResponse[]>([]);
   const [loading, setLoading]       = useState(false);
@@ -37,26 +39,54 @@ export default function ManageShowtimePage() {
   const [modalOpen, setModalOpen]       = useState(false);
   const [editShowtime, setEditShowtime] = useState<ShowtimeResponse | null>(null);
   const [showFilters, setShowFilters]   = useState(false);
-  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>("calendar");
+  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>("operations");
   const [createChoiceOpen, setCreateChoiceOpen] = useState(false);
-  const [autoScheduleOpen, setAutoScheduleOpen] = useState(false);
-  const [selectedGenerationRunId, setSelectedGenerationRunId] = useState<number | null>(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+  const [draftPlan, setDraftPlan] = useState<SchedulePlanResponse | null>(null);
 
-  const loadShowtimes = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const loadShowtimes = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const res = await showtimeApi.getShowtimes();
       setShowtimes(res.result ?? []);
+      setLastSyncedAt(new Date());
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(msg ?? "Failed to load showtimes. Is the showtime service running?");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { loadShowtimes(); }, [loadShowtimes]);
+  useEffect(() => { void loadShowtimes(); }, [loadShowtimes]);
+  useEffect(() => {
+    let active = true;
+    const loadDraftPlan = async () => {
+      try {
+        const summaries = await showtimeApi.listSchedulePlans(undefined, 0, 20);
+        const candidate = summaries.result?.content?.find((plan) => plan.status !== "PUBLISHED");
+        if (!candidate) {
+          if (active) setDraftPlan(null);
+          return;
+        }
+        const detail = await showtimeApi.getSchedulePlan(candidate.schedulePlanId);
+        if (active) setDraftPlan(detail.result);
+      } catch {
+        if (active) setDraftPlan(null);
+      }
+    };
+    void loadDraftPlan();
+    return () => { active = false; };
+  }, []);
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadShowtimes(true);
+    }, 30_000);
+    return () => window.clearInterval(interval);
+  }, [loadShowtimes]);
 
   // Derive room filter options from loaded showtimes (no extra API calls)
   const roomOptions = useMemo(() => {
@@ -65,15 +95,86 @@ export default function ManageShowtimePage() {
     return Array.from(map, ([cinemaRoomId, cinemaRoomName]) => ({ cinemaRoomId, cinemaRoomName }));
   }, [showtimes]);
 
+  const operationsShowtimes = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase();
+    return showtimes.filter((showtime) => {
+      const matchesSearch = !query
+        || showtime.movieName.toLocaleLowerCase().includes(query)
+        || showtime.cinemaRoomName.toLocaleLowerCase().includes(query)
+        || (showtime.clusterName ?? "").toLocaleLowerCase().includes(query);
+      const matchesStatus = !statusFilter || showtime.status === statusFilter;
+      const matchesRoom = !roomFilter || showtime.cinemaRoomId === roomFilter;
+      return matchesSearch && matchesStatus && matchesRoom;
+    });
+  }, [roomFilter, searchQuery, showtimes, statusFilter]);
+
   const handleSaveShowtime = async (payload: ShowtimeAssignPayload | ShowtimeUpdatePayload) => {
     if (editShowtime) {
-      const res = await showtimeApi.updateShowtime(editShowtime.showTimeId, payload as ShowtimeUpdatePayload);
-      setShowtimes((prev) =>
-        prev.map((s) => (s.showTimeId === editShowtime.showTimeId ? res.result : s))
-      );
+      await showtimeApi.updateShowtime(editShowtime.showTimeId, payload as ShowtimeUpdatePayload);
     } else {
-      const res = await showtimeApi.createShowtime(payload as ShowtimeAssignPayload);
-      setShowtimes((prev) => [res.result, ...prev]);
+      await showtimeApi.createShowtime(payload as ShowtimeAssignPayload);
+    }
+    await loadShowtimes(true);
+  };
+
+  const handleMoveShowtime = async (
+    showtime: ShowtimeResponse,
+    cinemaRoomId: number,
+    showDate: string,
+    startTime: string,
+  ) => {
+    try {
+      setLoading(true);
+      setError(null);
+      await showtimeApi.updateShowtime(showtime.showTimeId, { cinemaRoomId, showDate, startTime });
+      await loadShowtimes(true);
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(message ?? "The showtime could not be moved. Check room availability and scheduling rules.");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStatusChange = async (
+    showtime: ShowtimeResponse,
+    status: ShowtimeStatus,
+    reason?: string,
+  ) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await showtimeApi.updateShowtimeStatus(showtime.showTimeId, { status, reason });
+      setShowtimes((current) =>
+        current.map((item) => item.showTimeId === showtime.showTimeId ? response.result : item),
+      );
+      setLastSyncedAt(new Date());
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(message ?? "The showtime status could not be updated.");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBulkStatusChange = async (
+    showtimeIds: number[],
+    status: ShowtimeStatus,
+    reason?: string,
+  ) => {
+    try {
+      setLoading(true);
+      setError(null);
+      await showtimeApi.bulkUpdateShowtimeStatus({ showtimeIds, status, reason });
+      await loadShowtimes(true);
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(message ?? "The selected showtimes could not be updated.");
+      throw err;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -93,17 +194,7 @@ export default function ManageShowtimePage() {
     setRoomFilter("");
   };
 
-  const hasActiveFilters = !!(statusFilter || dateFilter || roomFilter);
-
-  const filteredShowtimes = useMemo(() => showtimes.filter((showtime) => {
-    const query = searchQuery.trim().toLowerCase();
-    return (
-      (!query || showtime.movieName.toLowerCase().includes(query) || showtime.cinemaRoomName.toLowerCase().includes(query)) &&
-      (!statusFilter || showtime.status === statusFilter) &&
-      (!dateFilter || showtime.showDate === dateFilter) &&
-      (!roomFilter || showtime.cinemaRoomId === roomFilter)
-    );
-  }), [dateFilter, roomFilter, searchQuery, showtimes, statusFilter]);
+  const hasActiveFilters = !!(statusFilter || roomFilter || (workspaceView === "list" && dateFilter));
 
   const openManualCreate = () => {
     setCreateChoiceOpen(false);
@@ -113,13 +204,12 @@ export default function ManageShowtimePage() {
 
   const openAutomaticCreate = (runId: number | null = null) => {
     setCreateChoiceOpen(false);
-    setSelectedGenerationRunId(runId);
-    setAutoScheduleOpen(true);
+    navigate(runId ? `/admin/showtimes/auto?runId=${runId}` : "/admin/showtimes/auto");
   };
 
   return (
     <>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 style={{ color: "var(--text-main)", fontWeight: 600, fontSize: "22px", letterSpacing: "-0.01em", marginBottom: "5px" }}>
             Showtime Workspace
@@ -130,9 +220,9 @@ export default function ManageShowtimePage() {
         </div>
         <div className="flex items-center rounded-xl border p-1" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
           {([
-            ["calendar", CalendarDays, "Calendar"],
-            ["list", List, "List"],
-            ["runs", History, "Generation Runs"],
+            ["operations", CalendarDays, "Operations"],
+            ["list", List, "Showtime List"],
+            ["runs", History, "Automation"],
           ] as const).map(([value, Icon, label]) => (
             <button
               key={value}
@@ -157,7 +247,7 @@ export default function ManageShowtimePage() {
           <AlertCircle size={16} className="text-rose-500 flex-shrink-0" />
           <p style={{ fontSize: "14px", color: "#e11d48" }}>{error}</p>
           <button
-            onClick={loadShowtimes}
+            onClick={() => void loadShowtimes()}
             className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 transition-colors text-rose-600"
             style={{ fontSize: "13px" }}
           >
@@ -166,52 +256,57 @@ export default function ManageShowtimePage() {
         </div>
       )}
 
-      <ShowtimeStatsCards showtimes={showtimes} />
-
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 flex-wrap mb-6">
-        {workspaceView !== "runs" && <div className="relative flex-1 min-w-64">
+      {workspaceView !== "runs" && (
+        <div
+          className="sticky top-2 z-30 mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-2 shadow-sm backdrop-blur"
+          style={{ background: "color-mix(in srgb, var(--bg-main) 92%, transparent)", borderColor: "var(--border-color)" }}
+        >
+        <ShowtimeStatsCards showtimes={showtimes} />
+        <div className="relative min-w-60 flex-[1_1_320px]">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-sub)" }} />
           <input
             type="text"
-            placeholder="Search by movie title or room…"
+            placeholder="Search movie, cinema or room..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl outline-none focus:ring-2 focus:ring-purple-500/20 transition-all"
-            style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", border: "1px solid var(--border-color)" }}
+            className="h-10 w-full rounded-xl border pl-10 pr-4 outline-none transition-all focus:ring-2 focus:ring-blue-500/20"
+            style={{ fontSize: "13px", background: "var(--bg-card)", color: "var(--text-main)", border: "1px solid var(--border-color)" }}
           />
-        </div>}
+        </div>
 
-        {workspaceView !== "runs" && <button
+        <button
           onClick={() => setShowFilters((v) => !v)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all hover:opacity-80"
-          style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
+          className="flex h-10 items-center gap-2 rounded-xl border px-3 transition-all hover:opacity-80"
+          style={{ fontSize: "13px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
         >
           <SlidersHorizontal size={15} /> Filters
           {hasActiveFilters && <span className="w-2 h-2 bg-purple-600 rounded-full ml-0.5" />}
-        </button>}
+        </button>
 
         <button
-          onClick={loadShowtimes}
+          onClick={() => void loadShowtimes()}
           disabled={loading}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all hover:opacity-80 disabled:opacity-50"
-          style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
+          title={lastSyncedAt ? `Last synced ${lastSyncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Refresh schedules"}
+          aria-label="Refresh schedules"
+          className="flex h-10 w-10 items-center justify-center rounded-xl border transition-all hover:opacity-80 disabled:opacity-50"
+          style={{ background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
         >
-          <RefreshCw size={15} className={loading ? "animate-spin" : ""} /> Refresh
+          <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
         </button>
 
         <button
           onClick={() => setCreateChoiceOpen(true)}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all shadow-sm"
-          style={{ fontSize: "14px", fontWeight: 500, background: isDarkMode ? "#9333ea" : "#7e22ce" }}
+          className="flex h-10 items-center gap-2 rounded-xl px-4 text-white shadow-sm transition-all hover:opacity-90"
+          style={{ fontSize: "13px", fontWeight: 600, background: isDarkMode ? "#9333ea" : "#7e22ce" }}
         >
           <Plus size={16} /> Create Schedule
         </button>
-      </div>
+        </div>
+      )}
 
       {/* Filter panel */}
       {showFilters && workspaceView !== "runs" && (
-        <div className="p-4 rounded-xl border mb-6 space-y-4" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+        <div className="mb-4 space-y-4 rounded-xl border p-4" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
           <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: "var(--border-color)" }}>
             <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-main)" }}>Filter Showtimes</p>
             {hasActiveFilters && (
@@ -221,7 +316,7 @@ export default function ManageShowtimePage() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className={`grid grid-cols-1 gap-4 ${workspaceView === "list" ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
             <div>
               <label className="block mb-1.5" style={{ fontSize: "12px", color: "var(--text-sub)" }}>Status</label>
               <select
@@ -239,7 +334,7 @@ export default function ManageShowtimePage() {
               </select>
             </div>
 
-            <div>
+            {workspaceView === "list" && <div>
               <label className="block mb-1.5" style={{ fontSize: "12px", color: "var(--text-sub)" }}>Date</label>
               <input
                 type="date"
@@ -248,7 +343,7 @@ export default function ManageShowtimePage() {
                 className="w-full px-3 py-2 rounded-lg border outline-none"
                 style={{ colorScheme: "var(--color-scheme)" as string, fontSize: "13px", background: "var(--bg-main)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
               />
-            </div>
+            </div>}
 
             <div>
               <label className="block mb-1.5" style={{ fontSize: "12px", color: "var(--text-sub)" }}>Room</label>
@@ -273,10 +368,14 @@ export default function ManageShowtimePage() {
           <RefreshCw size={24} className="animate-spin mx-auto mb-3 text-purple-600" />
           <p style={{ fontSize: "14px", color: "var(--text-sub)" }}>Loading schedules...</p>
         </div>
-      ) : workspaceView === "calendar" ? (
-        <ShowtimeCalendarView
-          showtimes={filteredShowtimes}
+      ) : workspaceView === "operations" ? (
+        <ShowtimeOperationsBoard
+          showtimes={operationsShowtimes}
+          busy={loading}
           onEdit={(showtime) => { setEditShowtime(showtime); setModalOpen(true); }}
+          onMove={handleMoveShowtime}
+          onStatusChange={handleStatusChange}
+          draftPlan={draftPlan}
         />
       ) : workspaceView === "list" ? (
         <ShowtimeTable
@@ -287,6 +386,7 @@ export default function ManageShowtimePage() {
           statusFilter={statusFilter}
           dateFilter={dateFilter}
           roomFilter={roomFilter}
+          onBulkStatusChange={handleBulkStatusChange}
         />
       ) : (
         <GenerationRunsView
@@ -304,17 +404,10 @@ export default function ManageShowtimePage() {
 
       <ShowtimeCreateChoiceDialog
         open={createChoiceOpen}
-        canGenerate={user?.role === "ROLE_ADMIN"}
+        canGenerate={user?.role === "ROLE_ADMIN" || user?.role === "ROLE_SUPER_ADMIN"}
         onClose={() => setCreateChoiceOpen(false)}
         onManual={openManualCreate}
         onAutomatic={() => openAutomaticCreate()}
-      />
-
-      <AutoScheduleWorkspaceModal
-        open={autoScheduleOpen}
-        runId={selectedGenerationRunId}
-        onClose={() => { setAutoScheduleOpen(false); setSelectedGenerationRunId(null); }}
-        onShowtimesChanged={loadShowtimes}
       />
 
       <style>{`

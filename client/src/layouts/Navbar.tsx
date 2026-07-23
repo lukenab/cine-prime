@@ -21,6 +21,7 @@ const navItems: { label: string; to: string; children?: { label: string; to: str
 ];
 
 const roleLabels: Record<string, string> = {
+  ROLE_SUPER_ADMIN: "Super Admin",
   ROLE_ADMIN: "Admin",
   ROLE_EMPLOYEE: "Employee",
   ROLE_MEMBER: "Member",
@@ -39,7 +40,7 @@ export function Navbar() {
   const token = localStorage.getItem("accessToken");
   const isLogged = !!token;
   const username = user?.username || "User";
-  const isStaff = user?.role === "ROLE_ADMIN" || user?.role === "ROLE_EMPLOYEE";
+  const isStaff = user?.role === "ROLE_SUPER_ADMIN" || user?.role === "ROLE_ADMIN" || user?.role === "ROLE_EMPLOYEE";
 
   // Fetch avatar khi user đăng nhập
   useEffect(() => {

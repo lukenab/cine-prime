@@ -4,7 +4,9 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import movie.theater.common.dto.ApiResponse;
 import movieservice.dto.request.BulkShowTimeRequest;
+import movieservice.dto.request.BulkUpdateShowTimeStatusRequest;
 import movieservice.dto.request.CreateShowTimeRequest;
+import movieservice.dto.request.UpdateShowTimeStatusRequest;
 import movieservice.dto.request.UpdateShowTimeRequest;
 import movieservice.dto.response.BulkShowTimeCreateResponse;
 import movieservice.dto.response.BulkShowTimePreviewResponse;
@@ -14,6 +16,7 @@ import movieservice.service.ShowTimeService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -105,6 +108,31 @@ public class ScheduleController {
                 .build();
     }
 
+    @PatchMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public ApiResponse<ShowTimeResponse> updateStatus(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateShowTimeStatusRequest request,
+            Authentication authentication) {
+        return ApiResponse.<ShowTimeResponse>builder()
+                .code(1000)
+                .message("Showtime status updated successfully")
+                .result(showTimeService.updateStatus(id, request, actor(authentication)))
+                .build();
+    }
+
+    @PatchMapping("/bulk/status")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public ApiResponse<List<ShowTimeResponse>> bulkUpdateStatus(
+            @Valid @RequestBody BulkUpdateShowTimeStatusRequest request,
+            Authentication authentication) {
+        return ApiResponse.<List<ShowTimeResponse>>builder()
+                .code(1000)
+                .message("Showtime statuses updated successfully")
+                .result(showTimeService.bulkUpdateStatus(request, actor(authentication)))
+                .build();
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<Void> deleteShowTime(@PathVariable Long id) {
@@ -113,5 +141,9 @@ public class ScheduleController {
                 .code(1000)
                 .message("Showtime deleted successfully")
                 .build();
+    }
+
+    private String actor(Authentication authentication) {
+        return authentication == null ? "system" : authentication.getName();
     }
 }

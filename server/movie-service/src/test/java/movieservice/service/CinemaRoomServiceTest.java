@@ -16,11 +16,13 @@ import movieservice.mapper.MovieMapper;
 import movieservice.repository.AudioFormatRepository;
 import movieservice.repository.AuditoriumClassRepository;
 import movieservice.repository.CinemaClusterRepository;
+import movieservice.repository.CinemaRoomFormatRepository;
 import movieservice.repository.CinemaRoomMaintenanceRepository;
 import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.ProjectionTechnologyRepository;
 import movieservice.repository.ResolutionRepository;
 import movieservice.repository.RoomLayoutRepository;
+import movieservice.repository.ScreeningFormatRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -56,6 +58,8 @@ class CinemaRoomServiceTest {
     @Mock AudioFormatRepository audioFormatRepository;
     @Mock RoomLayoutRepository roomLayoutRepository;
     @Mock RoomLayoutService roomLayoutService;
+    @Mock CinemaRoomFormatRepository cinemaRoomFormatRepository;
+    @Mock ScreeningFormatRepository screeningFormatRepository;
 
     @InjectMocks
     CinemaRoomService cinemaRoomService;
@@ -174,6 +178,78 @@ class CinemaRoomServiceTest {
         ArgumentCaptor<CinemaRoom> captor = ArgumentCaptor.forClass(CinemaRoom.class);
         verify(cinemaRoomRepository).save(captor.capture());
         assertEquals(PresentationSystem.SCREENX, captor.getValue().getPresentationSystem());
+    }
+
+    // ── cinema_room_format sync ──────────────────────────────────────────────
+    // The auto-showtime engine reads cinema_room_format exclusively, never
+    // supports2d/supports3d/presentationSystem directly - regression coverage
+    // for the wizard-to-capability sync (previously nothing wrote this table,
+    // so every wizard-created room was structurally invisible to Auto Schedule).
+
+    @Test
+    void wizardCreate_derivesCinemaRoomFormatFromWizardFields() {
+        when(auditoriumClassRepository.findById(1)).thenReturn(Optional.of(
+                AuditoriumClass.builder().classId(1).active(true).build()));
+        when(cinemaRoomRepository.save(any(CinemaRoom.class))).thenAnswer(invocation -> {
+            CinemaRoom room = invocation.getArgument(0);
+            room.setCinemaRoomId(10L);
+            return room;
+        });
+        when(movieMapper.toCinemaRoomResponse(any(CinemaRoom.class)))
+                .thenReturn(new CinemaRoomResponse());
+        when(cinemaRoomFormatRepository.findByCinemaRoom_CinemaRoomId(10L)).thenReturn(List.of());
+        when(screeningFormatRepository.findByFormatCode("2D"))
+                .thenReturn(Optional.of(movieservice.entity.ScreeningFormat.builder().formatId(1).formatCode("2D").build()));
+        when(screeningFormatRepository.findByFormatCode("3D"))
+                .thenReturn(Optional.of(movieservice.entity.ScreeningFormat.builder().formatId(2).formatCode("3D").build()));
+        when(screeningFormatRepository.findByFormatCode("IMAX"))
+                .thenReturn(Optional.of(movieservice.entity.ScreeningFormat.builder().formatId(3).formatCode("IMAX").build()));
+
+        cinemaRoomService.createCinemaRoom(
+                wizardRequest().supports3d(true).presentationSystem(PresentationSystem.IMAX).build(), "tester");
+
+        ArgumentCaptor<movieservice.entity.CinemaRoomFormat> captor =
+                ArgumentCaptor.forClass(movieservice.entity.CinemaRoomFormat.class);
+        verify(cinemaRoomFormatRepository, org.mockito.Mockito.times(3)).save(captor.capture());
+        List<String> savedFormatCodes = captor.getAllValues().stream()
+                .map(crf -> crf.getScreeningFormat().getFormatCode()).toList();
+        assertEquals(List.of("2D", "3D", "IMAX"), savedFormatCodes);
+    }
+
+    @Test
+    void wizardUpdate_disablesCapabilityNoLongerDerived() {
+        CinemaRoom existingRoom = CinemaRoom.builder()
+                .cinemaRoomId(20L)
+                .status(CinemaRoomStatus.DRAFT)
+                .cluster(CinemaCluster.builder().clusterId(1L).build())
+                .supports2d(true)
+                .supports3d(true)
+                .presentationSystem(PresentationSystem.STANDARD)
+                .build();
+        when(cinemaRoomRepository.findById(20L)).thenReturn(Optional.of(existingRoom));
+        when(cinemaRoomRepository.save(any(CinemaRoom.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(movieMapper.toCinemaRoomResponse(any(CinemaRoom.class))).thenReturn(new CinemaRoomResponse());
+
+        movieservice.entity.ScreeningFormat format2d =
+                movieservice.entity.ScreeningFormat.builder().formatId(1).formatCode("2D").build();
+        movieservice.entity.ScreeningFormat format3d =
+                movieservice.entity.ScreeningFormat.builder().formatId(2).formatCode("3D").build();
+        movieservice.entity.CinemaRoomFormat existing3dCapability = movieservice.entity.CinemaRoomFormat.builder()
+                .id(new movieservice.entity.CinemaRoomFormatId(20L, 2))
+                .cinemaRoom(existingRoom)
+                .screeningFormat(format3d)
+                .enabled(true)
+                .build();
+        when(cinemaRoomFormatRepository.findByCinemaRoom_CinemaRoomId(20L))
+                .thenReturn(List.of(existing3dCapability));
+        when(screeningFormatRepository.findByFormatCode("2D")).thenReturn(Optional.of(format2d));
+
+        movieservice.dto.request.CinemaRoomUpdateRequest request =
+                movieservice.dto.request.CinemaRoomUpdateRequest.builder().supports3d(false).build();
+        cinemaRoomService.updateRoom(20L, request, "tester");
+
+        assertEquals(false, existing3dCapability.getEnabled());
+        verify(cinemaRoomFormatRepository).save(existing3dCapability);
     }
 
     // ── `[Backend] Enforce movie-service endpoint authorization matrix` ──────

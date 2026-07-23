@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 const roleLabels: Record<string, string> = {
+  ROLE_SUPER_ADMIN: "Super Admin",
   ROLE_ADMIN: "Admin",
   ROLE_EMPLOYEE: "Employee",
   ROLE_MEMBER: "Member",

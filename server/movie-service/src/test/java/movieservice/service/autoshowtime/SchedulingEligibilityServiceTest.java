@@ -4,8 +4,6 @@ import movieservice.entity.CinemaCluster;
 import movieservice.entity.Movie;
 import movieservice.entity.MovieScreeningVersion;
 import movieservice.repository.MovieAvailabilityRepository;
-import movieservice.repository.MovieClassificationApprovalRepository;
-import movieservice.repository.TheatricalLicenseRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,8 +19,6 @@ import static org.mockito.Mockito.when;
 class SchedulingEligibilityServiceTest {
 
     @Mock MovieAvailabilityRepository availabilityRepository;
-    @Mock TheatricalLicenseRepository licenseRepository;
-    @Mock MovieClassificationApprovalRepository classificationRepository;
 
     private SchedulingEligibilityService service;
     private Movie movie;
@@ -32,8 +28,7 @@ class SchedulingEligibilityServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new SchedulingEligibilityService(
-                availabilityRepository, licenseRepository, classificationRepository);
+        service = new SchedulingEligibilityService(availabilityRepository);
         movie = Movie.builder().movieId(1L).build();
         cluster = CinemaCluster.builder().clusterId(2L).countryCode("VN").build();
         version = MovieScreeningVersion.builder().screeningVersionId(3L).movie(movie).build();
@@ -43,8 +38,6 @@ class SchedulingEligibilityServiceTest {
     @Test
     void acceptsOnlyWhenAllIndependentGatesPass() {
         when(availabilityRepository.existsSchedulableForDate(1L, 2L, businessDate)).thenReturn(true);
-        when(classificationRepository.existsApprovedClassification(1L, "VN", businessDate)).thenReturn(true);
-        when(licenseRepository.existsEligibleLicense(1L, 3L, 2L, "VN", businessDate)).thenReturn(true);
 
         assertThat(service.evaluate(movie, cluster, version, businessDate).eligible()).isTrue();
     }
@@ -55,9 +48,7 @@ class SchedulingEligibilityServiceTest {
 
         assertThat(result.eligible()).isFalse();
         assertThat(result.reasonCodes()).containsExactly(
-                SchedulingEligibilityService.AVAILABILITY_NOT_OPEN,
-                SchedulingEligibilityService.CLASSIFICATION_NOT_APPROVED,
-                SchedulingEligibilityService.THEATRICAL_RIGHT_NOT_ELIGIBLE
+                SchedulingEligibilityService.AVAILABILITY_NOT_OPEN
         );
     }
 }

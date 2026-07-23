@@ -80,6 +80,19 @@ movie:
     # MOV-03 release gate: require >=1 future non-cancelled showtime before COMING_SOON -> NOW_SHOWING.
     require-showtime-for-release: ${MOVIE_REQUIRE_SHOWTIME_FOR_RELEASE:false}
 
+auto-showtime:
+  # Immediate dispatch is the normal path; this poller recovers ACCEPTED runs
+  # after a restart or interrupted delivery.
+  scheduler:
+    fixed-delay-ms: ${AUTO_SHOWTIME_SCHEDULER_FIXED_DELAY_MS:60000}
+  worker:
+    core-pool-size: ${AUTO_SHOWTIME_WORKER_CORE_POOL_SIZE:2}
+    max-pool-size: ${AUTO_SHOWTIME_WORKER_MAX_POOL_SIZE:4}
+    queue-capacity: ${AUTO_SHOWTIME_WORKER_QUEUE_CAPACITY:50}
+  # Keep false in production. SUPER_ADMIN remains authorized regardless.
+  manual-execution:
+    enabled: ${AUTO_SHOWTIME_MANUAL_EXECUTION_ENABLED:false}
+
 CLOUDINARY:
   CLOUD_NAME: dzlfgmtbc
   API_KEY: 144287537763843

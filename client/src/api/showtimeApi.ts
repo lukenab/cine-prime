@@ -9,6 +9,7 @@ export interface ShowtimeResponse {
   showTimeId: number;
   movieId: number;
   movieName: string;
+  moviePosterUrl?: string;
   cinemaRoomId: number;
   cinemaRoomName: string;
   clusterId?: number;
@@ -17,8 +18,12 @@ export interface ShowtimeResponse {
   startTime: string;     // "HH:mm:ss"
   endTime: string;       // "HH:mm:ss"  — calculated by backend from movie duration
   status: ShowtimeStatus;
+  formatCode?: string;
+  source?: 'MANUAL' | 'AUTO';
   totalSeats?: number;
+  soldSeats?: number;
   availableSeats?: number;
+  cancellationReason?: string;
   price?: number;        // lowest active seat price in the room — "from X" display
   updatedAt?: string;
 }
@@ -51,10 +56,9 @@ export interface ApiWrapper<T> {
 }
 
 // ── Auto Showtime Generation (mirrors AutoShowtimeGenerationController.java) ──
-// Async: submit returns ACCEPTED immediately, a background scheduler picks the
-// run up within ~60s (fixed-delay poll) and executes it — poll getRun() until
-// status is COMPLETED/FAILED. executeRun() forces immediate execution instead
-// of waiting for the scheduler (same underlying executor, called synchronously).
+// Async: submit returns ACCEPTED immediately and publishes an after-commit event
+// to the generation worker. The fixed-delay scheduler only recovers ACCEPTED runs
+// left behind by a restart/interrupted dispatch. Poll getRun() until terminal.
 export type GenerationRunStatus = 'ACCEPTED' | 'RUNNING' | 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'FAILED';
 
 export interface AutoShowtimeGenerationRequestPayload {
@@ -117,6 +121,7 @@ export interface SchedulePlanSlot {
   schedulePlanSlotId: number;
   movieId: number;
   movieTitle: string;
+  moviePosterUrl?: string;
   clusterId: number;
   clusterName: string;
   cinemaRoomId: number;
@@ -131,6 +136,17 @@ export interface SchedulePlanSlot {
   basePrice?: number;
   totalSeats?: number;
   generationReason?: string;
+  scoreBreakdown?: {
+    allocationScore?: number;
+    daypart?: string;
+    movieDemandScore?: number;
+    clusterDemandScore?: number;
+    timeDemandScore?: number;
+    formatDemandScore?: number;
+    capacityFitScore?: number;
+    expectedAttendance?: number;
+    roomCapacity?: number;
+  };
   publishedShowtimeId?: number;
 }
 
@@ -148,9 +164,54 @@ export interface SchedulePlanResponse {
   reviewNote?: string;
 }
 
+export interface ShowtimeStatusUpdatePayload {
+  status: ShowtimeStatus;
+  reason?: string;
+}
+
+export interface BulkShowtimeStatusUpdatePayload extends ShowtimeStatusUpdatePayload {
+  showtimeIds: number[];
+}
+
+export interface SchedulePlanSummaryResponse {
+  schedulePlanId: number;
+  generationRunId: number;
+  status: SchedulePlanStatus;
+  blockerCount: number;
+  startDate: string;
+  endDate: string;
+  requestedBy: string;
+  sessionCount: number;
+  roomCount: number;
+  cinemaCount: number;
+  createdAt: string;
+  updatedAt: string;
+  submittedAt?: string;
+  publishedAt?: string;
+}
+
+export interface PageResponse<T> {
+  content: T[];
+  number: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+}
+
 export interface AutoShowtimeIneligibleMovie {
   movieId: number;
   originalTitle: string;
+}
+
+export interface AutoShowtimeGenerationPolicyResponse {
+  policyCode: string;
+  businessTimezone: string;
+  planningHorizonStartDays: number;
+  planningHorizonEndDays: number;
+  earliestAllowedDate: string;
+  latestAllowedDate: string;
 }
 
 // ── API ───────────────────────────────────────────────────────────────────────
@@ -175,9 +236,22 @@ export const showtimeApi = {
   updateShowtime: (id: number, payload: ShowtimeUpdatePayload) =>
     axiosClient.put(`/api/schedules/${id}`, payload) as Promise<ApiWrapper<ShowtimeResponse>>,
 
+  updateShowtimeStatus: (id: number, payload: ShowtimeStatusUpdatePayload) =>
+    axiosClient.patch(`/api/schedules/${id}/status`, payload) as Promise<ApiWrapper<ShowtimeResponse>>,
+
+  bulkUpdateShowtimeStatus: (payload: BulkShowtimeStatusUpdatePayload) =>
+    axiosClient.patch('/api/schedules/bulk/status', payload) as Promise<ApiWrapper<ShowtimeResponse[]>>,
+
   /** DELETE /api/schedules/{id} — ADMIN only */
   deleteShowtime: (id: number) =>
     axiosClient.delete(`/api/schedules/${id}`) as Promise<ApiWrapper<void>>,
+
+  /** GET /api/schedules/auto-generation-runs/policy — ADMIN only. The active allocation
+   *  policy's planning horizon (D+start ~ D+end), with earliest/latest allowed dates
+   *  pre-computed server-side so the wizard can validate the chosen date range before
+   *  submit instead of only learning about it from a 400 INVALID_GENERATION_RANGE. */
+  getActiveGenerationPolicy: () =>
+    axiosClient.get('/api/schedules/auto-generation-runs/policy') as Promise<ApiWrapper<AutoShowtimeGenerationPolicyResponse>>,
 
   /** POST /api/schedules/auto-generation-runs — ADMIN only. Idempotent: submitting
    *  the same scope (dates + movies + clusters) again returns the existing run
@@ -191,14 +265,20 @@ export const showtimeApi = {
   getAutoGenerationRun: (id: number, page = 0, size = 20) =>
     axiosClient.get(`/api/schedules/auto-generation-runs/${id}?page=${page}&size=${size}`) as Promise<ApiWrapper<AutoShowtimeGenerationRunResponse>>,
 
-  /** POST /api/schedules/auto-generation-runs/{id}/execute — ADMIN only. Forces the run
-   *  to execute now instead of waiting for the scheduler's next ~60s pass. No-op if the
-   *  run isn't ACCEPTED anymore (already running/done) — safe to call speculatively. */
+  /** POST /api/schedules/auto-generation-runs/{id}/execute — Process-now escape hatch.
+   *  Production: SUPER_ADMIN only. Development/demo may explicitly allow ADMIN.
+   *  No-op if another worker has already claimed the run. */
   executeAutoGenerationRun: (id: number) =>
     axiosClient.post(`/api/schedules/auto-generation-runs/${id}/execute`) as Promise<ApiWrapper<unknown>>,
 
   getSchedulePlan: (id: number) =>
     axiosClient.get(`/api/schedule-plans/${id}`) as Promise<ApiWrapper<SchedulePlanResponse>>,
+
+  listSchedulePlans: (status?: SchedulePlanStatus, page = 0, size = 20) => {
+    const params = new URLSearchParams({ page: String(page), size: String(size) });
+    if (status) params.set('status', status);
+    return axiosClient.get(`/api/schedule-plans?${params.toString()}`) as Promise<ApiWrapper<PageResponse<SchedulePlanSummaryResponse>>>;
+  },
 
   submitSchedulePlanReview: (id: number, note?: string) =>
     axiosClient.post(`/api/schedule-plans/${id}/submit-review`, { note }) as Promise<ApiWrapper<SchedulePlanResponse>>,

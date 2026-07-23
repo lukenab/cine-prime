@@ -14,10 +14,13 @@ import movieservice.entity.AudioFormat;
 import movieservice.entity.AuditoriumClass;
 import movieservice.entity.CinemaCluster;
 import movieservice.entity.CinemaRoom;
+import movieservice.entity.CinemaRoomFormat;
+import movieservice.entity.CinemaRoomFormatId;
 import movieservice.entity.CinemaRoomMaintenance;
 import movieservice.entity.ProjectionTechnology;
 import movieservice.entity.Resolution;
 import movieservice.entity.RoomLayout;
+import movieservice.entity.ScreeningFormat;
 import movieservice.enums.CinemaRoomStatus;
 import movieservice.enums.ClusterStatus;
 import movieservice.enums.LayoutStatus;
@@ -27,11 +30,13 @@ import movieservice.mapper.MovieMapper;
 import movieservice.repository.AudioFormatRepository;
 import movieservice.repository.AuditoriumClassRepository;
 import movieservice.repository.CinemaClusterRepository;
+import movieservice.repository.CinemaRoomFormatRepository;
 import movieservice.repository.CinemaRoomMaintenanceRepository;
 import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.ProjectionTechnologyRepository;
 import movieservice.repository.ResolutionRepository;
 import movieservice.repository.RoomLayoutRepository;
+import movieservice.repository.ScreeningFormatRepository;
 import movieservice.repository.SeatRepository;
 import movieservice.repository.ShowTimeRepository;
 import org.springframework.security.core.Authentication;
@@ -39,8 +44,13 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -62,6 +72,8 @@ public class CinemaRoomService {
     AudioFormatRepository audioFormatRepository;
     RoomLayoutRepository roomLayoutRepository;
     RoomLayoutService roomLayoutService;
+    CinemaRoomFormatRepository cinemaRoomFormatRepository;
+    ScreeningFormatRepository screeningFormatRepository;
 
     // Room creation always goes through the wizard: a DRAFT room is created here, then the
     // real seat layout is authored via RoomLayoutController and only becomes bookable once a
@@ -140,6 +152,7 @@ public class CinemaRoomService {
                 .updatedBy(actor)
                 .build();
         room = cinemaRoomRepository.save(room);
+        syncRoomFormatCapabilities(room, actor);
 
         roomLayoutService.createInitialDraft(room, actor);
 
@@ -224,6 +237,7 @@ public class CinemaRoomService {
 
         room.setUpdatedBy(actor);
         room = cinemaRoomRepository.save(room);
+        syncRoomFormatCapabilities(room, actor);
         return toDetailResponse(room);
     }
 
@@ -408,6 +422,64 @@ public class CinemaRoomService {
     private void validatePresentationFormats(boolean supports2d, boolean supports3d) {
         if (!supports2d && !supports3d) {
             throw new AppException(MovieErrorCode.ROOM_PRESENTATION_FORMAT_REQUIRED);
+        }
+    }
+
+    /**
+     * The auto-showtime engine reads cinema_room_format exclusively - never
+     * supports2d/supports3d/presentationSystem directly - so without this sync
+     * every room the wizard creates or edits would have zero capability rows
+     * and could never be picked for automatic scheduling. Keeps existing rows
+     * (audit trail) and only flips `enabled` rather than deleting when a format
+     * is no longer derived (e.g. 3D unchecked on an edit).
+     */
+    private void syncRoomFormatCapabilities(CinemaRoom room, String actor) {
+        Set<String> derivedCodes = new LinkedHashSet<>();
+        if (Boolean.TRUE.equals(room.getSupports2d())) derivedCodes.add("2D");
+        if (Boolean.TRUE.equals(room.getSupports3d())) derivedCodes.add("3D");
+        if (room.getPresentationSystem() != null) {
+            switch (room.getPresentationSystem()) {
+                case IMAX -> derivedCodes.add("IMAX");
+                case SCREENX -> derivedCodes.add("SCREENX");
+                case DOLBY_CINEMA -> derivedCodes.add("ATMOS");
+                case STANDARD -> { /* contributes nothing beyond supports2d/3d */ }
+            }
+        }
+
+        Map<Integer, CinemaRoomFormat> existingByFormatId = cinemaRoomFormatRepository
+                .findByCinemaRoom_CinemaRoomId(room.getCinemaRoomId()).stream()
+                .collect(Collectors.toMap(crf -> crf.getScreeningFormat().getFormatId(), Function.identity()));
+
+        for (String code : derivedCodes) {
+            Optional<ScreeningFormat> format = screeningFormatRepository.findByFormatCode(code);
+            if (format.isEmpty()) continue;
+            CinemaRoomFormat existing = existingByFormatId.remove(format.get().getFormatId());
+            if (existing != null) {
+                if (!Boolean.TRUE.equals(existing.getEnabled())) {
+                    existing.setEnabled(true);
+                    existing.setUpdatedBy(actor);
+                    cinemaRoomFormatRepository.save(existing);
+                }
+            } else {
+                cinemaRoomFormatRepository.save(CinemaRoomFormat.builder()
+                        .id(new CinemaRoomFormatId(room.getCinemaRoomId(), format.get().getFormatId()))
+                        .cinemaRoom(room)
+                        .screeningFormat(format.get())
+                        .enabled(true)
+                        .createdBy(actor)
+                        .updatedBy(actor)
+                        .build());
+            }
+        }
+
+        // Anything left is a capability the current wizard fields no longer derive
+        // (e.g. 3D was unchecked) - disable rather than delete to keep history.
+        for (CinemaRoomFormat stale : existingByFormatId.values()) {
+            if (Boolean.TRUE.equals(stale.getEnabled())) {
+                stale.setEnabled(false);
+                stale.setUpdatedBy(actor);
+                cinemaRoomFormatRepository.save(stale);
+            }
         }
     }
 

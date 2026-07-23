@@ -263,6 +263,12 @@ public enum MovieErrorCode implements BaseErrorCode {
                         HttpStatus.CONFLICT),
         SCHEDULE_PLAN_ELIGIBILITY_CHANGED(2106,
                         "Schedule plan rights, classification, or availability eligibility has changed.",
+                        HttpStatus.CONFLICT),
+        SHOWTIME_CANCELLATION_REASON_REQUIRED(2107,
+                        "A cancellation reason is required when cancelling a showtime.",
+                        HttpStatus.BAD_REQUEST),
+        SHOWTIME_TERMINAL_STATUS(2108,
+                        "A cancelled or completed showtime cannot be transitioned to another status.",
                         HttpStatus.CONFLICT);
 
         int code;

@@ -37,6 +37,7 @@ public class AutoShowtimeCandidatePersistenceService {
     private final ScreeningFormatRepository screeningFormatRepository;
     private final ShowtimeGenerationRunRepository generationRunRepository;
     private final ShowTimeRepository showTimeRepository;
+    private final SchedulingOperationalConstraintService operationalConstraintService;
 
     /// Mỗi candidate chạy transaction độc lập để conflict của một suất không rollback cả generation run.
     @Transactional
@@ -54,6 +55,17 @@ public class AutoShowtimeCandidatePersistenceService {
         if (room == null) {
             return AutoShowtimePersistenceResult.rejected(reject(candidate, GenerationSkipReason.NO_ELIGIBLE_ROOM,
                     "Cinema room no longer exists when the candidate is persisted."));
+        }
+
+        MovieScreeningVersion screeningVersion = movieScreeningVersionRepository
+                .getReferenceById(candidate.getScreeningVersionId());
+        SchedulingEligibilityResult operationalEligibility = operationalConstraintService.evaluate(
+                room, screeningVersion, candidate.temporalStartAt(), candidate.temporalEndAt());
+        if (!operationalEligibility.eligible()) {
+            return AutoShowtimePersistenceResult.rejected(reject(candidate,
+                    mapOperationalSkipReason(operationalEligibility.reasonCodes()),
+                    "Operational eligibility changed: "
+                            + String.join(",", operationalEligibility.reasonCodes())));
         }
 
         /// Check actual overlap trước để audit phân biệt conflict showtime thật với cleanup buffer conflict.
@@ -80,8 +92,6 @@ public class AutoShowtimeCandidatePersistenceService {
         /// getReferenceById chỉ tạo JPA reference; candidate đã được Factory validate từ trước.
         Movie movie = movieRepository.getReferenceById(candidate.getMovieId());
         ScreeningFormat format = screeningFormatRepository.getReferenceById(candidate.getFormatId());
-        MovieScreeningVersion screeningVersion = movieScreeningVersionRepository
-                .getReferenceById(candidate.getScreeningVersionId());
         ShowtimeGenerationRun run = generationRunRepository.getReferenceById(generationRunId);
 
         ShowTime showTime = ShowTime.builder()
@@ -111,6 +121,17 @@ public class AutoShowtimeCandidatePersistenceService {
         /// saveAndFlush để DB exclusion constraint phát hiện race condition ngay tại candidate này.
         ShowTime persisted = showTimeRepository.saveAndFlush(showTime);
         return AutoShowtimePersistenceResult.created(persisted);
+    }
+
+    private GenerationSkipReason mapOperationalSkipReason(List<String> reasonCodes) {
+        if (reasonCodes.contains(SchedulingOperationalConstraintService.ROOM_MAINTENANCE_CONFLICT)) {
+            return GenerationSkipReason.ROOM_MAINTENANCE_CONFLICT;
+        }
+        if (reasonCodes.contains(SchedulingOperationalConstraintService.ROOM_LAYOUT_NOT_ACTIVE)
+                || reasonCodes.contains(SchedulingOperationalConstraintService.ROOM_CAPACITY_NOT_SELLABLE)) {
+            return GenerationSkipReason.ROOM_LAYOUT_NOT_ACTIVE;
+        }
+        return GenerationSkipReason.NO_ELIGIBLE_ROOM;
     }
 
     /// Base price ưu tiên giá seat rẻ nhất; room chưa có seat config dùng default chung của module.

@@ -69,6 +69,7 @@ public class SchedulePlanDraftService {
             Movie movie = movieRepository.getReferenceById(candidate.getMovieId());
             MovieScreeningVersion version = screeningVersionRepository
                     .getReferenceById(candidate.getScreeningVersionId());
+            ShowtimeScoreBreakdown breakdown = candidate.getScoreBreakdown();
 
             plan.addSlot(SchedulePlanSlot.builder()
                     .movie(movie)
@@ -79,6 +80,14 @@ public class SchedulePlanDraftService {
                     .businessDate(candidate.getShowDate())
                     .basePrice(resolveBasePrice(room))
                     .totalSeats(room.getTotalSeatCapacity())
+                    .allocationScore(candidate.getScore())
+                    .daypartCode(breakdown == null ? null : breakdown.daypart())
+                    .movieDemandScore(breakdown == null ? null : breakdown.movieDemandScore())
+                    .clusterDemandScore(breakdown == null ? null : breakdown.clusterDemandScore())
+                    .timeDemandScore(breakdown == null ? null : breakdown.timeDemandScore())
+                    .formatDemandScore(breakdown == null ? null : breakdown.formatDemandScore())
+                    .capacityFitScore(breakdown == null ? null : breakdown.capacityFitScore())
+                    .expectedAttendance(breakdown == null ? null : breakdown.expectedAttendance())
                     .generationReason(candidate.getGenerationReason())
                     .build());
         }

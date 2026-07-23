@@ -26,5 +26,7 @@ public interface MovieScreeningVersionRepository extends JpaRepository<MovieScre
             @Param("businessDate") LocalDate businessDate,
             @Param("status") ScreeningVersionStatus status
     );
+
+    List<MovieScreeningVersion> findByMovie_MovieId(Long movieId);
 }
 

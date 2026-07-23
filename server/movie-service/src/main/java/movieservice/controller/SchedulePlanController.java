@@ -5,7 +5,10 @@ import lombok.RequiredArgsConstructor;
 import movie.theater.common.dto.ApiResponse;
 import movieservice.dto.request.SchedulePlanReviewRequest;
 import movieservice.dto.response.SchedulePlanResponse;
+import movieservice.dto.response.SchedulePlanSummaryResponse;
+import movieservice.enums.SchedulePlanStatus;
 import movieservice.service.SchedulePlanService;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -17,6 +20,17 @@ import org.springframework.web.bind.annotation.*;
 @PreAuthorize("hasRole('ADMIN')")
 public class SchedulePlanController {
     private final SchedulePlanService schedulePlanService;
+
+    @GetMapping
+    public ApiResponse<Page<SchedulePlanSummaryResponse>> list(
+            @RequestParam(required = false) SchedulePlanStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ApiResponse.<Page<SchedulePlanSummaryResponse>>builder()
+                .code(HttpStatus.OK.value())
+                .result(schedulePlanService.list(status, page, size))
+                .build();
+    }
 
     @GetMapping("/{planId}")
     public ApiResponse<SchedulePlanResponse> get(@PathVariable Long planId) {
@@ -57,4 +71,3 @@ public class SchedulePlanController {
         return authentication == null ? "system" : authentication.getName();
     }
 }
-
