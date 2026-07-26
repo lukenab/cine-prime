@@ -26,4 +26,7 @@ public interface ShowtimeAllocationFormatPriorityRepository
     List<ShowtimeAllocationFormatPriority> findAllByPolicyIdWithFormat(
             @Param("policyId") Long policyId
     );
+
+    /** Used by the admin update() flow: full-replace semantics for a policy's format priority list. */
+    void deleteByPolicy_PolicyId(Long policyId);
 }

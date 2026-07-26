@@ -269,7 +269,57 @@ public enum MovieErrorCode implements BaseErrorCode {
                         HttpStatus.BAD_REQUEST),
         SHOWTIME_TERMINAL_STATUS(2108,
                         "A cancelled or completed showtime cannot be transitioned to another status.",
-                        HttpStatus.CONFLICT);
+                        HttpStatus.CONFLICT),
+        AUTO_SHOWTIME_REPLAN_NOT_SUPPORTED(2109,
+                        "Rolling replanning is not implemented yet. Submit a fresh generation run instead.",
+                        HttpStatus.BAD_REQUEST),
+
+        // ── Showtime allocation policy admin CRUD ──────────────────────────────
+
+        ALLOCATION_POLICY_NOT_FOUND(2110,
+                        "Showtime allocation policy was not found.", HttpStatus.NOT_FOUND),
+        ALLOCATION_POLICY_CODE_DUPLICATE(2111,
+                        "A policy with this policy_code already exists.", HttpStatus.CONFLICT),
+
+        ROOM_FORMAT_MANAGED_AUTOMATICALLY(2112,
+                        "This format is derived automatically from the room's supports2d/supports3d/"
+                                        + "presentationSystem settings — edit those instead of toggling it directly.",
+                        HttpStatus.CONFLICT),
+
+        CINEMA_ROOM_STATUS_TRANSITION_INVALID(2113,
+                        "Invalid cinema room status transition. Wizard states (DRAFT/PENDING_APPROVAL/APPROVED) are "
+                                        + "managed by the layout approval workflow, MAINTENANCE/TEMPORARILY_UNAVAILABLE by "
+                                        + "report/resolve maintenance, and RETIRED is a permanent, one-way transition only "
+                                        + "available through the retire endpoint.",
+                        HttpStatus.CONFLICT),
+        CINEMA_ROOM_HAS_FUTURE_SHOWTIMES(2114,
+                        "Cannot retire a cinema room that still has scheduled or on-sale showtimes.",
+                        HttpStatus.CONFLICT),
+
+        // ── Cinema cluster demand profile admin CRUD (removes the V33 backfill-migration
+        //    stopgap: profiles are now created/edited through this endpoint, and a default
+        //    is auto-created on cluster approval instead of relying on a one-time migration) ──
+
+        CLUSTER_DEMAND_PROFILE_NOT_FOUND(2115,
+                        "This cinema cluster does not have a demand profile configured yet.",
+                        HttpStatus.NOT_FOUND),
+
+        SCREENING_VERSION_NOT_FOUND(2116,
+                        "Movie screening version was not found.", HttpStatus.NOT_FOUND),
+        SCREENING_VERSION_DUPLICATE(2117,
+                        "This movie already has the same presentation format, audio format, audio language and subtitle language version.",
+                        HttpStatus.CONFLICT),
+        SCREENING_VERSION_DATE_RANGE_INVALID(2118,
+                        "effectiveTo must be on or after effectiveFrom.", HttpStatus.BAD_REQUEST),
+        SCREENING_VERSION_FORMAT_NOT_CONFIGURED(2119,
+                        "The selected screening format is not configured on this movie.",
+                        HttpStatus.BAD_REQUEST),
+        SCREENING_VERSION_REFERENCED_IMMUTABLE(2120,
+                        "A screening version referenced by a schedule, showtime or theatrical license cannot be rewritten. Deactivate it and create a replacement version.",
+                        HttpStatus.CONFLICT),
+        SCREENING_FORMAT_AUDIO_CODE_INVALID(2121,
+                        "Audio technologies such as Dolby Atmos must be configured as an audio format, not as a presentation format.",
+                        HttpStatus.BAD_REQUEST);
 
         int code;
         String message;

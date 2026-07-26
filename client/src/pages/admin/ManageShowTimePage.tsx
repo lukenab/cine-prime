@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Search, Plus, SlidersHorizontal, RefreshCw, AlertCircle, CalendarDays, History, List } from "lucide-react";
-import { useNavigate, useOutletContext } from "react-router-dom";
+import { Search, Plus, SlidersHorizontal, RefreshCw, AlertCircle, CalendarDays, History, List, Film, X } from "lucide-react";
+import { useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { movieApi } from "../../api/movieApi";
 
 import { ShowtimeStatsCards } from "../../layouts/ShowTimeStatsCards";
 import { ShowtimeTable } from "../../layouts/ShowTimeTable";
@@ -26,6 +27,52 @@ export default function ManageShowtimePage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Deep-link scope from a release plan's "Schedule shows" action
+  // (/admin/showtimes?movieId=...&clusterId=...&availabilityId=...): when present, the
+  // workspace narrows to that movie+cluster and offers to schedule a showtime for it directly.
+  const scopeMovieId   = searchParams.get("movieId")   ? Number(searchParams.get("movieId"))   : null;
+  const scopeClusterId = searchParams.get("clusterId") ? Number(searchParams.get("clusterId")) : null;
+  const isScoped = scopeMovieId != null || scopeClusterId != null;
+
+  const [scopeMovieName, setScopeMovieName] = useState<string | null>(null);
+  const [scopeClusterName, setScopeClusterName] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (scopeMovieId != null) {
+      movieApi.getMovieById(scopeMovieId).then((res: any) => {
+        if (!active) return;
+        const movie = res?.result;
+        setScopeMovieName(movie?.movieNameEnglish || movie?.movieNameVn || null);
+      }).catch(() => { if (active) setScopeMovieName(null); });
+    } else {
+      setScopeMovieName(null);
+    }
+    return () => { active = false; };
+  }, [scopeMovieId]);
+
+  useEffect(() => {
+    let active = true;
+    if (scopeClusterId != null) {
+      movieApi.getClusterById(scopeClusterId).then((res: any) => {
+        if (!active) return;
+        setScopeClusterName(res?.result?.clusterName ?? null);
+      }).catch(() => { if (active) setScopeClusterName(null); });
+    } else {
+      setScopeClusterName(null);
+    }
+    return () => { active = false; };
+  }, [scopeClusterId]);
+
+  const clearScope = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("movieId");
+    next.delete("clusterId");
+    next.delete("availabilityId");
+    setSearchParams(next, { replace: true });
+  };
 
   const [showtimes, setShowtimes]   = useState<ShowtimeResponse[]>([]);
   const [loading, setLoading]       = useState(false);
@@ -35,6 +82,7 @@ export default function ManageShowtimePage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [dateFilter, setDateFilter]     = useState("");
   const [roomFilter, setRoomFilter]     = useState<number | "">("");
+  const [clusterFilter, setClusterFilter] = useState<number | "">("");
 
   const [modalOpen, setModalOpen]       = useState(false);
   const [editShowtime, setEditShowtime] = useState<ShowtimeResponse | null>(null);
@@ -95,9 +143,27 @@ export default function ManageShowtimePage() {
     return Array.from(map, ([cinemaRoomId, cinemaRoomName]) => ({ cinemaRoomId, cinemaRoomName }));
   }, [showtimes]);
 
+  // Derive cluster filter options from loaded showtimes (no extra API calls)
+  const clusterOptions = useMemo(() => {
+    const map = new Map<number, string>();
+    showtimes.forEach((s) => {
+      if (s.clusterId != null) map.set(s.clusterId, s.clusterName ?? `Cluster ${s.clusterId}`);
+    });
+    return Array.from(map, ([clusterId, clusterName]) => ({ clusterId, clusterName }));
+  }, [showtimes]);
+
+  // Scope to the deep-linked movie/cluster first, then apply the cluster picker on top.
+  const scopedShowtimes = useMemo(() => {
+    return showtimes.filter((s) =>
+      (scopeMovieId == null || s.movieId === scopeMovieId) &&
+      (scopeClusterId == null || s.clusterId === scopeClusterId) &&
+      (!clusterFilter || s.clusterId === clusterFilter),
+    );
+  }, [showtimes, scopeMovieId, scopeClusterId, clusterFilter]);
+
   const operationsShowtimes = useMemo(() => {
     const query = searchQuery.trim().toLocaleLowerCase();
-    return showtimes.filter((showtime) => {
+    return scopedShowtimes.filter((showtime) => {
       const matchesSearch = !query
         || showtime.movieName.toLocaleLowerCase().includes(query)
         || showtime.cinemaRoomName.toLocaleLowerCase().includes(query)
@@ -106,7 +172,7 @@ export default function ManageShowtimePage() {
       const matchesRoom = !roomFilter || showtime.cinemaRoomId === roomFilter;
       return matchesSearch && matchesStatus && matchesRoom;
     });
-  }, [roomFilter, searchQuery, showtimes, statusFilter]);
+  }, [roomFilter, searchQuery, scopedShowtimes, statusFilter]);
 
   const handleSaveShowtime = async (payload: ShowtimeAssignPayload | ShowtimeUpdatePayload) => {
     if (editShowtime) {
@@ -195,6 +261,7 @@ export default function ManageShowtimePage() {
   };
 
   const hasActiveFilters = !!(statusFilter || roomFilter || (workspaceView === "list" && dateFilter));
+  const hasClusterFilter = clusterFilter !== "";
 
   const openManualCreate = () => {
     setCreateChoiceOpen(false);
@@ -256,12 +323,62 @@ export default function ManageShowtimePage() {
         </div>
       )}
 
-      {workspaceView !== "runs" && (
+      {isScoped && (
         <div
-          className="sticky top-2 z-30 mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-2 shadow-sm backdrop-blur"
-          style={{ background: "color-mix(in srgb, var(--bg-main) 92%, transparent)", borderColor: "var(--border-color)" }}
+          className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3"
+          style={{ borderColor: "rgba(37,99,235,0.35)", background: "rgba(37,99,235,0.08)" }}
         >
-        <ShowtimeStatsCards showtimes={showtimes} />
+          <Film size={16} className="flex-shrink-0" style={{ color: "#2563eb" }} />
+          <p style={{ fontSize: "13px", color: "var(--text-main)" }}>
+            Showing schedules for{" "}
+            <strong>{scopeMovieName ?? (scopeMovieId != null ? `Movie #${scopeMovieId}` : "this movie")}</strong>
+            {scopeClusterId != null && (
+              <>
+                {" "}at <strong>{scopeClusterName ?? `Cluster #${scopeClusterId}`}</strong>
+              </>
+            )}
+            {" "}from the release plan.
+          </p>
+          <button
+            type="button"
+            onClick={() => setCreateChoiceOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-white transition-all hover:opacity-90"
+            style={{ fontSize: "12px", fontWeight: 600, background: "#2563eb" }}
+          >
+            <Plus size={13} /> Schedule showtime
+          </button>
+          <button
+            type="button"
+            onClick={clearScope}
+            className="ml-auto flex items-center gap-1 rounded-lg border px-2.5 py-1.5 transition-all hover:opacity-80"
+            style={{ fontSize: "12px", color: "var(--text-sub)", borderColor: "var(--border-color)" }}
+          >
+            <X size={12} /> Clear
+          </button>
+        </div>
+      )}
+
+      {workspaceView !== "runs" && (
+        <ShowtimeStatsCards showtimes={scopedShowtimes} loading={loading && showtimes.length === 0} />
+      )}
+
+      {workspaceView !== "runs" && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <select
+            value={clusterFilter}
+            onChange={(e) => setClusterFilter(e.target.value ? Number(e.target.value) : "")}
+            className="h-10 rounded-xl border pl-3 pr-8 outline-none transition-all appearance-none cursor-pointer focus:ring-2 focus:ring-blue-500/20"
+            style={{ fontSize: "13px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: hasClusterFilter ? "#2563eb" : "var(--border-color)" }}
+            aria-label="Filter by cinema cluster"
+          >
+            <option value="">All clusters</option>
+            {clusterOptions.map((c) => (
+              <option key={c.clusterId} value={c.clusterId}>{c.clusterName}</option>
+            ))}
+          </select>
+        </div>
+
         <div className="relative min-w-60 flex-[1_1_320px]">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-sub)" }} />
           <input
@@ -379,7 +496,7 @@ export default function ManageShowtimePage() {
         />
       ) : workspaceView === "list" ? (
         <ShowtimeTable
-          showtimes={showtimes}
+          showtimes={scopedShowtimes}
           onEdit={(s) => { setEditShowtime(s); setModalOpen(true); }}
           onDelete={handleDeleteShowtime}
           searchQuery={searchQuery}
@@ -400,6 +517,8 @@ export default function ManageShowtimePage() {
         onClose={() => setModalOpen(false)}
         onSave={handleSaveShowtime}
         editShowtime={editShowtime}
+        presetMovieId={scopeMovieId}
+        presetClusterId={scopeClusterId}
       />
 
       <ShowtimeCreateChoiceDialog

@@ -25,6 +25,8 @@ public class TmdbMovieDraft {
     String posterUrl;
     String overview;
     String tagline;
+    Double popularity;
+    Double voteAverage;
     List<TmdbCompanyDraft> companies;
     List<TmdbCastDraft> cast;
     List<TranslationDraft> translations;

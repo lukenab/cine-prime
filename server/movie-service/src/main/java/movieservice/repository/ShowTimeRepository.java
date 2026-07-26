@@ -166,4 +166,8 @@ public interface ShowTimeRepository extends JpaRepository<ShowTime, Long> {
         List<ShowTime> findAllByGenerationRun_GenerationRunIdOrderByShowDateAscStartTimeAsc(
             Long generationRunId
         );
+
+        /// Used by MovieService#hardDeleteMovie to block permanently deleting a movie that still
+        /// has any showtime row (regardless of status) referencing it.
+        boolean existsByMovie_MovieId(Long movieId);
 }

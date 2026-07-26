@@ -1,7 +1,18 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation, useOutletContext } from "react-router-dom";
-import { Armchair, RefreshCw, AlertCircle, X, Check, SendHorizonal, CheckCircle, XCircle, Rocket, Clock } from "lucide-react";
-import { movieApi, type SeatResponse, type RoomResponse, type CinemaRoomDetail, type SeatTypeValue, type RoomLayoutDetail } from "../../api/movieApi";
+import { Armchair, RefreshCw, AlertCircle, X, Check, SendHorizonal, CheckCircle, XCircle, Rocket, Clock, Wrench, Film, Lock } from "lucide-react";
+import {
+  movieApi,
+  type SeatResponse,
+  type RoomResponse,
+  type CinemaRoomDetail,
+  type SeatTypeValue,
+  type RoomLayoutDetail,
+  type CinemaRoomMaintenance,
+  type ReportMaintenancePayload,
+  type MaintenanceSeverityValue,
+  type CinemaRoomFormatCapability,
+} from "../../api/movieApi";
 import { useRole } from "../../hooks/useRole";
 import { Toast } from "../../components/shared/Toast";
 import { CinemaRoomHeader } from "./cinemaRoomEditor/CinemaRoomHeader";
@@ -53,6 +64,156 @@ function RejectLayoutModal({ onConfirm, onCancel }: { onConfirm: (note: string) 
             style={{ background: "#dc2626" }}
           >
             Reject
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Maintenance config ───────────────────────────────────────────────────────
+
+const MAINTENANCE_SEVERITY_CONFIG: Record<MaintenanceSeverityValue, { label: string; color: string; bg: string }> = {
+  LOW:      { label: "Low",      color: "#2563eb", bg: "rgba(37,99,235,0.10)"  },
+  MEDIUM:   { label: "Medium",   color: "#d97706", bg: "rgba(245,158,11,0.10)" },
+  HIGH:     { label: "High",     color: "#ea580c", bg: "rgba(234,88,12,0.12)"  },
+  CRITICAL: { label: "Critical", color: "#dc2626", bg: "rgba(220,38,38,0.12)"  },
+};
+
+function ReportMaintenanceModal({
+  onConfirm,
+  onCancel,
+  busy,
+}: {
+  onConfirm: (payload: ReportMaintenancePayload) => void;
+  onCancel: () => void;
+  busy: boolean;
+}) {
+  const [reason, setReason] = useState("");
+  const [severity, setSeverity] = useState<MaintenanceSeverityValue>("MEDIUM");
+  const [startedAt, setStartedAt] = useState("");
+
+  const fieldStyle: React.CSSProperties = {
+    fontSize: "13px",
+    background: "var(--bg-main)",
+    color: "var(--text-main)",
+    borderColor: "var(--border-color)",
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.45)" }} onClick={onCancel}>
+      <div className="rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-center w-12 h-12 rounded-full mx-auto mb-4" style={{ background: "#ea580c18" }}>
+          <Wrench size={20} style={{ color: "#ea580c" }} />
+        </div>
+        <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-main)", textAlign: "center", marginBottom: "16px" }}>Report Maintenance Issue</h3>
+
+        <div className="mb-4">
+          <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-sub)", display: "block", marginBottom: "6px" }}>Reason</label>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="VD: Máy chiếu bị lỗi màu, cần thay bóng đèn…"
+            rows={3}
+            autoFocus
+            className="w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 resize-none"
+            style={fieldStyle}
+          />
+        </div>
+
+        <div className="mb-4">
+          <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-sub)", display: "block", marginBottom: "6px" }}>Severity</label>
+          <select
+            value={severity}
+            onChange={(e) => setSeverity(e.target.value as MaintenanceSeverityValue)}
+            className="w-full px-3.5 py-2.5 rounded-xl border outline-none"
+            style={fieldStyle}
+          >
+            {(Object.keys(MAINTENANCE_SEVERITY_CONFIG) as MaintenanceSeverityValue[]).map((s) => (
+              <option key={s} value={s}>{MAINTENANCE_SEVERITY_CONFIG[s].label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="mb-5">
+          <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-sub)", display: "block", marginBottom: "6px" }}>Start time (optional — defaults to now)</label>
+          <input
+            type="datetime-local"
+            value={startedAt}
+            onChange={(e) => setStartedAt(e.target.value)}
+            className="w-full px-3.5 py-2.5 rounded-xl border outline-none"
+            style={fieldStyle}
+          />
+        </div>
+
+        <div className="flex gap-3">
+          <button onClick={onCancel} disabled={busy} className="flex-1 py-2.5 rounded-xl border text-sm font-medium hover:opacity-80 disabled:opacity-50" style={{ color: "var(--text-main)", borderColor: "var(--border-color)", background: "transparent" }}>
+            Cancel
+          </button>
+          <button
+            onClick={() =>
+              reason.trim()
+                ? onConfirm({
+                    reason: reason.trim(),
+                    severity,
+                    startedAt: startedAt ? new Date(startedAt).toISOString() : undefined,
+                  })
+                : null
+            }
+            disabled={!reason.trim() || busy}
+            className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            style={{ background: "#ea580c" }}
+          >
+            {busy ? <RefreshCw size={14} className="animate-spin" /> : <Wrench size={14} />}
+            {busy ? "Reporting…" : "Report"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ResolveMaintenanceModal({
+  onConfirm,
+  onCancel,
+  busy,
+}: {
+  onConfirm: (note?: string) => void;
+  onCancel: () => void;
+  busy: boolean;
+}) {
+  const [note, setNote] = useState("");
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.45)" }} onClick={onCancel}>
+      <div className="rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-center w-12 h-12 rounded-full mx-auto mb-4" style={{ background: "#05966918" }}>
+          <CheckCircle size={20} style={{ color: "#059669" }} />
+        </div>
+        <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-main)", textAlign: "center", marginBottom: "16px" }}>Resolve Maintenance</h3>
+        <div className="mb-5">
+          <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-sub)", display: "block", marginBottom: "6px" }}>Resolution note (optional)</label>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="VD: Đã thay bóng đèn máy chiếu, kiểm tra lại OK…"
+            rows={3}
+            autoFocus
+            className="w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 resize-none"
+            style={{ fontSize: "13px", background: "var(--bg-main)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
+          />
+        </div>
+        <div className="flex gap-3">
+          <button onClick={onCancel} disabled={busy} className="flex-1 py-2.5 rounded-xl border text-sm font-medium hover:opacity-80 disabled:opacity-50" style={{ color: "var(--text-main)", borderColor: "var(--border-color)", background: "transparent" }}>
+            Cancel
+          </button>
+          <button
+            onClick={() => onConfirm(note.trim() || undefined)}
+            disabled={busy}
+            className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            style={{ background: "#059669" }}
+          >
+            {busy ? <RefreshCw size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+            {busy ? "Resolving…" : "Resolve"}
           </button>
         </div>
       </div>
@@ -244,6 +405,16 @@ export default function RoomDetailPage() {
   const [rejecting, setRejecting] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
+  const [maintenanceList, setMaintenanceList] = useState<CinemaRoomMaintenance[]>([]);
+  const [maintenanceLoading, setMaintenanceLoading] = useState(false);
+  const [maintenanceBusy, setMaintenanceBusy] = useState(false);
+  const [reportingMaintenance, setReportingMaintenance] = useState(false);
+  const [resolvingMaintenanceId, setResolvingMaintenanceId] = useState<number | null>(null);
+
+  const [formats, setFormats] = useState<CinemaRoomFormatCapability[]>([]);
+  const [formatsLoading, setFormatsLoading] = useState(false);
+  const [togglingFormatId, setTogglingFormatId] = useState<number | null>(null);
+
   const showToast = (type: "success" | "error", message: string) => {
     setToast({ type, message });
     setTimeout(() => setToast(null), 3500);
@@ -286,7 +457,74 @@ export default function RoomDetailPage() {
     }
   }, [id]);
 
-  useEffect(() => { loadSeats(); loadRoom(); }, [loadSeats, loadRoom]);
+  const loadMaintenance = useCallback(async () => {
+    if (!id) return;
+    setMaintenanceLoading(true);
+    try {
+      const res = await movieApi.listRoomMaintenance(Number(id));
+      setMaintenanceList(res.result ?? []);
+    } catch {
+      // Non-fatal — maintenance history is a supplementary panel, not core to the seat grid.
+    } finally {
+      setMaintenanceLoading(false);
+    }
+  }, [id]);
+
+  const loadFormats = useCallback(async () => {
+    if (!id) return;
+    setFormatsLoading(true);
+    try {
+      const res = await movieApi.listRoomFormats(Number(id));
+      setFormats(res.result ?? []);
+    } catch {
+      // Non-fatal — same reasoning as loadMaintenance() above.
+    } finally {
+      setFormatsLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => { loadSeats(); loadRoom(); loadMaintenance(); loadFormats(); }, [loadSeats, loadRoom, loadMaintenance, loadFormats]);
+
+  const handleToggleFormat = async (formatId: number, enabled: boolean) => {
+    if (!id) return;
+    setTogglingFormatId(formatId);
+    try {
+      await movieApi.setRoomFormat(Number(id), formatId, enabled);
+      await loadFormats();
+    } catch (err: any) {
+      showToast("error", err?.response?.data?.message ?? "Failed to update format.");
+    } finally {
+      setTogglingFormatId(null);
+    }
+  };
+
+  const handleReportMaintenance = async (payload: ReportMaintenancePayload) => {
+    if (!id) return;
+    setMaintenanceBusy(true);
+    try {
+      await movieApi.reportRoomMaintenance(Number(id), payload);
+      showToast("success", "Maintenance reported. Room set to unavailable.");
+      setReportingMaintenance(false);
+      await Promise.all([loadRoom(), loadMaintenance()]);
+    } catch (err: any) {
+      showToast("error", err?.response?.data?.message ?? "Failed to report maintenance.");
+    } finally {
+      setMaintenanceBusy(false);
+    }
+  };
+
+  const handleResolveMaintenance = async (maintenanceId: number, resolutionNote?: string) => {
+    setMaintenanceBusy(true);
+    try {
+      await movieApi.resolveRoomMaintenance(maintenanceId, resolutionNote);
+      showToast("success", "Maintenance resolved.");
+      await Promise.all([loadRoom(), loadMaintenance()]);
+    } catch (err: any) {
+      showToast("error", err?.response?.data?.message ?? "Failed to resolve maintenance.");
+    } finally {
+      setMaintenanceBusy(false);
+    }
+  };
 
   const layout = room?.activeLayout;
   const layoutCfg = layout ? LAYOUT_STATUS_CONFIG[layout.status] : null;
@@ -473,6 +711,146 @@ export default function RoomDetailPage() {
           onCancel={() => setRejecting(false)}
         />
       )}
+
+      {/* Maintenance */}
+      <div className="rounded-2xl border p-4 mb-6" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <Wrench size={16} style={{ color: "var(--text-sub)" }} />
+            <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-main)" }}>Maintenance</h3>
+            {maintenanceList.some((m) => !m.resolved) && (
+              <span
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold"
+                style={{ background: "rgba(220,38,38,0.10)", color: "#dc2626" }}
+              >
+                <AlertCircle size={11} /> {maintenanceList.filter((m) => !m.resolved).length} open
+              </span>
+            )}
+          </div>
+          {can.edit && (
+            <button
+              onClick={() => setReportingMaintenance(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border hover:opacity-80"
+              style={{ fontSize: "13px", color: "#ea580c", borderColor: "var(--border-color)", background: "var(--bg-main)" }}
+            >
+              <Wrench size={13} /> Report Issue
+            </button>
+          )}
+        </div>
+
+        {maintenanceLoading ? (
+          <p style={{ fontSize: "13px", color: "var(--text-sub)" }}>Loading…</p>
+        ) : maintenanceList.length === 0 ? (
+          <p style={{ fontSize: "13px", color: "var(--text-sub)" }}>No maintenance history.</p>
+        ) : (
+          <div className="space-y-2">
+            {maintenanceList.map((m) => {
+              const sev = MAINTENANCE_SEVERITY_CONFIG[m.severity];
+              return (
+                <div
+                  key={m.maintenanceId}
+                  className="flex items-start gap-3 p-3 rounded-xl"
+                  style={{ background: "var(--bg-main)", border: "1px solid var(--border-color)" }}
+                >
+                  <span
+                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0"
+                    style={{ background: sev.bg, color: sev.color }}
+                  >
+                    {sev.label}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p style={{ fontSize: "13px", color: "var(--text-main)", fontWeight: 500 }}>{m.reason}</p>
+                    <p style={{ fontSize: "12px", color: "var(--text-sub)" }}>
+                      {new Date(m.startedAt).toLocaleString("vi-VN")}
+                      {m.resolved && m.resolvedAt && <> → {new Date(m.resolvedAt).toLocaleString("vi-VN")}</>}
+                      {m.createdBy && <> · reported by {m.createdBy}</>}
+                    </p>
+                    {m.resolutionNote && (
+                      <p style={{ fontSize: "12px", color: "var(--text-sub)", marginTop: "4px" }}>
+                        <em>Resolution: {m.resolutionNote}</em>
+                      </p>
+                    )}
+                  </div>
+                  {!m.resolved ? (
+                    can.edit && (
+                      <button
+                        disabled={maintenanceBusy}
+                        onClick={() => setResolvingMaintenanceId(m.maintenanceId)}
+                        className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg border hover:opacity-80 disabled:opacity-50"
+                        style={{ fontSize: "12px", color: "#059669", borderColor: "var(--border-color)", background: "var(--bg-card)" }}
+                      >
+                        <CheckCircle size={12} /> Resolve
+                      </button>
+                    )
+                  ) : (
+                    <span className="flex-shrink-0 inline-flex items-center gap-1" style={{ fontSize: "12px", color: "var(--text-sub)" }}>
+                      <CheckCircle size={12} /> Resolved
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Formats — cinema_room_format, merged with the full screening_format catalog */}
+      <div className="rounded-2xl border p-4 mb-6" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+        <div className="flex items-center gap-2 mb-3">
+          <Film size={16} style={{ color: "var(--text-sub)" }} />
+          <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-main)" }}>Screening Formats</h3>
+        </div>
+
+        {formatsLoading ? (
+          <p style={{ fontSize: "13px", color: "var(--text-sub)" }}>Loading…</p>
+        ) : formats.length === 0 ? (
+          <p style={{ fontSize: "13px", color: "var(--text-sub)" }}>No formats in the catalog yet.</p>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2">
+              {formats.map((f) => {
+                const busy = togglingFormatId === f.formatId;
+                if (f.managedAutomatically) {
+                  return (
+                    <span
+                      key={f.formatId}
+                      title="Derived from this room's 2D/3D/Presentation System settings — edit those via Edit Room."
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
+                      style={{
+                        background: f.enabled ? "rgba(16,185,129,0.10)" : "rgba(107,114,128,0.08)",
+                        color: f.enabled ? "#10b981" : "var(--text-sub)",
+                        opacity: f.enabled ? 1 : 0.7,
+                      }}
+                    >
+                      <Lock size={10} />
+                      {f.formatName}
+                    </span>
+                  );
+                }
+                return (
+                  <button
+                    key={f.formatId}
+                    disabled={busy}
+                    onClick={() => handleToggleFormat(f.formatId, !f.enabled)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-opacity hover:opacity-80 disabled:opacity-50"
+                    style={{
+                      background: f.enabled ? "rgba(37,99,235,0.10)" : "var(--bg-main)",
+                      color: f.enabled ? "#2563eb" : "var(--text-sub)",
+                      borderColor: f.enabled ? "rgba(37,99,235,0.30)" : "var(--border-color)",
+                    }}
+                  >
+                    {busy ? <RefreshCw size={10} className="animate-spin" /> : f.enabled ? <Check size={10} /> : null}
+                    {f.formatName}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-3 flex items-center gap-1.5" style={{ fontSize: "11.5px", color: "var(--text-sub)" }}>
+              <Lock size={10} /> Auto-derived from room settings · click any other format to toggle it manually for this room
+            </p>
+          </>
+        )}
+      </div>
 
       {/* Type summary chips */}
       {!loading && seats.length > 0 && (
@@ -699,6 +1077,26 @@ export default function RoomDetailPage() {
           onSave={handleSave}
           saving={saving}
           isDarkMode={isDarkMode}
+        />
+      )}
+
+      {reportingMaintenance && (
+        <ReportMaintenanceModal
+          busy={maintenanceBusy}
+          onConfirm={handleReportMaintenance}
+          onCancel={() => setReportingMaintenance(false)}
+        />
+      )}
+
+      {resolvingMaintenanceId !== null && (
+        <ResolveMaintenanceModal
+          busy={maintenanceBusy}
+          onConfirm={(note) => {
+            const maintenanceId = resolvingMaintenanceId;
+            setResolvingMaintenanceId(null);
+            handleResolveMaintenance(maintenanceId, note);
+          }}
+          onCancel={() => setResolvingMaintenanceId(null)}
         />
       )}
     </>

@@ -6,6 +6,7 @@ const SYSTEM_LABELS = {
   IMAX: "IMAX",
   DOLBY_CINEMA: "Dolby Cinema",
   SCREENX: "ScreenX",
+  FOUR_DX: "4DX",
 } as const;
 
 type ScreenTone = { core: string; soft: string; glow: string };

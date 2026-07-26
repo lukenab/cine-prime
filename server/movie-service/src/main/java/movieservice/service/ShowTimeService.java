@@ -305,9 +305,13 @@ public class ShowTimeService {
         Movie movie = movieRepository.findById(request.getMovieId())
                 .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
 
-        // 2. Room exists
-        CinemaRoom room = cinemaRoomRepository.findByCinemaRoomId(request.getCinemaRoomId());
-        if (room == null) throw new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND);
+        // 2. Room exists - locked (PESSIMISTIC_WRITE) for the rest of this transaction so a
+        // concurrent create/update targeting the same room is serialized behind this one
+        // instead of racing it. Without this lock, two overlapping requests can both run the
+        // overlap check below, both see "no conflict" (default READ COMMITTED isolation does
+        // not prevent this), and both commit - producing a real overlap despite the check.
+        CinemaRoom room = cinemaRoomRepository.findByIdForUpdate(request.getCinemaRoomId())
+                .orElseThrow(() -> new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND));
         validateSchedulableRoom(room);
 
         // 3. showDate >= today + 3
@@ -563,10 +567,16 @@ public class ShowTimeService {
         }
 
         if (request.getCinemaRoomId() != null) {
-            CinemaRoom room = cinemaRoomRepository.findByCinemaRoomId(request.getCinemaRoomId());
-            if (room == null) throw new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND);
+            // Locked for the rest of this transaction - see the comment in createStandalone()
+            // for why the overlap recheck below needs the room row locked first.
+            CinemaRoom room = cinemaRoomRepository.findByIdForUpdate(request.getCinemaRoomId())
+                    .orElseThrow(() -> new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND));
             validateSchedulableRoom(room);
             showTime.setCinemaRoom(room);
+        } else if (request.getShowDate() != null || request.getStartTime() != null) {
+            // Room isn't changing, but date/time is: lock the existing room anyway so the
+            // overlap recheck below can't race with another create/update touching this room.
+            cinemaRoomRepository.findByIdForUpdate(showTime.getCinemaRoom().getCinemaRoomId());
         }
 
         if (request.getShowDate() != null) {

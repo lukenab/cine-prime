@@ -8,9 +8,11 @@ import movieservice.entity.MovieTranslation;
 import movieservice.entity.ScreeningFormat;
 import movieservice.enums.GenreStatus;
 import movieservice.enums.MovieStatus;
+import movieservice.enums.ScreeningVersionStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.exception.MovieReadinessException;
 import movieservice.repository.ShowTimeRepository;
+import movieservice.repository.MovieScreeningVersionRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -28,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 /**
  * MOV-03: unit tests for MovieReadinessValidator's 3 gates in isolation, independent of
@@ -37,13 +40,23 @@ import static org.mockito.Mockito.when;
 class MovieReadinessValidatorTest {
 
     @Mock ShowTimeRepository showTimeRepository;
+    @Mock MovieScreeningVersionRepository movieScreeningVersionRepository;
 
     private static final LocalDate TODAY = LocalDate.of(2026, 7, 15);
     private final Clock fixedClock = Clock.fixed(
             TODAY.atStartOfDay(ZoneOffset.UTC).toInstant(), ZoneOffset.UTC);
 
     private MovieReadinessValidator validator(boolean requireShowtimeForRelease) {
-        return new MovieReadinessValidator(showTimeRepository, fixedClock, requireShowtimeForRelease);
+        lenient().when(movieScreeningVersionRepository
+                .existsByMovie_MovieIdAndStatusAndAudioFormatIsNotNull(
+                        org.mockito.ArgumentMatchers.eq(1L),
+                        org.mockito.ArgumentMatchers.eq(ScreeningVersionStatus.ACTIVE)))
+                .thenReturn(true);
+        return new MovieReadinessValidator(
+                showTimeRepository,
+                movieScreeningVersionRepository,
+                fixedClock,
+                requireShowtimeForRelease);
     }
 
     private Genre activeGenre() {
@@ -95,6 +108,10 @@ class MovieReadinessValidatorTest {
                 .genres(List.of())
                 .formats(List.of())
                 .build();
+        when(movieScreeningVersionRepository
+                .existsByMovie_MovieIdAndStatusAndAudioFormatIsNotNull(
+                        2L, ScreeningVersionStatus.ACTIVE))
+                .thenReturn(false);
 
         MovieReadinessException ex = assertThrows(MovieReadinessException.class,
                 () -> validator(false).requireReadyForReview(movie));
@@ -105,7 +122,7 @@ class MovieReadinessValidatorTest {
         assertTrue(fields.contains("originalLanguage"));
         assertTrue(fields.contains("durationMinutes"));
         assertTrue(fields.contains("genres"));
-        assertTrue(fields.contains("formats"));
+        assertTrue(fields.contains("screeningVersions"));
         // All violations reported together, not fail-fast on the first one.
         assertEquals(5, fields.size());
     }

@@ -11,6 +11,7 @@ import movieservice.repository.CinemaRoomMaintenanceRepository;
 import movieservice.repository.RoomLayoutRepository;
 import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.MovieScreeningVersionRepository;
+import movieservice.service.AudioFormatCompatibilityService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +34,7 @@ public class SchedulingOperationalConstraintService {
     public static final String ROOM_CAPACITY_NOT_SELLABLE = "ROOM_CAPACITY_NOT_SELLABLE";
     public static final String ROOM_LAYOUT_NOT_ACTIVE = "ROOM_LAYOUT_NOT_ACTIVE";
     public static final String ROOM_FORMAT_NOT_SUPPORTED = "ROOM_FORMAT_NOT_SUPPORTED";
+    public static final String ROOM_AUDIO_NOT_SUPPORTED = "ROOM_AUDIO_NOT_SUPPORTED";
     public static final String ROOM_MAINTENANCE_CONFLICT = "ROOM_MAINTENANCE_CONFLICT";
 
     private final RoomLayoutRepository roomLayoutRepository;
@@ -40,6 +42,7 @@ public class SchedulingOperationalConstraintService {
     private final CinemaRoomMaintenanceRepository maintenanceRepository;
     private final CinemaRoomRepository cinemaRoomRepository;
     private final MovieScreeningVersionRepository screeningVersionRepository;
+    private final AudioFormatCompatibilityService audioFormatCompatibilityService;
 
     @Transactional(readOnly = true)
     public SchedulingEligibilityResult evaluate(ShowtimeCandidate candidate) {
@@ -87,6 +90,12 @@ public class SchedulingOperationalConstraintService {
                 .existsByCinemaRoom_CinemaRoomIdAndScreeningFormat_FormatIdAndEnabledTrue(
                         room.getCinemaRoomId(), formatId)) {
             reasons.add(ROOM_FORMAT_NOT_SUPPORTED);
+        }
+
+        if (screeningVersion != null
+                && !audioFormatCompatibilityService.supports(
+                        room.getAudioFormat(), screeningVersion.getAudioFormat())) {
+            reasons.add(ROOM_AUDIO_NOT_SUPPORTED);
         }
 
         if (startAt != null && endAt != null && room.getCluster() != null) {

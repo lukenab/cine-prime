@@ -5,7 +5,8 @@ import {
   Building2,
   CalendarDays,
   CheckCircle2,
-  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Eye,
   Film,
@@ -70,6 +71,28 @@ function formatDate(value: string, compact = false) {
     : { weekday: "short", month: "short", day: "numeric" });
 }
 
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function addDaysISO(value: string, delta: number) {
+  const date = new Date(`${value}T00:00:00`);
+  date.setDate(date.getDate() + delta);
+  return date.toISOString().slice(0, 10);
+}
+
+function formatWeekday(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("en-US", { weekday: "short" });
+}
+
+function formatMonthDay(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
 function toTimeValue(totalMinutes: number) {
   const safe = Math.max(0, Math.min(23 * 60 + 55, totalMinutes));
   return `${String(Math.floor(safe / 60)).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
@@ -84,10 +107,6 @@ function duration(showtime: ShowtimeResponse) {
   const start = minutes(showtime.startTime);
   const end = minutes(showtime.endTime);
   return end > start ? end - start : end + 24 * 60 - start;
-}
-
-function gapMinutes(current: ShowtimeResponse, next: ShowtimeResponse) {
-  return minutes(next.startTime) - (minutes(current.startTime) + duration(current));
 }
 
 function findConflictIds(showtimes: ShowtimeResponse[]) {
@@ -269,20 +288,60 @@ function DraftComparison({
 }
 
 export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdit, onMove, onStatusChange, draftPlan }: Props) {
-  const availableDates = useMemo(() => Array.from(new Set(showtimes.map((item) => item.showDate))).sort(), [showtimes]);
-  const [selectedDate, setSelectedDate] = useState(availableDates[0] ?? new Date().toISOString().slice(0, 10));
+  const datesWithSessions = useMemo(() => Array.from(new Set(showtimes.map((item) => item.showDate))).sort(), [showtimes]);
+
+  // A continuous day-by-day strip (not just days that already have a session) so admins can
+  // navigate ahead into an empty future date - e.g. to check what's still unscheduled - the same
+  // way the customer-facing date tabs work, rather than only ever listing days with existing data.
+  const availableDates = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const earliest = datesWithSessions[0] && datesWithSessions[0] < today ? datesWithSessions[0] : today;
+    const minimumWindowEnd = new Date(new Date(`${earliest}T00:00:00`).getTime() + 8 * 86_400_000).toISOString().slice(0, 10);
+    const latest = datesWithSessions[datesWithSessions.length - 1];
+    const windowEnd = latest && latest > minimumWindowEnd ? latest : minimumWindowEnd;
+
+    const result: string[] = [];
+    for (let cursor = new Date(`${earliest}T00:00:00`); cursor.toISOString().slice(0, 10) <= windowEnd; cursor.setDate(cursor.getDate() + 1)) {
+      result.push(cursor.toISOString().slice(0, 10));
+    }
+    return result;
+  }, [datesWithSessions]);
+  // Defaults to the first date that actually has a session (matching the pre-existing behavior)
+  // rather than "today", which the continuous strip above may include even when every real
+  // session is still in the future - landing an admin on a blank day on first load would be worse
+  // than the extra navigation the continuous strip is meant to enable.
+  const [selectedDate, setSelectedDate] = useState(() => datesWithSessions[0] ?? new Date().toISOString().slice(0, 10));
   const [clusterId, setClusterId] = useState("all");
-  const [mode, setMode] = useState<BoardMode>("schedule");
+  const [mode, setMode] = useState<BoardMode>("timeline");
   const [onlyIssues, setOnlyIssues] = useState(false);
   const [selected, setSelected] = useState<ShowtimeResponse | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [comparisonOpen, setComparisonOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
-  const [collapsedCinemaIds, setCollapsedCinemaIds] = useState<Set<string>>(new Set());
+  const [cancelPromptOpen, setCancelPromptOpen] = useState(false);
 
   useEffect(() => {
     if (availableDates.length > 0 && !availableDates.includes(selectedDate)) setSelectedDate(availableDates[0]);
   }, [availableDates, selectedDate]);
+
+  // The date bar always shows exactly 7 days at a time, starting from today by default.
+  // Navigation moves a full week at a time rather than one day, and is bounded by the
+  // same earliest/latest dates the continuous availableDates window covers.
+  const [weekStart, setWeekStart] = useState(() => todayISO());
+  const weekDates = useMemo(() => Array.from({ length: 7 }, (_, index) => addDaysISO(weekStart, index)), [weekStart]);
+  const minDate = availableDates[0] ?? todayISO();
+  const maxDate = availableDates[availableDates.length - 1] ?? todayISO();
+  const canGoPrevWeek = weekStart > minDate;
+  const canGoNextWeek = weekDates[weekDates.length - 1] < maxDate;
+  const goToAdjacentWeek = (direction: -1 | 1) => {
+    const next = addDaysISO(weekStart, direction * 7);
+    setWeekStart(next < minDate ? minDate : next > maxDate ? maxDate : next);
+  };
+  const jumpToDate = (value: string) => {
+    if (value < minDate || value > maxDate) return;
+    setSelectedDate(value);
+    setWeekStart(value);
+  };
 
   const clusterOptions = useMemo(() => Array.from(new Map(showtimes
     .filter((item) => item.clusterId != null)
@@ -337,15 +396,6 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
     return Array.from(groups.values());
   }, [rooms]);
 
-  const toggleCinema = (key: string) => {
-    setCollapsedCinemaIds((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
   const timelineWindow = useMemo(() => {
     const active = scoped.filter((item) => item.status !== "CANCELLED");
     if (active.length === 0) return { start: DAY_START, end: DAY_END };
@@ -368,7 +418,7 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
     (_, index) => timelineWindow.start / 60 + index,
   );
 
-  const handleDrop = async (event: DragEvent<HTMLDivElement>, roomId: number) => {
+  const handleDrop = async (event: DragEvent<HTMLElement>, roomId: number) => {
     event.preventDefault();
     const id = Number(event.dataTransfer.getData("text/showtime-id"));
     const showtime = showtimes.find((item) => item.showTimeId === id);
@@ -382,6 +432,75 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
 
   return (
     <>
+      {/* Date navigation - a standalone card of its own, not nested inside the
+          "Daily schedule" section below, so it reads as page-level navigation
+          rather than a control that belongs to just one section. */}
+      <div className="mb-4 flex items-center gap-2 rounded-2xl border px-2 py-2" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+        <button
+          type="button"
+          onClick={() => goToAdjacentWeek(-1)}
+          disabled={!canGoPrevWeek}
+          aria-label="Previous week"
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border disabled:cursor-not-allowed disabled:opacity-35"
+          style={{ borderColor: "var(--border-color)", color: "var(--text-main)", background: "var(--bg-main)" }}
+        >
+          <ChevronLeft size={16} />
+        </button>
+
+        <div className="grid min-w-0 flex-1 grid-cols-7 gap-2">
+          {weekDates.map((date) => {
+            const isToday = date === todayISO();
+            const isSelected = selectedDate === date;
+            return (
+              <button
+                key={date}
+                type="button"
+                data-selected={isSelected}
+                onClick={() => setSelectedDate(date)}
+                className="min-w-0 rounded-lg border px-2 py-2 text-center transition-colors"
+                style={{
+                  borderColor: isSelected ? "#2563eb" : "var(--border-color)",
+                  color: isSelected ? "#2563eb" : "var(--text-main)",
+                  background: isSelected ? "rgba(37,99,235,.12)" : "var(--bg-main)",
+                }}
+              >
+                <span className="block text-[10px] font-bold uppercase" style={{ color: isSelected ? "#2563eb" : "var(--text-sub)" }}>
+                  {isToday ? "Today" : formatWeekday(date)}
+                </span>
+                <span className="mt-0.5 block text-xs font-bold" style={{ color: isSelected ? "#2563eb" : "var(--text-main)" }}>
+                  {formatMonthDay(date)}
+                </span>
+                <span className="mt-0.5 block text-[9px] font-medium" style={{ color: isSelected ? "#2563eb" : "var(--text-sub)" }}>
+                  {dateCounts.get(date) ?? 0} sessions
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => goToAdjacentWeek(1)}
+          disabled={!canGoNextWeek}
+          aria-label="Next week"
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border disabled:cursor-not-allowed disabled:opacity-35"
+          style={{ borderColor: "var(--border-color)", color: "var(--text-main)", background: "var(--bg-main)" }}
+        >
+          <ChevronRight size={16} />
+        </button>
+
+        <input
+          type="date"
+          value={selectedDate}
+          min={minDate}
+          max={maxDate}
+          onChange={(event) => jumpToDate(event.target.value)}
+          aria-label="Jump to schedule date"
+          className="h-9 flex-shrink-0 rounded-lg border px-2 text-xs outline-none"
+          style={{ background: "var(--bg-main)", borderColor: "var(--border-color)", color: "var(--text-main)", colorScheme: "var(--color-scheme)" as string }}
+        />
+      </div>
+
       <section className="overflow-hidden rounded-2xl border" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
         <header className="border-b px-4 py-3" style={{ borderColor: "var(--border-color)" }}>
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -392,7 +511,17 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold" style={{ color: conflictIds.size ? "#dc2626" : "#059669", background: conflictIds.size ? "rgba(220,38,38,.10)" : "rgba(5,150,105,.10)" }}>
+                {conflictIds.size ? <AlertTriangle size={13} /> : <ShieldCheck size={13} />}
+                {conflictIds.size ? "Action required" : "No room overlaps"}
+              </span>
+              {conflictIds.size > 0 && (
+                <button type="button" aria-pressed={onlyIssues} onClick={() => setOnlyIssues((value) => !value)} className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold" style={{ borderColor: "rgba(220,38,38,.3)", color: "#dc2626", background: onlyIssues ? "rgba(220,38,38,.12)" : "transparent" }}>
+                  <AlertTriangle size={13} /> {onlyIssues ? "Showing conflicts" : `${conflictIds.size} conflicts`}
+                </button>
+              )}
               <div className="flex rounded-lg border p-0.5" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
+                <button type="button" onClick={() => setMode("timeline")} className="rounded-md px-3 py-1.5 text-xs font-semibold" style={{ color: mode === "timeline" ? "#2563eb" : "var(--text-sub)", background: mode === "timeline" ? "rgba(37,99,235,.12)" : "transparent" }}>Timeline</button>
                 <button type="button" onClick={() => setMode("schedule")} className="rounded-md px-3 py-1.5 text-xs font-semibold" style={{ color: mode === "schedule" ? "#2563eb" : "var(--text-sub)", background: mode === "schedule" ? "rgba(37,99,235,.12)" : "transparent" }}>Schedule board</button>
                 <button type="button" onClick={() => setMode("utilization")} className="rounded-md px-3 py-1.5 text-xs font-semibold" style={{ color: mode === "utilization" ? "#2563eb" : "var(--text-sub)", background: mode === "utilization" ? "rgba(37,99,235,.12)" : "transparent" }}>Room utilization</button>
               </div>
@@ -400,63 +529,6 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
               {draftPlan && <button type="button" onClick={() => setComparisonOpen(true)} title="Compare with draft schedule" className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-main)", background: "var(--bg-main)" }}><CalendarDays size={14} /> Draft</button>}
             </div>
           </div>
-
-          <div className="mt-3 flex items-center gap-2 overflow-x-auto border-y py-2" style={{ borderColor: "var(--border-color)" }}>
-            <CalendarDays size={14} className="ml-1 flex-shrink-0" style={{ color: "var(--text-sub)" }} />
-            {availableDates.map((date) => (
-              <button
-                key={date}
-                type="button"
-                onClick={() => setSelectedDate(date)}
-                className="min-w-[96px] flex-shrink-0 rounded-lg border px-3 py-2 text-left transition-colors"
-                style={{
-                  borderColor: selectedDate === date ? "#2563eb" : "var(--border-color)",
-                  color: selectedDate === date ? "#2563eb" : "var(--text-main)",
-                  background: selectedDate === date ? "rgba(37,99,235,.12)" : "var(--bg-main)",
-                }}
-              >
-                <span className="block text-xs font-bold">{formatDate(date, true)}</span>
-                <span className="mt-0.5 block text-[9px] font-medium" style={{ color: selectedDate === date ? "#2563eb" : "var(--text-sub)" }}>
-                  {dateCounts.get(date) ?? 0} sessions
-                </span>
-              </button>
-            ))}
-            <input
-              type="date"
-              value={selectedDate}
-              min={availableDates[0]}
-              max={availableDates[availableDates.length - 1]}
-              onChange={(event) => availableDates.includes(event.target.value) && setSelectedDate(event.target.value)}
-              aria-label="Jump to schedule date"
-              className="ml-auto h-9 flex-shrink-0 rounded-lg border px-2 text-xs outline-none"
-              style={{ background: "var(--bg-main)", borderColor: "var(--border-color)", color: "var(--text-main)", colorScheme: "var(--color-scheme)" as string }}
-            />
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {clusterOptions.length > 1 ? (
-              <label className="relative min-w-52">
-                <Building2 size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-sub)" }} />
-                <select value={clusterId} onChange={(event) => setClusterId(event.target.value)} className="w-full appearance-none rounded-lg border py-2 pl-8 pr-8 text-xs outline-none" style={{ background: "var(--bg-main)", borderColor: "var(--border-color)", color: "var(--text-main)" }}>
-                  <option value="all">All cinemas</option>
-                  {clusterOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-                </select>
-                <ChevronDown size={13} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-sub)" }} />
-              </label>
-            ) : clusterOptions.length === 1 ? (
-              <span className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold" style={{ background: "var(--bg-main)", borderColor: "var(--border-color)", color: "var(--text-main)" }}><Building2 size={13} /> {clusterOptions[0][1]}</span>
-            ) : null}
-            {conflictIds.size > 0 && (
-              <button type="button" aria-pressed={onlyIssues} onClick={() => setOnlyIssues((value) => !value)} className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold" style={{ borderColor: "rgba(220,38,38,.3)", color: "#dc2626", background: onlyIssues ? "rgba(220,38,38,.12)" : "transparent" }}>
-                <AlertTriangle size={13} /> {onlyIssues ? "Showing conflicts" : `${conflictIds.size} conflicts`}
-              </button>
-            )}
-            <span className="ml-auto inline-flex items-center gap-1.5 text-xs" style={{ color: conflictIds.size ? "#dc2626" : "#059669" }}>
-              {conflictIds.size ? <AlertTriangle size={13} /> : <ShieldCheck size={13} />}
-              {conflictIds.size ? "Action required" : "No room overlaps"}
-            </span>
-          </div>
-
         </header>
 
         {rooms.length === 0 ? (
@@ -486,129 +558,96 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
             })}
           </div>
         ) : mode === "schedule" ? (
-          <div className="divide-y" style={{ borderColor: "var(--border-color)" }}>
-            {boardCinemas.map((cinema) => {
-              const sessionCount = cinema.rooms.reduce((total, room) => total + room.items.length, 0);
-              const collapsed = collapsedCinemaIds.has(cinema.key);
-              const cinemaConflictCount = cinema.rooms.reduce(
-                (total, room) => total + room.items.filter((item) => conflictIds.has(item.showTimeId)).length,
-                0,
-              );
-              return (
-                <section key={cinema.key}>
-                  <button
-                    type="button"
-                    aria-expanded={!collapsed}
-                    onClick={() => toggleCinema(cinema.key)}
-                    className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-blue-500/[0.04]"
-                  >
-                    <span className="flex min-w-0 items-center gap-3">
-                      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600"><Building2 size={16} /></span>
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-bold" style={{ color: "var(--text-main)" }}>{cinema.name}</span>
-                        <span className="mt-1 block text-[11px]" style={{ color: "var(--text-sub)" }}>{cinema.rooms.length} rooms · {sessionCount} sessions</span>
-                      </span>
-                    </span>
-                    <span className="flex items-center gap-3">
-                      <span className="rounded-full px-2.5 py-1 text-[10px] font-bold" style={{ color: cinemaConflictCount ? "#dc2626" : "#059669", background: cinemaConflictCount ? "rgba(220,38,38,.10)" : "rgba(5,150,105,.10)" }}>
-                        {cinemaConflictCount ? `${cinemaConflictCount} conflicts` : "No conflicts"}
-                      </span>
-                      <ChevronDown size={16} className={`transition-transform ${collapsed ? "" : "rotate-180"}`} style={{ color: "var(--text-sub)" }} />
-                    </span>
-                  </button>
+          // No cinema-level accordion here - the board is already scoped to a single
+          // branch (selected at the page level), so grouping rooms under a repeated
+          // cinema-name header was pure duplication. Rooms render directly.
+          <div className="space-y-3 p-4">
+            {rooms.map((room) => (
+              <article
+                key={room.roomId}
+                className="overflow-hidden rounded-xl border"
+                style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => void handleDrop(event, room.roomId)}
+              >
+                <header className="flex items-center justify-between gap-3 border-b px-4 py-3" style={{ borderColor: "var(--border-color)" }}>
+                  <div>
+                    <h4 className="text-sm font-bold" style={{ color: "var(--text-main)" }}>{room.roomName}</h4>
+                    <p className="mt-1 text-[11px]" style={{ color: "var(--text-sub)" }}>{room.items.length} scheduled sessions</p>
+                  </div>
+                  <p className="text-xs font-semibold tabular-nums" style={{ color: "var(--text-sub)" }}>
+                    {formatTime(room.items[0].startTime)}–{formatTime(room.items[room.items.length - 1].endTime)}
+                  </p>
+                </header>
 
-                  {!collapsed && (
-                    <div className="space-y-3 px-4 pb-4">
-                      {cinema.rooms.map((room) => (
-                        <article
-                          key={room.roomId}
-                          className="overflow-hidden rounded-xl border"
-                          style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}
-                          onDragOver={(event) => event.preventDefault()}
-                          onDrop={(event) => void handleDrop(event, room.roomId)}
-                        >
-                          <header className="flex items-center justify-between gap-3 border-b px-4 py-3" style={{ borderColor: "var(--border-color)" }}>
-                            <div>
-                              <h4 className="text-sm font-bold" style={{ color: "var(--text-main)" }}>{room.roomName}</h4>
-                              <p className="mt-1 text-[11px]" style={{ color: "var(--text-sub)" }}>{room.items.length} scheduled sessions</p>
-                            </div>
-                            <p className="text-xs font-semibold tabular-nums" style={{ color: "var(--text-sub)" }}>
-                              {formatTime(room.items[0].startTime)}–{formatTime(room.items[room.items.length - 1].endTime)}
-                            </p>
-                          </header>
+                <div className="overflow-x-auto">
+                  <div className="flex flex-wrap items-start gap-3 p-4">
+                    {(() => {
+                      // Consecutive sessions of the same movie/format collapse into one
+                      // block (poster + title shown once) instead of repeating a full
+                      // card per session - a room showing the same title back-to-back
+                      // no longer needs N copies of the same poster to scan the day.
+                      type SessionGroup = { movieName: string; posterUrl?: string; formatCode: string; items: typeof room.items };
+                      const groups: SessionGroup[] = [];
+                      room.items.forEach((item) => {
+                        const formatCode = item.formatCode ?? "2D";
+                        const last = groups[groups.length - 1];
+                        if (last && last.movieName === item.movieName && last.formatCode === formatCode) {
+                          last.items.push(item);
+                        } else {
+                          groups.push({ movieName: item.movieName, posterUrl: item.moviePosterUrl, formatCode, items: [item] });
+                        }
+                      });
 
-                          <div className="overflow-x-auto">
-                            <div className="flex min-w-max items-stretch gap-2 p-4">
-                              {room.items.map((item, index) => {
-                                const next = room.items[index + 1];
-                                const gap = next ? gapMinutes(item, next) : null;
-                                const meta = STATUS_META[item.status];
-                                const conflict = conflictIds.has(item.showTimeId);
-                                const draggable = item.status !== "CANCELLED" && item.status !== "COMPLETED";
-                                const soldSeats = item.soldSeats ?? Math.max(0, (item.totalSeats ?? 0) - (item.availableSeats ?? item.totalSeats ?? 0));
-                                return (
-                                  <div key={item.showTimeId} className="flex items-stretch gap-2">
-                                    <article
-                                      draggable={draggable && !busy}
-                                      onDragStart={(event) => event.dataTransfer.setData("text/showtime-id", String(item.showTimeId))}
-                                      className="flex w-[340px] flex-col overflow-hidden rounded-xl border shadow-sm"
-                                      style={{
-                                        borderColor: conflict ? "rgba(220,38,38,.6)" : meta.border,
-                                        background: "var(--bg-card)",
-                                        opacity: item.status === "CANCELLED" ? .58 : 1,
-                                        cursor: draggable ? "grab" : "default",
-                                      }}
-                                    >
-                                      <header className="flex items-start justify-between gap-3 px-4 py-3" style={{ background: conflict ? "rgba(220,38,38,.10)" : meta.background }}>
-                                        <div>
-                                          <p className="text-base font-extrabold tabular-nums" style={{ color: conflict ? "#dc2626" : "var(--text-main)" }}>{formatTime(item.startTime)}–{formatTime(item.endTime)}</p>
-                                          <p className="mt-0.5 text-[11px] font-medium" style={{ color: "var(--text-sub)" }}>{duration(item)} minutes</p>
-                                        </div>
-                                        <span className="rounded-md px-2 py-1 text-[10px] font-bold" style={{ color: conflict ? "#dc2626" : meta.color, background: "var(--bg-card)" }}>{conflict ? "Conflict" : item.formatCode ?? "2D"}</span>
-                                      </header>
-
-                                      <div className="flex flex-1 gap-3.5 px-4 py-4">
-                                        <Poster src={item.moviePosterUrl} title={item.movieName} large />
-                                        <div className="flex min-w-0 flex-1 flex-col">
-                                          <p className="text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: "var(--text-sub)" }}>Movie</p>
-                                          <h5 className="mt-1 line-clamp-3 text-sm font-bold leading-5" style={{ color: "var(--text-main)", textDecoration: item.status === "CANCELLED" ? "line-through" : "none" }}>{item.movieName}</h5>
-                                          <div className="mt-auto flex flex-wrap gap-1.5 pt-2">
-                                            <span className="rounded-md border px-2 py-1 text-[10px] font-semibold uppercase" style={{ borderColor: "var(--border-color)", color: meta.color }}>{meta.label}</span>
-                                            {item.source && <span className="rounded-md border px-2 py-1 text-[10px]" style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}>{item.source === "AUTO" ? "Generated" : "Manual"}</span>}
-                                          </div>
-                                        </div>
-                                      </div>
-
-                                      <footer className="flex items-end justify-between gap-3 border-t px-4 py-3" style={{ borderColor: "var(--border-color)" }}>
-                                        <span>
-                                          <span className="block text-[9px] font-semibold uppercase tracking-wide" style={{ color: "var(--text-sub)" }}>Seat sales</span>
-                                          <span className="mt-0.5 block text-sm font-bold" style={{ color: "var(--text-main)" }}>{item.totalSeats != null ? `${soldSeats}/${item.totalSeats} seats` : "Not available"}</span>
-                                        </span>
-                                        <button type="button" onClick={() => { setSelected(item); setCancelReason(""); }} className="text-[11px] font-semibold text-blue-600">Showtime details</button>
-                                      </footer>
-                                    </article>
-
-                                    {next && gap != null && (
-                                      <div className="flex w-20 flex-shrink-0 flex-col items-center justify-center gap-2 text-center">
-                                        <span className="h-px w-full" style={{ background: gap < 0 ? "#dc2626" : "var(--border-color)" }} />
-                                        <span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ color: gap < 0 ? "#dc2626" : "var(--text-sub)", background: gap < 0 ? "rgba(220,38,38,.10)" : "var(--bg-main)" }}>
-                                          {gap < 0 ? `${Math.abs(gap)}m overlap` : `${gap}m gap`}
-                                        </span>
-                                        <span className="h-px w-full" style={{ background: gap < 0 ? "#dc2626" : "var(--border-color)" }} />
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
+                      return groups.map((group, groupIndex) => (
+                        <article key={groupIndex} className="flex w-[250px] flex-col overflow-hidden rounded-xl border shadow-sm" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+                          <div className="flex gap-3 px-3 py-3">
+                            <Poster src={group.posterUrl} title={group.movieName} />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-[9px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--text-sub)" }}>Movie</p>
+                                <span className="rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase" style={{ background: "rgba(37,99,235,.1)", color: "#2563eb" }}>{group.formatCode}</span>
+                              </div>
+                              <h5 className="mt-1 line-clamp-3 text-[13px] font-bold leading-4" style={{ color: "var(--text-main)" }}>{group.movieName}</h5>
+                              <p className="mt-1 text-[10px]" style={{ color: "var(--text-sub)" }}>{group.items.length} session{group.items.length > 1 ? "s" : ""}</p>
                             </div>
                           </div>
+                          <div className="flex flex-wrap gap-1.5 border-t px-3 py-2.5" style={{ borderColor: "var(--border-color)" }}>
+                            {group.items.map((item) => {
+                              const meta = STATUS_META[item.status];
+                              const conflict = conflictIds.has(item.showTimeId);
+                              const draggable = item.status !== "CANCELLED" && item.status !== "COMPLETED";
+                              const soldSeats = item.soldSeats ?? Math.max(0, (item.totalSeats ?? 0) - (item.availableSeats ?? item.totalSeats ?? 0));
+                              return (
+                                <button
+                                  key={item.showTimeId}
+                                  type="button"
+                                  draggable={draggable && !busy}
+                                  onDragStart={(event) => event.dataTransfer.setData("text/showtime-id", String(item.showTimeId))}
+                                  onClick={() => { setSelected(item); setCancelReason(""); setCancelPromptOpen(false); }}
+                                  title={`${meta.label}${item.totalSeats != null ? ` · ${soldSeats}/${item.totalSeats} seats` : ""}`}
+                                  className="rounded-lg border px-2 py-1.5 text-left transition hover:-translate-y-0.5"
+                                  style={{
+                                    borderColor: conflict ? "#dc2626" : meta.border,
+                                    background: conflict ? "rgba(220,38,38,.10)" : meta.background,
+                                    opacity: item.status === "CANCELLED" ? .55 : 1,
+                                    cursor: draggable ? "grab" : "pointer",
+                                    textDecoration: item.status === "CANCELLED" ? "line-through" : "none",
+                                  }}
+                                >
+                                  <span className="block text-[11px] font-bold tabular-nums" style={{ color: conflict ? "#dc2626" : meta.color }}>{formatTime(item.startTime)}–{formatTime(item.endTime)}</span>
+                                  {item.totalSeats != null && <span className="mt-0.5 block text-[9px]" style={{ color: "var(--text-sub)" }}>{soldSeats}/{item.totalSeats} sold</span>}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </article>
-                      ))}
-                    </div>
-                  )}
-                </section>
-              );
-            })}
+                      ));
+                    })()}
+                  </div>
+                </div>
+              </article>
+            ))}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -619,67 +658,76 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
                   {hourTicks.map((hour) => <span key={hour} className="absolute top-4 -translate-x-1/2 text-[11px] font-medium" style={{ left: `${((hour * 60 - timelineWindow.start) / timelineSpan) * 100}%`, color: "var(--text-sub)" }}>{String(hour % 24).padStart(2, "0")}:00</span>)}
                 </div>
               </div>
-              {rooms.map((room) => (
-                <div key={room.roomId} className="grid border-b last:border-0" style={{ gridTemplateColumns: `220px ${timelineWidth}px`, borderColor: "var(--border-color)" }}>
-                  <div className="border-r px-5 py-5" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600"><Monitor size={17} /></div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-bold" style={{ color: "var(--text-main)" }}>{room.roomName}</p>
-                        <p className="mt-1 truncate text-[11px]" style={{ color: "var(--text-sub)" }}>{room.clusterName}</p>
-                        <span className="mt-2 inline-flex rounded-full bg-blue-500/10 px-2 py-1 text-[10px] font-bold text-blue-600">{room.items.length} sessions</span>
-                      </div>
+              {boardCinemas.map((cinema) => (
+                <div key={cinema.key}>
+                  {boardCinemas.length > 1 && (
+                    <div className="flex items-center gap-2 border-b px-5 py-2" style={{ borderColor: "var(--border-color)", background: "rgba(37,99,235,.05)" }}>
+                      <Building2 size={13} className="text-blue-600" />
+                      <span className="text-xs font-bold" style={{ color: "var(--text-main)" }}>{cinema.name}</span>
+                      <span className="text-[11px]" style={{ color: "var(--text-sub)" }}>· {cinema.rooms.length} rooms</span>
                     </div>
-                  </div>
-                  <div className="relative min-h-[152px]" onDragOver={(event) => event.preventDefault()} onDrop={(event) => void handleDrop(event, room.roomId)}>
-                    {hourTicks.map((hour) => <span key={hour} className="pointer-events-none absolute inset-y-0 border-l" style={{ left: `${((hour * 60 - timelineWindow.start) / timelineSpan) * 100}%`, borderColor: "var(--border-color)", opacity: .55 }} />)}
-                    {room.items.map((item) => {
-                      const meta = STATUS_META[item.status];
-                      const left = ((minutes(item.startTime) - timelineWindow.start) / timelineSpan) * 100;
-                      const width = (duration(item) / timelineSpan) * 100;
-                      const conflict = conflictIds.has(item.showTimeId);
-                      const draggable = item.status !== "CANCELLED" && item.status !== "COMPLETED";
-                      const soldSeats = item.soldSeats ?? Math.max(0, (item.totalSeats ?? 0) - (item.availableSeats ?? item.totalSeats ?? 0));
-                      return (
-                        <button
-                          key={item.showTimeId}
-                          type="button"
-                          draggable={draggable && !busy}
-                          onDragStart={(event) => event.dataTransfer.setData("text/showtime-id", String(item.showTimeId))}
-                          onClick={() => { setSelected(item); setCancelReason(""); }}
-                          title={`${item.movieName}\n${formatTime(item.startTime)}–${formatTime(item.endTime)}`}
-                          className="absolute top-4 h-[120px] overflow-hidden rounded-xl border p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                          style={{
-                            left: `${Math.max(0, left)}%`,
-                            width: `${Math.max(12, width)}%`,
-                            minWidth: 230,
-                            color: meta.color,
-                            borderColor: conflict ? "#dc2626" : meta.border,
-                            background: meta.background,
-                            opacity: item.status === "CANCELLED" ? .55 : 1,
-                            cursor: draggable ? "grab" : "pointer",
-                          }}
-                        >
-                          <div className="flex h-full gap-3">
-                            <Poster src={item.moviePosterUrl} title={item.movieName} />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="truncate text-[13px] font-bold">{formatTime(item.startTime)}–{formatTime(item.endTime)}</span>
-                                <span className="rounded-md px-2 py-1 text-[9px] font-bold uppercase" style={{ background: `${meta.color}18` }}>{item.formatCode ?? "2D"}</span>
+                  )}
+                  {cinema.rooms.map((room) => (
+                    <div key={room.roomId} className="grid border-b last:border-0" style={{ gridTemplateColumns: `220px ${timelineWidth}px`, borderColor: "var(--border-color)" }}>
+                      <div className="border-r px-5 py-5" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600"><Monitor size={17} /></div>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-bold" style={{ color: "var(--text-main)" }}>{room.roomName}</p>
+                            {boardCinemas.length <= 1 && <p className="mt-1 truncate text-[11px]" style={{ color: "var(--text-sub)" }}>{room.clusterName}</p>}
+                            <span className="mt-2 inline-flex rounded-full bg-blue-500/10 px-2 py-1 text-[10px] font-bold text-blue-600">{room.items.length} sessions</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="relative min-h-[104px]" onDragOver={(event) => event.preventDefault()} onDrop={(event) => void handleDrop(event, room.roomId)}>
+                        {hourTicks.map((hour) => <span key={hour} className="pointer-events-none absolute inset-y-0 border-l" style={{ left: `${((hour * 60 - timelineWindow.start) / timelineSpan) * 100}%`, borderColor: "var(--border-color)", opacity: .55 }} />)}
+                        {room.items.map((item) => {
+                          const meta = STATUS_META[item.status];
+                          const left = ((minutes(item.startTime) - timelineWindow.start) / timelineSpan) * 100;
+                          const width = (duration(item) / timelineSpan) * 100;
+                          const conflict = conflictIds.has(item.showTimeId);
+                          const draggable = item.status !== "CANCELLED" && item.status !== "COMPLETED";
+                          const soldSeats = item.soldSeats ?? Math.max(0, (item.totalSeats ?? 0) - (item.availableSeats ?? item.totalSeats ?? 0));
+                          return (
+                            <button
+                              key={item.showTimeId}
+                              type="button"
+                              draggable={draggable && !busy}
+                              onDragStart={(event) => event.dataTransfer.setData("text/showtime-id", String(item.showTimeId))}
+                              onClick={() => { setSelected(item); setCancelReason(""); setCancelPromptOpen(false); }}
+                              title={`${item.movieName}\n${formatTime(item.startTime)}–${formatTime(item.endTime)}`}
+                              // No poster - keeping the card slim (fixed min-width down from 230px
+                              // to 150px) is what stops adjacent short sessions from overlapping
+                              // each other on the timeline.
+                              className="absolute top-3 h-[70px] overflow-hidden rounded-lg border px-2.5 py-2 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                              style={{
+                                left: `${Math.max(0, left)}%`,
+                                width: `${Math.max(8, width)}%`,
+                                minWidth: 150,
+                                color: meta.color,
+                                borderColor: conflict ? "#dc2626" : meta.border,
+                                background: meta.background,
+                                opacity: item.status === "CANCELLED" ? .55 : 1,
+                                cursor: draggable ? "grab" : "pointer",
+                              }}
+                            >
+                              <div className="flex items-center justify-between gap-1.5">
+                                <span className="truncate text-[11px] font-bold">{formatTime(item.startTime)}–{formatTime(item.endTime)}</span>
+                                <span className="flex-shrink-0 rounded px-1.5 py-0.5 text-[8px] font-bold uppercase" style={{ background: `${meta.color}18` }}>{item.formatCode ?? "2D"}</span>
                               </div>
-                              <span className="mt-2 block line-clamp-2 text-[13px] font-bold leading-4" style={{ color: "var(--text-main)", textDecoration: item.status === "CANCELLED" ? "line-through" : "none" }}>{item.movieName}</span>
-                              <div className="mt-2 flex items-center justify-between gap-2">
-                                <span className="truncate text-[10px] font-semibold uppercase">{conflict ? "Conflict" : meta.label}</span>
+                              <span className="mt-1 block truncate text-[11px] font-bold leading-4" style={{ color: "var(--text-main)", textDecoration: item.status === "CANCELLED" ? "line-through" : "none" }}>{item.movieName}</span>
+                              <div className="mt-1 flex items-center justify-between gap-1.5">
+                                <span className="truncate text-[9px] font-semibold uppercase">{conflict ? "Conflict" : meta.label}</span>
                                 {item.totalSeats != null && (
-                                  <span className="whitespace-nowrap text-[10px] font-semibold" style={{ color: "var(--text-sub)" }}>{soldSeats}/{item.totalSeats} sold</span>
+                                  <span className="flex-shrink-0 whitespace-nowrap text-[9px] font-semibold" style={{ color: "var(--text-sub)" }}>{soldSeats}/{item.totalSeats}</span>
                                 )}
                               </div>
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
@@ -688,11 +736,14 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
       </section>
 
       {selected && (
-        <div className="fixed inset-0 z-[80] bg-black/35 backdrop-blur-[1px]" onMouseDown={(event) => event.target === event.currentTarget && setSelected(null)}>
-          <aside className="absolute inset-y-0 right-0 w-full max-w-md overflow-y-auto border-l p-5 shadow-2xl" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm" onMouseDown={(event) => event.target === event.currentTarget && setSelected(null)}>
+          <div role="dialog" aria-modal="true" aria-label="Showtime details" className="max-h-[calc(100vh-3rem)] w-full max-w-md overflow-y-auto rounded-3xl border p-5 shadow-2xl" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
             <div className="flex items-start justify-between gap-3"><div className="flex gap-3"><Poster src={selected.moviePosterUrl} title={selected.movieName} /><div><span className="rounded-full px-2 py-1 text-[9px] font-bold uppercase" style={{ color: STATUS_META[selected.status].color, background: STATUS_META[selected.status].background }}>{STATUS_META[selected.status].label}</span><h2 className="mt-2 text-base font-bold" style={{ color: "var(--text-main)" }}>{selected.movieName}</h2><p className="mt-1 text-xs" style={{ color: "var(--text-sub)" }}>Showtime #{selected.showTimeId}</p></div></div><button type="button" onClick={() => setSelected(null)} className="flex h-9 w-9 items-center justify-center rounded-xl border" style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}><X size={16} /></button></div>
 
-            <div className="mt-5 grid grid-cols-2 gap-3">
+            {/* One bordered panel for all detail fields (instead of 6 separate boxed
+                cards) - cells share a single outer border and thin internal dividers,
+                so it reads as one cohesive block rather than a loose grid of pills. */}
+            <div className="mt-4 grid grid-cols-2 overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
               {[
                 [CalendarDays, "Date", formatDate(selected.showDate)],
                 [Clock3, "Time", `${formatTime(selected.startTime)}–${formatTime(selected.endTime)}`],
@@ -700,26 +751,53 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
                 [Monitor, "Room", selected.cinemaRoomName],
                 [Armchair, "Availability", `${selected.availableSeats ?? "—"}/${selected.totalSeats ?? "—"}`],
                 [Ticket, "From price", selected.price ? `${selected.price.toLocaleString("vi-VN")} ₫` : "—"],
-              ].map(([Icon, label, value]) => {
+              ].map(([Icon, label, value], index) => {
                 const DetailIcon = Icon as typeof CalendarDays;
-                return <div key={String(label)} className="rounded-xl border p-3" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}><DetailIcon size={14} className="text-blue-600" /><p className="mt-2 text-[9px] font-bold uppercase" style={{ color: "var(--text-sub)" }}>{String(label)}</p><p className="mt-1 text-xs font-semibold" style={{ color: "var(--text-main)" }}>{String(value)}</p></div>;
+                return (
+                  <div
+                    key={String(label)}
+                    className="p-3.5"
+                    style={{
+                      borderColor: "var(--border-color)",
+                      borderRight: index % 2 === 0 ? "1px solid var(--border-color)" : undefined,
+                      borderBottom: index < 4 ? "1px solid var(--border-color)" : undefined,
+                    }}
+                  >
+                    <DetailIcon size={14} className="text-blue-600" />
+                    <p className="mt-2 text-[9px] font-bold uppercase" style={{ color: "var(--text-sub)" }}>{String(label)}</p>
+                    <p className="mt-1 text-xs font-semibold" style={{ color: "var(--text-main)" }}>{String(value)}</p>
+                  </div>
+                );
               })}
             </div>
 
+            {/* Actions live in a matching bordered panel, same radius and border color as
+                the detail panel above, so the modal reads as a consistent stack of
+                sections rather than a boxed grid followed by loose floating buttons. */}
             {selected.status !== "CANCELLED" && selected.status !== "COMPLETED" && (
-              <div className="mt-5 space-y-2 border-t pt-4" style={{ borderColor: "var(--border-color)" }}>
-                <button type="button" onClick={() => onEdit(selected)} className="flex w-full items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }}><Pencil size={15} /> Edit room or time</button>
-                {selected.status !== "ON_SALE" && <button type="button" disabled={busy} onClick={() => void onStatusChange(selected, "ON_SALE").then(() => setSelected(null))} className="flex w-full items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-600"><PlayCircle size={15} /> Open ticket sales</button>}
-                {selected.status !== "SUSPENDED" && <button type="button" disabled={busy} onClick={() => void onStatusChange(selected, "SUSPENDED").then(() => setSelected(null))} className="flex w-full items-center gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-600"><PauseCircle size={15} /> Suspend showtime</button>}
-                <div className="rounded-xl border border-rose-500/20 p-3">
-                  <label className="text-xs font-semibold text-rose-500">Cancellation reason</label>
-                  <textarea value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} rows={3} placeholder="Required before cancellation" className="mt-2 w-full resize-none rounded-lg border bg-transparent px-3 py-2 text-xs outline-none" style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }} />
-                  <button type="button" disabled={busy || !cancelReason.trim()} onClick={() => void onStatusChange(selected, "CANCELLED", cancelReason.trim()).then(() => setSelected(null))} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-40"><XCircle size={14} /> Cancel showtime</button>
+              <div className="mt-3 space-y-2 rounded-2xl border p-3" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => onEdit(selected)} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border px-2 py-2.5 text-xs font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-main)", background: "var(--bg-card)" }}><Pencil size={14} /> Edit</button>
+                  {selected.status !== "ON_SALE" && <button type="button" disabled={busy} onClick={() => void onStatusChange(selected, "ON_SALE").then(() => setSelected(null))} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-2 py-2.5 text-xs font-semibold text-emerald-600"><PlayCircle size={14} /> Open sales</button>}
+                  {selected.status !== "SUSPENDED" && <button type="button" disabled={busy} onClick={() => void onStatusChange(selected, "SUSPENDED").then(() => setSelected(null))} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-amber-500/25 bg-amber-500/10 px-2 py-2.5 text-xs font-semibold text-amber-600"><PauseCircle size={14} /> Suspend</button>}
                 </div>
+
+                {!cancelPromptOpen ? (
+                  <button type="button" onClick={() => setCancelPromptOpen(true)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-500/25 bg-rose-500/10 px-4 py-2.5 text-xs font-semibold text-rose-600"><XCircle size={14} /> Cancel showtime</button>
+                ) : (
+                  <div className="rounded-xl border border-rose-500/20 p-3" style={{ background: "var(--bg-card)" }}>
+                    <label className="text-xs font-semibold text-rose-500">Cancellation reason</label>
+                    <textarea value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} rows={3} placeholder="Required before cancellation" className="mt-2 w-full resize-none rounded-lg border bg-transparent px-3 py-2 text-xs outline-none" style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }} />
+                    <div className="mt-2 flex gap-2">
+                      <button type="button" onClick={() => { setCancelPromptOpen(false); setCancelReason(""); }} className="flex-1 rounded-lg border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }}>Keep showtime</button>
+                      <button type="button" disabled={busy || !cancelReason.trim()} onClick={() => void onStatusChange(selected, "CANCELLED", cancelReason.trim()).then(() => setSelected(null))} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-40"><XCircle size={14} /> Confirm cancellation</button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-            {selected.status === "CANCELLED" && selected.cancellationReason && <div className="mt-5 rounded-xl border border-rose-500/20 bg-rose-500/5 p-4 text-xs text-rose-500"><strong>Cancellation reason</strong><p className="mt-1">{selected.cancellationReason}</p></div>}
-          </aside>
+            {selected.status === "CANCELLED" && selected.cancellationReason && <div className="mt-3 rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4 text-xs text-rose-500"><strong>Cancellation reason</strong><p className="mt-1">{selected.cancellationReason}</p></div>}
+          </div>
         </div>
       )}
 

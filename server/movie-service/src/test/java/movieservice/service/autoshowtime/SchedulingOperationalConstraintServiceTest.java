@@ -2,6 +2,7 @@ package movieservice.service.autoshowtime;
 
 import movieservice.entity.CinemaCluster;
 import movieservice.entity.CinemaRoom;
+import movieservice.entity.AudioFormat;
 import movieservice.entity.MovieScreeningVersion;
 import movieservice.entity.RoomLayout;
 import movieservice.entity.ScreeningFormat;
@@ -13,6 +14,7 @@ import movieservice.repository.CinemaRoomMaintenanceRepository;
 import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.MovieScreeningVersionRepository;
 import movieservice.repository.RoomLayoutRepository;
+import movieservice.service.AudioFormatCompatibilityService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,6 +37,7 @@ class SchedulingOperationalConstraintServiceTest {
     @Mock CinemaRoomMaintenanceRepository maintenanceRepository;
     @Mock CinemaRoomRepository roomRepository;
     @Mock MovieScreeningVersionRepository screeningVersionRepository;
+    @Mock AudioFormatCompatibilityService audioFormatCompatibilityService;
 
     private SchedulingOperationalConstraintService service;
     private CinemaRoom room;
@@ -46,16 +49,23 @@ class SchedulingOperationalConstraintServiceTest {
     void setUp() {
         service = new SchedulingOperationalConstraintService(
                 roomLayoutRepository, roomFormatRepository, maintenanceRepository,
-                roomRepository, screeningVersionRepository);
+                roomRepository, screeningVersionRepository, audioFormatCompatibilityService);
 
         CinemaCluster cluster = CinemaCluster.builder()
                 .clusterId(10L)
                 .status(ClusterStatus.ACTIVE)
                 .timezone("Asia/Ho_Chi_Minh")
                 .build();
+        AudioFormat audioFormat = AudioFormat.builder()
+                .audioFormatId(1)
+                .formatCode("DOLBY_5_1")
+                .formatName("Dolby Digital 5.1")
+                .active(true)
+                .build();
         room = CinemaRoom.builder()
                 .cinemaRoomId(20L)
                 .cluster(cluster)
+                .audioFormat(audioFormat)
                 .status(CinemaRoomStatus.ACTIVE)
                 .totalSeatCapacity(100)
                 .build();
@@ -63,6 +73,7 @@ class SchedulingOperationalConstraintServiceTest {
         version = MovieScreeningVersion.builder()
                 .screeningVersionId(40L)
                 .format(format)
+                .audioFormat(audioFormat)
                 .build();
         startAt = OffsetDateTime.parse("2026-07-24T18:00:00+07:00");
         endAt = OffsetDateTime.parse("2026-07-24T20:00:00+07:00");
@@ -77,6 +88,7 @@ class SchedulingOperationalConstraintServiceTest {
         when(roomFormatRepository
                 .existsByCinemaRoom_CinemaRoomIdAndScreeningFormat_FormatIdAndEnabledTrue(20L, 30))
                 .thenReturn(true);
+        when(audioFormatCompatibilityService.supports(audioFormat, audioFormat)).thenReturn(true);
     }
 
     @Test
@@ -111,5 +123,19 @@ class SchedulingOperationalConstraintServiceTest {
         assertThat(result.eligible()).isFalse();
         assertThat(result.reasonCodes())
                 .contains(SchedulingOperationalConstraintService.ROOM_LAYOUT_NOT_ACTIVE);
+    }
+
+    @Test
+    void blocksRoomThatCannotPlayTheVersionAudioFormat() {
+        when(audioFormatCompatibilityService.supports(room.getAudioFormat(), version.getAudioFormat()))
+                .thenReturn(false);
+        when(maintenanceRepository.existsBlockingMaintenance(eq(20L), any(), any()))
+                .thenReturn(false);
+
+        SchedulingEligibilityResult result = service.evaluate(room, version, startAt, endAt);
+
+        assertThat(result.eligible()).isFalse();
+        assertThat(result.reasonCodes())
+                .contains(SchedulingOperationalConstraintService.ROOM_AUDIO_NOT_SUPPORTED);
     }
 }

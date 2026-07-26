@@ -6,7 +6,6 @@ import { Outlet, useOutletContext, useNavigate } from "react-router-dom";
 import { MovieStatsCards } from "../../layouts/MovieStatsCards";
 import { MovieTable } from "../../layouts/MovieTable";
 import { MovieDetailModal } from "../../layouts/MovieDetailModal";
-import { PendingReviewModal } from "../../layouts/PendingReviewModal";
 import {
   movieApi,
   type MovieApiResponse,
@@ -67,6 +66,8 @@ export default function ManageMoviePage() {
   const handleAddMovie = () => navigate("/admin/movies/new");
 
   const handleEditMovie = (movie: MovieApiResponse) => navigate(`/admin/movies/${movie.movieId}/edit`);
+
+  const handleManageAvailability = (id: number) => navigate(`/admin/movies/${id}/availability`);
 
   const handleViewMovie = async (movie: MovieApiResponse) => {
     setDetailLoading(true);
@@ -309,6 +310,7 @@ export default function ManageMoviePage() {
           onSubmit={handleSubmit}
           onReviewClick={handleReviewClick}
           onRework={handleRework}
+          onManageAvailability={handleManageAvailability}
           searchQuery={searchQuery}
           genreFilter={genreFilter}
           statusFilter={statusFilter}
@@ -322,7 +324,8 @@ export default function ManageMoviePage() {
         onClose={() => { setDetailMovie(null); setDetailLoading(false); }}
       />
 
-      <PendingReviewModal
+      <MovieDetailModal
+        mode="review"
         open={Boolean(reviewMovie) || reviewLoading}
         movie={reviewMovie}
         loading={reviewLoading}

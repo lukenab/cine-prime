@@ -1,6 +1,6 @@
 import { useAuth } from "../context/AuthContext";
 import { useState, useEffect } from "react";
-import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, Users, UserCog, BarChart2, Settings, Clapperboard, LogOut, Gift, ShoppingCart, MapPin, UserSquare2, ChevronDown, List, ShieldCheck, Monitor, Factory } from "lucide-react";
+import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, Users, UserCog, BarChart2, Settings, Clapperboard, LogOut, Gift, ShoppingCart, MapPin, UserSquare2, ChevronDown, List, ShieldCheck, Monitor, Factory, Armchair, Languages } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { movieApi } from "../api/movieApi";
 
@@ -31,11 +31,19 @@ const navItems: NavItem[] = [
       { icon: Tags,        label: "Genres",      path: "/admin/genres",      roles: ["ROLE_ADMIN"] },
       { icon: ShieldCheck, label: "Age Ratings", path: "/admin/age-ratings", roles: ["ROLE_ADMIN"] },
       { icon: Monitor,     label: "Formats",     path: "/admin/formats",     roles: ["ROLE_ADMIN"] },
+      { icon: Languages,   label: "Screening Versions", path: "/admin/screening-versions", roles: ["ROLE_ADMIN"] },
       { icon: Factory,     label: "Companies",   path: "/admin/companies",   roles: ["ROLE_ADMIN"] },
       { icon: UserSquare2, label: "Persons",     path: "/admin/persons",     roles: ["ROLE_ADMIN"] },
     ],
   },
-  { icon: Building2, label: "Cinemas", id: "cinemas", path: "/admin/clusters", group: "catalog", roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"] },
+  {
+    icon: Building2, label: "Cinemas", id: "cinemas", path: "/admin/clusters", group: "catalog",
+    roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"],
+    children: [
+      { icon: MapPin,    label: "Clusters",  path: "/admin/clusters" },
+      { icon: Armchair,  label: "All Rooms", path: "/admin/rooms" },
+    ],
+  },
   { icon: Calendar, label: "Showtimes", id: "showtimes", path: "/admin/showtimes", group: "ops" },
   { icon: Ticket,      label: "Bookings",     id: "bookings",   path: "/admin/bookings",   group: "ops" },
   { icon: ShoppingCart,label: "Sell Tickets", id: "sell",       path: "/admin/sell",       group: "ops", roles: ["ROLE_EMPLOYEE"] },

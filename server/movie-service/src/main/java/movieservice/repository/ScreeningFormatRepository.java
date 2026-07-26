@@ -11,4 +11,5 @@ import java.util.Optional;
 public interface ScreeningFormatRepository extends JpaRepository<ScreeningFormat, Integer> {
     Optional<ScreeningFormat> findByFormatCode(String formatCode);
     List<ScreeningFormat> findAllByFormatIdIn(List<Integer> ids);
+    List<ScreeningFormat> findByStatusOrderByFormatNameAsc(String status);
 }

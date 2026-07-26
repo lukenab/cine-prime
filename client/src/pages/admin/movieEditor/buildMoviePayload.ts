@@ -25,6 +25,11 @@ export type MoviePayloadFormFields = {
   en_title: string;
   en_synopsis: string;
   en_tagline: string;
+  /** movie_scheduling_profile - 0-100, see MovieEditorPage's Scheduling priority section. */
+  popularityScore: number;
+  /** Optional manual override; empty string means "no override" (kept as string in form
+   *  state, like ShowtimeModal's basePrice, so the input can be blank without coercing to 0). */
+  priorityOverride: string;
 };
 
 /**
@@ -79,5 +84,7 @@ export function buildMoviePayload(
     imdbId: sourceForm.imdbId,
     translations: translations.length ? translations : undefined,
     cast: resolvedCast,
+    popularityScore: sourceForm.popularityScore,
+    priorityOverride: sourceForm.priorityOverride.trim() ? Number(sourceForm.priorityOverride) : undefined,
   };
 }

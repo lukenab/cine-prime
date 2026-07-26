@@ -16,9 +16,22 @@ import {
 
 import type {
   AutoShowtimeGenerationRunResponse,
+  ObjectiveBreakdown,
   SchedulePlanResponse,
   SchedulePlanSlot,
+  ShadowComparisonResult,
+  SolverDiagnostics,
 } from "../../../api/showtimeApi";
+import { OPTIMIZER_META, SCENARIO_META, SOLVER_STATUS_META } from "./optimizerMeta";
+
+function parseJson<T>(raw: string | undefined): T | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
 
 type PlanAction = "submit" | "changes" | "publish";
 type ScheduleView = "board" | "timeline";
@@ -278,6 +291,10 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
   const conflicts = useMemo(() => findConflicts(slots), [slots]);
   const validationIssues = useMemo(() => buildValidationIssues(plan?.validationSummary, slots), [plan?.validationSummary, slots]);
   const conflictSlotIds = useMemo(() => new Set(conflicts.flatMap((item) => [item.first.schedulePlanSlotId, item.second.schedulePlanSlotId])), [conflicts]);
+  const objectiveBreakdown = useMemo(() => parseJson<ObjectiveBreakdown>(run.objectiveBreakdown), [run.objectiveBreakdown]);
+  const solverDiagnostics = useMemo(() => parseJson<SolverDiagnostics>(run.solverDiagnostics), [run.solverDiagnostics]);
+  const shadowComparison = useMemo(() => parseJson<ShadowComparisonResult>(run.shadowComparison), [run.shadowComparison]);
+  const usedOptimizer = run.optimizerMode ?? "LEGACY";
 
   const [selectedDate, setSelectedDate] = useState(availableDates[0] ?? run.startDate);
   const [clusterId, setClusterId] = useState("all");
@@ -462,11 +479,39 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="truncate" style={{ color: "var(--text-main)", fontSize: "18px", fontWeight: 760 }}>Plan #{plan?.schedulePlanId ?? run.generationRunId}</h2>
               <span className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide" style={{ color: status.color, background: status.background }}>{status.label}</span>
+              {usedOptimizer !== "LEGACY" && (
+                <span className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide" style={{ color: "#7c3aed", background: "rgba(124,58,237,.12)" }} title={OPTIMIZER_META[usedOptimizer].description}>
+                  {OPTIMIZER_META[usedOptimizer].label}
+                </span>
+              )}
+              {run.solverStatus && (
+                <span className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide" style={{ color: SOLVER_STATUS_META[run.solverStatus].color, background: SOLVER_STATUS_META[run.solverStatus].background }}>
+                  {SOLVER_STATUS_META[run.solverStatus].label}
+                </span>
+              )}
             </div>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: "var(--text-sub)" }}>
               <span>{formatDate(run.startDate)} – {formatDate(run.endDate)}</span>
               <span aria-hidden="true">·</span>
               <span>{countLabel(slots.length, "session")}</span>
+              {run.scenario && usedOptimizer !== "LEGACY" && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span title={SCENARIO_META[run.scenario].description}>{SCENARIO_META[run.scenario].label} scenario</span>
+                </>
+              )}
+              {typeof run.objectiveScore === "number" && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span>Objective {run.objectiveScore.toFixed(2)}</span>
+                </>
+              )}
+              {typeof run.solveDurationMillis === "number" && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span>Solved in {(run.solveDurationMillis / 1000).toFixed(2)}s</span>
+                </>
+              )}
               <span aria-hidden="true">·</span>
               <span>{countLabel(clusterOptions.length, "cinema")}</span>
               <span aria-hidden="true">·</span>
@@ -982,6 +1027,72 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
         <div className="grid gap-3 border-t px-4 py-4 sm:grid-cols-4" style={{ borderColor: "var(--border-color)" }}>
           {[["Candidate slots evaluated", run.summary.candidateCount], ["Alternatives rejected", run.summary.skippedCount], ["Draft slots accepted", run.summary.createdCount], ["Partitions completed", `${run.summary.successfulPartitionCount}/${run.summary.successfulPartitionCount + run.summary.failedPartitionCount}`]].map(([label, value]) => <div key={String(label)}><p className="text-[9px] font-semibold uppercase" style={{ color: "var(--text-sub)" }}>{label}</p><p className="mt-1 text-base font-bold" style={{ color: "var(--text-main)" }}>{value}</p></div>)}
         </div>
+
+        {solverDiagnostics && (
+          <div className="border-t px-4 py-4" style={{ borderColor: "var(--border-color)" }}>
+            <p className="text-[9px] font-semibold uppercase" style={{ color: "var(--text-sub)" }}>Solver ({OPTIMIZER_META[usedOptimizer].label})</p>
+            <div className="mt-2 grid gap-3 sm:grid-cols-4">
+              {[
+                ["Raw candidates", solverDiagnostics.rawCandidateCount],
+                ["Eligible candidates", solverDiagnostics.eligibleCandidateCount],
+                ["Decision variables", solverDiagnostics.variablesCreated],
+                ["Constraints", solverDiagnostics.constraintCount],
+              ].map(([label, value]) => (
+                <div key={String(label)}>
+                  <p className="text-[9px] font-semibold uppercase" style={{ color: "var(--text-sub)" }}>{label}</p>
+                  <p className="mt-1 text-base font-bold" style={{ color: "var(--text-main)" }}>{value}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[10px]" style={{ color: solverDiagnostics.optimalityProven ? "#059669" : "var(--text-sub)" }}>
+              {solverDiagnostics.optimalityProven ? "Optimality proven within the configured time/gap limit." : "Optimality not proven — result may be feasible but not the mathematical optimum."}
+            </p>
+            {Object.keys(solverDiagnostics.prunedByReason).length > 0 && (
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {Object.entries(solverDiagnostics.prunedByReason).map(([reason, count]) => (
+                  <span key={reason} className="rounded-md border px-2 py-1 text-[10px] font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}>
+                    {reason.replace(/_/g, " ")}: {count}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {objectiveBreakdown && (
+          <div className="border-t px-4 py-4" style={{ borderColor: "var(--border-color)" }}>
+            <p className="text-[9px] font-semibold uppercase" style={{ color: "var(--text-sub)" }}>Objective breakdown</p>
+            <div className="mt-2 grid gap-3 sm:grid-cols-4">
+              {[
+                ["Demand", objectiveBreakdown.demandScore],
+                ["Utilization", objectiveBreakdown.utilizationScore],
+                ["Revenue proxy", objectiveBreakdown.revenueScore],
+                ["Prime-time", objectiveBreakdown.primeTimeScore],
+                ["Diversity", objectiveBreakdown.diversityScore],
+                ["Stability penalty", objectiveBreakdown.stabilityPenalty],
+                ["Gap penalty", objectiveBreakdown.gapPenalty],
+                ["Final weighted score", objectiveBreakdown.finalWeightedScore],
+              ].map(([label, value]) => (
+                <div key={String(label)}>
+                  <p className="text-[9px] font-semibold uppercase" style={{ color: "var(--text-sub)" }}>{label}</p>
+                  <p className="mt-1 text-base font-bold" style={{ color: "var(--text-main)" }}>{Number(value).toFixed(2)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {shadowComparison && (
+          <div className="border-t px-4 py-4" style={{ borderColor: "var(--border-color)" }}>
+            <p className="text-[9px] font-semibold uppercase" style={{ color: "var(--text-sub)" }}>Shadow comparison — CP-SAT (not used for this plan)</p>
+            <p className="mt-1.5 text-[11px]" style={{ color: "var(--text-sub)" }}>
+              CP-SAT status: <strong style={{ color: SOLVER_STATUS_META[shadowComparison.solverStatus]?.color ?? "var(--text-main)" }}>{SOLVER_STATUS_META[shadowComparison.solverStatus]?.label ?? shadowComparison.solverStatus}</strong>
+              {" · "}Objective: <strong style={{ color: "var(--text-main)" }}>{shadowComparison.objectiveBreakdown?.finalWeightedScore?.toFixed(2) ?? "—"}</strong>
+              {" "}(legacy: {objectiveBreakdown?.finalWeightedScore?.toFixed(2) ?? "—"})
+              {" · "}Solve time: <strong style={{ color: "var(--text-main)" }}>{((shadowComparison.diagnostics?.solveDurationMillis ?? 0) / 1000).toFixed(2)}s</strong>
+            </p>
+          </div>
+        )}
       </details>
 
       {action && (

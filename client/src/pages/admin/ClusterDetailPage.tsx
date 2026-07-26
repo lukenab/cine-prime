@@ -16,6 +16,7 @@ import { useRole } from "../../hooks/useRole";
 import { RoomCreationMethodDialog } from "./cinemaRoomEditor/RoomCreationMethodDialog";
 import { ClusterWizardModal } from "./ClusterWizardModal";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog";
+import { ClusterDemandProfilePanel } from "./ClusterDemandProfilePanel";
 
 // ── Status config (small local copy — kept in sync with ManageCinemaClusterPage.tsx) ──
 
@@ -24,6 +25,29 @@ const STATUS_CONFIG: Record<ClusterStatus, { label: string; icon: React.ElementT
   PENDING_REVIEW: { label: "Pending Review", icon: Clock,       color: "#d97706", bg: "rgba(245,158,11,0.10)"  },
   ACTIVE:         { label: "Active",         icon: CheckCircle, color: "#10b981", bg: "rgba(16,185,129,0.10)"  },
   INACTIVE:       { label: "Inactive",       icon: XCircle,     color: "#ef4444", bg: "rgba(239,68,68,0.10)"   },
+};
+
+/** Room `status` was already reaching the client on every RoomResponse but was only ever
+ *  read for a delete-button permission check, never rendered — this is its first visible
+ *  surface (a badge in the rooms table). Values per CinemaRoomWizardStatus. */
+const ROOM_STATUS_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string; bg: string }> = {
+  DRAFT:                    { label: "Draft",         icon: Clock,       color: "#6b7280", bg: "rgba(107,114,128,0.10)" },
+  PENDING_APPROVAL:         { label: "Pending",        icon: Clock,       color: "#d97706", bg: "rgba(245,158,11,0.10)"  },
+  APPROVED:                 { label: "Approved",       icon: CheckCircle, color: "#2563eb", bg: "rgba(37,99,235,0.10)"   },
+  ACTIVE:                   { label: "Active",         icon: CheckCircle, color: "#10b981", bg: "rgba(16,185,129,0.10)"  },
+  MAINTENANCE:              { label: "Maintenance",    icon: AlertCircle, color: "#d97706", bg: "rgba(245,158,11,0.10)"  },
+  TEMPORARILY_UNAVAILABLE:  { label: "Unavailable",    icon: AlertCircle, color: "#ea580c", bg: "rgba(234,88,12,0.10)"   },
+  SUSPENDED:                { label: "Suspended",      icon: XCircle,     color: "#e11d48", bg: "rgba(225,29,72,0.10)"   },
+  CLOSED:                   { label: "Closed",         icon: XCircle,     color: "#6b7280", bg: "rgba(107,114,128,0.10)" },
+  RETIRED:                  { label: "Retired",        icon: XCircle,     color: "#6b7280", bg: "rgba(107,114,128,0.10)" },
+};
+
+const PRESENTATION_SYSTEM_LABEL: Record<string, string> = {
+  STANDARD: "Standard",
+  IMAX: "IMAX",
+  DOLBY_CINEMA: "Dolby Cinema",
+  SCREENX: "ScreenX",
+  FOUR_DX: "4DX",
 };
 
 const OPERATING_DAY_LABELS = { MONDAY: "Mon", TUESDAY: "Tue", WEDNESDAY: "Wed", THURSDAY: "Thu", FRIDAY: "Fri", SATURDAY: "Sat", SUNDAY: "Sun" } as const;
@@ -507,6 +531,10 @@ export default function ClusterDetailPage() {
         </div>
       </section>
 
+      <div className="mt-5">
+        <ClusterDemandProfilePanel clusterId={clusterId} canEdit={isAdmin} />
+      </div>
+
       {/* A refresh can fail after an earlier cluster response has already rendered. */}
       {clusterError && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl mb-5 border border-rose-200 bg-rose-50">
@@ -575,7 +603,7 @@ export default function ClusterDetailPage() {
         <table className="w-full">
           <thead>
             <tr className="border-b" style={{ borderColor: "var(--border-color)", backgroundColor: "rgba(128,128,128,0.04)" }}>
-              {["#", "Room Name", "Seat Quantity", "Seat Layout", ""].map((h) => (
+              {["#", "Room Name", "Seat Quantity", "Seat Layout", "Format", "Status", ""].map((h) => (
                 <th key={h} className="px-5 py-3.5 text-left">
                   <span style={{ color: "var(--text-sub)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>{h}</span>
                 </th>
@@ -585,14 +613,14 @@ export default function ClusterDetailPage() {
           <tbody>
             {roomsLoading ? (
               <tr>
-                <td colSpan={5} className="px-5 py-16 text-center">
+                <td colSpan={7} className="px-5 py-16 text-center">
                   <RefreshCw size={18} className="animate-spin mx-auto mb-2" style={{ color: "var(--text-sub)" }} />
                   <p style={{ fontSize: "14px", color: "var(--text-sub)" }}>Loading rooms…</p>
                 </td>
               </tr>
             ) : roomsError ? (
               <tr>
-                <td colSpan={5} className="px-5 py-12 text-center">
+                <td colSpan={7} className="px-5 py-12 text-center">
                   <div role="alert" className="mx-auto flex max-w-lg flex-col items-center gap-2">
                     <div className="flex h-10 w-10 items-center justify-center rounded-full" style={{ background: "rgba(239,68,68,0.10)" }}>
                       <AlertCircle size={20} style={{ color: "#ef4444" }} />
@@ -633,7 +661,7 @@ export default function ClusterDetailPage() {
               </tr>
             ) : filteredRooms.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>
+                <td colSpan={7} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>
                   {searchQuery ? "No rooms match your search." : "No rooms in this cluster yet. Add one to get started."}
                 </td>
               </tr>
@@ -671,6 +699,37 @@ export default function ClusterDetailPage() {
                       <span style={{ fontSize: "13px", color: "var(--text-sub)" }}>
                         Rows A–{lastRow} · {room.seatsPerRow} seats/row
                       </span>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <div className="flex flex-wrap items-center gap-1">
+                        {room.presentationSystem && room.presentationSystem !== "STANDARD" && (
+                          <span className="rounded-md px-2 py-0.5 text-[11px] font-bold" style={{ background: "rgba(37,99,235,0.12)", color: "#2563eb" }}>
+                            {PRESENTATION_SYSTEM_LABEL[room.presentationSystem] ?? room.presentationSystem}
+                          </span>
+                        )}
+                        {room.supports2d && (
+                          <span className="rounded-md border px-1.5 py-0.5 text-[10px] font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}>2D</span>
+                        )}
+                        {room.supports3d && (
+                          <span className="rounded-md border px-1.5 py-0.5 text-[10px] font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}>3D</span>
+                        )}
+                        {!room.presentationSystem && !room.supports2d && !room.supports3d && (
+                          <span style={{ fontSize: "12px", color: "var(--text-sub)" }}>—</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      {room.status && ROOM_STATUS_CONFIG[room.status] ? (() => {
+                        const cfg = ROOM_STATUS_CONFIG[room.status];
+                        const StatusIcon = cfg.icon;
+                        return (
+                          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap" style={{ background: cfg.bg, color: cfg.color }}>
+                            <StatusIcon size={11} />{cfg.label}
+                          </span>
+                        );
+                      })() : (
+                        <span style={{ fontSize: "12px", color: "var(--text-sub)" }}>—</span>
+                      )}
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3 justify-end">

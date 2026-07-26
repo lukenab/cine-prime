@@ -16,6 +16,7 @@ import {
   MoreHorizontal,
   RefreshCw,
   Search,
+  Settings2,
   XCircle,
   Zap,
 } from "lucide-react";
@@ -31,13 +32,17 @@ import {
   type AutoShowtimeGenerationRunResponse,
   type AutoShowtimeIneligibleMovie,
   type GenerationRunStatus,
+  type OptimizationScenario,
+  type OptimizerMode,
   type SchedulePlanResponse,
   type SchedulePlanSummaryResponse,
 } from "../../api/showtimeApi";
 import AutoScheduleResultsWorkspace from "./autoSchedule/AutoScheduleResultsWorkspace";
+import AllocationPolicyPanel from "./autoSchedule/AllocationPolicyPanel";
+import { OPTIMIZER_META, SCENARIO_META } from "./autoSchedule/optimizerMeta";
 
 type StepKey = "scope" | "review" | "running" | "results";
-type WorkspaceSection = "create" | "review-plans" | "published";
+type WorkspaceSection = "create" | "review-plans" | "published" | "policy";
 const STEPS: { key: StepKey; label: string; icon: typeof Calendar }[] = [
   { key: "scope", label: "Scope", icon: Calendar },
   { key: "review", label: "Review", icon: CheckCircle2 },
@@ -97,6 +102,13 @@ function extractErrorMessage(err: unknown): { message: string; ineligibleMovies?
   };
 }
 
+// A CP-SAT run can legitimately take up to the policy's max_solve_time_seconds (default 30s)
+// plus overhead; Legacy runs normally finish in a couple seconds. Past this, the run is either
+// still solving a hard model or has been orphaned (see AutoShowtimeGenerationScheduler's
+// reclaimStaleRunningRuns() sweep) - either way the admin should know to expect a delay or retry,
+// not just watch an ever-increasing "Elapsed Ns" with no upper bound.
+const STUCK_RUN_WARNING_SECONDS = 75;
+
 const STATUS_META: Record<GenerationRunStatus, { label: string; color: string; background: string }> = {
   ACCEPTED: { label: "Queued", color: "#2563eb", background: "rgba(37,99,235,0.1)" },
   RUNNING: { label: "Running", color: "#d97706", background: "rgba(217,119,6,0.1)" },
@@ -111,6 +123,7 @@ const PLAN_STATUS_META: Record<SchedulePlanResponse["status"], { label: string; 
   CHANGES_REQUESTED: { label: "Changes requested", color: "#d97706", background: "rgba(217,119,6,.12)" },
   PUBLISHED: { label: "Published", color: "#059669", background: "rgba(5,150,105,.12)" },
 };
+
 
 function SchedulePlanLibrary({
   mode,
@@ -267,6 +280,8 @@ export default function AutoScheduleShowtimePage({
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [startDate, setStartDate] = useState(todayPlusDays(3));
   const [endDate, setEndDate] = useState(todayPlusDays(9));
+  const [optimizerMode, setOptimizerMode] = useState<OptimizerMode>("LEGACY");
+  const [scenario, setScenario] = useState<OptimizationScenario>("BALANCED");
   const [generationPolicy, setGenerationPolicy] = useState<AutoShowtimeGenerationPolicyResponse | null>(null);
   const [allClusters, setAllClusters] = useState(false);
   const [selectedClusterIds, setSelectedClusterIds] = useState<Set<number>>(new Set());
@@ -482,6 +497,8 @@ export default function AutoScheduleShowtimePage({
         endDate,
         cinemaClusterIds: effectiveClusterIds,
         movieIds: Array.from(selectedMovieIds),
+        optimizer: optimizerMode,
+        scenario: optimizerMode === "LEGACY" ? undefined : scenario,
       });
       const accepted = res.result;
       saveRecentRun({ generationRunId: accepted.generationRunId, submittedAt: new Date().toISOString(), startDate, endDate });
@@ -584,38 +601,42 @@ export default function AutoScheduleShowtimePage({
 
       {step !== "scope" && step !== "results" && <StepIndicator current={step} />}
 
-      {step === "scope" && (
-        <nav className="flex flex-wrap items-center gap-1 rounded-xl border p-1.5" aria-label="Automatic scheduling workspace" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
-          {([
-            { id: "create", label: "Create schedule", icon: CalendarCog, count: null },
-            { id: "review-plans", label: "Review plans", icon: ClipboardCheck, count: reviewPlans.length },
-            { id: "published", label: "Published schedules", icon: CheckCircle2, count: publishedPlans.length },
-          ] as const).map(({ id, label, icon: Icon, count }) => {
-            const active = workspaceSection === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                aria-current={active ? "page" : undefined}
-                onClick={() => setWorkspaceSection(id)}
-                className="flex items-center gap-2 rounded-lg px-3.5 py-2.5 text-xs font-semibold transition-colors"
-                style={{
-                  color: active ? "#2563eb" : "var(--text-sub)",
-                  background: active ? "rgba(37,99,235,.11)" : "transparent",
-                }}
-              >
-                <Icon size={14} />
-                {label}
-                {count != null && count > 0 && (
-                  <span className="rounded-full px-1.5 py-0.5 text-[9px] font-bold" style={{ color: active ? "#2563eb" : "var(--text-main)", background: active ? "rgba(37,99,235,.12)" : "var(--bg-main)" }}>
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
-      )}
+      {/* Nav stays visible on every step (not just "scope") so Policy (and the other
+          sections) are always reachable — previously it only rendered during the
+          scope step, so resuming an in-flight/completed run (which jumps straight to
+          "running"/"results") hid the nav entirely and made Policy unreachable from
+          that flow. */}
+      <nav className="flex flex-wrap items-center gap-1 rounded-xl border p-1.5" aria-label="Automatic scheduling workspace" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+        {([
+          { id: "create", label: "Create schedule", icon: CalendarCog, count: null },
+          { id: "review-plans", label: "Review plans", icon: ClipboardCheck, count: reviewPlans.length },
+          { id: "published", label: "Published schedules", icon: CheckCircle2, count: publishedPlans.length },
+          { id: "policy", label: "Policy", icon: Settings2, count: null },
+        ] as const).map(({ id, label, icon: Icon, count }) => {
+          const active = workspaceSection === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              aria-current={active ? "page" : undefined}
+              onClick={() => { setWorkspaceSection(id); setStep("scope"); }}
+              className="flex items-center gap-2 rounded-lg px-3.5 py-2.5 text-xs font-semibold transition-colors"
+              style={{
+                color: active ? "#2563eb" : "var(--text-sub)",
+                background: active ? "rgba(37,99,235,.11)" : "transparent",
+              }}
+            >
+              <Icon size={14} />
+              {label}
+              {count != null && count > 0 && (
+                <span className="rounded-full px-1.5 py-0.5 text-[9px] font-bold" style={{ color: active ? "#2563eb" : "var(--text-main)", background: active ? "rgba(37,99,235,.12)" : "var(--bg-main)" }}>
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
 
       {step === "scope" && workspaceSection === "review-plans" && (
         <SchedulePlanLibrary
@@ -638,6 +659,8 @@ export default function AutoScheduleShowtimePage({
           onOpen={resumeRun}
         />
       )}
+
+      {step === "scope" && workspaceSection === "policy" && <AllocationPolicyPanel />}
 
       {/* ── Step 1: Scope ── */}
       {step === "scope" && workspaceSection === "create" && (
@@ -782,7 +805,7 @@ export default function AutoScheduleShowtimePage({
                     </div>
 
                     <div className="nice-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2" style={{ scrollbarGutter: "stable" }}>
-                      <div className="grid auto-rows-[116px] grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+                      <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-2 2xl:grid-cols-3">
                         {visibleMovies.map((movie) => {
                           const scopeChosen = effectiveClusterIds.length > 0;
                           const availabilityCheck = movieAvailabilityEligibility.get(movie.movieId);
@@ -994,6 +1017,56 @@ export default function AutoScheduleShowtimePage({
             </div>
           </section>
 
+          <section className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+            <header className="border-b px-4 py-3.5" style={{ borderColor: "var(--border-color)" }}>
+              <p style={{ fontSize: "15px", fontWeight: 750, color: "var(--text-main)" }}>Scheduling engine</p>
+              <p className="mt-0.5" style={{ fontSize: "12.5px", color: "var(--text-sub)" }}>Choose which algorithm allocates showtimes for this run.</p>
+            </header>
+            <div className="space-y-3.5 p-4">
+              <div className="grid gap-2.5 sm:grid-cols-3">
+                {(Object.keys(OPTIMIZER_META) as OptimizerMode[]).map((mode) => {
+                  const selected = optimizerMode === mode;
+                  return (
+                    <button key={mode} type="button" onClick={() => setOptimizerMode(mode)}
+                      className="rounded-xl border p-3 text-left transition-colors"
+                      style={{ borderColor: selected ? "rgba(37,99,235,.6)" : "var(--border-color)", background: selected ? "rgba(37,99,235,.08)" : "var(--bg-main)" }}>
+                      <p style={{ fontSize: "13px", fontWeight: 700, color: selected ? "#2563eb" : "var(--text-main)" }}>{OPTIMIZER_META[mode].label}</p>
+                      <p className="mt-1" style={{ fontSize: "11px", lineHeight: 1.45, color: "var(--text-sub)" }}>{OPTIMIZER_META[mode].description}</p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {optimizerMode !== "LEGACY" && (
+                <div>
+                  <p className="mb-1.5" style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-sub)", textTransform: "uppercase", letterSpacing: ".04em" }}>Scenario</p>
+                  <div className="grid gap-2.5 sm:grid-cols-3">
+                    {(Object.keys(SCENARIO_META) as OptimizationScenario[]).map((option) => {
+                      const selected = scenario === option;
+                      return (
+                        <button key={option} type="button" onClick={() => setScenario(option)}
+                          className="rounded-xl border p-3 text-left transition-colors"
+                          style={{ borderColor: selected ? "rgba(124,58,237,.6)" : "var(--border-color)", background: selected ? "rgba(124,58,237,.08)" : "var(--bg-main)" }}>
+                          <p style={{ fontSize: "12.5px", fontWeight: 700, color: selected ? "#7c3aed" : "var(--text-main)" }}>{SCENARIO_META[option].label}</p>
+                          <p className="mt-1" style={{ fontSize: "11px", lineHeight: 1.45, color: "var(--text-sub)" }}>{SCENARIO_META[option].description}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {optimizerMode === "CP_SAT" && (
+                <div className="flex items-start gap-2 rounded-xl border px-3 py-2.5" style={{ borderColor: "rgba(217,119,6,.25)", background: "rgba(217,119,6,.06)" }}>
+                  <Info size={13} className="mt-0.5 flex-shrink-0" style={{ color: "#d97706" }} />
+                  <p style={{ fontSize: "12px", lineHeight: 1.5, color: "var(--text-sub)" }}>
+                    If the solver can't produce a usable schedule in time, this run automatically falls back to the Legacy algorithm (configurable per policy).
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+
           {submitError && (
             <div className="rounded-xl border border-rose-500/30 bg-rose-500/[0.07] p-3.5">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1047,11 +1120,25 @@ export default function AutoScheduleShowtimePage({
               ? "Run accepted. A worker has been notified and will start automatically."
               : "Scoring candidates and building a reviewable draft schedule…"}
           </p>
-          {runningSince && (
-            <p className="mt-1" style={{ fontSize: "11px", color: "var(--text-sub)" }}>
-               Elapsed {Math.max(0, Math.round((Date.now() - runningSince) / 1000))}s · You may leave this page while processing continues.
-            </p>
-          )}
+          {runningSince && (() => {
+            const elapsedSeconds = Math.max(0, Math.round((Date.now() - runningSince) / 1000));
+            const isTakingUnusuallyLong = elapsedSeconds > STUCK_RUN_WARNING_SECONDS;
+            return (
+              <>
+                <p className="mt-1" style={{ fontSize: "11px", color: "var(--text-sub)" }}>
+                   Elapsed {elapsedSeconds}s · You may leave this page while processing continues.
+                </p>
+                {isTakingUnusuallyLong && (
+                  <div className="col-span-2 mt-2 flex items-start gap-2 rounded-xl border px-3 py-2.5" style={{ borderColor: "rgba(217,119,6,.3)", background: "rgba(217,119,6,.08)" }}>
+                    <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" style={{ color: "#d97706" }} />
+                    <p style={{ fontSize: "11.5px", lineHeight: 1.5, color: "var(--text-sub)" }}>
+                      This is taking longer than usual — it may have failed silently (e.g. a server restart interrupted it). Try refreshing this page; if it's still stuck after a few minutes, start a new run instead of waiting indefinitely.
+                    </p>
+                  </div>
+                )}
+              </>
+            );
+          })()}
           {canProcessNow && run.status === "ACCEPTED" && (
             <details className="group relative col-span-2 ml-auto mt-2 w-fit text-left">
               <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-lg border px-3 py-2 text-[11px] font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-sub)", background: "var(--bg-main)" }}>

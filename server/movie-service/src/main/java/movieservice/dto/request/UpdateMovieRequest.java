@@ -5,6 +5,7 @@ import jakarta.validation.constraints.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -52,4 +53,14 @@ public class UpdateMovieRequest {
     List<TranslationRequest> translations;
     @Valid
     List<CastRequest> cast;
+
+    // ── Scheduling profile (movie_scheduling_profile) ──────────
+    /** Null/absent = don't touch the existing scheduling profile value (partial-update
+     *  contract, same as every other scalar field on this DTO). See CreateMovieRequest for
+     *  what this drives. */
+    @DecimalMin(value = "0", message = "popularityScore must be between 0 and 100.")
+    @DecimalMax(value = "100", message = "popularityScore must be between 0 and 100.")
+    BigDecimal popularityScore;
+
+    BigDecimal priorityOverride;
 }
