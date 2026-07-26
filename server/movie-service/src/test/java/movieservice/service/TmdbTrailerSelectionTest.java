@@ -12,6 +12,7 @@ import movieservice.repository.AgeRatingRepository;
 import movieservice.repository.GenreRepository;
 import movieservice.repository.MovieCastRepository;
 import movieservice.repository.MovieRepository;
+import movieservice.repository.MovieSchedulingProfileRepository;
 import movieservice.repository.MovieTranslationRepository;
 import movieservice.repository.PersonRepository;
 import movieservice.repository.ProductionCompanyRepository;
@@ -49,6 +50,7 @@ class TmdbTrailerSelectionTest {
     @Mock ProductionCompanyRepository productionCompanyRepository;
     @Mock GenreRepository genreRepository;
     @Mock AgeRatingRepository ageRatingRepository;
+    @Mock MovieSchedulingProfileRepository movieSchedulingProfileRepository;
     @Mock RestTemplate restTemplate;
 
     TmdbService tmdbService;
@@ -59,7 +61,8 @@ class TmdbTrailerSelectionTest {
     void setUp() {
         tmdbService = new TmdbService(
                 movieRepository, movieTranslationRepository, movieCastRepository, personRepository,
-                productionCompanyRepository, genreRepository, ageRatingRepository, "dummy-api-key", 3);
+                productionCompanyRepository, genreRepository, ageRatingRepository,
+                movieSchedulingProfileRepository, "dummy-api-key", 3);
         ReflectionTestUtils.setField(tmdbService, "restTemplate", restTemplate);
 
         TmdbMovieDetail detail = new TmdbMovieDetail();

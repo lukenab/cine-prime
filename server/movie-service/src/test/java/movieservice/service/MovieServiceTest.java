@@ -53,7 +53,8 @@ class MovieServiceTest {
     @Mock MovieReadinessValidator movieReadinessValidator;
     @Mock MovieAvailabilityRepository movieAvailabilityRepository;
     @Mock MovieStatusHistoryRepository movieStatusHistoryRepository;
-    @Mock MovieScreeningVersionRepository movieScreeningVersionRepository;
+    @Mock ShowTimeRepository showTimeRepository;
+    @Mock MovieSchedulingProfileRepository movieSchedulingProfileRepository;
 
     private MovieService movieService;
     private Movie movie;
@@ -65,7 +66,8 @@ class MovieServiceTest {
                 screeningFormatRepository, productionCompanyRepository, personRepository,
                 movieCastRepository, movieTranslationRepository, cinemaRoomService,
                 showTimeService, auditLogService, imageStorageService, movieReadinessValidator,
-                movieAvailabilityRepository, movieStatusHistoryRepository, movieScreeningVersionRepository);
+                movieAvailabilityRepository, movieStatusHistoryRepository,
+                showTimeRepository, movieSchedulingProfileRepository);
 
         movie = Movie.builder().movieId(1L).originalTitle("Existing Movie").build();
         // lenient(): cac test kiem tra "throw truoc khi mutate" khong bao gio toi duoc dong

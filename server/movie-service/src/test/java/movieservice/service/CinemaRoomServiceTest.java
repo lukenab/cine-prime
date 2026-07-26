@@ -39,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import org.mockito.ArgumentCaptor;
 
@@ -264,6 +265,10 @@ class CinemaRoomServiceTest {
         return new TestingAuthenticationToken("employee.a", null, "ROLE_EMPLOYEE");
     }
 
+    private Authentication admin() {
+        return new TestingAuthenticationToken("admin.a", null, "ROLE_ADMIN");
+    }
+
     @Test
     void getRoomDetail_hidesDraftRoomFromAnonymousCaller() {
         CinemaRoom draft = CinemaRoom.builder().cinemaRoomId(5L).status(CinemaRoomStatus.DRAFT).build();
@@ -323,5 +328,96 @@ class CinemaRoomServiceTest {
         var result = cinemaRoomService.getAllRooms(null, employee());
 
         assertEquals(2, result.size());
+    }
+
+    // ── setRoomStatus() state machine guard ──────────────────────────────────
+
+    @Test
+    void setRoomStatus_allowsActiveToSuspended_andRecordsAuditLog() {
+        CinemaRoom room = CinemaRoom.builder().cinemaRoomId(10L).status(CinemaRoomStatus.ACTIVE).build();
+        when(cinemaRoomRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(room));
+        when(cinemaRoomRepository.save(any(CinemaRoom.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(movieMapper.toCinemaRoomResponse(any(CinemaRoom.class))).thenReturn(new CinemaRoomResponse());
+
+        cinemaRoomService.setRoomStatus(10L, CinemaRoomStatus.SUSPENDED, admin());
+
+        assertEquals(CinemaRoomStatus.SUSPENDED, room.getStatus());
+        verify(auditLogService).logAction(eq("admin.a"), eq("ADMIN"), eq("cinema_room:10"), any(String.class));
+    }
+
+    @Test
+    void setRoomStatus_rejectsDraftToActive_skippingLayoutApproval() {
+        CinemaRoom draft = CinemaRoom.builder().cinemaRoomId(10L).status(CinemaRoomStatus.DRAFT).build();
+        when(cinemaRoomRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(draft));
+
+        AppException ex = assertThrows(AppException.class,
+                () -> cinemaRoomService.setRoomStatus(10L, CinemaRoomStatus.ACTIVE, admin()));
+
+        assertEquals(MovieErrorCode.CINEMA_ROOM_STATUS_TRANSITION_INVALID, ex.getErrorCode());
+        assertEquals(CinemaRoomStatus.DRAFT, draft.getStatus());
+    }
+
+    @Test
+    void setRoomStatus_rejectsDirectJumpToRetired() {
+        CinemaRoom room = CinemaRoom.builder().cinemaRoomId(10L).status(CinemaRoomStatus.ACTIVE).build();
+        when(cinemaRoomRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(room));
+
+        AppException ex = assertThrows(AppException.class,
+                () -> cinemaRoomService.setRoomStatus(10L, CinemaRoomStatus.RETIRED, admin()));
+
+        assertEquals(MovieErrorCode.CINEMA_ROOM_STATUS_TRANSITION_INVALID, ex.getErrorCode());
+    }
+
+    @Test
+    void setRoomStatus_rejectsLeavingAnOpenMaintenanceIncidentThroughThisEndpoint() {
+        CinemaRoom room = CinemaRoom.builder().cinemaRoomId(10L).status(CinemaRoomStatus.TEMPORARILY_UNAVAILABLE).build();
+        when(cinemaRoomRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(room));
+
+        AppException ex = assertThrows(AppException.class,
+                () -> cinemaRoomService.setRoomStatus(10L, CinemaRoomStatus.ACTIVE, admin()));
+
+        assertEquals(MovieErrorCode.CINEMA_ROOM_STATUS_TRANSITION_INVALID, ex.getErrorCode());
+    }
+
+    // ── retireCinemaRoom() ────────────────────────────────────────────────────
+
+    @Test
+    void retireCinemaRoom_succeedsFromActiveWithNoFutureShowtimes() {
+        CinemaRoom room = CinemaRoom.builder().cinemaRoomId(10L).status(CinemaRoomStatus.ACTIVE).build();
+        when(cinemaRoomRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(room));
+        when(showTimeRepository.existsByCinemaRoomCinemaRoomIdAndStatusInAndShowDateGreaterThanEqual(
+                eq(10L), any(), any())).thenReturn(false);
+        when(cinemaRoomRepository.save(any(CinemaRoom.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(movieMapper.toCinemaRoomResponse(any(CinemaRoom.class))).thenReturn(new CinemaRoomResponse());
+
+        cinemaRoomService.retireCinemaRoom(10L, "End of lease", admin());
+
+        assertEquals(CinemaRoomStatus.RETIRED, room.getStatus());
+        verify(auditLogService).logAction(eq("admin.a"), eq("ADMIN"), eq("cinema_room:10"), any(String.class));
+    }
+
+    @Test
+    void retireCinemaRoom_rejectsWhenFutureShowtimesStillScheduled() {
+        CinemaRoom room = CinemaRoom.builder().cinemaRoomId(10L).status(CinemaRoomStatus.ACTIVE).build();
+        when(cinemaRoomRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(room));
+        when(showTimeRepository.existsByCinemaRoomCinemaRoomIdAndStatusInAndShowDateGreaterThanEqual(
+                eq(10L), any(), any())).thenReturn(true);
+
+        AppException ex = assertThrows(AppException.class,
+                () -> cinemaRoomService.retireCinemaRoom(10L, null, admin()));
+
+        assertEquals(MovieErrorCode.CINEMA_ROOM_HAS_FUTURE_SHOWTIMES, ex.getErrorCode());
+        assertEquals(CinemaRoomStatus.ACTIVE, room.getStatus());
+    }
+
+    @Test
+    void retireCinemaRoom_rejectsRoomStillMidWizard() {
+        CinemaRoom draft = CinemaRoom.builder().cinemaRoomId(10L).status(CinemaRoomStatus.DRAFT).build();
+        when(cinemaRoomRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(draft));
+
+        AppException ex = assertThrows(AppException.class,
+                () -> cinemaRoomService.retireCinemaRoom(10L, null, admin()));
+
+        assertEquals(MovieErrorCode.CINEMA_ROOM_STATUS_TRANSITION_INVALID, ex.getErrorCode());
     }
 }

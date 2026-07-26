@@ -77,6 +77,39 @@ public class ShowtimeAllocationPolicy {
     Integer sameMovieStaggerMinutes = 20;
 
     @Builder.Default
+    @Column(name = "max_solve_time_seconds", nullable = false)
+    Integer maxSolveTimeSeconds = 30;
+
+    @Builder.Default
+    @Column(name = "solver_random_seed", nullable = false)
+    Integer solverRandomSeed = 42;
+
+    @Builder.Default
+    @Column(name = "solver_search_workers", nullable = false)
+    Integer solverSearchWorkers = 8;
+
+    @Builder.Default
+    @Column(name = "solver_relative_gap", nullable = false, precision = 6, scale = 4)
+    BigDecimal solverRelativeGap = BigDecimal.ZERO;
+
+    @Builder.Default
+    @Column(name = "solver_log_search_progress", nullable = false)
+    Boolean solverLogSearchProgress = false;
+
+    /** Optional pruning cap; null means "no cap, prune only by hard eligibility." */
+    @Column(name = "max_candidates_per_movie_per_day")
+    Integer maxCandidatesPerMoviePerDay;
+
+    @Builder.Default
+    @Column(name = "optimizer_fallback_to_legacy_on_error", nullable = false)
+    Boolean optimizerFallbackToLegacyOnError = true;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "default_optimizer_mode", nullable = false, length = 20)
+    movieservice.enums.OptimizerMode defaultOptimizerMode = movieservice.enums.OptimizerMode.LEGACY;
+
+    @Builder.Default
     @Column(name = "business_timezone", nullable = false, length = 50)
     String businessTimezone = "Asia/Ho_Chi_Minh";
 

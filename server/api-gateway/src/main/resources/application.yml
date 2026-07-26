@@ -27,7 +27,7 @@ spring:
         - id: movie-service
           uri: lb://movie-service
           predicates:
-            - Path=/api/movies/**, /api/movie-availabilities/**, /api/cinemas/**, /api/shows/**, /api/showtimes/**, /api/cinema-rooms/**, /api/cinema-room-master-data, /api/cinema-clusters/**, /api/seats/**, /api/schedules/**, /api/schedule-plans/**, /api/genres/**, /api/age-ratings/**, /api/screening-formats/**, /api/companies/**, /api/persons/**
+            - Path=/api/movies/**, /api/movie-availabilities/**, /api/cinemas/**, /api/shows/**, /api/showtimes/**, /api/cinema-rooms/**, /api/cinema-room-master-data, /api/cinema-clusters/**, /api/seats/**, /api/schedules/**, /api/schedule-plans/**, /api/genres/**, /api/age-ratings/**, /api/screening-formats/**, /api/screening-versions/**, /api/companies/**, /api/persons/**
 
         - id: booking-service
           uri: lb://booking-service

@@ -68,13 +68,13 @@ describe("MovieEditorWorkflow", () => {
     const title = screen.getByRole("textbox", { name: "Original title" });
     fireEvent.change(title, { target: { value: "The Last Screening" } });
 
-    fireEvent.click(screen.getAllByRole("button", { name: /3\.\s*Media/i })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /4\.\s*Media/i })[0]);
 
     expect(window.location.hash).toBe("#media");
     expect(document.activeElement).toBe(document.getElementById(movieEditorSectionDomId("media")));
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
     expect(title).toHaveValue("The Last Screening");
-    expect(screen.getAllByRole("button", { name: /3\.\s*Media/i }).some((button) => button.getAttribute("aria-current") === "step")).toBe(true);
+    expect(screen.getAllByRole("button", { name: /4\.\s*Media/i }).some((button) => button.getAttribute("aria-current") === "step")).toBe(true);
   });
 
   it("tracks the active section while the editor is scrolled", () => {
@@ -92,10 +92,10 @@ describe("MovieEditorWorkflow", () => {
     });
 
     expect(window.location.hash).toBe("#credits");
-    expect(screen.getAllByRole("button", { name: /4\.\s*Credits/i }).some((button) => button.getAttribute("aria-current") === "step")).toBe(true);
+    expect(screen.getAllByRole("button", { name: /5\.\s*Credits/i }).some((button) => button.getAttribute("aria-current") === "step")).toBe(true);
   });
 
-  it.each<MovieEditorSectionId>(["overview", "classification-release", "media", "credits", "review"])(
+  it.each<MovieEditorSectionId>(["overview", "classification-release", "screening-versions", "media", "credits", "review"])(
     "renders a stable target for the %s section",
     (id) => {
       render(<Harness />);

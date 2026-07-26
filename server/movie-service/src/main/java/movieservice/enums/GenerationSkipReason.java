@@ -16,5 +16,7 @@ public enum GenerationSkipReason {
     SAME_MOVIE_START_STAGGER_CONFLICT,
     MAX_DAILY_SHOWS_PER_MOVIE_REACHED,
     MISSING_DEMAND_PROFILE,
-    NO_AVAILABLE_TIME_SLOT
+    NO_AVAILABLE_TIME_SLOT,
+    /** CP-SAT considered this candidate feasible but the weekly optimum simply didn't select it. */
+    OPTIMIZER_NOT_SELECTED
 }

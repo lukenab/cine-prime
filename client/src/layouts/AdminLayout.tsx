@@ -60,6 +60,7 @@ export default function AdminLayout() {
           display: "flex",
           flexDirection: "column",
           minHeight: "100vh",
+          minWidth: 0,
         }}
       >
         <Header activePage={activeNav} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)} />
@@ -69,6 +70,7 @@ export default function AdminLayout() {
             flex: 1,
             padding: "28px 32px 40px",
             overflowX: "hidden",
+            minWidth: 0,
           }}
         >
           {/* 🌟 ĐÂY LÀ ĐIỂM ĂN TIỀN: Nội dung các trang sẽ được nhét vào đây */}

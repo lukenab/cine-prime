@@ -21,6 +21,12 @@ type Props = {
   onClose: () => void;
   onSave: (payload: ShowtimeAssignPayload | ShowtimeUpdatePayload) => Promise<void>;
   editShowtime?: ShowtimeResponse | null;
+  /** Pre-select this movie when opening for a new showtime (e.g. deep-linked from a
+   *  release plan's "Schedule shows" action). Ignored when editing an existing showtime. */
+  presetMovieId?: number | null;
+  /** Narrow the room list to this cinema cluster when opening for a new showtime,
+   *  and default the room selection to a room in that cluster if one is schedulable. */
+  presetClusterId?: number | null;
 };
 
 const EMPTY_FORM: FormState = {
@@ -31,7 +37,7 @@ const EMPTY_FORM: FormState = {
   basePrice: "",
 };
 
-export function ShowtimeModal({ open, onClose, onSave, editShowtime }: Props) {
+export function ShowtimeModal({ open, onClose, onSave, editShowtime, presetMovieId, presetClusterId }: Props) {
   const [movies, setMovies]   = useState<MovieApiResponse[]>([]);
   const [rooms, setRooms]     = useState<RoomResponse[]>([]);
   const [loadingData, setLoadingData] = useState(false);
@@ -66,14 +72,23 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime }: Props) {
           basePrice:   "",
         });
       } else {
+        // When deep-linked (e.g. "Schedule shows" from a movie's release plan), default
+        // to the requested movie/cluster instead of just the first item in each list.
+        const clusterRooms = presetClusterId
+          ? schedulableRooms.filter((r) => r.clusterId === presetClusterId)
+          : [];
+        const defaultRoomPool = clusterRooms.length > 0 ? clusterRooms : schedulableRooms;
+        const defaultMovieId = presetMovieId && movList.some((m: MovieApiResponse) => m.movieId === presetMovieId)
+          ? presetMovieId
+          : movList[0]?.movieId ?? 0;
         setForm({
           ...EMPTY_FORM,
-          movieId:     movList[0]?.movieId ?? 0,
-          cinemaRoomId: schedulableRooms[0]?.cinemaRoomId ?? 0,
+          movieId:     defaultMovieId,
+          cinemaRoomId: defaultRoomPool[0]?.cinemaRoomId ?? 0,
         });
       }
     }).finally(() => setLoadingData(false));
-  }, [open, editShowtime]);
+  }, [open, editShowtime, presetMovieId, presetClusterId]);
 
   if (!open) return null;
 
@@ -134,6 +149,14 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime }: Props) {
     () => movies.find((m) => m.movieId === form.movieId),
     [movies, form.movieId]
   );
+
+  // Narrow the room picker to the deep-linked cluster (new showtimes only); fall back to
+  // every schedulable room if that cluster happens to have none.
+  const roomsForSelect = useMemo(() => {
+    if (editShowtime || !presetClusterId) return rooms;
+    const clusterRooms = rooms.filter((r) => r.clusterId === presetClusterId);
+    return clusterRooms.length > 0 ? clusterRooms : rooms;
+  }, [rooms, presetClusterId, editShowtime]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -217,7 +240,7 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime }: Props) {
                 style={inputStyle}
               >
                 <option value={0} disabled>Choose a room…</option>
-                {rooms.map(r => (
+                {roomsForSelect.map(r => (
                   <option key={r.cinemaRoomId} value={r.cinemaRoomId} style={{ background: "var(--bg-card)" }}>
                     {r.cinemaRoomName} · {r.seatQuantity} seats
                   </option>

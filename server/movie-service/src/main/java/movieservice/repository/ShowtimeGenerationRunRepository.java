@@ -33,4 +33,10 @@ public interface ShowtimeGenerationRunRepository extends JpaRepository<ShowtimeG
 
     /// Scheduler chỉ lấy một batch nhỏ run đang chờ để không giữ transaction quá lâu.
     List<ShowtimeGenerationRun> findTop20ByStatusOrderByCreatedAtAsc(GenerationRunStatus status);
+
+    /// Run RUNNING quá lâu so với cutoff nghĩa là worker đã claim nó đã chết (ví dụ dev-server
+    /// restart giữa chừng) mà không kịp gọi finish()/fail() - không có cơ chế nào khác từng phục
+    /// hồi run ở trạng thái này (recovery scheduler ở trên chỉ xử lý ACCEPTED).
+    List<ShowtimeGenerationRun> findTop20ByStatusAndStartedAtBeforeOrderByStartedAtAsc(
+            GenerationRunStatus status, java.time.LocalDateTime cutoff);
 }

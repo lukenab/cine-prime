@@ -52,10 +52,10 @@ class FlywayMigrationIntegrationTest {
         MigrateResult result = flywayFor(FRESH_DB).migrate();
 
         assertTrue(result.success);
-        // V1..V10, V12..V39 (versioned - V11 is reserved on a sibling branch not yet merged)
+        // V1..V10, V12..V42 (versioned - V11 is reserved on a sibling branch not yet merged)
         // + R (repeatable seed) all actually executed — a fresh DB has no prior state for
         // baselineOnMigrate to kick in on.
-        assertEquals(39, result.migrationsExecuted);
+        assertEquals(42, result.migrationsExecuted);
 
         try (Connection conn = DriverManager.getConnection(
                 FRESH_DB.getJdbcUrl(), FRESH_DB.getUsername(), FRESH_DB.getPassword());
@@ -67,6 +67,22 @@ class FlywayMigrationIntegrationTest {
             assertTrue(tableExists(st, "auditorium_class"));
             assertTrue(tableExists(st, "showtime_daypart_policy"));
             assertFalse(tableExists(st, "type"), "legacy 'type' table must never be created fresh");
+            try (ResultSet rs = st.executeQuery("""
+                    SELECT COUNT(*)
+                    FROM information_schema.columns
+                    WHERE table_name = 'movie_screening_version'
+                      AND column_name = 'audio_format_id'
+                    """)) {
+                rs.next();
+                assertEquals(1, rs.getInt(1), "screening versions must store audio format separately");
+            }
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT status FROM screening_format WHERE format_code = 'ATMOS'")) {
+                if (rs.next()) {
+                    assertEquals("RETIRED", rs.getString("status"),
+                            "Dolby Atmos must not remain selectable as a presentation format");
+                }
+            }
 
             try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM genre")) {
                 rs.next();

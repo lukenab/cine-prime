@@ -61,11 +61,56 @@ export interface ApiWrapper<T> {
 // left behind by a restart/interrupted dispatch. Poll getRun() until terminal.
 export type GenerationRunStatus = 'ACCEPTED' | 'RUNNING' | 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'FAILED';
 
+// ── Constraint optimizer (P1) ──────────────────────────────────────────────────
+// Matches backend: movieservice.enums.OptimizerMode / OptimizationScenario / SolverStatus
+export type OptimizerMode = 'LEGACY' | 'CP_SAT' | 'SHADOW_COMPARE';
+export type OptimizationScenario = 'CONSERVATIVE' | 'BALANCED' | 'REVENUE_FOCUSED';
+export type SolverStatus = 'OPTIMAL' | 'FEASIBLE' | 'INFEASIBLE' | 'MODEL_INVALID' | 'UNKNOWN';
+
+/** Mirrors movieservice.service.autoshowtime.optimizer.ObjectiveBreakdown - parse from the
+ *  run's `objectiveBreakdown` JSON string. */
+export interface ObjectiveBreakdown {
+  demandScore: number;
+  utilizationScore: number;
+  revenueScore: number;
+  primeTimeScore: number;
+  diversityScore: number;
+  stabilityPenalty: number;
+  gapPenalty: number;
+  finalWeightedScore: number;
+}
+
+/** Mirrors movieservice.service.autoshowtime.optimizer.SolverDiagnostics - parse from the
+ *  run's `solverDiagnostics` JSON string. */
+export interface SolverDiagnostics {
+  rawCandidateCount: number;
+  eligibleCandidateCount: number;
+  prunedByReason: Record<string, number>;
+  variablesCreated: number;
+  intervalVariablesCreated: number;
+  constraintCount: number;
+  solveDurationMillis: number;
+  optimalityProven: boolean;
+}
+
+/** Backend serializes the full ScheduleOptimizationResult (including raw candidate lists) for
+ *  the non-primary optimizer in SHADOW_COMPARE mode - only the summary fields the UI actually
+ *  renders are declared here; the rest is read defensively. */
+export interface ShadowComparisonResult {
+  solverStatus: SolverStatus;
+  objectiveBreakdown: ObjectiveBreakdown;
+  diagnostics: SolverDiagnostics;
+}
+
 export interface AutoShowtimeGenerationRequestPayload {
   startDate: string; // YYYY-MM-DD
   endDate: string;
   cinemaClusterIds: number[];
   movieIds: number[];
+  /** Omit (or LEGACY) to keep the current greedy algorithm. */
+  optimizer?: OptimizerMode;
+  /** Ignored when optimizer is LEGACY. Defaults to BALANCED server-side. */
+  scenario?: OptimizationScenario;
 }
 
 export interface AutoShowtimeGenerationAcceptedResponse {
@@ -113,6 +158,18 @@ export interface AutoShowtimeGenerationRunResponse {
   startedAt?: string;
   completedAt?: string;
   failureDetail?: string;
+  optimizerMode?: OptimizerMode;
+  scenario?: OptimizationScenario;
+  /** Null until the run finishes. UNKNOWN must never be read as a successful optimal result. */
+  solverStatus?: SolverStatus;
+  solveDurationMillis?: number;
+  objectiveScore?: number;
+  /** Raw JSON - parse with JSON.parse(...) as ObjectiveBreakdown. */
+  objectiveBreakdown?: string;
+  /** Raw JSON - parse with JSON.parse(...) as SolverDiagnostics. */
+  solverDiagnostics?: string;
+  /** Raw JSON - parse with JSON.parse(...) as ShadowComparisonResult. Only set for SHADOW_COMPARE runs. */
+  shadowComparison?: string;
 }
 
 export type SchedulePlanStatus = 'DRAFT_GENERATED' | 'IN_REVIEW' | 'CHANGES_REQUESTED' | 'PUBLISHED';
@@ -214,6 +271,74 @@ export interface AutoShowtimeGenerationPolicyResponse {
   latestAllowedDate: string;
 }
 
+// ── Allocation policy admin CRUD (mirrors ShowtimeAllocationPolicyController.java) ──────
+// NOTE: auto-generation runs only ever read policy_code="DEFAULT" + active=true
+// (AutoShowtimeGenerationService.DEFAULT_POLICY_CODE) - creating a row with a different
+// code doesn't plug into any run. Managing multiple rows is only useful for keeping
+// alternates ready and swapping which one is active under the DEFAULT code.
+export interface ShowtimeAllocationFormatPriority {
+  formatId: number;
+  formatCode?: string;
+  formatName?: string;
+  allocationPriority: number;
+}
+
+export type ShowtimeDaypart = 'MORNING' | 'AFTERNOON' | 'EVENING' | 'LATE_NIGHT';
+
+/** Mirrors ShowtimeDaypartPolicy.java, nested full-replace list on ShowtimeAllocationPolicy —
+ *  same pattern as formatPriorities above. daypartPolicyId is undefined for a row the admin
+ *  just added client-side and hasn't saved yet. */
+export interface ShowtimeDaypartPolicy {
+  daypartPolicyId?: number;
+  daypartCode: ShowtimeDaypart;
+  startTime: string; // "HH:mm:ss"
+  endTime: string;
+  weekdayDemandMultiplier: number;
+  weekendDemandMultiplier: number;
+  active: boolean;
+}
+
+export interface ShowtimeAllocationPolicy {
+  policyId: number;
+  policyCode: string;
+  active: boolean;
+  peakDemandWeight: number;
+  movieDemandWeight: number;
+  clusterDemandWeight: number;
+  timeSlotDemandWeight: number;
+  formatDemandWeight: number;
+  roomCapacityWeight: number;
+  minimumCoverage: number;
+  maximumRoomShare: number;
+  planningHorizonStartDays: number;
+  planningHorizonEndDays: number;
+  cleanupBufferMinutes: number;
+  timeSlotIntervalMinutes: number;
+  sameMovieStaggerMinutes: number;
+  maxSolveTimeSeconds: number;
+  solverRandomSeed: number;
+  solverSearchWorkers: number;
+  solverRelativeGap: number;
+  solverLogSearchProgress: boolean;
+  maxCandidatesPerMoviePerDay?: number;
+  optimizerFallbackToLegacyOnError: boolean;
+  defaultOptimizerMode: OptimizerMode;
+  businessTimezone: string;
+  peakStartTime: string; // "HH:mm:ss"
+  peakEndTime: string;
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
+  updatedBy?: string;
+  formatPriorities: ShowtimeAllocationFormatPriority[];
+  daypartPolicies: ShowtimeDaypartPolicy[];
+}
+
+export type ShowtimeAllocationPolicyPayload = Omit<
+  ShowtimeAllocationPolicy,
+  'policyId' | 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy'
+>;
+
 // ── API ───────────────────────────────────────────────────────────────────────
 export const showtimeApi = {
   /** GET /api/schedules — list all showtimes */
@@ -288,4 +413,23 @@ export const showtimeApi = {
 
   publishSchedulePlan: (id: number) =>
     axiosClient.post(`/api/schedule-plans/${id}/publish`) as Promise<ApiWrapper<SchedulePlanResponse>>,
+
+  /** GET /api/schedules/allocation-policies — ADMIN only. Lists every policy row, most
+   *  recently updated first. */
+  listAllocationPolicies: () =>
+    axiosClient.get('/api/schedules/allocation-policies') as Promise<ApiWrapper<ShowtimeAllocationPolicy[]>>,
+
+  getAllocationPolicy: (policyId: number) =>
+    axiosClient.get(`/api/schedules/allocation-policies/${policyId}`) as Promise<ApiWrapper<ShowtimeAllocationPolicy>>,
+
+  createAllocationPolicy: (payload: ShowtimeAllocationPolicyPayload) =>
+    axiosClient.post('/api/schedules/allocation-policies', payload) as Promise<ApiWrapper<ShowtimeAllocationPolicy>>,
+
+  updateAllocationPolicy: (policyId: number, payload: ShowtimeAllocationPolicyPayload) =>
+    axiosClient.put(`/api/schedules/allocation-policies/${policyId}`, payload) as Promise<ApiWrapper<ShowtimeAllocationPolicy>>,
+
+  /** Activates this row and deactivates any other row sharing the same policy_code — see
+   *  ShowtimeAllocationPolicy's DEFAULT-code caveat above. */
+  activateAllocationPolicy: (policyId: number) =>
+    axiosClient.post(`/api/schedules/allocation-policies/${policyId}/activate`) as Promise<ApiWrapper<ShowtimeAllocationPolicy>>,
 };

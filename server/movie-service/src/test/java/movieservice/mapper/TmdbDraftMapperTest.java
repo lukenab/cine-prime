@@ -192,6 +192,29 @@ class TmdbDraftMapperTest {
         assertTrue(draft.getWarnings().stream().noneMatch(w -> w.toLowerCase().contains("tagline")));
     }
 
+    // ── TMDB Popularity Integration (P1) ──────────────────────
+
+    @Test
+    void popularityAndVoteAverageAreCopiedFromDetailToTheDraft() {
+        TmdbMovieDetail detail = baseDetail();
+        detail.setPopularity(87.654);
+        detail.setVoteAverage(7.8);
+
+        TmdbMovieDraft draft = TmdbDraftMapper.toDraft(detail, new TmdbCreditsResponse(), new TmdbTranslationsResponse());
+
+        assertEquals(87.654, draft.getPopularity());
+        assertEquals(7.8, draft.getVoteAverage());
+    }
+
+    @Test
+    void missingPopularityIsCopiedAsNullNotDefaultedToZero() {
+        TmdbMovieDetail detail = baseDetail();
+
+        TmdbMovieDraft draft = TmdbDraftMapper.toDraft(detail, new TmdbCreditsResponse(), new TmdbTranslationsResponse());
+
+        assertNull(draft.getPopularity());
+    }
+
     @Test
     void genresAreExtractedAsRawTmdbIdAndNameWithoutAnyLocalResolution() {
         TmdbMovieDetail detail = baseDetail();

@@ -42,6 +42,38 @@
 | POST | `/api/schedules/auto-generation-runs/{runId}/execute` | SUPER_ADMIN hoặc ADMIN trong dev/demo | — | `AutoShowtimeExecutionResult` | Escape hatch `Process now`; flow bình thường tự dispatch sau commit |
 | GET | `/api/schedules/auto-generation-runs/{runId}?page=0&size=20` | ADMIN | — | `AutoShowtimeGenerationRunResponse` | Poll status, counts, plan và kết quả |
 
+#### 3.2.1. Constraint optimizer (P1) request/response additions
+
+`AutoShowtimeGenerationRequest` gained three optional fields (null-safe, existing callers
+unaffected):
+
+```json
+{
+  "startDate": "2026-07-27",
+  "endDate": "2026-08-02",
+  "cinemaClusterIds": [43],
+  "movieIds": [12, 18],
+  "optimizer": "CP_SAT",
+  "scenario": "BALANCED",
+  "replanMode": false
+}
+```
+
+- `optimizer`: `LEGACY` | `CP_SAT` | `SHADOW_COMPARE`. Null uses the active policy's
+  `default_optimizer_mode` (`LEGACY` unless configured otherwise).
+- `scenario`: `CONSERVATIVE` | `BALANCED` | `REVENUE_FOCUSED`. Null defaults to `BALANCED`;
+  ignored when `optimizer` is `LEGACY`.
+- `replanMode`: **not implemented** (P2 rolling replanning). `true` is rejected with
+  `AUTO_SHOWTIME_REPLAN_NOT_SUPPORTED` (code 2109) rather than silently treated as a fresh run.
+- The idempotency key now includes `optimizer`/`scenario` - the same scope submitted with a
+  different optimizer produces a *different* run, not a reused one.
+
+`AutoShowtimeGenerationRunResponse` gained: `optimizerMode`, `scenario`, `solverStatus`
+(`OPTIMAL`/`FEASIBLE`/`INFEASIBLE`/`MODEL_INVALID`/`UNKNOWN`, null until the run finishes),
+`solveDurationMillis`, `objectiveScore`, and three JSON-string fields for the frontend to parse:
+`objectiveBreakdown`, `solverDiagnostics`, `shadowComparison` (the last is only non-null for
+`SHADOW_COMPARE` runs). See `CONSTRAINT_OPTIMIZER_DESIGN.md` for what each JSON payload contains.
+
 ### 3.3. Schedule Plan Workflow
 
 | Method | Endpoint | Auth | Request | Response | Transition |

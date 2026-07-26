@@ -31,6 +31,14 @@ public class MovieScreeningVersion {
     @JoinColumn(name = "format_id", nullable = false)
     ScreeningFormat format;
 
+    /**
+     * Audio mix delivered with this version. It remains nullable only for
+     * records created before V42; new commands require an explicit value.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "audio_format_id")
+    AudioFormat audioFormat;
+
     @Column(name = "audio_language_code", nullable = false, length = 10)
     String audioLanguageCode;
 

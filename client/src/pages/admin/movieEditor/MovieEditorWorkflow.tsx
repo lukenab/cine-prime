@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { AlertCircle, Check, Clapperboard, Film, Images, ListChecks, Users } from "lucide-react";
+import { AlertCircle, Check, Clapperboard, Film, Images, Languages, ListChecks, Users } from "lucide-react";
 
 export type MovieEditorSectionId =
   | "overview"
   | "classification-release"
+  | "screening-versions"
   | "media"
   | "credits"
   | "review";
@@ -21,8 +22,14 @@ export const MOVIE_EDITOR_SECTION_META = [
   {
     id: "classification-release",
     label: "Classification & Release",
-    description: "Runtime, release window, ratings, genres and screening formats.",
+    description: "Runtime, release window, ratings and catalogue genres.",
     icon: Clapperboard,
+  },
+  {
+    id: "screening-versions",
+    label: "Screening Versions",
+    description: "Presentation, audio system and language combinations used by scheduling.",
+    icon: Languages,
   },
   { id: "media", label: "Media", description: "Poster, trailer and gallery assets.", icon: Images },
   { id: "credits", label: "Credits", description: "Production companies, cast and crew billing.", icon: Users },

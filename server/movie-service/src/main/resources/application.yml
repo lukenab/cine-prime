@@ -44,6 +44,14 @@ spring:
     out-of-order: true
     baseline-version: 1
     baseline-description: "Pre-Flyway schema (docs/database/movie-service/V3-V34, applied by hand)"
+    # V33__backfill_default_cluster_demand_profile.sql was removed after it already ran on
+    # existing databases (its one-time backfill is now superseded by
+    # CinemaClusterService#approveCluster auto-creating the same default, plus the admin-facing
+    # CinemaClusterDemandProfileController). Without this, Flyway's validate step fails on
+    # startup with "Detected applied migration not resolved locally: 33" for any DB that already
+    # has that row in flyway_schema_history. This tells Flyway to tolerate a resolved-but-missing
+    # migration instead of requiring a manual `flyway repair` against every such database.
+    ignore-migration-patterns: "*:missing"
 
 management:
   endpoints:

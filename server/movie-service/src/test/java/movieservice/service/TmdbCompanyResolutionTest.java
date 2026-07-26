@@ -14,6 +14,7 @@ import movieservice.repository.AgeRatingRepository;
 import movieservice.repository.GenreRepository;
 import movieservice.repository.MovieCastRepository;
 import movieservice.repository.MovieRepository;
+import movieservice.repository.MovieSchedulingProfileRepository;
 import movieservice.repository.MovieTranslationRepository;
 import movieservice.repository.PersonRepository;
 import movieservice.repository.ProductionCompanyRepository;
@@ -57,6 +58,7 @@ class TmdbCompanyResolutionTest {
     @Mock ProductionCompanyRepository productionCompanyRepository;
     @Mock GenreRepository genreRepository;
     @Mock AgeRatingRepository ageRatingRepository;
+    @Mock MovieSchedulingProfileRepository movieSchedulingProfileRepository;
     @Mock RestTemplate restTemplate;
 
     TmdbService tmdbService;
@@ -67,7 +69,8 @@ class TmdbCompanyResolutionTest {
     void setUp() {
         tmdbService = new TmdbService(
                 movieRepository, movieTranslationRepository, movieCastRepository, personRepository,
-                productionCompanyRepository, genreRepository, ageRatingRepository, "dummy-api-key", 10);
+                productionCompanyRepository, genreRepository, ageRatingRepository,
+                movieSchedulingProfileRepository, "dummy-api-key", 10);
         ReflectionTestUtils.setField(tmdbService, "restTemplate", restTemplate);
 
         when(movieRepository.existsByTmdbId(TMDB_ID)).thenReturn(false);

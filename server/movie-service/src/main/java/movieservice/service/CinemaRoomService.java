@@ -9,6 +9,8 @@ import movie.theater.common.exception.AppException;
 import movieservice.dto.request.CinemaRoomRequest;
 import movieservice.dto.request.CinemaRoomUpdateRequest;
 import movieservice.dto.request.MaintenanceRequest;
+import movieservice.dto.response.CinemaRoomFormatResponse;
+import movieservice.dto.response.CinemaRoomMaintenanceResponse;
 import movieservice.dto.response.CinemaRoomResponse;
 import movieservice.entity.AudioFormat;
 import movieservice.entity.AuditoriumClass;
@@ -25,6 +27,7 @@ import movieservice.enums.CinemaRoomStatus;
 import movieservice.enums.ClusterStatus;
 import movieservice.enums.LayoutStatus;
 import movieservice.enums.PresentationSystem;
+import movieservice.enums.ShowTimeStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.AudioFormatRepository;
@@ -43,6 +46,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -337,7 +341,7 @@ public class CinemaRoomService {
     // ── Maintenance ───────────────────────────────────────────
 
     @Transactional
-    public CinemaRoomMaintenance reportMaintenance(Long roomId,
+    public CinemaRoomMaintenanceResponse reportMaintenance(Long roomId,
                                                     MaintenanceRequest request,
                                                     String createdBy) {
         CinemaRoom room = cinemaRoomRepository.findById(roomId)
@@ -359,11 +363,11 @@ public class CinemaRoomService {
         cinemaRoomRepository.save(room);
 
         log.info("Room {} set to TEMPORARILY_UNAVAILABLE — reason: {}", roomId, request.getReason());
-        return maintenance;
+        return toMaintenanceResponse(maintenance);
     }
 
     @Transactional
-    public void resolveMaintenance(Long maintenanceId, String resolutionNote, String resolvedBy) {
+    public CinemaRoomMaintenanceResponse resolveMaintenance(Long maintenanceId, String resolutionNote, String resolvedBy) {
         CinemaRoomMaintenance maintenance = maintenanceRepository.findById(maintenanceId)
                 .orElseThrow(() -> new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND));
 
@@ -373,25 +377,128 @@ public class CinemaRoomService {
         maintenanceRepository.save(maintenance);
 
         CinemaRoom room = maintenance.getCinemaRoom();
-        boolean hasOpenMaintenance = maintenanceRepository
+        boolean noOpenMaintenanceRemains = maintenanceRepository
                 .findByCinemaRoom_CinemaRoomIdAndResolvedFalse(room.getCinemaRoomId())
                 .isEmpty();
 
-        if (hasOpenMaintenance) {
+        if (noOpenMaintenanceRemains) {
             room.setStatus(CinemaRoomStatus.ACTIVE);
             room.setMaintenanceNote(null);
             cinemaRoomRepository.save(room);
             log.info("Room {} restored to ACTIVE", room.getCinemaRoomId());
         }
+
+        return toMaintenanceResponse(maintenance);
     }
 
+    /// Lịch sử đầy đủ (đã xử lý lẫn còn mở) - trước đây CinemaRoomMaintenanceRepository đã có
+    /// sẵn query này nhưng không có endpoint/service method nào expose ra ngoài, nên UI không
+    /// bao giờ biết được phòng có sự cố nào đã/đang xảy ra ngoài dòng maintenanceNote hiện tại.
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public List<CinemaRoomMaintenanceResponse> listMaintenance(Long roomId) {
+        return maintenanceRepository.findByCinemaRoom_CinemaRoomId(roomId).stream()
+                .sorted(java.util.Comparator.comparing(CinemaRoomMaintenance::getStartedAt).reversed())
+                .map(this::toMaintenanceResponse)
+                .toList();
+    }
+
+    private CinemaRoomMaintenanceResponse toMaintenanceResponse(CinemaRoomMaintenance maintenance) {
+        return CinemaRoomMaintenanceResponse.builder()
+                .maintenanceId(maintenance.getMaintenanceId())
+                .cinemaRoomId(maintenance.getCinemaRoom().getCinemaRoomId())
+                .reason(maintenance.getReason())
+                .severity(maintenance.getSeverity())
+                .startedAt(maintenance.getStartedAt())
+                .resolvedAt(maintenance.getResolvedAt())
+                .resolved(maintenance.getResolved())
+                .resolutionNote(maintenance.getResolutionNote())
+                .createdBy(maintenance.getCreatedBy())
+                .createdAt(maintenance.getCreatedAt())
+                .build();
+    }
+
+    /**
+     * The only manual transitions this endpoint is allowed to make - ACTIVE / SUSPENDED / CLOSED
+     * cycling among each other. Everything else has its own dedicated flow that enforces real
+     * preconditions and its own audit trail, and would be silently bypassed if this generic PATCH
+     * could also reach it:
+     *   - DRAFT / PENDING_APPROVAL / APPROVED / ACTIVE (as a wizard target) are owned exclusively
+     *     by RoomLayoutService.submit()/approve()/reject()/activate() - jumping straight to ACTIVE
+     *     from here would skip layout review entirely (the gap this fixes).
+     *   - MAINTENANCE / TEMPORARILY_UNAVAILABLE are owned by reportMaintenance(), which captures a
+     *     reason/severity; resolveMaintenance() is the only way back out.
+     *   - RETIRED is permanent and one-way - see retireCinemaRoom() below, which has its own
+     *     no-future-showtimes precondition that doesn't belong on every other status change.
+     */
+    private static final Map<CinemaRoomStatus, Set<CinemaRoomStatus>> ALLOWED_MANUAL_STATUS_TRANSITIONS = Map.of(
+            CinemaRoomStatus.ACTIVE, Set.of(CinemaRoomStatus.SUSPENDED, CinemaRoomStatus.CLOSED),
+            CinemaRoomStatus.SUSPENDED, Set.of(CinemaRoomStatus.ACTIVE, CinemaRoomStatus.CLOSED),
+            CinemaRoomStatus.CLOSED, Set.of(CinemaRoomStatus.ACTIVE, CinemaRoomStatus.SUSPENDED));
+
     @Transactional
-    public CinemaRoomResponse setRoomStatus(Long roomId, CinemaRoomStatus newStatus, String updatedBy) {
-        CinemaRoom room = cinemaRoomRepository.findById(roomId)
+    public CinemaRoomResponse setRoomStatus(Long roomId, CinemaRoomStatus newStatus, Authentication authentication) {
+        CinemaRoom room = cinemaRoomRepository.findByIdForUpdate(roomId)
                 .orElseThrow(() -> new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND));
+        CinemaRoomStatus oldStatus = room.getStatus();
+
+        Set<CinemaRoomStatus> allowedTargets = ALLOWED_MANUAL_STATUS_TRANSITIONS.get(oldStatus);
+        if (allowedTargets == null || !allowedTargets.contains(newStatus)) {
+            throw new AppException(MovieErrorCode.CINEMA_ROOM_STATUS_TRANSITION_INVALID);
+        }
+
+        String actor = authenticatedActor(authentication);
         room.setStatus(newStatus);
-        room.setUpdatedBy(updatedBy);
-        return movieMapper.toCinemaRoomResponse(cinemaRoomRepository.save(room));
+        room.setUpdatedBy(actor);
+        room = cinemaRoomRepository.save(room);
+
+        auditLogService.logAction(actor, primaryRole(authentication),
+                "cinema_room:" + roomId,
+                "Status changed: " + oldStatus + " -> " + newStatus);
+
+        return movieMapper.toCinemaRoomResponse(room);
+    }
+
+    /**
+     * Permanent decommission - terminal and one-way, so it gets its own method rather than
+     * being just another target of setRoomStatus(). Only reachable from an operational status
+     * that has already left the wizard workflow (ACTIVE/SUSPENDED/CLOSED); a room still under
+     * an open maintenance incident must be resolved first (see resolveMaintenance()), and a room
+     * still mid-wizard (DRAFT/PENDING_APPROVAL/APPROVED) should go through deleteCinemaRoom()
+     * instead if it was never actually put into service. Blocked while any future scheduled/
+     * on-sale showtime exists - the same guard RoomLayoutService.activate() applies before
+     * superseding a layout - so a room can never disappear out from under a sold ticket.
+     */
+    @Transactional
+    public CinemaRoomResponse retireCinemaRoom(Long roomId, String note, Authentication authentication) {
+        CinemaRoom room = cinemaRoomRepository.findByIdForUpdate(roomId)
+                .orElseThrow(() -> new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND));
+        CinemaRoomStatus oldStatus = room.getStatus();
+
+        boolean retirable = oldStatus == CinemaRoomStatus.ACTIVE
+                || oldStatus == CinemaRoomStatus.SUSPENDED
+                || oldStatus == CinemaRoomStatus.CLOSED;
+        if (!retirable) {
+            throw new AppException(MovieErrorCode.CINEMA_ROOM_STATUS_TRANSITION_INVALID);
+        }
+
+        boolean hasFutureShowtimes = showTimeRepository
+                .existsByCinemaRoomCinemaRoomIdAndStatusInAndShowDateGreaterThanEqual(
+                        roomId, List.of(ShowTimeStatus.SCHEDULED, ShowTimeStatus.ON_SALE), LocalDate.now());
+        if (hasFutureShowtimes) {
+            throw new AppException(MovieErrorCode.CINEMA_ROOM_HAS_FUTURE_SHOWTIMES);
+        }
+
+        String actor = authenticatedActor(authentication);
+        room.setStatus(CinemaRoomStatus.RETIRED);
+        room.setUpdatedBy(actor);
+        room = cinemaRoomRepository.save(room);
+
+        auditLogService.logAction(actor, primaryRole(authentication),
+                "cinema_room:" + roomId,
+                "Retired (permanent): " + oldStatus + " -> RETIRED"
+                        + (note != null && !note.isBlank() ? " — " + note : ""));
+
+        return movieMapper.toCinemaRoomResponse(room);
     }
 
     // ── Validation helpers ───────────────────────────────────────────────────
@@ -426,6 +533,16 @@ public class CinemaRoomService {
     }
 
     /**
+     * Format codes the wizard fields (supports2d/supports3d/presentationSystem) can ever
+     * derive. Anything else in the screening_format catalog (e.g. a format an admin added
+     * later through Manage Formats with no matching wizard field) is out of scope for
+     * syncRoomFormatCapabilities() and is instead controlled directly via
+     * setManualRoomFormat()/listRoomFormats() below - the sync loop must never disable
+     * those rows just because they weren't in this run's derivedCodes.
+     */
+    private static final Set<String> AUTO_MANAGED_FORMAT_CODES = Set.of("2D", "3D", "IMAX", "SCREENX", "ATMOS", "4DX");
+
+    /**
      * The auto-showtime engine reads cinema_room_format exclusively - never
      * supports2d/supports3d/presentationSystem directly - so without this sync
      * every room the wizard creates or edits would have zero capability rows
@@ -442,6 +559,7 @@ public class CinemaRoomService {
                 case IMAX -> derivedCodes.add("IMAX");
                 case SCREENX -> derivedCodes.add("SCREENX");
                 case DOLBY_CINEMA -> derivedCodes.add("ATMOS");
+                case FOUR_DX -> derivedCodes.add("4DX");
                 case STANDARD -> { /* contributes nothing beyond supports2d/3d */ }
             }
         }
@@ -472,15 +590,92 @@ public class CinemaRoomService {
             }
         }
 
-        // Anything left is a capability the current wizard fields no longer derive
-        // (e.g. 3D was unchecked) - disable rather than delete to keep history.
+        // Anything left is either (a) a capability the current wizard fields no longer derive
+        // (e.g. 3D was unchecked) - disable rather than delete to keep history - or (b) a
+        // manually-managed format (not in AUTO_MANAGED_FORMAT_CODES) that this sync has no
+        // opinion on and must leave untouched.
         for (CinemaRoomFormat stale : existingByFormatId.values()) {
+            if (!AUTO_MANAGED_FORMAT_CODES.contains(stale.getScreeningFormat().getFormatCode())) continue;
             if (Boolean.TRUE.equals(stale.getEnabled())) {
                 stale.setEnabled(false);
                 stale.setUpdatedBy(actor);
                 cinemaRoomFormatRepository.save(stale);
             }
         }
+    }
+
+    // ── Per-room format capabilities (cinema_room_format) ───────────────────
+
+    /** Every active catalog format, merged with this room's current cinema_room_format rows -
+     *  the view the maintenance-UI-style panel needs to show "what this room actually supports"
+     *  without the caller reasoning through supports2d/supports3d/presentationSystem themselves. */
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public List<CinemaRoomFormatResponse> listRoomFormats(Long roomId) {
+        if (!cinemaRoomRepository.existsById(roomId)) {
+            throw new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND);
+        }
+        Map<Integer, CinemaRoomFormat> existingByFormatId = cinemaRoomFormatRepository
+                .findByCinemaRoom_CinemaRoomId(roomId).stream()
+                .collect(Collectors.toMap(crf -> crf.getScreeningFormat().getFormatId(), Function.identity()));
+
+        return screeningFormatRepository.findAll().stream()
+                .filter(format -> "ACTIVE".equals(format.getStatus()))
+                .map(format -> {
+                    CinemaRoomFormat existing = existingByFormatId.get(format.getFormatId());
+                    return CinemaRoomFormatResponse.builder()
+                            .formatId(format.getFormatId())
+                            .formatCode(format.getFormatCode())
+                            .formatName(format.getFormatName())
+                            .surcharge(format.getSurcharge())
+                            .enabled(existing != null && Boolean.TRUE.equals(existing.getEnabled()))
+                            .managedAutomatically(AUTO_MANAGED_FORMAT_CODES.contains(format.getFormatCode()))
+                            .build();
+                })
+                .sorted(java.util.Comparator.comparing(CinemaRoomFormatResponse::getFormatCode))
+                .toList();
+    }
+
+    /** Manual override for a format cinema_room_format has no wizard field for (anything outside
+     *  AUTO_MANAGED_FORMAT_CODES - e.g. a new format an admin just added via Manage Formats).
+     *  Rejects the 2D/3D/IMAX/SCREENX/ATMOS/4DX codes: those must stay single-source-of-truth
+     *  from supports2d/supports3d/presentationSystem, otherwise the next room save would silently
+     *  flip them back via syncRoomFormatCapabilities() and the toggle would look broken. */
+    @Transactional
+    public CinemaRoomFormatResponse setManualRoomFormat(Long roomId, Integer formatId, boolean enabled, String actor) {
+        CinemaRoom room = cinemaRoomRepository.findById(roomId)
+                .orElseThrow(() -> new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND));
+        ScreeningFormat format = screeningFormatRepository.findById(formatId)
+                .orElseThrow(() -> new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND));
+        if (AUTO_MANAGED_FORMAT_CODES.contains(format.getFormatCode())) {
+            throw new AppException(MovieErrorCode.ROOM_FORMAT_MANAGED_AUTOMATICALLY);
+        }
+
+        CinemaRoomFormat existing = cinemaRoomFormatRepository
+                .findByCinemaRoom_CinemaRoomIdAndScreeningFormat_FormatId(roomId, formatId)
+                .orElse(null);
+        if (existing != null) {
+            existing.setEnabled(enabled);
+            existing.setUpdatedBy(actor);
+            existing = cinemaRoomFormatRepository.save(existing);
+        } else {
+            existing = cinemaRoomFormatRepository.save(CinemaRoomFormat.builder()
+                    .id(new CinemaRoomFormatId(roomId, formatId))
+                    .cinemaRoom(room)
+                    .screeningFormat(format)
+                    .enabled(enabled)
+                    .createdBy(actor)
+                    .updatedBy(actor)
+                    .build());
+        }
+
+        return CinemaRoomFormatResponse.builder()
+                .formatId(format.getFormatId())
+                .formatCode(format.getFormatCode())
+                .formatName(format.getFormatName())
+                .surcharge(format.getSurcharge())
+                .enabled(existing.getEnabled())
+                .managedAutomatically(false)
+                .build();
     }
 
     private AuditoriumClass findActiveAuditoriumClass(Integer id) {

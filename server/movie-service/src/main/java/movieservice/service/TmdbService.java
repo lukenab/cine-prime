@@ -30,6 +30,7 @@ import movieservice.dto.tmdb.TmdbVideosResponse;
 import movieservice.dto.tmdb.TranslationDraft;
 import movieservice.entity.*;
 import movieservice.enums.GenreStatus;
+import movieservice.enums.MovieSchedulingScoreSource;
 import movieservice.enums.MovieStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.TmdbDraftMapper;
@@ -41,6 +42,8 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.net.URI;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -65,6 +68,7 @@ public class TmdbService {
     private final ProductionCompanyRepository productionCompanyRepository;
     private final GenreRepository genreRepository;
     private final AgeRatingRepository ageRatingRepository;
+    private final MovieSchedulingProfileRepository movieSchedulingProfileRepository;
     private final String apiKey;
     private final int maxStills;
     private final RestTemplate restTemplate;
@@ -144,6 +148,7 @@ public class TmdbService {
             ProductionCompanyRepository productionCompanyRepository,
             GenreRepository genreRepository,
             AgeRatingRepository ageRatingRepository,
+            MovieSchedulingProfileRepository movieSchedulingProfileRepository,
             @Value("${tmdb.api-key}") String apiKey,
             @Value("${tmdb.image.max-stills:10}") int maxStills) {
         this.movieRepository = movieRepository;
@@ -153,6 +158,7 @@ public class TmdbService {
         this.productionCompanyRepository = productionCompanyRepository;
         this.genreRepository = genreRepository;
         this.ageRatingRepository = ageRatingRepository;
+        this.movieSchedulingProfileRepository = movieSchedulingProfileRepository;
         this.apiKey = apiKey;
         this.maxStills = maxStills;
         this.restTemplate = new RestTemplate();
@@ -450,6 +456,17 @@ public class TmdbService {
             // Closes the race window between the existsBy*() pre-checks above and this insert.
             throw new AppException(MovieErrorCode.TMDB_MOVIE_ALREADY_EXISTS);
         }
+
+        // 8b. Scheduling profile - seed popularityScore from TMDB's own popularity metric so Auto
+        // Showtime has a real priority signal from the moment a movie is imported, instead of a
+        // TMDB-imported movie silently sitting at the same default 0 as a movie with no signal at
+        // all until an admin manually sets one (MovieSchedulingScoreSource.TMDB marks it as such,
+        // distinct from a MANUAL score set later through MovieService.upsertSchedulingProfile()).
+        movieSchedulingProfileRepository.save(MovieSchedulingProfile.builder()
+                .movie(movie)
+                .popularityScore(toPopularityScore(draft.getPopularity()))
+                .scoreSource(MovieSchedulingScoreSource.TMDB)
+                .build());
 
         // 9. Translations + cast, fed from the same draft used for preview
         saveTranslations(movie, draft.getTranslations());
@@ -1158,5 +1175,16 @@ public class TmdbService {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /** TMDB's raw `popularity` is unbounded (viral titles can exceed 1000) while
+     *  movie_scheduling_profile.popularity_score is a 0-100 scale (precision 5,2) - clamp rather
+     *  than let a viral title overflow the column or dominate every other movie's priority. */
+    private BigDecimal toPopularityScore(Double tmdbPopularity) {
+        if (tmdbPopularity == null || tmdbPopularity <= 0) {
+            return BigDecimal.ZERO;
+        }
+        double clamped = Math.min(100.0, tmdbPopularity);
+        return BigDecimal.valueOf(clamped).setScale(2, RoundingMode.HALF_UP);
     }
 }
