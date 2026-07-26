@@ -28,6 +28,7 @@ type Props = {
   canManage: boolean;
   movieEditable: boolean;
   hasUnsavedMovieChanges: boolean;
+  onPrepareMovieDraft: () => Promise<number>;
 };
 
 type EditorState = {
@@ -75,13 +76,17 @@ export default function ScreeningVersionsSection({
   canManage,
   movieEditable,
   hasUnsavedMovieChanges,
+  onPrepareMovieDraft,
 }: Props) {
   const [versions, setVersions] = useState<MovieScreeningVersionResponse[]>([]);
   const [audioFormats, setAudioFormats] = useState<MasterDataItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [preparingDraft, setPreparingDraft] = useState(false);
+  const [preparedMovieId, setPreparedMovieId] = useState<number | null>(movieId);
   const [error, setError] = useState("");
   const [editor, setEditor] = useState<EditorState | null>(null);
+  const effectiveMovieId = movieId ?? preparedMovieId;
 
   const presentationFormats = useMemo(
     () => formats.filter((format) => format.formatCode.toUpperCase() !== "ATMOS"),
@@ -89,21 +94,21 @@ export default function ScreeningVersionsSection({
   );
 
   const load = useCallback(async () => {
-    if (!movieId) {
+    if (!effectiveMovieId) {
       setVersions([]);
       return;
     }
     setLoading(true);
     setError("");
     try {
-      const response = await movieApi.listMovieScreeningVersions(movieId);
+      const response = await movieApi.listMovieScreeningVersions(effectiveMovieId);
       setVersions(response.result ?? []);
     } catch (requestError) {
       setError(apiErrorMessage(requestError));
     } finally {
       setLoading(false);
     }
-  }, [movieId]);
+  }, [effectiveMovieId]);
 
   useEffect(() => {
     void load();
@@ -125,7 +130,29 @@ export default function ScreeningVersionsSection({
     };
   }, []);
 
-  const startCreate = () => {
+  useEffect(() => {
+    if (movieId) setPreparedMovieId(movieId);
+  }, [movieId]);
+
+  const ensureLatestMovieDraft = async (): Promise<number | null> => {
+    if (effectiveMovieId && !hasUnsavedMovieChanges) return effectiveMovieId;
+    setPreparingDraft(true);
+    setError("");
+    try {
+      const persistedMovieId = await onPrepareMovieDraft();
+      setPreparedMovieId(persistedMovieId);
+      return persistedMovieId;
+    } catch (requestError) {
+      setError(apiErrorMessage(requestError));
+      return null;
+    } finally {
+      setPreparingDraft(false);
+    }
+  };
+
+  const startCreate = async () => {
+    const persistedMovieId = await ensureLatestMovieDraft();
+    if (!persistedMovieId) return;
     setError("");
     setEditor(emptyEditor(
       presentationFormats[0]?.formatId ?? "",
@@ -134,7 +161,9 @@ export default function ScreeningVersionsSection({
     ));
   };
 
-  const startEdit = (version: MovieScreeningVersionResponse) => {
+  const startEdit = async (version: MovieScreeningVersionResponse) => {
+    const persistedMovieId = await ensureLatestMovieDraft();
+    if (!persistedMovieId) return;
     setError("");
     setEditor({
       versionId: version.screeningVersionId,
@@ -148,7 +177,7 @@ export default function ScreeningVersionsSection({
   };
 
   const submit = async () => {
-    if (!movieId || !editor || !editor.formatId || !editor.audioFormatId || !editor.audioLanguageCode.trim()) {
+    if (!effectiveMovieId || !editor || !editor.formatId || !editor.audioFormatId || !editor.audioLanguageCode.trim()) {
       setError("Presentation format, audio format and audio language are required.");
       return;
     }
@@ -170,10 +199,10 @@ export default function ScreeningVersionsSection({
     setError("");
     try {
       if (editor.versionId) {
-        await movieApi.updateMovieScreeningVersion(movieId, editor.versionId, payload);
+        await movieApi.updateMovieScreeningVersion(effectiveMovieId, editor.versionId, payload);
         toast.success("Screening version updated.");
       } else {
-        await movieApi.createMovieScreeningVersion(movieId, payload);
+        await movieApi.createMovieScreeningVersion(effectiveMovieId, payload);
         toast.success("Screening version created.");
       }
       setEditor(null);
@@ -186,15 +215,16 @@ export default function ScreeningVersionsSection({
   };
 
   const changeStatus = async (version: MovieScreeningVersionResponse) => {
-    if (!movieId) return;
+    const persistedMovieId = await ensureLatestMovieDraft();
+    if (!persistedMovieId) return;
     setSaving(true);
     setError("");
     try {
       if (version.status === "ACTIVE") {
-        await movieApi.deactivateMovieScreeningVersion(movieId, version.screeningVersionId);
+        await movieApi.deactivateMovieScreeningVersion(persistedMovieId, version.screeningVersionId);
         toast.success("Version deactivated. Existing schedules remain unchanged.");
       } else {
-        await movieApi.activateMovieScreeningVersion(movieId, version.screeningVersionId);
+        await movieApi.activateMovieScreeningVersion(persistedMovieId, version.screeningVersionId);
         toast.success("Version activated for future scheduling.");
       }
       await load();
@@ -204,23 +234,6 @@ export default function ScreeningVersionsSection({
       setSaving(false);
     }
   };
-
-  if (!movieId) {
-    return (
-      <div
-        className="flex items-start gap-3 rounded-xl border px-4 py-4"
-        style={{ background: "var(--bg-main)", borderColor: "var(--border-color)" }}
-      >
-        <MonitorPlay size={18} className="mt-0.5 flex-shrink-0 text-blue-500" />
-        <div>
-          <p className="text-sm font-semibold" style={{ color: "var(--text-main)" }}>Save the movie draft first</p>
-          <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--text-sub)" }}>
-            Save the draft first, then define the exact presentation, audio system and language combination used for exhibition.
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4">
@@ -234,11 +247,12 @@ export default function ScreeningVersionsSection({
         {canManage && movieEditable && (
           <button
             type="button"
-            onClick={startCreate}
-            disabled={presentationFormats.length === 0 || audioFormats.length === 0 || saving || hasUnsavedMovieChanges}
+            onClick={() => void startCreate()}
+            disabled={presentationFormats.length === 0 || audioFormats.length === 0 || saving || preparingDraft}
             className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <Plus size={14} /> Add version
+            {preparingDraft ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+            {preparingDraft ? "Preparing draft…" : "Add version"}
           </button>
         )}
       </div>
@@ -253,7 +267,7 @@ export default function ScreeningVersionsSection({
       {hasUnsavedMovieChanges && (
         <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
           <AlertCircle size={14} />
-          Save the movie draft before adding or editing screening versions.
+          Your latest movie changes will be saved automatically when you add, edit or activate a screening version.
         </div>
       )}
 
@@ -403,7 +417,9 @@ export default function ScreeningVersionsSection({
         >
           <MonitorPlay size={22} className="mx-auto mb-2" />
           <p className="text-sm font-medium">No screening versions yet</p>
-          <p className="mt-1 text-xs">Add a presentation, audio and language combination for scheduling.</p>
+          <p className="mt-1 text-xs">
+            Add a presentation, audio and language combination. The movie draft will be created automatically.
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
@@ -467,8 +483,8 @@ export default function ScreeningVersionsSection({
                     {movieEditable && (
                       <button
                         type="button"
-                        onClick={() => startEdit(version)}
-                        disabled={version.referenced || hasUnsavedMovieChanges}
+                        onClick={() => void startEdit(version)}
+                        disabled={version.referenced || preparingDraft}
                         title={version.referenced ? "Referenced versions cannot be rewritten" : "Edit version"}
                         className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40"
                         style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }}
@@ -480,7 +496,7 @@ export default function ScreeningVersionsSection({
                       <button
                         type="button"
                         onClick={() => void changeStatus(version)}
-                        disabled={saving || hasUnsavedMovieChanges || (version.status !== "ACTIVE" && !movieEditable)}
+                        disabled={saving || preparingDraft || (version.status !== "ACTIVE" && !movieEditable)}
                         className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40"
                         style={{
                           borderColor: version.status === "ACTIVE" ? "rgba(245,158,11,0.45)" : "rgba(16,185,129,0.45)",

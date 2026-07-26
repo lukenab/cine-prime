@@ -21,6 +21,7 @@ import lombok.experimental.FieldDefaults;
 @Builder
 public class CreateBookingResponse {
     String bookingId;
+    String holdId;
     Long showtimeId;
     String status;
     BigDecimal totalPrice;

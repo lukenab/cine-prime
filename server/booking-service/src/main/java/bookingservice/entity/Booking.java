@@ -76,6 +76,11 @@ public class Booking {
 
     @Column(name = "expires_at")
     LocalDateTime expiresAt;
+
+    /** Authoritative temporary hold created by movie-service. */
+    @Column(name = "seat_hold_id", length = 36, unique = true)
+    String seatHoldId;
+
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
     List<BookingItem> bookingDetails;
 

@@ -1,18 +1,22 @@
 package bookingservice.client;
 
-import java.util.List;
-
 import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 
-import bookingservice.dto.response.SeatAvailabilityResponse;
+import bookingservice.dto.request.MovieSeatHoldRequest;
+import bookingservice.dto.response.MovieSeatHoldResponse;
+import movie.theater.common.dto.ApiResponse;
 
 
-@FeignClient(name = "showtime-service", path = "/api/showtimes")
+@FeignClient(name = "movie-service", path = "/api/showtimes")
 public interface ShowtimeClient {
 
-
-    @GetMapping("/{showtimeId}/seats")
-    List<SeatAvailabilityResponse> getAllSeatsByShowtime(@PathVariable("showtimeId") Long showtimeId);
+    @PostMapping("/{showtimeId}/seat-holds")
+    ApiResponse<MovieSeatHoldResponse> holdSeats(
+            @PathVariable("showtimeId") Long showtimeId,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @RequestBody MovieSeatHoldRequest request);
 }

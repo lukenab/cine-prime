@@ -751,6 +751,9 @@ export type TmdbMovieDetails = {
    *  string as posterUrl. Use this directly; don't copy posterUrl into a thumbnail field. */
   thumbnailUrl?: string;
   overview?: string;
+  /** Backend-normalized TMDB popularity on the same 0-100 scale persisted on import. */
+  popularityScore?: number;
+  voteAverage?: number;
   /** `[Backend] Add tagline field to Movie and MovieTranslation entities` - original-language
    *  tagline; per-locale ones are in each entry of `translations` below. */
   tagline?: string;
@@ -985,6 +988,7 @@ const toLegacyPublicMovie = (movie: PublicMovieResponse): MovieApiResponse => ({
     updateAt: '',
   }] : [],
   createAt: '',
+  ageRatingCode: movie.ageRating?.ratingCode,
 });
 
 /** Backend uses `totalSeatCapacity`; UI has used `seatQuantity` throughout —

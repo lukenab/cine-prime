@@ -39,6 +39,7 @@ public interface BookingMapper {
     BookingItemResponse toBookingItemResponse(SeatAvailabilityResponse seat);
 
     @Mapping(source = "booking.bookingId", target = "bookingId")
+    @Mapping(source = "booking.seatHoldId", target = "holdId")
     @Mapping(source = "booking.showtimeId", target = "showtimeId")
     @Mapping(source = "booking.status", target = "status")
     @Mapping(source = "booking.totalAmount", target = "totalPrice")

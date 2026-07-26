@@ -16,6 +16,7 @@ type Props = {
   operation: MovieEditorOperation;
   canSave: boolean;
   canSubmit: boolean;
+  showSubmit?: boolean;
   saveDisabled?: boolean;
   submitDisabled?: boolean;
   onSaveDraft: () => void;
@@ -43,6 +44,7 @@ export function MovieEditorActionBar({
   operation,
   canSave,
   canSubmit,
+  showSubmit = true,
   saveDisabled = false,
   submitDisabled = false,
   onSaveDraft,
@@ -64,12 +66,7 @@ export function MovieEditorActionBar({
 
   return (
     <div
-      className="sticky top-3 z-40 mb-5 flex flex-col gap-3 rounded-2xl border px-4 py-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between"
-      style={{
-        background: "color-mix(in srgb, var(--bg-card) 94%, transparent)",
-        borderColor: "var(--border-color)",
-        boxShadow: "0 10px 30px rgba(15,23,42,0.10)",
-      }}
+      className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2"
       aria-label="Movie draft and review actions"
     >
       <div
@@ -87,7 +84,7 @@ export function MovieEditorActionBar({
         </span>
       </div>
 
-      {(canSave || canSubmit) && (
+      {(canSave || (canSubmit && showSubmit)) && (
         <div className="flex flex-wrap items-center justify-end gap-2">
           {canSave && (
             <button
@@ -108,7 +105,7 @@ export function MovieEditorActionBar({
             </button>
           )}
 
-          {canSubmit && (
+          {canSubmit && showSubmit && (
             <button
               type="button"
               onClick={guard(onSubmitForReview)}

@@ -14,7 +14,7 @@ import { useNavigate } from "react-router-dom";
 import { movieApi, type ClusterResponse } from "../../api/movieApi";
 import { showtimeApi, type ShowtimeResponse } from "../../api/showtimeApi";
 
-const BOOKABLE_STATUSES = new Set(["ON_SALE", "SCHEDULED"]);
+const BOOKABLE_STATUSES = new Set(["ON_SALE"]);
 
 type BookingOption = {
   value: string;

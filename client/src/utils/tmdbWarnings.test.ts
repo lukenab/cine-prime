@@ -37,6 +37,13 @@ describe("classifyWarning", () => {
     expect(w.group).toBe("required-metadata");
   });
 
+  it("classifies a missing age rating as a release-rating warning", () => {
+    const w = classifyWarning("AGE_RATING_NOT_AVAILABLE");
+    expect(w.severity).toBe("WARNING");
+    expect(w.group).toBe("release-rating");
+    expect(w.label).toContain("select and verify");
+  });
+
   it("falls back to a generic upstream warning for an unrecognized code, keyed off the code prefix only", () => {
     const w = classifyWarning("SOME_FUTURE_CODE:xyz");
     expect(w.severity).toBe("WARNING");

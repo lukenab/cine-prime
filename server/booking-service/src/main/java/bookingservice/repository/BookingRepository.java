@@ -1,6 +1,7 @@
 package bookingservice.repository;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,4 +15,5 @@ import bookingservice.entity.BookingStatus;
 public interface BookingRepository extends JpaRepository<Booking, String> {
     List<Booking> findByAccountIdAndStatus(String accountId, BookingStatus status);
     Page<Booking> findAllByAccountId(String accountId, Pageable pageable);
+    Optional<Booking> findBySeatHoldId(String seatHoldId);
 }

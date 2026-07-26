@@ -69,4 +69,21 @@ describe("MovieEditorActionBar", () => {
     expect(screen.queryByRole("button", { name: "Save Draft" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Submit for Review" })).not.toBeInTheDocument();
   });
+
+  it("keeps submit hidden until the review step", () => {
+    render(
+      <MovieEditorActionBar
+        status="dirty"
+        operation="idle"
+        canSave
+        canSubmit
+        showSubmit={false}
+        onSaveDraft={vi.fn()}
+        onSubmitForReview={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Save Draft" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Submit for Review" })).not.toBeInTheDocument();
+  });
 });

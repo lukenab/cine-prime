@@ -6,14 +6,12 @@ import movieservice.entity.*;
 import movieservice.exception.MovieErrorCode;
 import movieservice.repository.*;
 import movieservice.enums.GenerationPartitionStatus;
-import movieservice.service.ShowtimePricingDefaults;
+import movieservice.service.ShowtimePriceResolver;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 
 @Service
@@ -78,7 +76,7 @@ public class SchedulePlanDraftService {
                     .startAt(candidate.temporalStartAt())
                     .endAt(candidate.temporalEndAt())
                     .businessDate(candidate.getShowDate())
-                    .basePrice(resolveBasePrice(room))
+                    .basePrice(ShowtimePriceResolver.resolveRoomStandardBasePrice(room))
                     .totalSeats(room.getTotalSeatCapacity())
                     .allocationScore(candidate.getScore())
                     .daypartCode(breakdown == null ? null : breakdown.daypart())
@@ -128,11 +126,4 @@ public class SchedulePlanDraftService {
                 .getGenerationRun().getGenerationRunId();
     }
 
-    private BigDecimal resolveBasePrice(CinemaRoom room) {
-        return Optional.ofNullable(room.getSeats()).orElseGet(List::of).stream()
-                .map(Seat::getPrice)
-                .filter(Objects::nonNull)
-                .min(BigDecimal::compareTo)
-                .orElse(ShowtimePricingDefaults.DEFAULT_SEAT_PRICE);
-    }
 }

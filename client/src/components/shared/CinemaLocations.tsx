@@ -26,7 +26,7 @@ export function CinemaLocations() {
   const handleViewShowtimes = (cluster: ClusterResponse) => {
     localStorage.setItem("cp_province", cluster.province);
     localStorage.setItem("cp_cluster", JSON.stringify(cluster));
-    navigate("/movies");
+    navigate(`/cinemas/${cluster.clusterId}/showtimes`);
   };
 
   return (

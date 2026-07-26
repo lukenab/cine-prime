@@ -12,6 +12,7 @@ import ActivateAccountPage from "../pages/auth/ActivateAccountPage";
 import HomePage from "../pages/customer/HomePage";
 import MoviesPage from "../pages/customer/MoviesPage";
 import CinemasPage from "../pages/customer/CinemasPage";
+import CinemaShowtimesPage from "../pages/customer/CinemaShowtimesPage";
 import EventsPage from "../pages/customer/EventsPage";
 import OffersPage from "../pages/customer/OffersPage";
 import ShowtimePage from "../pages/customer/ShowtimePage";
@@ -66,6 +67,7 @@ export default function AppRoutes() {
         <Route path="/home" element={<HomePage />} />
         <Route path="/movies" element={<MoviesPage />} />
         <Route path="/cinemas" element={<CinemasPage />} />
+        <Route path="/cinemas/:clusterId/showtimes" element={<CinemaShowtimesPage />} />
         <Route path="/events" element={<EventsPage />} />
         <Route path="/offers" element={<OffersPage />} />
         <Route path="/showtime/:movieId" element={<ShowtimePage />} />

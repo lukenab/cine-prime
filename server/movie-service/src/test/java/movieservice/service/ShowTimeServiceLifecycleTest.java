@@ -43,6 +43,7 @@ class ShowTimeServiceLifecycleTest {
     @Mock CinemaRoomRepository cinemaRoomRepository;
     @Mock RoomLayoutRepository roomLayoutRepository;
     @Mock MovieMapper movieMapper;
+    @Mock ShowtimeInventoryService showtimeInventoryService;
 
     @InjectMocks
     ShowTimeService showTimeService;
@@ -61,6 +62,7 @@ class ShowTimeServiceLifecycleTest {
         assertEquals("ON_SALE", response.getStatus());
         assertEquals(ShowTimeStatus.ON_SALE, showTime.getStatus());
         assertEquals("admin-7", showTime.getUpdatedBy());
+        verify(showtimeInventoryService).materialize(11L);
     }
 
     @Test

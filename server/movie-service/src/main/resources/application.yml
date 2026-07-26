@@ -88,6 +88,11 @@ movie:
     # MOV-03 release gate: require >=1 future non-cancelled showtime before COMING_SOON -> NOW_SHOWING.
     require-showtime-for-release: ${MOVIE_REQUIRE_SHOWTIME_FOR_RELEASE:false}
 
+showtime:
+  seat-hold:
+    ttl-seconds: ${SHOWTIME_SEAT_HOLD_TTL_SECONDS:600}
+    cleanup-delay-ms: ${SHOWTIME_SEAT_HOLD_CLEANUP_DELAY_MS:30000}
+
 auto-showtime:
   # Immediate dispatch is the normal path; this poller recovers ACCEPTED runs
   # after a restart or interrupted delivery.

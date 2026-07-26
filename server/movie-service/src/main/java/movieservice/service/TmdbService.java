@@ -116,6 +116,25 @@ public class TmdbService {
             "NC-17", "T18"
     );
 
+    /**
+     * TMDB contains both current Vietnamese T13/T16/T18 labels and historical
+     * C13/C16/C18 variants. Normalize both to the current local catalogue.
+     */
+    private static final Map<String, String> VN_CERT_TO_LOCAL = Map.ofEntries(
+            Map.entry("P", "P"),
+            Map.entry("K", "K"),
+            Map.entry("T13", "T13"),
+            Map.entry("C13", "T13"),
+            Map.entry("13+", "T13"),
+            Map.entry("T16", "T16"),
+            Map.entry("C16", "T16"),
+            Map.entry("16+", "T16"),
+            Map.entry("T18", "T18"),
+            Map.entry("C18", "T18"),
+            Map.entry("18+", "T18"),
+            Map.entry("C", "C")
+    );
+
     // TMDB genre ID → genre_code in local DB. Legacy/migration fallback only - genreRepository
     // .findByTmdbGenreId() (Genre.tmdbGenreId, TMDB-FIX-03) is now the primary, stable match.
     private static final Map<Integer, String> TMDB_GENRE_CODES = Map.ofEntries(
@@ -296,6 +315,9 @@ public class TmdbService {
         AgeRating resolvedRating = resolveAgeRating(bundle.releaseDates());
 
         List<String> warnings = new ArrayList<>(draft.getWarnings());
+        if (resolvedRating == null) {
+            warnings.add("AGE_RATING_NOT_AVAILABLE");
+        }
         genreMatches.stream()
                 .filter(m -> m.mappingStatus() == GenreMappingStatus.UNMAPPED)
                 .forEach(m -> warnings.add("GENRE_UNMAPPED:" + m.tmdbGenreId()));
@@ -318,6 +340,8 @@ public class TmdbService {
                 .posterUrl(posterMedia.posterUrl())
                 .thumbnailUrl(posterMedia.thumbnailUrl())
                 .overview(draft.getOverview())
+                .popularityScore(toPopularityScore(draft.getPopularity()))
+                .voteAverage(draft.getVoteAverage())
                 .tagline(draft.getTagline())
                 .media(posterMedia.media())
                 .trailerUrl(trailer != null ? trailer.url() : null)
@@ -411,6 +435,9 @@ public class TmdbService {
                     .orElseThrow(() -> new AppException(MovieErrorCode.AGE_RATING_NOT_FOUND));
         } else {
             resolvedRating = resolveAgeRating(bundle.releaseDates());
+        }
+        if (resolvedRating == null) {
+            warnings.add("AGE_RATING_NOT_AVAILABLE");
         }
 
         // 7. Screening format - never inferred from movie master; belongs to release-version/showtime
@@ -1015,19 +1042,19 @@ public class TmdbService {
 
         for (TmdbReleaseDatesResponse.CountryRelease country : releaseDates.getResults()) {
             if (country.getReleaseDates() == null) continue;
-            String cert = country.getReleaseDates().stream()
-                    .filter(rd -> rd.getCertification() != null && !rd.getCertification().isBlank())
-                    .map(TmdbReleaseDatesResponse.ReleaseDate::getCertification)
-                    .findFirst().orElse(null);
+            String cert = selectCertification(country.getReleaseDates());
             if (cert == null) continue;
-            if ("VN".equals(country.getCountryCode())) vnCert = cert;
-            if ("US".equals(country.getCountryCode())) usCert = cert;
+            if ("VN".equalsIgnoreCase(country.getCountryCode())) vnCert = cert;
+            if ("US".equalsIgnoreCase(country.getCountryCode())) usCert = cert;
         }
 
         // 1. Try VN cert first — already matches local codes (P, K, T13, T16, T18)
         if (vnCert != null) {
-            Optional<AgeRating> found = ageRatingRepository.findByRatingCode(vnCert);
-            if (found.isPresent()) return found.get();
+            String localCode = VN_CERT_TO_LOCAL.get(vnCert);
+            if (localCode != null) {
+                Optional<AgeRating> found = ageRatingRepository.findByRatingCode(localCode);
+                if (found.isPresent()) return found.get();
+            }
         }
 
         // 2. Map US MPAA → local code
@@ -1039,6 +1066,19 @@ public class TmdbService {
         }
 
         return null;
+    }
+
+    /**
+     * Prefer a theatrical certification (TMDB type=3). If none exists, use the first
+     * non-empty certification for that country. Always normalize whitespace and case.
+     */
+    private String selectCertification(List<TmdbReleaseDatesResponse.ReleaseDate> releaseDates) {
+        return releaseDates.stream()
+                .filter(rd -> rd.getCertification() != null && !rd.getCertification().isBlank())
+                .sorted(Comparator.comparingInt(rd -> Integer.valueOf(3).equals(rd.getType()) ? 0 : 1))
+                .map(rd -> rd.getCertification().trim().toUpperCase(Locale.ROOT))
+                .findFirst()
+                .orElse(null);
     }
 
     // ── Genre resolution (shared by preview + import, TMDB-FIX-03) ────────

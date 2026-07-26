@@ -8,12 +8,20 @@ import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import movieservice.entity.ShowTime;
+import movieservice.enums.ShowTimeStatus;
+import jakarta.persistence.LockModeType;
 
 public interface ShowTimeRepository extends JpaRepository<ShowTime, Long> {
+
+        /** Serializes inventory materialization and lifecycle transitions for one showtime. */
+        @Lock(LockModeType.PESSIMISTIC_WRITE)
+        @Query("SELECT s FROM ShowTime s WHERE s.showTimeId = :showtimeId")
+        java.util.Optional<ShowTime> findByIdForUpdate(@Param("showtimeId") Long showtimeId);
 
         @Query("SELECT COUNT(s) > 0 FROM ShowTime s WHERE s.cinemaRoom.cinemaRoomId = :roomId " +
                         "AND s.status <> movieservice.enums.ShowTimeStatus.CANCELLED " +
@@ -135,6 +143,23 @@ public interface ShowTimeRepository extends JpaRepository<ShowTime, Long> {
         List<ShowTime> findByMovieMovieId(Long movieId);
 
         List<ShowTime> findByMovieMovieIdAndShowDate(Long movieId, LocalDate showDate);
+
+        /**
+         * Customer catalogue queries. A showtime is public only while ticket sales are open;
+         * internal SCHEDULED/SUSPENDED rows must never leak through the guest API.
+         */
+        List<ShowTime> findAllByStatusOrderByShowDateAscStartTimeAsc(ShowTimeStatus status);
+
+        java.util.Optional<ShowTime> findByShowTimeIdAndStatus(Long showTimeId, ShowTimeStatus status);
+
+        List<ShowTime> findByMovieMovieIdAndStatusOrderByShowDateAscStartTimeAsc(
+                        Long movieId,
+                        ShowTimeStatus status);
+
+        List<ShowTime> findByMovieMovieIdAndShowDateAndStatusOrderByStartTimeAsc(
+                        Long movieId,
+                        LocalDate showDate,
+                        ShowTimeStatus status);
 
         /** One query for bulk preview/create; cancelled showtimes do not block a room. */
         @Query("SELECT s FROM ShowTime s " +

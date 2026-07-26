@@ -69,7 +69,7 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime, presetMovie
           cinemaRoomId: editShowtime.cinemaRoomId,
           showDate:    editShowtime.showDate,
           startTime:   editShowtime.startTime.slice(0, 5), // "HH:mm:ss" → "HH:mm"
-          basePrice:   "",
+          basePrice:   editShowtime.basePrice != null ? String(editShowtime.basePrice) : "",
         });
       } else {
         // When deep-linked (e.g. "Schedule shows" from a movie's release plan), default
@@ -107,6 +107,10 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime, presetMovie
     setSubmitting(true);
     try {
       const basePriceNum = form.basePrice ? Number(form.basePrice) : undefined;
+      if (form.basePrice && (!Number.isFinite(basePriceNum) || (basePriceNum ?? 0) <= 0)) {
+        setErrorMsg("Standard-seat base price must be greater than 0.");
+        return;
+      }
 
       const payload = editShowtime
         ? ({
@@ -114,6 +118,9 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime, presetMovie
             cinemaRoomId: form.cinemaRoomId || undefined,
             showDate:    form.showDate    || undefined,
             startTime:   form.startTime   || undefined,
+            ...(editShowtime.status === "SCHEDULED"
+              ? { basePrice: basePriceNum && basePriceNum > 0 ? basePriceNum : null }
+              : {}),
           } as ShowtimeUpdatePayload)
         : ({
             movieId:     form.movieId,
@@ -149,6 +156,22 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime, presetMovie
     () => movies.find((m) => m.movieId === form.movieId),
     [movies, form.movieId]
   );
+  const canEditPrice = !editShowtime || editShowtime.status === "SCHEDULED";
+  const basePrice = Number(form.basePrice);
+  const pricePreview = Number.isFinite(basePrice) && basePrice > 0
+    ? [
+        { label: "Standard", value: basePrice },
+        { label: "VIP", value: basePrice * 1.25 },
+        { label: "Couple unit", value: basePrice * 1.8 },
+        { label: "Accessible", value: basePrice },
+      ]
+    : [];
+  const formatVnd = (value: number) =>
+    new Intl.NumberFormat("vi-VN", {
+      style: "currency",
+      currency: "VND",
+      maximumFractionDigits: 0,
+    }).format(value);
 
   // Narrow the room picker to the deep-linked cluster (new showtimes only); fall back to
   // every schedulable room if that cluster happens to have none.
@@ -163,7 +186,7 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime, presetMovie
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
 
       <div
-        className="relative rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden"
+        className="relative rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden"
         style={{ background: "var(--bg-main)" }}
       >
         {/* Header */}
@@ -288,10 +311,9 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime, presetMovie
             </div>
 
             {/* Base Price — create only, optional */}
-            {!editShowtime && (
-              <div>
+            <div className="rounded-xl border p-4" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
                 <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
-                  Base Price (VND){" "}
+                  Standard seat base price (VND){" "}
                   <span style={{ fontSize: "11px", fontWeight: 400, color: "var(--text-sub)" }}>(optional — leave blank to use room defaults)</span>
                 </label>
                 <input
@@ -301,11 +323,31 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime, presetMovie
                   placeholder="e.g. 90000"
                   value={form.basePrice}
                   onChange={e => set("basePrice", e.target.value)}
+                  disabled={!canEditPrice}
                   className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-purple-400 transition-colors"
-                  style={inputStyle}
+                  style={{ ...inputStyle, opacity: canEditPrice ? 1 : 0.65 }}
                 />
-              </div>
-            )}
+                {!canEditPrice && (
+                  <p className="mt-2 text-xs text-amber-600">
+                    Price is locked because this showtime has already entered its sales lifecycle.
+                  </p>
+                )}
+                {pricePreview.length > 0 && (
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {pricePreview.map((item) => (
+                      <div key={item.label} className="rounded-lg border px-2.5 py-2" style={{ borderColor: "var(--border-color)" }}>
+                        <div style={{ fontSize: "10px", color: "var(--text-sub)" }}>{item.label}</div>
+                        <div className="mt-0.5 font-semibold" style={{ fontSize: "12px", color: "var(--text-main)" }}>
+                          {formatVnd(item.value)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-2" style={{ fontSize: "11px", color: "var(--text-sub)" }}>
+                  Standard × 1.00 · VIP × 1.25 · Couple unit × 1.80 · Accessible × 1.00.
+                </p>
+            </div>
 
             {/* Actions */}
             <div className="flex gap-3 pt-2">

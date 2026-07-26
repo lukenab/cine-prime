@@ -98,7 +98,7 @@ export default function ManageShowtimePage() {
       setError(null);
     }
     try {
-      const res = await showtimeApi.getShowtimes();
+      const res = await showtimeApi.getInternalShowtimes();
       setShowtimes(res.result ?? []);
       setLastSyncedAt(new Date());
     } catch (err: unknown) {

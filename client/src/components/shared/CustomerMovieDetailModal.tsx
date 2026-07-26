@@ -133,8 +133,18 @@ export function CustomerMovieDetailModal({ movieId, clusterId, onClose }: Props)
 
   const handleBook = () => {
     if (!movie || isComingSoon) return;
+    let preferredClusterId = clusterId;
+    if (!preferredClusterId) {
+      try {
+        preferredClusterId = JSON.parse(localStorage.getItem("cp_cluster") ?? "null")?.clusterId;
+      } catch {
+        preferredClusterId = undefined;
+      }
+    }
     onClose();
-    navigate(`/showtime/${movie.movieId}`);
+    navigate(
+      `/showtime/${movie.movieId}${preferredClusterId ? `?clusterId=${preferredClusterId}` : ""}`
+    );
   };
 
   if (!open) return null;

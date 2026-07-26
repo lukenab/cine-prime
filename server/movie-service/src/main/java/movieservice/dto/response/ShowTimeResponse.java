@@ -68,5 +68,11 @@ public class ShowTimeResponse {
     // thi "tu X d" o danh sach suat chieu; gia chi tiet tung ghe van lay o trang dat ve.
     BigDecimal price;
 
+    /**
+     * Standard-seat base price configured for this showtime. Final prices are
+     * snapped per sellable seat unit in showtime_seat.
+     */
+    BigDecimal basePrice;
+
     LocalDateTime updatedAt;
 }

@@ -10,6 +10,8 @@ import java.math.BigDecimal;
 @Builder
 public class ShowtimeSeatDto {
     private Long seatId; // Maps to ShowtimeSeat.showtimeSeatId
+    private String seatCode;
+    private String seatGroupId;
     private String row;
     private Integer number;
     private String type; // "STANDARD" | "VIP" | "COUPLE" | "ACCESSIBLE"

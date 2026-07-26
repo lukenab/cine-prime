@@ -11,6 +11,7 @@ import movieservice.dto.tmdb.TmdbCreditsResponse;
 import movieservice.dto.tmdb.TmdbMovieDetail;
 import movieservice.dto.tmdb.TmdbReleaseDatesResponse;
 import movieservice.dto.tmdb.TmdbTranslationsResponse;
+import movieservice.entity.AgeRating;
 import movieservice.entity.Genre;
 import movieservice.entity.Movie;
 import movieservice.entity.MovieSchedulingProfile;
@@ -146,8 +147,22 @@ class TmdbServiceTest {
         when(restTemplate.getForObject(any(URI.class), eq(TmdbCreditsResponse.class))).thenReturn(credits);
         when(restTemplate.getForObject(any(URI.class), eq(TmdbTranslationsResponse.class)))
                 .thenReturn(new TmdbTranslationsResponse());
-        when(restTemplate.getForObject(any(URI.class), eq(TmdbReleaseDatesResponse.class)))
+        lenient().when(restTemplate.getForObject(any(URI.class), eq(TmdbReleaseDatesResponse.class)))
                 .thenReturn(new TmdbReleaseDatesResponse());
+    }
+
+    private TmdbReleaseDatesResponse releaseDates(String countryCode, String certification, int type) {
+        TmdbReleaseDatesResponse.ReleaseDate date = new TmdbReleaseDatesResponse.ReleaseDate();
+        date.setCertification(certification);
+        date.setType(type);
+
+        TmdbReleaseDatesResponse.CountryRelease country = new TmdbReleaseDatesResponse.CountryRelease();
+        country.setCountryCode(countryCode);
+        country.setReleaseDates(List.of(date));
+
+        TmdbReleaseDatesResponse response = new TmdbReleaseDatesResponse();
+        response.setResults(List.of(country));
+        return response;
     }
 
     private TmdbImportRequest importRequest(Integer tmdbId) {
@@ -184,6 +199,8 @@ class TmdbServiceTest {
     @Test
     void getDetailsNeverWritesToAnyRepositoryWhenCompanyAndPersonAreNew() {
         TmdbMovieDetail detail = detailWithOneCompanyAndGenre();
+        detail.setPopularity(45.5);
+        detail.setVoteAverage(8.2);
         TmdbCreditsResponse credits = creditsWithOneDirectorAndOneActor();
         stubTmdbHttpCalls(detail, credits);
 
@@ -211,12 +228,58 @@ class TmdbServiceTest {
         assertEquals("ACTOR", actorPreview.getRoleType());
         assertEquals("Paul Atreides", actorPreview.getCharacterName());
         assertNull(actorPreview.getLocalPersonId());
+        assertEquals(0, new BigDecimal("45.50").compareTo(response.getPopularityScore()));
+        assertEquals(8.2, response.getVoteAverage());
 
         // Cot loi cua issue #188: preview khong duoc phep ghi bat ky repository nao.
         verify(productionCompanyRepository, never()).save(any());
         verify(personRepository, never()).save(any());
         verify(genreRepository, never()).save(any());
         verifyNoInteractions(movieRepository, movieTranslationRepository, movieCastRepository);
+    }
+
+    @Test
+    void getDetailsUsesTheSamePopularityNormalizationAsImport() {
+        TmdbMovieDetail detail = detailWithOneCompanyAndGenre();
+        detail.setPopularity(853.921);
+        stubTmdbHttpCalls(detail, creditsWithOneDirectorAndOneActor());
+        when(productionCompanyRepository.findByName("Legendary Pictures")).thenReturn(Optional.empty());
+        when(personRepository.findByTmdbId(anyInt())).thenReturn(Optional.empty());
+
+        TmdbMovieDetailsResponse response = tmdbService.getDetails(693134);
+
+        assertEquals(0, new BigDecimal("100.00").compareTo(response.getPopularityScore()));
+        verifyNoInteractions(movieRepository, movieSchedulingProfileRepository);
+    }
+
+    @Test
+    void getDetailsMapsLegacyVietnamC13CertificationToCurrentT13Rating() {
+        TmdbMovieDetail detail = detailWithOneCompanyAndGenre();
+        stubTmdbHttpCalls(detail, creditsWithOneDirectorAndOneActor());
+        org.mockito.Mockito.doReturn(releaseDates("VN", "c13", 3))
+                .when(restTemplate).getForObject(any(URI.class), eq(TmdbReleaseDatesResponse.class));
+        AgeRating t13 = AgeRating.builder().ratingId(3).ratingCode("T13").build();
+        when(ageRatingRepository.findByRatingCode("T13")).thenReturn(Optional.of(t13));
+        when(productionCompanyRepository.findByName("Legendary Pictures")).thenReturn(Optional.empty());
+        when(personRepository.findByTmdbId(anyInt())).thenReturn(Optional.empty());
+
+        TmdbMovieDetailsResponse response = tmdbService.getDetails(693134);
+
+        assertEquals(3, response.getAgeRatingId());
+        assertTrue(response.getWarnings().stream().noneMatch("AGE_RATING_NOT_AVAILABLE"::equals));
+    }
+
+    @Test
+    void getDetailsExplainsWhenTmdbHasNoRecognizedAgeRating() {
+        TmdbMovieDetail detail = detailWithOneCompanyAndGenre();
+        stubTmdbHttpCalls(detail, creditsWithOneDirectorAndOneActor());
+        when(productionCompanyRepository.findByName("Legendary Pictures")).thenReturn(Optional.empty());
+        when(personRepository.findByTmdbId(anyInt())).thenReturn(Optional.empty());
+
+        TmdbMovieDetailsResponse response = tmdbService.getDetails(693134);
+
+        assertNull(response.getAgeRatingId());
+        assertTrue(response.getWarnings().contains("AGE_RATING_NOT_AVAILABLE"));
     }
 
     @Test
