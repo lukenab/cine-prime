@@ -10,7 +10,7 @@ import org.springframework.stereotype.Repository;
 import bookingservice.entity.BookingItem;
 
 @Repository
-public interface BookingItemRepository extends JpaRepository<BookingItem, Long> {
+public interface BookingItemRepository extends JpaRepository<BookingItem, String> {
     List<BookingItem> findByBooking_BookingId(String bookingId);
 
     @Query("SELECT COUNT(bi) > 0 FROM BookingItem bi JOIN bi.booking b WHERE b.showtimeId = :showtimeId AND bi.seatCode IN :seatCodes AND b.status = 'CONFIRMED'")

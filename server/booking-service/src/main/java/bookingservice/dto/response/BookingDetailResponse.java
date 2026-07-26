@@ -2,7 +2,7 @@ package bookingservice.dto.response;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.LocalTime;
 import java.util.List;
 
@@ -31,6 +31,6 @@ public class BookingDetailResponse {
     BigDecimal finalAmount;   
     String bookingType;       
     String status;            
-    LocalDateTime createdAt;
+    OffsetDateTime createdAt;
     List<BookingItemResponse> items;
 }

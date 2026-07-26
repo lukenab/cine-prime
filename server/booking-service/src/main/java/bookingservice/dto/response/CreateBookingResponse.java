@@ -1,7 +1,7 @@
 package bookingservice.dto.response;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 import lombok.AccessLevel;
@@ -25,5 +25,5 @@ public class CreateBookingResponse {
     String status;
     BigDecimal totalPrice;
     List<BookingItemResponse> items; 
-    LocalDateTime lockedUntil;       
+    OffsetDateTime lockedUntil;
 }

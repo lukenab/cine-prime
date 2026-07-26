@@ -1,6 +1,6 @@
 package bookingservice.mapper;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -16,10 +16,8 @@ import bookingservice.dto.response.BookingListResponse;
 import bookingservice.dto.response.CancelBookingResponse;
 import bookingservice.dto.response.CreateBookingResponse;
 import bookingservice.dto.response.SeatAvailabilityResponse;
-import bookingservice.dto.response.SeatHoldResponse;
 import bookingservice.entity.Booking;
 import bookingservice.entity.BookingItem;
-import bookingservice.entity.SeatLock;
 
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE, nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
 public interface BookingMapper {
@@ -45,7 +43,7 @@ public interface BookingMapper {
     @Mapping(source = "items", target = "items")
     @Mapping(source = "expiredAt", target = "lockedUntil")
     CreateBookingResponse toCreateBookingResponse(Booking booking, List<BookingItemResponse> items,
-            LocalDateTime expiredAt);
+            OffsetDateTime expiredAt);
 
     CancelBookingResponse toCancelBookingResponse(Booking booking);
 
@@ -69,13 +67,4 @@ public interface BookingMapper {
     }
 
 
-    default SeatHoldResponse toSeatHoldResponse(List<SeatLock> savedLocks) {
-        if (savedLocks == null) {
-            return null;
-        }
-
-        return SeatHoldResponse.builder()
-                .lockedSeats(savedLocks)
-                .build();
-    }
 }

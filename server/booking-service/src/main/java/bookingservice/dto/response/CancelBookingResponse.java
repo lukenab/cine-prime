@@ -1,6 +1,6 @@
 package bookingservice.dto.response;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 
@@ -20,5 +20,5 @@ public class CancelBookingResponse {
     String bookingId;
     String status;
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    LocalDateTime updatedAt;
+    OffsetDateTime updatedAt;
 }

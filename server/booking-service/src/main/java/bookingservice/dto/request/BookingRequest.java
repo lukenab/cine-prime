@@ -1,9 +1,11 @@
 package bookingservice.dto.request;
 
 import java.util.List;
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AccessLevel;
@@ -27,8 +29,8 @@ public class BookingRequest {
 
     @NotEmpty(message = "SEAT_LIST_REQUIRED")
     @Size(max = 8, message = "MAX_SEATS_EXCEEDED") 
+    @JsonProperty("showtimeSeatIds")
+    @JsonAlias("seatIds")
     List<Long> seatIds;
 
-    @Min(value = 0, message = "POINTS_CANNOT_BE_NEGATIVE")
-    Integer pointsUsed = 0;
 }

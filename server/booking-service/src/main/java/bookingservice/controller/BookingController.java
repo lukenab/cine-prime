@@ -8,17 +8,16 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import bookingservice.dto.request.BookingRequest;
-import bookingservice.dto.request.HoldSeatRequest;
 
 import bookingservice.dto.response.BookingDetailResponse;
 import bookingservice.dto.response.BookingListResponse;
 import bookingservice.dto.response.CancelBookingResponse;
 import bookingservice.dto.response.CreateBookingResponse;
-import bookingservice.dto.response.SeatHoldResponse;
 import bookingservice.service.BookingService;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
@@ -36,10 +35,13 @@ public class BookingController {
 
         @PostMapping
         @ResponseStatus(HttpStatus.CREATED)
-        public ApiResponse<CreateBookingResponse> createBooking(@RequestBody @Valid BookingRequest request) {
+        public ApiResponse<CreateBookingResponse> createBooking(
+                        @RequestBody @Valid BookingRequest request,
+                        @RequestHeader("Idempotency-Key") String idempotencyKey) {
                 String accountId = JwtSecurityUtils.getCurrentAccountId();
                 boolean isMember = JwtSecurityUtils.hasRole("ROLE_MEMBER");
-                CreateBookingResponse response = bookingService.createBookingAndHoldSeats(request, accountId, isMember);
+                CreateBookingResponse response = bookingService.createBookingAndHoldSeats(
+                                request, accountId, isMember, idempotencyKey);
 
                 return ApiResponse.<CreateBookingResponse>builder()
                                 .code(1000)
