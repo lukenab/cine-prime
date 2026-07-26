@@ -2,138 +2,75 @@ import axiosClient from "./api";
 
 export interface Seat {
   seatId: number;
+  /** Stable code from the active room-layout snapshot, for example A1. */
+  seatCode?: string;
+  /** Atomic inventory group for couple/sofa seating. */
+  seatGroupId?: string;
   row: string;
   number: number;
   type: "STANDARD" | "VIP" | "COUPLE" | "ACCESSIBLE";
-  colSpan?: number; // so cot vat ly ghe chiem trong hang (Couple = 2)
-  aisleAfter?: boolean; // co loi di ngay sau ghe nay khong (render gap trong so do ghe)
+  colSpan?: number;
+  aisleAfter?: boolean;
   status: "AVAILABLE" | "LOCKED" | "BOOKED";
   price: number;
+}
+
+/** A physical cell in the room-layout version snapped to a showtime. */
+export interface SeatMapPosition {
+  positionId?: number;
+  rowIndex: number;
+  columnIndex: number;
+  rowLabel: string;
+  positionType: "SEAT" | "AISLE" | "EXIT" | "EMPTY_SPACE";
+  seatNumber?: number;
+  seatCode?: string;
+  seatType?: Seat["type"];
+  seatGroupId?: string;
+}
+
+/**
+ * Customer inventory and its immutable auditorium geometry.
+ * A public showtime without positions is invalid and must not fall back to a
+ * synthetic grid.
+ */
+export interface ShowtimeSeatMap {
+  seats: Seat[];
+  positions: SeatMapPosition[];
+  presentationSystem?: "STANDARD" | "IMAX" | "DOLBY_CINEMA" | "SCREENX" | "FOUR_DX";
+  projectionTechnologyCode?: string;
+  audioFormatCode?: string;
+  audioFormatName?: string;
 }
 
 export interface BookingPayload {
   showtimeId: number;
   seatIds: number[];
+  /** Stable for retries of the same seat selection. */
+  idempotencyKey: string;
 }
 
 export interface BookingConfirmation {
   bookingId: string;
+  holdId?: string;
   lockedUntil: string;
 }
 
-
-const mockState: Record<string, Seat[]> = {};
-
-function getMockSeats(showtimeId: string | number) {
-  const sid = String(showtimeId);
-  if (!mockState[sid]) {
-    const mockSeats: Seat[] = [];
-    
-
-    let totalRows = 10;
-    if (sid === "1" || sid === "4") totalRows = 5;
-    else if (sid === "2" || sid === "5") totalRows = 8;
-    
-    const rows = Array.from({ length: totalRows }, (_, i) => String.fromCharCode(65 + i));
-    const seatsPerRow = 10;
-    let idCounter = 1;
-    
-    for (const row of rows) {
-      for (let num = 1; num <= seatsPerRow; num++) { 
-
-        const isVip = row === "C" || row === "D"; 
-        
-        let status: "AVAILABLE" | "LOCKED" | "BOOKED" = "AVAILABLE";
-        const seatCode = `${row}-${num}`;
-        
-
-        if (["A-5", "A-6", "C-5", "C-6", "E-2"].includes(seatCode)) {
-          status = "BOOKED";
-        } else if (["D-4", "D-5"].includes(seatCode)) {
-          status = "LOCKED";
-        }
-
-        mockSeats.push({
-          seatId: idCounter++,
-          row: row,
-          number: num,
-          type: isVip ? "VIP" : "STANDARD",
-          status: status,
-          price: isVip ? 100000 : 70000,
-        });
-      }
-    }
-    mockState[sid] = mockSeats;
-  }
-  return mockState[sid];
-}
-// ----------------------
-
 export const bookingApi = {
-  getSeatsByShowtime: async (showtimeId: string | number): Promise<Seat[]> => {
-    try {
-      const res: any = await axiosClient.get(`/api/showtimes/${showtimeId}/seats`);
-      return res.result || res;
-    } catch (error: any) {
-      const isApiMissing = !error.response || error.response.status === 404 || error.response.status >= 500;
-      if (error.code === "ERR_NETWORK" || error.message === "Network Error" || isApiMissing) {
-        console.warn("🚀 BACKEND UNREACHABLE OR ENDPOINT MISSING: USING STATEFUL MOCK API for getSeatsByShowtime");
-        return new Promise((resolve) => {
-          setTimeout(() => {
-            const seats = JSON.parse(JSON.stringify(getMockSeats(showtimeId)));
-            resolve(seats);
-          }, 500);
-        });
-      }
-      throw error;
-    }
+  getSeatMapByShowtime: async (showtimeId: string | number): Promise<ShowtimeSeatMap> => {
+    const res: any = await axiosClient.get(`/api/showtimes/${showtimeId}/seat-map`);
+    return res.result || res;
   },
-  
+
+  getSeatsByShowtime: async (showtimeId: string | number): Promise<Seat[]> => {
+    const res: any = await axiosClient.get(`/api/showtimes/${showtimeId}/seats`);
+    return res.result || res;
+  },
+
   createBooking: async (payload: BookingPayload): Promise<BookingConfirmation> => {
-    try {
-      const res: any = await axiosClient.post(`/api/bookings`, payload);
-      return res.result || res;
-    } catch (error: any) {
-      const isApiMissing = !error.response || error.response.status === 404 || error.response.status >= 500;
-      if (error.code === "ERR_NETWORK" || error.message === "Network Error" || isApiMissing) {
-        console.warn("🚀 BACKEND UNREACHABLE OR ENDPOINT MISSING: USING STATEFUL MOCK API for createBooking");
-        return new Promise((resolve, reject) => {
-          setTimeout(() => {
-            const sid = String(payload.showtimeId);
-            const seatsInDb = getMockSeats(sid);
-            
-            const conflicts = seatsInDb.filter(
-              s => payload.seatIds.includes(s.seatId) && s.status !== "AVAILABLE"
-            );
-            
-            if (conflicts.length > 0) {
-              reject({
-                response: {
-                  status: 409,
-                  data: {
-                    code: 2005,
-                    message: "Seats already taken by another user",
-                    result: { conflictingSeatIds: conflicts.map(s => s.seatId) }
-                  }
-                }
-              });
-              return;
-            }
-
-            seatsInDb.forEach(s => {
-              if (payload.seatIds.includes(s.seatId)) {
-                s.status = "BOOKED";
-              }
-            });
-
-            resolve({
-              bookingId: "MOCK-BOOKING-" + Math.floor(Math.random() * 10000),
-              lockedUntil: new Date(Date.now() + 10 * 60000).toISOString(),
-            });
-          }, 800);
-        });
-      }
-      throw error;
-    }
+    const { idempotencyKey, ...requestBody } = payload;
+    const res: any = await axiosClient.post("/api/bookings", requestBody, {
+      headers: { "Idempotency-Key": idempotencyKey },
+    });
+    return res.result || res;
   },
 };

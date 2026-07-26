@@ -23,10 +23,13 @@ import bookingservice.dto.response.BookingItemResponse;
 import bookingservice.dto.response.BookingListResponse;
 import bookingservice.dto.response.CancelBookingResponse;
 import bookingservice.dto.response.CreateBookingResponse;
+import bookingservice.dto.response.HeldShowtimeSeatResponse;
+import bookingservice.dto.response.MovieSeatHoldResponse;
 import bookingservice.dto.response.SeatAvailabilityResponse;
 import bookingservice.dto.response.SeatHoldResponse;
 import bookingservice.dto.request.BookingRequest;
 import bookingservice.dto.request.HoldSeatRequest;
+import bookingservice.dto.request.MovieSeatHoldRequest;
 import bookingservice.entity.Booking;
 import bookingservice.entity.BookingItem;
 import bookingservice.entity.BookingStatus;
@@ -40,12 +43,14 @@ import bookingservice.repository.SeatLockRepository;
 import bookingservice.repository.TicketRepository;
 import bookingservice.client.MemberClient;
 import bookingservice.client.ShowtimeClient; 
+import feign.FeignException;
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
+import movie.theater.common.dto.ApiResponse;
 import movie.theater.common.exception.AppException;
 
 @Service
@@ -68,8 +73,11 @@ public class BookingService {
     // seat_id)
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public CreateBookingResponse createBookingAndHoldSeats(BookingRequest request, String currentUserId,
-            boolean isMember) {
+    public CreateBookingResponse createBookingAndHoldSeats(
+            BookingRequest request,
+            String currentUserId,
+            boolean isMember,
+            String idempotencyKey) {
 
         if (!isMember) {
             throw new AppException(BookingErrorCode.MEMBER_ONLY_ACTION);
@@ -80,23 +88,28 @@ public class BookingService {
             throw new AppException(BookingErrorCode.DUPLICATE_SEATS_IN_REQUEST);
         }
 
-        List<String> seatIdStrs = request.getSeatIds().stream()
-                .map(String::valueOf)
-                .collect(Collectors.toList());
-
         // 1. Kiểm tra trạng thái ghế đã thanh toán/xác nhận chưa
-        if (bookingItemRepository.existsByShowtimeIdAndSeatCodeInAndStatusConfirmed(request.getShowtimeId(),
-                seatIdStrs)) {
-            throw new AppException(BookingErrorCode.SEATS_ALREADY_TAKEN);
-        }
-
         // 2. Gọi hàm xử lý Lock thông minh (Đã giải quyết việc check expires_at và
         // trùng lặp)
-        cleanExpiredLocksAndHold(request.getShowtimeId(), seatIdStrs, currentUserId);
+        MovieSeatHoldResponse seatHold = requestAuthoritativeSeatHold(request, idempotencyKey);
+        validateHeldSelection(request, seatHold);
+
+        Optional<Booking> replayedBooking = bookingRepository.findBySeatHoldId(seatHold.getHoldId());
+        if (replayedBooking.isPresent()) {
+            Booking existing = replayedBooking.get();
+            if (!existing.getAccountId().equals(currentUserId)) {
+                throw new AppException(BookingErrorCode.SEAT_ALREADY_LOCKED);
+            }
+            List<BookingItemResponse> existingItems = bookingItemRepository
+                    .findByBooking_BookingId(existing.getBookingId())
+                    .stream()
+                    .map(bookingMapper::toBookingItemResponse)
+                    .toList();
+            return bookingMapper.toCreateBookingResponse(
+                    existing, existingItems, existing.getExpiresAt());
+        }
 
         // Expiry returned to the client — matches the 10-minute hold created above
-        LocalDateTime expiredAt = LocalDateTime.now().plusMinutes(10);
-
         // 3. Logic tạo Booking & chi tiết hóa đơn
         BigDecimal totalPrice = BigDecimal.ZERO;
         List<BookingItemResponse> itemResponses = new ArrayList<>();
@@ -109,24 +122,25 @@ public class BookingService {
                 .accountId(currentUserId)
                 .showtimeId(request.getShowtimeId())
                 .totalAmount(BigDecimal.ZERO)
+                .expiresAt(seatHold.getExpiresAt())
+                .seatHoldId(seatHold.getHoldId())
                 .bookingDetails(new ArrayList<>())
                 .build();
 
-        for (Long seatId : request.getSeatIds()) {
-            BigDecimal seatPrice = BigDecimal.valueOf(85000);
+        for (HeldShowtimeSeatResponse heldSeat : seatHold.getSeats()) {
+            BigDecimal seatPrice = heldSeat.getPrice();
             totalPrice = totalPrice.add(seatPrice);
-            String temporarySeatCode = String.valueOf(seatId);
 
             booking.getBookingDetails().add(BookingItem.builder()
                     .booking(booking)
-                    .showtimeSeatId(seatId)
-                    .seatCode(temporarySeatCode)
+                    .showtimeSeatId(heldSeat.getSeatId())
+                    .seatCode(heldSeat.getSeatCode())
                     .unitPrice(seatPrice)
                     .build());
 
             itemResponses.add(BookingItemResponse.builder()
-                    .seatId(seatId)
-                    .seatLabel(temporarySeatCode)
+                    .seatId(heldSeat.getSeatId())
+                    .seatLabel(heldSeat.getSeatCode())
                     .price(seatPrice)
                     .build());
         }
@@ -137,7 +151,50 @@ public class BookingService {
         // XÓA BỎ HOÀN TOÀN ĐOẠN CODE TỰ INSERT LOCK Ở ĐÂY! Nhường sân khấu cho bước 2
         // lo.
 
-        return bookingMapper.toCreateBookingResponse(savedBooking, itemResponses, expiredAt);
+        return bookingMapper.toCreateBookingResponse(savedBooking, itemResponses, seatHold.getExpiresAt());
+    }
+
+    private MovieSeatHoldResponse requestAuthoritativeSeatHold(
+            BookingRequest request,
+            String idempotencyKey) {
+        try {
+            ApiResponse<MovieSeatHoldResponse> response = showtimeClient.holdSeats(
+                    request.getShowtimeId(),
+                    idempotencyKey,
+                    new MovieSeatHoldRequest(request.getSeatIds()));
+            if (response == null || response.getResult() == null) {
+                throw new AppException(BookingErrorCode.SHOWTIME_INVENTORY_UNAVAILABLE);
+            }
+            return response.getResult();
+        } catch (FeignException ex) {
+            if (ex.status() == 404) {
+                throw new AppException(BookingErrorCode.SHOWTIME_NOT_AVAILABLE);
+            }
+            if (ex.status() == 409) {
+                throw new AppException(BookingErrorCode.SEAT_ALREADY_LOCKED);
+            }
+            if (ex.status() == 400 || ex.status() == 422) {
+                throw new AppException(BookingErrorCode.INVALID_SEAT_SELECTION);
+            }
+            log.error("movie-service seat hold failed: status={}", ex.status(), ex);
+            throw new AppException(BookingErrorCode.SHOWTIME_INVENTORY_UNAVAILABLE);
+        }
+    }
+
+    private void validateHeldSelection(BookingRequest request, MovieSeatHoldResponse seatHold) {
+        if (seatHold.getShowtimeId() == null
+                || !seatHold.getShowtimeId().equals(request.getShowtimeId())
+                || seatHold.getSeats() == null
+                || seatHold.getExpiresAt() == null
+                || seatHold.getHoldId() == null
+                || !seatHold.getSeats().stream()
+                        .map(HeldShowtimeSeatResponse::getSeatId)
+                        .collect(java.util.stream.Collectors.toSet())
+                        .equals(new java.util.HashSet<>(request.getSeatIds()))
+                || seatHold.getSeats().stream()
+                        .anyMatch(seat -> seat.getPrice() == null || seat.getSeatCode() == null)) {
+            throw new AppException(BookingErrorCode.SHOWTIME_INVENTORY_UNAVAILABLE);
+        }
     }
 
     private void cleanExpiredLocksAndHold(Long showtimeId, List<String> seatIdStrs, String accountId) {

@@ -40,6 +40,12 @@ const RULES: Rule[] = [
     label: () => "TMDB didn't provide a runtime — please verify the duration before saving.",
   },
   {
+    match: (c) => c === "AGE_RATING_NOT_AVAILABLE",
+    severity: "WARNING",
+    group: "release-rating",
+    label: () => "TMDB has no recognized Vietnam or US theatrical certification — select and verify an age rating before review.",
+  },
+  {
     match: (c) => c.startsWith("GENRE_UNMAPPED:"),
     severity: "BLOCKING",
     group: "genre-mapping",

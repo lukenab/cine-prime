@@ -52,6 +52,7 @@ class ShowTimeServiceBulkTest {
     @Mock CinemaRoomRepository cinemaRoomRepository;
     @Mock RoomLayoutRepository roomLayoutRepository;
     @Mock MovieMapper movieMapper;
+    @Mock ShowtimeInventoryService showtimeInventoryService;
 
     @InjectMocks
     ShowTimeService showTimeService;
@@ -142,6 +143,7 @@ class ShowTimeServiceBulkTest {
         ordered.verify(showTimeRepository).findActiveByRoomsAndDateRange(
                 List.of(1L), request.getFromDate(), request.getToDate());
         ordered.verify(showTimeRepository).saveAllAndFlush(anyList());
+        verify(showtimeInventoryService).materialize(99L);
     }
 
     private BulkShowTimeRequest request(LocalDate date, List<LocalTime> startTimes) {

@@ -19,6 +19,8 @@ import java.time.LocalDateTime;
         @Index(name = "idx_ss_status",   columnList = "showtime_id, status"),
         @Index(name = "idx_ss_booking",  columnList = "booking_id"),
         @Index(name = "idx_ss_expires",  columnList = "reserved_expires_at"),
+        @Index(name = "idx_ss_hold",     columnList = "hold_id"),
+        @Index(name = "idx_ss_hold_key", columnList = "showtime_id, reserved_by, hold_idempotency_key"),
     }
 )
 @Getter @Setter
@@ -44,10 +46,22 @@ public class ShowtimeSeat {
     @Column(name = "seat_code", nullable = false, length = 10)
     String seatCode;
 
+    /** Active layout used to materialize this immutable showtime inventory snapshot. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "room_layout_id")
+    RoomLayout roomLayout;
+
+    @Column(name = "layout_version")
+    Integer layoutVersion;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "seat_type", nullable = false, length = 20)
     @Builder.Default
     SeatType seatType = SeatType.STANDARD;
+
+    /** Snapshot of the atomic sellable group (for example a Couple seat). */
+    @Column(name = "seat_group_id", length = 36)
+    String seatGroupId;
 
     @Column(name = "price", nullable = false, precision = 10, scale = 2)
     BigDecimal price;
@@ -70,4 +84,22 @@ public class ShowtimeSeat {
      */
     @Column(name = "booking_id", length = 36)
     String bookingId;
+
+    /** One identifier shared by every seat selected in the same atomic hold. */
+    @Column(name = "hold_id", length = 36)
+    String holdId;
+
+    /** Stable authenticated account identifier that owns the temporary hold. */
+    @Column(name = "reserved_by", length = 100)
+    String reservedBy;
+
+    /** Client retry key; repeated requests with the same selection replay the hold. */
+    @Column(name = "hold_idempotency_key", length = 128)
+    String holdIdempotencyKey;
+
+    /** Secondary protection if a write path ever bypasses the pessimistic lock. */
+    @Version
+    @Column(name = "version", nullable = false)
+    @Builder.Default
+    Long version = 0L;
 }

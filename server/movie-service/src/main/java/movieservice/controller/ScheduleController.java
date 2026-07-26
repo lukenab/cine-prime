@@ -34,14 +34,14 @@ public class ScheduleController {
     @GetMapping
     public ApiResponse<List<ShowTimeResponse>> getAll() {
         return ApiResponse.<List<ShowTimeResponse>>builder()
-                .result(showTimeService.getAll())
+                .result(showTimeService.getPublicOnSale())
                 .build();
     }
 
     @GetMapping("/{id}")
     public ApiResponse<ShowTimeResponse> getById(@PathVariable Long id) {
         return ApiResponse.<ShowTimeResponse>builder()
-                .result(showTimeService.getById(id))
+                .result(showTimeService.getPublicOnSaleById(id))
                 .build();
     }
 
@@ -54,7 +54,24 @@ public class ScheduleController {
             @PathVariable Long movieId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return ApiResponse.<List<ShowTimeResponse>>builder()
-                .result(showTimeService.getByMovieId(movieId, date))
+                .result(showTimeService.getPublicOnSaleByMovieId(movieId, date))
+                .build();
+    }
+
+    // Internal operational reads must remain separate from the customer catalogue.
+    @GetMapping("/internal")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public ApiResponse<List<ShowTimeResponse>> getAllInternal() {
+        return ApiResponse.<List<ShowTimeResponse>>builder()
+                .result(showTimeService.getAll())
+                .build();
+    }
+
+    @GetMapping("/internal/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public ApiResponse<ShowTimeResponse> getByIdInternal(@PathVariable Long id) {
+        return ApiResponse.<ShowTimeResponse>builder()
+                .result(showTimeService.getById(id))
                 .build();
     }
 

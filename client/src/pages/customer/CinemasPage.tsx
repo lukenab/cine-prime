@@ -1,7 +1,44 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MapPin, Building2, Armchair, Phone, ArrowRight, Search } from "lucide-react";
+import {
+  MapPin,
+  Building2,
+  Armchair,
+  Phone,
+  ArrowRight,
+  Search,
+  Heart,
+  Navigation,
+  Loader2,
+} from "lucide-react";
 import { movieApi, type ClusterResponse } from "../../api/movieApi";
+
+const FAVORITE_CINEMAS_KEY = "cp_favorite_clusters";
+
+function readFavoriteCinemaIds(): number[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(FAVORITE_CINEMAS_KEY) ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter((id): id is number => Number.isInteger(id)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function distanceInKm(
+  origin: { latitude: number; longitude: number },
+  destination: { latitude: number; longitude: number }
+) {
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const deltaLatitude = toRadians(destination.latitude - origin.latitude);
+  const deltaLongitude = toRadians(destination.longitude - origin.longitude);
+  const latitudeA = toRadians(origin.latitude);
+  const latitudeB = toRadians(destination.latitude);
+  const h =
+    Math.sin(deltaLatitude / 2) ** 2
+    + Math.cos(latitudeA) * Math.cos(latitudeB) * Math.sin(deltaLongitude / 2) ** 2;
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
 
 export default function CinemasPage() {
   const navigate = useNavigate();
@@ -10,6 +47,10 @@ export default function CinemasPage() {
   const [activeProvince, setActiveProvince] = useState("All");
   const [clusters, setClusters] = useState<ClusterResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [favoriteIds, setFavoriteIds] = useState<number[]>(readFavoriteCinemaIds);
+  const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState("");
 
   useEffect(() => {
     movieApi.getClusters()
@@ -20,22 +61,65 @@ export default function CinemasPage() {
 
   const provinces = useMemo(() => ["All", ...Array.from(new Set(clusters.map((c) => c.province)))], [clusters]);
 
-  // Same localStorage keys the search bar's location picker uses, so the
-  // chosen cinema flows through to Movies and pre-selects it on Showtime page.
   const handleViewShowtimes = (cluster: ClusterResponse) => {
     localStorage.setItem("cp_province", cluster.province);
     localStorage.setItem("cp_cluster", JSON.stringify(cluster));
-    navigate("/movies");
+    navigate(`/cinemas/${cluster.clusterId}/showtimes`);
   };
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return clusters.filter((c) => {
-      const matchesProvince = activeProvince === "All" || c.province === activeProvince;
-      const matchesQuery = !q || c.clusterName.toLowerCase().includes(q) || c.address.toLowerCase().includes(q);
-      return matchesProvince && matchesQuery;
+    return clusters
+      .filter((c) => {
+        const matchesProvince = activeProvince === "All" || c.province === activeProvince;
+        const matchesQuery = !q || c.clusterName.toLowerCase().includes(q) || c.address.toLowerCase().includes(q);
+        return matchesProvince && matchesQuery;
+      })
+      .sort((a, b) => {
+        const favoriteDifference =
+          Number(favoriteIds.includes(b.clusterId)) - Number(favoriteIds.includes(a.clusterId));
+        if (favoriteDifference !== 0) return favoriteDifference;
+        if (currentLocation && a.latitude != null && a.longitude != null && b.latitude != null && b.longitude != null) {
+          return distanceInKm(currentLocation, { latitude: a.latitude, longitude: a.longitude })
+            - distanceInKm(currentLocation, { latitude: b.latitude, longitude: b.longitude });
+        }
+        return a.clusterName.localeCompare(b.clusterName);
+      });
+  }, [clusters, query, activeProvince, currentLocation, favoriteIds]);
+
+  function toggleFavorite(clusterId: number) {
+    setFavoriteIds((current) => {
+      const next = current.includes(clusterId)
+        ? current.filter((id) => id !== clusterId)
+        : [...current, clusterId];
+      localStorage.setItem(FAVORITE_CINEMAS_KEY, JSON.stringify(next));
+      return next;
     });
-  }, [clusters, query, activeProvince]);
+  }
+
+  function findNearbyCinemas() {
+    if (!navigator.geolocation) {
+      setLocationError("Location is not supported by this browser.");
+      return;
+    }
+    setLocating(true);
+    setLocationError("");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setCurrentLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+        setActiveProvince("All");
+        setLocating(false);
+      },
+      () => {
+        setLocationError("Allow location access to sort cinemas by distance.");
+        setLocating(false);
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+    );
+  }
 
   return (
     <div className="min-h-screen pt-16" style={{ backgroundColor: "#050505" }}>
@@ -54,18 +138,30 @@ export default function CinemasPage() {
           </p>
 
           {/* Search */}
-          <div
-            className="mt-6 flex items-center gap-3 rounded-2xl px-4"
-            style={{ border: "1px solid rgba(255,215,0,0.2)", backgroundColor: "rgba(255,255,255,0.04)" }}
-          >
-            <Search size={16} style={{ color: "rgba(255,215,0,0.6)" }} />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by cinema name or address..."
-              className="w-full bg-transparent py-3.5 text-sm text-white outline-none placeholder-white/35"
-            />
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <div
+              className="flex flex-1 items-center gap-3 rounded-2xl px-4"
+              style={{ border: "1px solid rgba(255,215,0,0.2)", backgroundColor: "rgba(255,255,255,0.04)" }}
+            >
+              <Search size={16} style={{ color: "rgba(255,215,0,0.6)" }} />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search by cinema name or address..."
+                className="w-full bg-transparent py-3.5 text-sm text-white outline-none placeholder-white/35"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={findNearbyCinemas}
+              disabled={locating}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white/75 transition-colors hover:border-[#FFD700]/35 hover:text-white disabled:opacity-60"
+            >
+              {locating ? <Loader2 size={15} className="animate-spin" /> : <Navigation size={15} />}
+              {currentLocation ? "Sorted by distance" : "Find cinemas near me"}
+            </button>
           </div>
+          {locationError && <p className="mt-2 text-xs text-amber-400">{locationError}</p>}
 
           {/* Province tabs */}
           <div className="mt-5 flex gap-2.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
@@ -114,6 +210,22 @@ export default function CinemasPage() {
                   el.style.boxShadow = "none";
                 }}
               >
+                <button
+                  type="button"
+                  aria-label={favoriteIds.includes(cluster.clusterId) ? "Remove favorite" : "Add favorite"}
+                  aria-pressed={favoriteIds.includes(cluster.clusterId)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    toggleFavorite(cluster.clusterId);
+                  }}
+                  className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/45 text-white/55 backdrop-blur transition-colors hover:text-[#FFD700]"
+                >
+                  <Heart
+                    size={16}
+                    fill={favoriteIds.includes(cluster.clusterId) ? "currentColor" : "none"}
+                    style={{ color: favoriteIds.includes(cluster.clusterId) ? "#FFD700" : undefined }}
+                  />
+                </button>
                 <div className="mb-5 flex items-start gap-4">
                   <div
                     className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl"
@@ -125,6 +237,15 @@ export default function CinemasPage() {
                     <h3 className="text-base font-bold text-white">{cluster.clusterName}</h3>
                     <p className="mt-0.5 text-[13px] text-white/40">{cluster.address}</p>
                     <p className="mt-0.5 text-[11px] uppercase tracking-wider text-[#FFD700]/70">{cluster.province}</p>
+                    {currentLocation && cluster.latitude != null && cluster.longitude != null && (
+                      <p className="mt-1 flex items-center gap-1 text-[11px] text-emerald-400/80">
+                        <Navigation size={10} />
+                        {distanceInKm(currentLocation, {
+                          latitude: cluster.latitude,
+                          longitude: cluster.longitude,
+                        }).toFixed(1)} km away
+                      </p>
+                    )}
                   </div>
                 </div>
 

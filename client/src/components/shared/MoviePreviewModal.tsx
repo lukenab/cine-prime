@@ -106,8 +106,16 @@ export function MoviePreviewModal({ movie, onClose }: Props) {
 
   const handleBook = () => {
     if (isComingSoon) return;
+    let preferredClusterId: number | undefined;
+    try {
+      preferredClusterId = JSON.parse(localStorage.getItem("cp_cluster") ?? "null")?.clusterId;
+    } catch {
+      preferredClusterId = undefined;
+    }
     onClose();
-    navigate(`/showtime/${movie.movieId}`);
+    navigate(
+      `/showtime/${movie.movieId}${preferredClusterId ? `?clusterId=${preferredClusterId}` : ""}`
+    );
   };
 
   return (

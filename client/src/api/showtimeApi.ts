@@ -19,12 +19,16 @@ export interface ShowtimeResponse {
   endTime: string;       // "HH:mm:ss"  — calculated by backend from movie duration
   status: ShowtimeStatus;
   formatCode?: string;
+  screeningVersionId?: number;
+  audioLanguageCode?: string;
+  subtitleLanguageCode?: string;
   source?: 'MANUAL' | 'AUTO';
   totalSeats?: number;
   soldSeats?: number;
   availableSeats?: number;
   cancellationReason?: string;
   price?: number;        // lowest active seat price in the room — "from X" display
+  basePrice?: number;
   updatedAt?: string;
 }
 
@@ -41,12 +45,13 @@ export interface ShowtimeAssignPayload {
 }
 
 // ── Update payload (mirrors UpdateShowTimeRequest.java) ───────────────────────
-// NOTE: basePrice and status are NOT supported by the update endpoint yet
+// Price can be edited only while the showtime remains SCHEDULED.
 export interface ShowtimeUpdatePayload {
   movieId?: number;
   cinemaRoomId?: number;
   showDate?: string;
   startTime?: string;
+  basePrice?: number | null;
 }
 
 export interface ApiWrapper<T> {
@@ -341,9 +346,13 @@ export type ShowtimeAllocationPolicyPayload = Omit<
 
 // ── API ───────────────────────────────────────────────────────────────────────
 export const showtimeApi = {
-  /** GET /api/schedules — list all showtimes */
+  /** Public catalogue: backend returns ON_SALE showtimes only. */
   getShowtimes: () =>
     axiosClient.get('/api/schedules') as Promise<ApiWrapper<ShowtimeResponse[]>>,
+
+  /** Internal operations catalogue: includes SCHEDULED/SUSPENDED/etc. ADMIN only. */
+  getInternalShowtimes: () =>
+    axiosClient.get('/api/schedules/internal') as Promise<ApiWrapper<ShowtimeResponse[]>>,
 
   /** GET /api/schedules/{id} */
   getById: (id: number) =>

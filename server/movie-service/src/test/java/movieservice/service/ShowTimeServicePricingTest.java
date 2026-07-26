@@ -4,11 +4,13 @@ import movie.theater.common.exception.AppException;
 import movieservice.dto.request.CreateShowTimeRequest;
 import movieservice.dto.request.UpdateShowTimeRequest;
 import movieservice.dto.response.ShowTimePricingResponse;
+import movieservice.dto.response.ShowtimeSeatMapResponse;
 import movieservice.dto.response.ShowtimeSeatDto;
 import movieservice.entity.CinemaRoom;
 import movieservice.entity.CinemaCluster;
 import movieservice.entity.Movie;
 import movieservice.entity.RoomLayout;
+import movieservice.entity.RoomLayoutPosition;
 import movieservice.entity.Seat;
 import movieservice.entity.ShowTime;
 import movieservice.entity.ShowtimeSeat;
@@ -16,6 +18,7 @@ import movieservice.enums.SeatType;
 import movieservice.enums.CinemaRoomStatus;
 import movieservice.enums.ClusterStatus;
 import movieservice.enums.LayoutStatus;
+import movieservice.enums.LayoutPositionType;
 import movieservice.enums.ShowTimeStatus;
 import movieservice.enums.ShowtimeSeatStatus;
 import movieservice.mapper.MovieMapper;
@@ -23,6 +26,7 @@ import movieservice.exception.MovieErrorCode;
 import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.MovieRepository;
 import movieservice.repository.RoomLayoutRepository;
+import movieservice.repository.RoomLayoutPositionRepository;
 import movieservice.repository.SeatRepository;
 import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeSeatRepository;
@@ -56,26 +60,76 @@ class ShowTimeServicePricingTest {
     @Mock MovieRepository movieRepository;
     @Mock CinemaRoomRepository cinemaRoomRepository;
     @Mock RoomLayoutRepository roomLayoutRepository;
+    @Mock RoomLayoutPositionRepository roomLayoutPositionRepository;
     @Mock MovieMapper movieMapper;
+    @Mock ShowtimeInventoryService showtimeInventoryService;
 
     @InjectMocks
     ShowTimeService showTimeService;
 
     @Test
-    void lazyInitPrefersShowtimeBasePrice() {
-        assertEquals(new BigDecimal("120000.00"),
-                initializeSeatPrice(new BigDecimal("120000.00"), new BigDecimal("90000.00")));
+    void seatReadRejectsMissingInventoryWithoutCreatingRows() {
+        when(showTimeRepository.findByShowTimeIdAndStatus(7L, ShowTimeStatus.ON_SALE))
+                .thenReturn(Optional.of(ShowTime.builder().showTimeId(7L).build()));
+        when(showtimeSeatRepository.findByShowTime_ShowTimeId(7L)).thenReturn(List.of());
+
+        AppException exception = assertThrows(
+                AppException.class, () -> showTimeService.getSeatsByShowtime(7L));
+
+        assertEquals(MovieErrorCode.SHOWTIME_INVENTORY_NOT_MATERIALIZED, exception.getErrorCode());
+        verify(showtimeSeatRepository, never()).saveAll(anyList());
     }
 
     @Test
-    void lazyInitFallsBackToSeatPrice() {
-        assertEquals(new BigDecimal("90000.00"),
-                initializeSeatPrice(null, new BigDecimal("90000.00")));
-    }
+    void seatMapReturnsInventoryAlongsideTheSnappedPhysicalLayout() {
+        CinemaRoom room = CinemaRoom.builder().cinemaRoomId(3L).build();
+        ShowTime showtime = ShowTime.builder()
+                .showTimeId(7L)
+                .status(ShowTimeStatus.ON_SALE)
+                .cinemaRoom(room)
+                .build();
+        RoomLayout layout = RoomLayout.builder().roomLayoutId(11L).build();
+        ShowtimeSeat inventory = ShowtimeSeat.builder()
+                .showtimeSeatId(71L)
+                .showTime(showtime)
+                .roomLayout(layout)
+                .seatCode("A1")
+                .seatType(SeatType.STANDARD)
+                .status(ShowtimeSeatStatus.AVAILABLE)
+                .price(new BigDecimal("90000.00"))
+                .build();
+        RoomLayoutPosition position = RoomLayoutPosition.builder()
+                .positionId(101L)
+                .rowIndex(0)
+                .columnIndex(0)
+                .rowLabel("A")
+                .positionType(LayoutPositionType.SEAT)
+                .seatNumber(1)
+                .seatCode("A1")
+                .seatType(SeatType.STANDARD)
+                .build();
+        RoomLayoutPosition aisle = RoomLayoutPosition.builder()
+                .positionId(102L)
+                .rowIndex(0)
+                .columnIndex(1)
+                .rowLabel("A")
+                .positionType(LayoutPositionType.AISLE)
+                .seatStatus(null)
+                .build();
 
-    @Test
-    void lazyInitFallsBackToSystemDefault() {
-        assertEquals(new BigDecimal("85000.00"), initializeSeatPrice(null, null));
+        when(showTimeRepository.findByShowTimeIdAndStatus(7L, ShowTimeStatus.ON_SALE))
+                .thenReturn(Optional.of(showtime));
+        when(showtimeSeatRepository.findByShowTime_ShowTimeId(7L)).thenReturn(List.of(inventory));
+        when(roomLayoutPositionRepository.findByRoomLayoutRoomLayoutIdOrderByRowIndexAscColumnIndexAsc(11L))
+                .thenReturn(List.of(position, aisle));
+
+        ShowtimeSeatMapResponse result = showTimeService.getSeatMapByShowtime(7L);
+
+        assertEquals("A1", result.getSeats().getFirst().getSeatCode());
+        assertEquals("SEAT", result.getPositions().getFirst().getPositionType());
+        assertEquals("A", result.getPositions().getFirst().getRowLabel());
+        assertEquals("AISLE", result.getPositions().get(1).getPositionType());
+        assertNull(result.getPositions().get(1).getSeatStatus());
     }
 
     @Test
@@ -96,11 +150,11 @@ class ShowTimeServicePricingTest {
         request.setBasePrice(new BigDecimal("120000.00"));
 
         when(movieRepository.findById(1L)).thenReturn(Optional.of(movie));
-        when(cinemaRoomRepository.findByCinemaRoomId(3L)).thenReturn(room);
+        when(cinemaRoomRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(room));
         allowActiveLayout(3L);
         when(showTimeRepository.existsByCinemaRoomAndOverlappingTime(
                 any(), any(), any(), any())).thenReturn(false);
-        when(showTimeRepository.save(any(ShowTime.class))).thenAnswer(invocation -> {
+        when(showTimeRepository.saveAndFlush(any(ShowTime.class))).thenAnswer(invocation -> {
             ShowTime value = invocation.getArgument(0);
             value.setShowTimeId(55L);
             return value;
@@ -110,6 +164,7 @@ class ShowTimeServicePricingTest {
 
         assertEquals(new BigDecimal("120000.00"), response.getBasePrice());
         assertEquals(55L, response.getShowTimeId());
+        verify(showtimeInventoryService).materialize(55L);
     }
 
     @Test
@@ -128,12 +183,16 @@ class ShowTimeServicePricingTest {
         request.setStartTime(LocalTime.of(14, 30));
 
         when(movieRepository.findById(1L)).thenReturn(Optional.of(movie));
-        when(cinemaRoomRepository.findByCinemaRoomId(3L)).thenReturn(room);
+        when(cinemaRoomRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(room));
         allowActiveLayout(3L);
         when(showTimeRepository.existsByCinemaRoomAndOverlappingTime(
                 any(), any(), any(), any())).thenReturn(false);
-        when(showTimeRepository.save(any(ShowTime.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(showTimeRepository.saveAndFlush(any(ShowTime.class)))
+                .thenAnswer(invocation -> {
+                    ShowTime value = invocation.getArgument(0);
+                    value.setShowTimeId(56L);
+                    return value;
+                });
 
         ShowTimePricingResponse response = showTimeService.createStandalone(request);
 
@@ -156,7 +215,7 @@ class ShowTimeServicePricingTest {
         request.setStartTime(LocalTime.of(14, 30));
 
         when(movieRepository.findById(1L)).thenReturn(Optional.of(movie));
-        when(cinemaRoomRepository.findByCinemaRoomId(3L)).thenReturn(room);
+        when(cinemaRoomRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(room));
 
         AppException exception = assertThrows(
                 AppException.class, () -> showTimeService.createStandalone(request));
@@ -237,29 +296,23 @@ class ShowTimeServicePricingTest {
         verify(showtimeSeatRepository, never()).saveAll(anyList());
     }
 
-    private BigDecimal initializeSeatPrice(BigDecimal showTimePrice, BigDecimal seatPrice) {
-        CinemaRoom room = CinemaRoom.builder().cinemaRoomId(3L).seatsPerRow(10).build();
-        Seat seat = Seat.builder()
-                .seatId(1L)
-                .seatCode("A1")
-                .seatType(SeatType.STANDARD)
-                .cinemaRoom(room)
-                .price(seatPrice)
-                .build();
-        room.setSeats(List.of(seat));
+    @Test
+    void updateRejectsPriceChangeAfterShowtimeOpensForSales() {
         ShowTime showTime = ShowTime.builder()
                 .showTimeId(7L)
-                .cinemaRoom(room)
-                .basePrice(showTimePrice)
-                .status(ShowTimeStatus.SCHEDULED)
+                .status(ShowTimeStatus.ON_SALE)
+                .basePrice(new BigDecimal("120000.00"))
                 .build();
-
+        UpdateShowTimeRequest request = new UpdateShowTimeRequest();
+        request.setBasePrice(new BigDecimal("130000.00"));
         when(showTimeRepository.findById(7L)).thenReturn(Optional.of(showTime));
-        when(showtimeSeatRepository.findByShowTime_ShowTimeId(7L)).thenReturn(List.of());
-        when(showtimeSeatRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        List<ShowtimeSeatDto> result = showTimeService.getSeatsByShowtime(7L);
-        return result.getFirst().getPrice();
+        AppException exception = assertThrows(
+                AppException.class, () -> showTimeService.update(7L, request));
+
+        assertEquals(MovieErrorCode.SHOWTIME_PRICE_LOCKED, exception.getErrorCode());
+        verify(showTimeRepository, never()).save(any(ShowTime.class));
+        verify(showtimeSeatRepository, never()).saveAll(anyList());
     }
 
     private ShowtimeSeat showtimeSeat(

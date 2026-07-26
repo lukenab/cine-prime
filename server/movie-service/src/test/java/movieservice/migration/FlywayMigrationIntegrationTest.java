@@ -52,10 +52,10 @@ class FlywayMigrationIntegrationTest {
         MigrateResult result = flywayFor(FRESH_DB).migrate();
 
         assertTrue(result.success);
-        // V1..V10, V12..V42 (versioned - V11 is reserved on a sibling branch not yet merged)
+        // V1..V10, V12..V46 (versioned - V11 is reserved on a sibling branch not yet merged)
         // + R (repeatable seed) all actually executed — a fresh DB has no prior state for
         // baselineOnMigrate to kick in on.
-        assertEquals(42, result.migrationsExecuted);
+        assertEquals(46, result.migrationsExecuted);
 
         try (Connection conn = DriverManager.getConnection(
                 FRESH_DB.getJdbcUrl(), FRESH_DB.getUsername(), FRESH_DB.getPassword());
@@ -75,6 +75,25 @@ class FlywayMigrationIntegrationTest {
                     """)) {
                 rs.next();
                 assertEquals(1, rs.getInt(1), "screening versions must store audio format separately");
+            }
+            try (ResultSet rs = st.executeQuery("""
+                    SELECT COUNT(*)
+                    FROM information_schema.columns
+                    WHERE table_name = 'showtime_seat'
+                      AND column_name IN (
+                          'room_layout_id',
+                          'layout_version',
+                          'seat_group_id',
+                          'booking_id',
+                          'hold_id',
+                          'reserved_by',
+                          'hold_idempotency_key',
+                          'version'
+                      )
+                    """)) {
+                rs.next();
+                assertEquals(8, rs.getInt(1),
+                        "showtime inventory must snapshot its layout and hold/booking ownership");
             }
             try (ResultSet rs = st.executeQuery(
                     "SELECT status FROM screening_format WHERE format_code = 'ATMOS'")) {
