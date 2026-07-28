@@ -55,6 +55,21 @@ export interface BookingConfirmation {
   lockedUntil: string;
 }
 
+export interface SeatHoldPolicy {
+  channel: "WEB" | "MOBILE" | "COUNTER";
+  ttlSeconds: number;
+  maxSeatsPerBooking: number;
+}
+
+export const seatInventoryWebSocketUrl = (showtimeId: string | number): string => {
+  const apiBase = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
+  const url = new URL(apiBase, window.location.origin);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.pathname = "/ws/seat-inventory";
+  url.search = new URLSearchParams({ showtimeId: String(showtimeId) }).toString();
+  return url.toString();
+};
+
 export const bookingApi = {
   getSeatMapByShowtime: async (showtimeId: string | number): Promise<ShowtimeSeatMap> => {
     const res: any = await axiosClient.get(`/api/showtimes/${showtimeId}/seat-map`);
@@ -66,11 +81,34 @@ export const bookingApi = {
     return res.result || res;
   },
 
+  getSeatHoldPolicy: async (): Promise<SeatHoldPolicy> => {
+    const res: any = await axiosClient.get("/api/showtimes/seat-hold-policy", {
+      headers: { "X-Booking-Channel": "WEB" },
+    });
+    return res.result || res;
+  },
+
+  releaseSeatHold: async (
+    showtimeId: string | number,
+    holdId: string,
+  ): Promise<void> => {
+    await axiosClient.delete(`/api/showtimes/${showtimeId}/seat-holds/${encodeURIComponent(holdId)}`);
+  },
+
   createBooking: async (payload: BookingPayload): Promise<BookingConfirmation> => {
     const { idempotencyKey, ...requestBody } = payload;
     const res: any = await axiosClient.post("/api/bookings", requestBody, {
-      headers: { "Idempotency-Key": idempotencyKey },
+      headers: {
+        "Idempotency-Key": idempotencyKey,
+        "X-Booking-Channel": "WEB",
+      },
     });
-    return res.result || res;
+    const result = res.result || res;
+    return {
+      ...result,
+      // movie-service calls this timestamp expiresAt; keep the existing
+      // customer contract while booking-service is migrated incrementally.
+      lockedUntil: result.lockedUntil ?? result.expiresAt,
+    };
   },
 };
