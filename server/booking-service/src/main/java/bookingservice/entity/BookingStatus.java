@@ -1,7 +1,10 @@
 package bookingservice.entity;
 
 public enum BookingStatus {
-    PENDING,
+    PENDING_PAYMENT,
+    CONFIRM_PENDING,
     CONFIRMED,
-    CANCELLED
+    CANCEL_REQUESTED,
+    CANCELLED,
+    EXPIRED
 }

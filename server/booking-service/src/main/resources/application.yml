@@ -19,12 +19,15 @@ spring:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false   
     properties:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+  flyway:
+    enabled: true
+    locations: ${BOOKING_FLYWAY_LOCATIONS:classpath:db/migration,classpath:db/seed}
 
 eureka:
   client:

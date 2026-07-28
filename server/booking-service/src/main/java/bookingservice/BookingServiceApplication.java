@@ -15,7 +15,7 @@ import org.springframework.context.annotation.ComponentScan;
 public class BookingServiceApplication {
 
 	public static void main(String[] args) {
-		TimeZone.setDefault(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
+		TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 		SpringApplication.run(BookingServiceApplication.class, args);
 	}
 
