@@ -44,6 +44,7 @@ import MovieEditorWorkflow, {
   MOVIE_EDITOR_SECTION_META,
   movieEditorSectionDomId,
   type MovieEditorSectionDefinition,
+  type MovieEditorSectionId,
 } from "./movieEditor/MovieEditorWorkflow";
 import {
   MovieEditorActionBar,
@@ -53,6 +54,9 @@ import {
 import { persistMovieDraft, saveDraftThenSubmit } from "./movieEditor/movieDraftActions";
 import { buildMoviePayload } from "./movieEditor/buildMoviePayload";
 import { MediaThumbnail } from "./movieEditor/MediaThumbnail";
+import ScreeningVersionsSection, {
+  type ScreeningVersionSummary,
+} from "./movieEditor/ScreeningVersionsSection";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Local types (same shape as the previous MovieModal)
@@ -80,6 +84,8 @@ type FormState = {
   releaseDate: string;
   country: string;
   ageRatingId: number | null;
+  popularityScore: number;
+  priorityOverride: string;
   selectedCompanies: SelectedCompany[];
   genreIds: number[];
   formatIds: number[];
@@ -104,6 +110,8 @@ const emptyForm: FormState = {
   releaseDate: "",
   country: "",
   ageRatingId: null,
+  popularityScore: 0,
+  priorityOverride: "",
   selectedCompanies: [],
   genreIds: [],
   formatIds: [],
@@ -135,6 +143,8 @@ function movieToForm(mv: MovieResponse): FormState {
     releaseDate: mv.releaseDate ?? "",
     country: mv.country ?? "",
     ageRatingId: mv.ageRating?.ratingId ?? null,
+    popularityScore: mv.popularityScore ?? 0,
+    priorityOverride: mv.priorityOverride != null ? String(mv.priorityOverride) : "",
     selectedCompanies: mv.companies?.map((c) => ({
       companyId: c.companyId, name: c.name, country: c.country, logoUrl: c.logoUrl,
     })) ?? [],
@@ -295,6 +305,12 @@ export default function MovieEditorPage() {
 
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [backendViolations, setBackendViolations] = useState<ReadinessViolation[]>([]);
+  const [screeningVersionSummary, setScreeningVersionSummary] = useState<ScreeningVersionSummary>({
+    movieId: null,
+    loaded: false,
+    totalCount: 0,
+    reviewReadyCount: 0,
+  });
 
   const [genres, setGenres] = useState<GenreResponse[]>([]);
   const [formats, setFormats] = useState<ScreeningFormatResponse[]>([]);
@@ -365,11 +381,19 @@ export default function MovieEditorPage() {
 
   const [localEditId, setLocalEditId] = useState<number | null>(null);
   const activeMovieId = localEditId ?? editMovieId;
+  const screeningVersionsLoadedForActiveMovie =
+    screeningVersionSummary.loaded
+    && screeningVersionSummary.movieId === activeMovieId;
+  const hasReviewReadyScreeningVersion =
+    screeningVersionsLoadedForActiveMovie
+    && screeningVersionSummary.reviewReadyCount > 0;
   const [savedFingerprint, setSavedFingerprint] = useState(() => editorFingerprint(emptyForm, []));
   const [actionStatus, setActionStatus] = useState<MovieEditorActionStatus>("pristine");
   const [operation, setOperation] = useState<MovieEditorOperation>("idle");
+  const [activeWorkflowSection, setActiveWorkflowSection] = useState<MovieEditorSectionId>("details");
   const [confirmExitOpen, setConfirmExitOpen] = useState(false);
   const operationGuard = useRef(false);
+  const screeningDraftPreparation = useRef<Promise<number> | null>(null);
   const currentFingerprint = useMemo(
     () => editorFingerprint(form, pendingMediaSelections),
     [form, pendingMediaSelections],
@@ -522,7 +546,6 @@ export default function MovieEditorPage() {
     // A "Create new" genre resolution doesn't add a real genreId yet (it's created server-side
     // as PENDING_REVIEW at import time - see resolveGenreCreateNew), so it must still count here.
     if (form.genreIds.length === 0 && pendingCreatedGenreCount === 0) return { ok: false, msg: "Select at least 1 genre." };
-    if (form.formatIds.length === 0) return { ok: false, msg: "Select at least 1 screening format." };
     return { ok: true };
   };
 
@@ -585,7 +608,7 @@ export default function MovieEditorPage() {
       resolveCompanyIds(),
       resolveCastPersonIds(),
     ]);
-    const resolvedForm: FormState = {
+    let resolvedForm: FormState = {
       ...form,
       selectedCompanies: resolvedCompanies,
       cast: form.cast.map((castMember, index) => ({
@@ -615,7 +638,23 @@ export default function MovieEditorPage() {
         ...(importedMovie.result.genres?.map((g) => g.genreId) ?? []),
         ...(payload.genreIds ?? []),
       ]));
-      savedMovie = (await movieApi.updateMovie(imported.result.movieId, { ...payload, genreIds: mergedGenreIds })).result;
+      // TMDB import (`[Backend] Auto-init MovieSchedulingProfile from TMDB popularity`) just
+      // seeded popularityScore/scoreSource=TMDB from TMDB's own popularity metric - but `form`
+      // (and therefore `payload`) never had it populated (the preview step this form was built
+      // from doesn't carry it), so it's still sitting at the form's default of 0. Sending that
+      // stale 0 here would make MovieService.upsertSchedulingProfile() treat it as a deliberate
+      // manual override and immediately clobber both the score and its TMDB provenance the
+      // instant the draft is first saved - which is exactly why the fetched score never seemed
+      // to show up. Omitting it (undefined) lets the "null means don't touch" rule preserve
+      // what the import just set instead.
+      const { popularityScore: _staleFormPopularityScore, ...payloadWithoutStalePopularity } = payload;
+      savedMovie = (await movieApi.updateMovie(imported.result.movieId, {
+        ...payloadWithoutStalePopularity,
+        genreIds: mergedGenreIds,
+      })).result;
+      // Reflect what TMDB import actually set so the Popularity Score field shows the real
+      // fetched value instead of the stale 0 the form was holding when this draft was created.
+      resolvedForm = { ...resolvedForm, popularityScore: savedMovie.popularityScore ?? resolvedForm.popularityScore };
     } else {
       savedMovie = await persistMovieDraft<CreateMovieRequest, MovieResponse>({
         movieId: activeMovieId,
@@ -666,6 +705,70 @@ export default function MovieEditorPage() {
       setOperation("idle");
       operationGuard.current = false;
     }
+  };
+
+  /**
+   * Screening versions are child records and therefore require a persisted movieId.
+   * Keep that persistence detail out of the user's workflow: entering a version command
+   * saves the latest valid movie draft in the background and returns its identity.
+   */
+  const prepareDraftForScreeningVersions = async (): Promise<number> => {
+    if (activeMovieId && !isDirty) return activeMovieId;
+    if (screeningDraftPreparation.current) return screeningDraftPreparation.current;
+    if (operationGuard.current) {
+      throw new Error("Another movie operation is already in progress.");
+    }
+
+    const preparation = (async () => {
+      operationGuard.current = true;
+      setSubmitting(true);
+      setOperation("saving-draft");
+      setError("");
+      try {
+        const wasNewDraft = activeMovieId == null;
+        const savedMovie = await persistCurrentDraft();
+        setActionStatus("saved");
+        toast.success(
+          wasNewDraft
+            ? "Movie draft created automatically. You can now configure screening versions."
+            : "Latest movie changes saved automatically.",
+        );
+        return savedMovie.movieId;
+      } catch (e: any) {
+        const message = errorMessage(e, "Could not prepare the movie draft for screening versions.");
+        setError(message);
+        setActionStatus("save-error");
+        throw new Error(message);
+      } finally {
+        setSubmitting(false);
+        setOperation("idle");
+        operationGuard.current = false;
+      }
+    })();
+
+    screeningDraftPreparation.current = preparation;
+    try {
+      return await preparation;
+    } finally {
+      screeningDraftPreparation.current = null;
+    }
+  };
+
+  const handleActiveEditorSectionChange = (sectionId: MovieEditorSectionId) => {
+    setActiveWorkflowSection(sectionId);
+    if (
+      sectionId !== "screening-versions"
+      || !can.edit
+      || (currentContentStatus != null && currentContentStatus !== "DRAFT")
+      || (activeMovieId != null && !isDirty)
+      || operationGuard.current
+    ) {
+      return;
+    }
+    void prepareDraftForScreeningVersions().catch(() => {
+      // Validation and API errors are already exposed by the editor and the
+      // ScreeningVersionsSection can retry when the user chooses Add version.
+    });
   };
 
   const handleSubmitForReview = async () => {
@@ -753,6 +856,10 @@ export default function MovieEditorPage() {
         trailerUrl: details.trailerUrl || p.trailerUrl,
         tmdbId: details.tmdbId,
         imdbId: details.imdbId,
+        // Populate the scheduling signal during the read-only preview. The backend uses the
+        // same normalization method when the real import is persisted, so Save Draft will not
+        // cause this field to appear or jump to a different value later.
+        popularityScore: details.popularityScore ?? p.popularityScore,
         genreIds: resolvedGenreIds.length ? resolvedGenreIds : p.genreIds,
         ageRatingId: details.ageRatingId ?? p.ageRatingId,
         vi_title: vietnamese?.title ?? p.vi_title,
@@ -943,14 +1050,37 @@ export default function MovieEditorPage() {
       label,
       description,
       complete:
-        id === "overview" ? Boolean(form.originalTitle.trim() && form.originalLanguage)
-          : id === "classification-release" ? Boolean(form.durationMinutes > 0 && form.genreIds.length && form.formatIds.length)
-            : id === "media" ? Boolean(form.posterUrl)
-              : id === "credits" ? Boolean(form.selectedCompanies.length || form.cast.length)
-                : !hasBlockingTmdbIssues,
+        id === "details"
+          ? Boolean(form.originalTitle.trim() && form.originalLanguage && form.durationMinutes > 0 && form.genreIds.length)
+          : id === "media-credits"
+            ? Boolean(form.posterUrl)
+            : id === "screening-versions"
+              ? hasReviewReadyScreeningVersion
+              : !hasBlockingTmdbIssues && Object.keys(validationErrors).length === 0 && backendViolations.length === 0,
+      hasError:
+        id === "details"
+          ? Boolean(submitted && (!form.originalTitle.trim() || !form.originalLanguage || form.durationMinutes <= 0 || form.genreIds.length === 0))
+          : id === "media-credits"
+            ? Boolean(submitted && !form.posterUrl)
+            : id === "screening-versions"
+              ? Boolean(submitted && screeningVersionsLoadedForActiveMovie && !hasReviewReadyScreeningVersion)
+            : id === "review"
+              ? hasBlockingTmdbIssues || backendViolations.length > 0
+              : false,
+      blockNext:
+        id === "screening-versions"
+          ? !hasReviewReadyScreeningVersion
+          : false,
+      blockNextMessage:
+        id === "screening-versions" && screeningVersionsLoadedForActiveMovie
+          ? "Create and save at least one active screening version before review."
+          : id === "screening-versions"
+            ? "Checking saved screening versions..."
+            : undefined,
     })),
-  [form.originalTitle, form.originalLanguage, form.durationMinutes, form.genreIds.length, form.formatIds.length,
-    form.posterUrl, form.selectedCompanies.length, form.cast.length, hasBlockingTmdbIssues]);
+  [form.originalTitle, form.originalLanguage, form.durationMinutes, form.genreIds.length,
+    form.posterUrl, hasBlockingTmdbIssues, submitted, validationErrors, backendViolations,
+    hasReviewReadyScreeningVersion, screeningVersionsLoadedForActiveMovie]);
 
   const editableDraft = currentContentStatus == null || currentContentStatus === "DRAFT";
   const canSaveDraft = can.edit && editableDraft;
@@ -983,7 +1113,7 @@ export default function MovieEditorPage() {
   return (
     <div className="mx-auto w-full max-w-[1520px]">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -1016,6 +1146,16 @@ export default function MovieEditorPage() {
             </p>
           </div>
         </div>
+        <MovieEditorActionBar
+          status={displayedActionStatus}
+          operation={operation}
+          canSave={canSaveDraft}
+          canSubmit={canSubmitForReview}
+          showSubmit={activeWorkflowSection === "review"}
+          saveDisabled={!isDirty}
+          onSaveDraft={handleSaveDraft}
+          onSubmitForReview={handleSubmitForReview}
+        />
       </div>
 
       {error && (
@@ -1025,17 +1165,10 @@ export default function MovieEditorPage() {
         </div>
       )}
 
-      <MovieEditorActionBar
-        status={displayedActionStatus}
-        operation={operation}
-        canSave={canSaveDraft}
-        canSubmit={canSubmitForReview}
-        saveDisabled={!isDirty}
-        onSaveDraft={handleSaveDraft}
-        onSubmitForReview={handleSubmitForReview}
-      />
-
-      <MovieEditorWorkflow sections={workflowSections}>
+      <MovieEditorWorkflow
+        sections={workflowSections}
+        onActiveSectionChange={handleActiveEditorSectionChange}
+      >
 
         {/* Existing form fields keep a single state owner; CSS order groups them by workflow. */}
         <div className="contents">
@@ -1044,6 +1177,7 @@ export default function MovieEditorPage() {
           <section
             id={movieEditorSectionDomId("overview")}
             data-editor-section="overview"
+            data-workflow-step="details"
             tabIndex={-1}
             aria-labelledby="movie-editor-overview-title"
             className="order-1 scroll-mt-28 rounded-2xl border p-5 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
@@ -1141,6 +1275,41 @@ export default function MovieEditorPage() {
               </div>
             </div>
 
+            <details className="group mt-4 rounded-xl border" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+                <span>
+                  <span className="block text-xs font-semibold" style={{ color: "var(--text-main)" }}>Scheduling signals</span>
+                  <span className="mt-0.5 block text-[11px]" style={{ color: "var(--text-sub)" }}>
+                    Automatically populated for TMDB imports. Change only when an operational override is required.
+                  </span>
+                </span>
+                <span className="rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide" style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}>
+                  Advanced
+                </span>
+              </summary>
+              <div className="grid grid-cols-1 gap-3 border-t px-4 py-4 sm:grid-cols-2" style={{ borderColor: "var(--border-color)" }}>
+                <div>
+                  <label style={FL}>Popularity Score (0-100)</label>
+                  <input
+                    type="number" min={0} max={100} step={1}
+                    value={form.popularityScore}
+                    onChange={(e) => set("popularityScore", e.target.value ? Number(e.target.value) : 0)}
+                    className={IC} style={IS}
+                  />
+                </div>
+                <div>
+                  <label style={FL}>Priority Override</label>
+                  <input
+                    type="number" step="0.01"
+                    placeholder="Leave blank to use auto score"
+                    value={form.priorityOverride}
+                    onChange={(e) => set("priorityOverride", e.target.value)}
+                    className={IC} style={IS}
+                  />
+                </div>
+              </div>
+            </details>
+
             <div ref={companyRef} className="relative mt-3">
               <label style={FL}>Production Companies</label>
               {form.selectedCompanies.length > 0 && (
@@ -1203,6 +1372,7 @@ export default function MovieEditorPage() {
           <section
             id={movieEditorSectionDomId("classification-release")}
             data-editor-section="classification-release"
+            data-workflow-step="details"
             tabIndex={-1}
             aria-labelledby="movie-editor-classification-title"
             className="order-2 scroll-mt-28 rounded-2xl border p-5 space-y-5 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
@@ -1233,34 +1403,37 @@ export default function MovieEditorPage() {
               {submitted && form.genreIds.length === 0 && <p className="mt-2 text-xs text-rose-500">Select at least 1 genre.</p>}
             </div>
 
-            <div>
-              <p style={SL}>Screening Formats <span className="text-rose-500">*</span></p>
-              {formats.length === 0 ? (
-                <p style={{ fontSize: "13px", color: "var(--text-sub)" }}>Loading…</p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {formats.map((f) => {
-                    const sel = form.formatIds.includes(f.formatId);
-                    return (
-                      <button
-                        key={f.formatId} type="button"
-                        onClick={() => set("formatIds", sel ? form.formatIds.filter((id) => id !== f.formatId) : [...form.formatIds, f.formatId])}
-                        className="px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors"
-                        style={{ background: sel ? "#2563eb" : "transparent", color: sel ? "#fff" : "var(--text-sub)", borderColor: sel ? "#2563eb" : "var(--border-color)" }}
-                      >
-                        {f.formatCode}{f.formatName && f.formatName !== f.formatCode && ` — ${f.formatName}`}
-                        {Number(f.surcharge) > 0 && <span className="ml-1 opacity-70">(+{Number(f.surcharge).toLocaleString()})</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              {submitted && form.formatIds.length === 0 && <p className="mt-2 text-xs text-rose-500">Select at least 1 screening format.</p>}
-            </div>
+          </section>
+
+          <section
+            id={movieEditorSectionDomId("screening-versions")}
+            data-editor-section="screening-versions"
+            data-workflow-step="screening-versions"
+            tabIndex={-1}
+            aria-labelledby="movie-editor-screening-versions-title"
+            className="order-3 scroll-mt-28 rounded-2xl border p-5 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
+          >
+            <p id="movie-editor-screening-versions-title" style={SL}>Screening Versions</p>
+            <ScreeningVersionsSection
+              movieId={activeMovieId}
+              originalLanguage={form.originalLanguage}
+              formats={formats}
+              canManage={isAdmin}
+              movieEditable={editableDraft}
+              hasUnsavedMovieChanges={isDirty}
+              onPrepareMovieDraft={prepareDraftForScreeningVersions}
+              onVersionSummaryChange={setScreeningVersionSummary}
+            />
           </section>
 
           {/* Languages */}
-          <section className="order-1 rounded-2xl border p-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+          <section
+            data-workflow-step="details"
+            tabIndex={-1}
+            className="order-1 rounded-2xl border p-5"
+            style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
+          >
             <p style={SL}>Multilingual Titles & Descriptions</p>
             <div className="inline-flex gap-1 p-1 rounded-lg mb-3" style={{ background: "var(--bg-main)" }}>
               {(["vi", "en"] as const).map((lang) => (
@@ -1317,9 +1490,10 @@ export default function MovieEditorPage() {
           <section
             id={movieEditorSectionDomId("credits")}
             data-editor-section="credits"
+            data-workflow-step="media-credits"
             tabIndex={-1}
             aria-labelledby="movie-editor-credits-title"
-            className="order-4 scroll-mt-28 rounded-2xl border p-5 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="order-5 scroll-mt-28 rounded-2xl border p-5 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
           >
             <p id="movie-editor-credits-title" style={SL}>Credits</p>
@@ -1419,9 +1593,10 @@ export default function MovieEditorPage() {
             <section
               id={movieEditorSectionDomId("review")}
               data-editor-section="review"
+              data-workflow-step="review"
               tabIndex={-1}
               aria-labelledby="movie-editor-review-title"
-              className="order-5 scroll-mt-28 rounded-2xl border p-5 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="order-6 scroll-mt-28 rounded-2xl border p-5 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
             >
               <p id="movie-editor-review-title" style={SL}>Review</p>
@@ -1445,9 +1620,10 @@ export default function MovieEditorPage() {
           <section
             id={movieEditorSectionDomId("media")}
             data-editor-section="media"
+            data-workflow-step="media-credits"
             tabIndex={-1}
             aria-labelledby="movie-editor-media-title"
-            className="order-3 scroll-mt-28 rounded-2xl border p-5 space-y-6 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="order-4 scroll-mt-28 rounded-2xl border p-5 space-y-6 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
           >
             <p id="movie-editor-media-title" style={SL}>Media</p>
@@ -1654,9 +1830,10 @@ export default function MovieEditorPage() {
             <section
               id={movieEditorSectionDomId("review")}
               data-editor-section="review"
+              data-workflow-step="review"
               tabIndex={-1}
               aria-labelledby="movie-editor-review-title"
-              className="order-5 scroll-mt-28 rounded-2xl border p-5 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 space-y-4"
+              className="order-6 scroll-mt-28 rounded-2xl border p-5 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 space-y-4"
               style={{ background: "var(--bg-card)", borderColor: hasBlockingTmdbIssues ? "#f87171" : "var(--border-color)" }}
             >
               <p id="movie-editor-review-title" style={SL}>Review</p>

@@ -16,12 +16,17 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/screening-formats")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ScreeningFormatController {
+
+    private static final Set<String> AUDIO_ONLY_CODES =
+            Set.of("ATMOS", "DOLBY_ATMOS", "DOLBY_5_1", "DOLBY_7_1");
 
     ScreeningFormatRepository screeningFormatRepository;
     MovieMapper movieMapper;
@@ -30,7 +35,8 @@ public class ScreeningFormatController {
     public ApiResponse<List<ScreeningFormatResponse>> getAll() {
         return ApiResponse.<List<ScreeningFormatResponse>>builder()
                 .code(200)
-                .result(movieMapper.toScreeningFormatResponseList(screeningFormatRepository.findAll()))
+                .result(movieMapper.toScreeningFormatResponseList(
+                        screeningFormatRepository.findByStatusOrderByFormatNameAsc("ACTIVE")))
                 .build();
     }
 
@@ -45,8 +51,9 @@ public class ScreeningFormatController {
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public ApiResponse<ScreeningFormatResponse> create(@Valid @RequestBody ScreeningFormatRequest req) {
+        String formatCode = normalizeAndValidatePresentationCode(req.getFormatCode());
         ScreeningFormat entity = ScreeningFormat.builder()
-                .formatCode(req.getFormatCode().toUpperCase().trim())
+                .formatCode(formatCode)
                 .formatName(req.getFormatName().trim())
                 .description(req.getDescription())
                 .surcharge(req.getSurcharge())
@@ -64,7 +71,7 @@ public class ScreeningFormatController {
                                                         @Valid @RequestBody ScreeningFormatRequest req) {
         ScreeningFormat entity = screeningFormatRepository.findById(id)
                 .orElseThrow(() -> new AppException(MovieErrorCode.FORMAT_NOT_FOUND));
-        entity.setFormatCode(req.getFormatCode().toUpperCase().trim());
+        entity.setFormatCode(normalizeAndValidatePresentationCode(req.getFormatCode()));
         entity.setFormatName(req.getFormatName().trim());
         entity.setDescription(req.getDescription());
         entity.setSurcharge(req.getSurcharge());
@@ -84,5 +91,13 @@ public class ScreeningFormatController {
             throw new AppException(MovieErrorCode.FORMAT_NOT_FOUND);
         screeningFormatRepository.deleteById(id);
         return ApiResponse.<Void>builder().code(200).message("Deleted").build();
+    }
+
+    private String normalizeAndValidatePresentationCode(String rawCode) {
+        String normalizedCode = rawCode.trim().toUpperCase(Locale.ROOT);
+        if (AUDIO_ONLY_CODES.contains(normalizedCode)) {
+            throw new AppException(MovieErrorCode.SCREENING_FORMAT_AUDIO_CODE_INVALID);
+        }
+        return normalizedCode;
     }
 }

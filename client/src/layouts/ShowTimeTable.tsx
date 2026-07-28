@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pencil, Trash2, ChevronLeft, ChevronRight, Monitor, Clock, PlayCircle, PauseCircle, XCircle } from "lucide-react";
+import { Pencil, Trash2, ChevronLeft, ChevronRight, Monitor, Building2, Clock, PlayCircle, PauseCircle, XCircle } from "lucide-react";
 import type { ShowtimeResponse, ShowtimeStatus } from "../api/showtimeApi";
 
 type Props = {
@@ -11,6 +11,10 @@ type Props = {
   dateFilter: string;
   roomFilter: number | "";
   onBulkStatusChange: (ids: number[], status: ShowtimeStatus, reason?: string) => Promise<void>;
+  /** True once the cinema dropdown above the table has narrowed the list to one branch -
+   *  at that point the per-row cinema name is redundant and hidden. When "All Cinemas" is
+   *  selected, rows can belong to different branches with same-named rooms, so it stays. */
+  scopedToOneCinema?: boolean;
 };
 
 const ITEMS_PER_PAGE = 8;
@@ -43,6 +47,7 @@ export function ShowtimeTable({
   dateFilter,
   roomFilter,
   onBulkStatusChange,
+  scopedToOneCinema = false,
 }: Props) {
   const [page, setPage] = useState(1);
   const [confirmDelete, setConfirmDelete] = useState<ShowtimeResponse | null>(null);
@@ -56,7 +61,8 @@ export function ShowtimeTable({
     const matchSearch =
       !q ||
       s.movieName.toLowerCase().includes(q) ||
-      s.cinemaRoomName.toLowerCase().includes(q);
+      s.cinemaRoomName.toLowerCase().includes(q) ||
+      (s.clusterName ?? "").toLowerCase().includes(q);
     const matchStatus = !statusFilter || s.status === statusFilter;
     const matchDate   = !dateFilter   || s.showDate === dateFilter;
     const matchRoom   = !roomFilter   || s.cinemaRoomId === roomFilter;
@@ -210,6 +216,12 @@ export function ShowtimeTable({
                           <Monitor size={12} />
                           <span style={{ fontSize: "12px" }}>{item.cinemaRoomName}</span>
                         </div>
+                        {!scopedToOneCinema && item.clusterName && (
+                          <div className="flex items-center gap-1.5 mt-0.5" style={{ color: "var(--text-sub)" }}>
+                            <Building2 size={12} />
+                            <span style={{ fontSize: "12px" }}>{item.clusterName}</span>
+                          </div>
+                        )}
                       </td>
 
                       <td className="px-5 py-3.5">

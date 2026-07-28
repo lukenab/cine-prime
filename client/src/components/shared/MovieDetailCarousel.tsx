@@ -91,8 +91,16 @@ export function MovieDetailCarousel({ movie, onClose }: Props) {
   const releaseDate = movie.showTimes?.[0]?.showDate;
 
   const handleBook = () => {
+    let preferredClusterId: number | undefined;
+    try {
+      preferredClusterId = JSON.parse(localStorage.getItem("cp_cluster") ?? "null")?.clusterId;
+    } catch {
+      preferredClusterId = undefined;
+    }
     onClose();
-    navigate(`/showtime/${movie.movieId}`);
+    navigate(
+      `/showtime/${movie.movieId}${preferredClusterId ? `?clusterId=${preferredClusterId}` : ""}`
+    );
   };
 
   return (

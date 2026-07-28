@@ -78,6 +78,19 @@
 			<artifactId>mapstruct</artifactId>
 			<version>1.6.3</version>
 		</dependency>
+		<!--
+			CP-SAT weekly showtime optimizer (constraint-optimizer P1). ortools-java pulls in
+			every platform's native runtime jar (win32/linux/darwin, x86-64/aarch64) transitively
+			at runtime scope, so no OS-specific profile is needed - Maven just resolves the one
+			matching the running platform's classpath entry via the native loader baked into
+			ortools-java itself. See docs/features/showtime-management/CONSTRAINT_OPTIMIZER_DESIGN.md
+			for native-library requirements.
+		-->
+		<dependency>
+			<groupId>com.google.ortools</groupId>
+			<artifactId>ortools-java</artifactId>
+			<version>9.15.6755</version>
+		</dependency>
 		<dependency>
 			<groupId>com.cloudinary</groupId>
 			<artifactId>cloudinary-http44</artifactId>

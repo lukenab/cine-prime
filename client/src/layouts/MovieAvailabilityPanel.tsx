@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowRight,
+  Building2,
   CalendarClock,
   CalendarDays,
   Check,
@@ -13,6 +14,7 @@ import {
   Pause,
   Play,
   Plus,
+  Search,
   Square,
   Ticket,
   X,
@@ -254,6 +256,7 @@ function CreatePlanDialog({
 }) {
   const [allActive, setAllActive] = useState(false);
   const [selectedClusterIds, setSelectedClusterIds] = useState<Set<number>>(new Set());
+  const [clusterSearch, setClusterSearch] = useState("");
   const [showingStartDate, setShowingStartDate] = useState("");
   const [showingEndDate, setShowingEndDate] = useState("");
   const [salesStartAt, setSalesStartAt] = useState("");
@@ -268,6 +271,16 @@ function CreatePlanDialog({
       return next;
     });
   };
+
+  const visibleClusters = useMemo(() => {
+    const q = clusterSearch.trim().toLowerCase();
+    if (!q) return clusters;
+    return clusters.filter((cluster) =>
+      cluster.clusterName.toLowerCase().includes(q)
+      || cluster.province?.toLowerCase().includes(q)
+      || cluster.address?.toLowerCase().includes(q),
+    );
+  }, [clusters, clusterSearch]);
 
   const invalidDateRange = Boolean(
     showingStartDate && showingEndDate && showingEndDate < showingStartDate,
@@ -389,7 +402,7 @@ function CreatePlanDialog({
           </button>
         </div>
 
-        <div className="space-y-5 px-6 py-5">
+        <div className="space-y-4 px-6 py-5">
           {error && (
             <div className="flex items-start gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2.5 text-rose-600">
               <AlertTriangle size={15} className="mt-0.5 flex-shrink-0" />
@@ -397,102 +410,157 @@ function CreatePlanDialog({
             </div>
           )}
 
-          <div>
-            <label className="mb-1.5 block" style={{ color: "var(--text-main)", fontSize: "12px", fontWeight: 600 }}>
-              Cinema cluster(s) <span className="text-rose-500">*</span>
-            </label>
+          {/* 2-column layout — cluster picker left, schedule fields right. The modal already
+              has the width (max-w-2xl) to spare; stacking everything vertically was the main
+              reason this felt so tall. */}
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div>
+              {/* Header + toggle — mirrors the "Cinema scope" picker used in auto-schedule
+                  showtime creation, so cluster-picking reads the same way across the admin. */}
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <div>
+                  <p style={{ color: "var(--text-main)", fontSize: "12px", fontWeight: 600 }}>
+                    Cinema cluster(s) <span className="text-rose-500">*</span>
+                  </p>
+                  <p style={{ color: "var(--text-sub)", fontSize: "11px" }}>
+                    {allActive ? clusters.length : selectedClusterIds.size} selected
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setAllActive(!allActive); setSelectedClusterIds(new Set()); }}
+                  className="flex-shrink-0 rounded-lg border px-2.5 py-1.5 text-xs font-semibold"
+                  style={{ borderColor: allActive ? "rgba(37,99,235,0.35)" : "var(--border-color)", background: allActive ? "rgba(37,99,235,0.1)" : "var(--bg-card)", color: allActive ? "#2563eb" : "var(--text-main)" }}
+                >
+                  {allActive ? "Clear all" : `All active (${clusters.length})`}
+                </button>
+              </div>
 
-            <label
-              className="mb-2 flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5"
-              style={{ borderColor: allActive ? "rgba(37,99,235,0.35)" : "var(--border-color)", background: allActive ? "rgba(37,99,235,0.06)" : "var(--bg-card)" }}
-            >
-              <input
-                type="checkbox"
-                checked={allActive}
-                onChange={(event) => { setAllActive(event.target.checked); setSelectedClusterIds(new Set()); }}
-              />
-              <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-main)" }}>
-                Release wide — all active clusters ({clusters.length})
-              </span>
-            </label>
+              <div className="relative mb-2">
+                <Search size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-sub)" }} />
+                <input
+                  type="text"
+                  value={clusterSearch}
+                  onChange={(event) => setClusterSearch(event.target.value)}
+                  placeholder="Search cinema or city…"
+                  className="w-full rounded-xl border py-2 pl-8 pr-3 outline-none focus:ring-2 focus:ring-blue-500/20"
+                  style={{ background: "var(--bg-card)", borderColor: "var(--border-color)", color: "var(--text-main)", fontSize: "13px" }}
+                />
+              </div>
 
-            <div
-              className="max-h-40 space-y-1 overflow-y-auto rounded-xl border p-2"
-              style={{ borderColor: "var(--border-color)", background: "var(--bg-card)", opacity: allActive ? 0.5 : 1 }}
-            >
-              {clusters.map((cluster) => (
-                <label key={cluster.clusterId} className="flex items-center gap-2 rounded-lg px-2 py-1.5" style={{ cursor: allActive ? "not-allowed" : "pointer" }}>
+              <div className="max-h-64 space-y-1.5 overflow-y-auto pr-0.5">
+                {visibleClusters.map((cluster) => {
+                  const selected = allActive || selectedClusterIds.has(cluster.clusterId);
+                  return (
+                    <label
+                      key={cluster.clusterId}
+                      className="relative flex cursor-pointer items-center gap-3 rounded-xl border p-2.5"
+                      style={{
+                        borderColor: selected ? "rgba(37,99,235,0.4)" : "var(--border-color)",
+                        background: selected ? "rgba(37,99,235,0.06)" : "var(--bg-card)",
+                        cursor: allActive ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      <input
+                        className="sr-only"
+                        type="checkbox"
+                        disabled={allActive}
+                        checked={selected}
+                        onChange={() => toggleCluster(cluster.clusterId)}
+                      />
+                      <div className="h-11 w-14 flex-shrink-0 overflow-hidden rounded-lg" style={{ background: "var(--bg-hover)" }}>
+                        {cluster.coverImageUrl
+                          ? <img src={cluster.coverImageUrl} alt="" className="h-full w-full object-cover" />
+                          : <div className="flex h-full w-full items-center justify-center" style={{ color: "var(--text-sub)" }}><Building2 size={16} /></div>}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate" style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-main)" }}>{cluster.clusterName}</p>
+                        <p className="flex items-center gap-1 truncate" style={{ fontSize: "11px", color: "var(--text-sub)" }}>
+                          <MapPin size={10} />{cluster.province || cluster.address}
+                        </p>
+                        <p style={{ fontSize: "11px", color: "#059669" }}>
+                          {cluster.totalRooms ?? "—"} rooms · {(cluster.totalSeats ?? 0).toLocaleString()} seats
+                        </p>
+                      </div>
+                      <span
+                        className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border"
+                        style={{ borderColor: selected ? "#2563eb" : "var(--border-color)", background: selected ? "#2563eb" : "transparent" }}
+                      >
+                        {selected && <Check size={12} color="#fff" />}
+                      </span>
+                    </label>
+                  );
+                })}
+                {visibleClusters.length === 0 && clusters.length > 0 && (
+                  <p className="py-4 text-center" style={{ fontSize: "12px", color: "var(--text-sub)" }}>
+                    No cluster matches "{clusterSearch}".
+                  </p>
+                )}
+              </div>
+              {clusters.length === 0 && (
+                <p className="mt-1.5 text-amber-600" style={{ fontSize: "11px" }}>
+                  No active cinema cluster is available. Approve and activate a cluster first.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1.5 block" style={{ color: "var(--text-main)", fontSize: "12px", fontWeight: 600 }}>
+                    Starts <span className="text-rose-500">*</span>
+                  </label>
                   <input
-                    type="checkbox"
-                    disabled={allActive}
-                    checked={allActive || selectedClusterIds.has(cluster.clusterId)}
-                    onChange={() => toggleCluster(cluster.clusterId)}
+                    type="date"
+                    min={today()}
+                    value={showingStartDate}
+                    onChange={(event) => setShowingStartDate(event.target.value)}
+                    className="w-full rounded-xl border px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500/20"
+                    style={{ colorScheme: "var(--color-scheme)" as string, background: "var(--bg-card)", borderColor: "var(--border-color)", color: "var(--text-main)", fontSize: "13px" }}
                   />
-                  <span style={{ fontSize: "13px", color: "var(--text-main)" }}>{cluster.clusterName}</span>
+                </div>
+                <div>
+                  <label className="mb-1.5 block" style={{ color: "var(--text-main)", fontSize: "12px", fontWeight: 600 }}>
+                    Ends <span style={{ color: "var(--text-sub)", fontWeight: 400 }}>(optional)</span>
+                  </label>
+                  <input
+                    type="date"
+                    min={showingStartDate || today()}
+                    value={showingEndDate}
+                    onChange={(event) => setShowingEndDate(event.target.value)}
+                    className="w-full rounded-xl border px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500/20"
+                    style={{ colorScheme: "var(--color-scheme)" as string, background: "var(--bg-card)", borderColor: invalidDateRange ? "#e11d48" : "var(--border-color)", color: "var(--text-main)", fontSize: "13px" }}
+                  />
+                </div>
+              </div>
+              {invalidDateRange && <p style={{ fontSize: "11px", color: "#f43f5e", marginTop: "-8px" }}>End date cannot be before start date.</p>}
+
+              <div>
+                <label className="mb-1.5 block" style={{ color: "var(--text-main)", fontSize: "12px", fontWeight: 600 }}>
+                  Sales start <span style={{ color: "var(--text-sub)", fontWeight: 400 }}>(optional)</span>
                 </label>
-              ))}
-            </div>
-            {clusters.length === 0 && (
-              <p className="mt-1.5 text-amber-600" style={{ fontSize: "11px" }}>
-                No active cinema cluster is available. Approve and activate a cluster first.
-              </p>
-            )}
-          </div>
+                <input
+                  type="datetime-local"
+                  value={salesStartAt}
+                  onChange={(event) => setSalesStartAt(event.target.value)}
+                  className="w-full rounded-xl border px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500/20"
+                  style={{ colorScheme: "var(--color-scheme)" as string, background: "var(--bg-card)", borderColor: "var(--border-color)", color: "var(--text-main)", fontSize: "13px" }}
+                />
+                <p className="mt-1.5" style={{ color: "var(--text-sub)", fontSize: "11px" }}>
+                  Planned presale time. Opening individual showtimes remains a separate action.
+                </p>
+              </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1.5 block" style={{ color: "var(--text-main)", fontSize: "12px", fontWeight: 600 }}>
-                Showing starts <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="date"
-                min={today()}
-                value={showingStartDate}
-                onChange={(event) => setShowingStartDate(event.target.value)}
-                className="w-full rounded-xl border px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500/20"
-                style={{ colorScheme: "var(--color-scheme)" as string, background: "var(--bg-card)", borderColor: "var(--border-color)", color: "var(--text-main)", fontSize: "13px" }}
-              />
+              <div className="rounded-xl border p-3" style={{ borderColor: "rgba(37,99,235,0.18)", background: "rgba(37,99,235,0.05)" }}>
+                <div className="flex items-center gap-2 text-blue-600">
+                  <CheckCircle2 size={14} />
+                  <p style={{ fontSize: "12px", fontWeight: 600 }}>New plan starts as PLANNED</p>
+                </div>
+                <p className="mt-1 pl-[22px]" style={{ color: "var(--text-sub)", fontSize: "11px" }}>
+                  Won't open ticket sales or publish a showtime automatically.
+                </p>
+              </div>
             </div>
-            <div>
-              <label className="mb-1.5 block" style={{ color: "var(--text-main)", fontSize: "12px", fontWeight: 600 }}>
-                Showing ends <span style={{ color: "var(--text-sub)", fontWeight: 400 }}>(optional)</span>
-              </label>
-              <input
-                type="date"
-                min={showingStartDate || today()}
-                value={showingEndDate}
-                onChange={(event) => setShowingEndDate(event.target.value)}
-                className="w-full rounded-xl border px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500/20"
-                style={{ colorScheme: "var(--color-scheme)" as string, background: "var(--bg-card)", borderColor: invalidDateRange ? "#e11d48" : "var(--border-color)", color: "var(--text-main)", fontSize: "13px" }}
-              />
-              {invalidDateRange && <p className="mt-1 text-rose-500" style={{ fontSize: "11px" }}>End date cannot be before start date.</p>}
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-1.5 block" style={{ color: "var(--text-main)", fontSize: "12px", fontWeight: 600 }}>
-              Sales start <span style={{ color: "var(--text-sub)", fontWeight: 400 }}>(optional)</span>
-            </label>
-            <input
-              type="datetime-local"
-              value={salesStartAt}
-              onChange={(event) => setSalesStartAt(event.target.value)}
-              className="w-full rounded-xl border px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500/20"
-              style={{ colorScheme: "var(--color-scheme)" as string, background: "var(--bg-card)", borderColor: "var(--border-color)", color: "var(--text-main)", fontSize: "13px" }}
-            />
-            <p className="mt-1.5" style={{ color: "var(--text-sub)", fontSize: "11px" }}>
-              This is the planned presale time. Opening individual showtimes remains a separate operational action.
-            </p>
-          </div>
-
-          <div className="rounded-xl border p-3" style={{ borderColor: "rgba(37,99,235,0.18)", background: "rgba(37,99,235,0.05)" }}>
-            <div className="flex items-center gap-2 text-blue-600">
-              <CheckCircle2 size={14} />
-              <p style={{ fontSize: "12px", fontWeight: 600 }}>The new plan starts as PLANNED</p>
-            </div>
-            <p className="mt-1 pl-[22px]" style={{ color: "var(--text-sub)", fontSize: "11px" }}>
-              It will not open ticket sales or publish a showtime automatically.
-            </p>
           </div>
         </div>
 
@@ -755,7 +823,11 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
                     )}
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-1.5 sm:max-w-[210px] sm:justify-end">
+                  {/* No max-width cap here anymore — Suspend/Close grew from icon-only 28px
+                      squares to labeled buttons (clearer, but wider), so the old 210px cap
+                      just forced an awkward wrap. flex-wrap + justify-end still keeps this
+                      right-aligned and lets it wrap naturally on narrow screens. */}
+                  <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
                     {availability.status !== "CLOSED" && (
                       <button
                         type="button"
@@ -781,12 +853,12 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
                     {isAdmin && !busy && (availability.status === "PLANNED" || availability.status === "OPEN") && (
                       <button
                         type="button"
-                        title="Temporarily suspend"
+                        title="Temporarily suspend exhibition"
                         onClick={() => setSuspendTarget(availability.availabilityId)}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg border text-amber-600 hover:bg-amber-500/10"
+                        className="flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-amber-600 hover:bg-amber-500/10"
                         style={{ borderColor: "var(--border-color)" }}
                       >
-                        <Pause size={12} />
+                        <Pause size={12} /> Suspend
                       </button>
                     )}
 
@@ -806,10 +878,10 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
                         type="button"
                         title="Close this release window"
                         onClick={() => setCloseTarget(availability.availabilityId)}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg border hover:bg-slate-500/10"
+                        className="flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-500/10"
                         style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}
                       >
-                        <Square size={11} />
+                        <Square size={11} /> Close
                       </button>
                     )}
 

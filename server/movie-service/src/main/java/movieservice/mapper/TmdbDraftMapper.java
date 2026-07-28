@@ -64,6 +64,8 @@ public final class TmdbDraftMapper {
                 .posterUrl(buildPosterUrl(detail.getPosterPath()))
                 .overview(detail.getOverview())
                 .tagline(blankToNull(detail.getTagline()))
+                .popularity(detail.getPopularity())
+                .voteAverage(detail.getVoteAverage())
                 .companies(buildCompanies(detail))
                 .cast(buildCast(credits))
                 .translations(buildTranslations(detail, translations))

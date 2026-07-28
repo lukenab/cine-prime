@@ -82,18 +82,32 @@ public class AutoShowtimeGenerationService {
         /// Kiểm tra ngày request có thuộc planning horizon mà policy cho phép không.
         validateGenerationRange(request, policy);
 
+        /// Rolling replanning (P2) chưa được implement - từ chối rõ ràng thay vì âm thầm chạy
+        /// như một run generate bình thường rồi khiến caller tưởng nhầm là đã replan.
+        if (Boolean.TRUE.equals(request.replanMode())) {
+            throw new AppException(MovieErrorCode.AUTO_SHOWTIME_REPLAN_NOT_SUPPORTED);
+        }
+
+        movieservice.enums.OptimizerMode optimizerMode = request.optimizer() == null
+                ? policy.getDefaultOptimizerMode() : request.optimizer();
+        movieservice.enums.OptimizationScenario scenario = request.scenario() == null
+                ? movieservice.enums.OptimizationScenario.BALANCED : request.scenario();
+
         /// Load entity thật từ DB, đồng thời fail sớm nếu movie hoặc cluster id không tồn tại.
         Set<Movie> movies = loadMovies(request.movieIds());
         Set<CinemaCluster> clusters = loadClusters(request.cinemaClusterIds());
 
-        /// Cùng policy + date range + movie scope + cluster scope sẽ tạo ra cùng một idempotency key.
-        /// Nhờ đó user gọi lại request hoặc nhiều node nhận cùng request cũng không tạo run trùng.
+        /// Cùng policy + date range + movie scope + cluster scope + optimizer + scenario sẽ tạo
+        /// ra cùng một idempotency key. Nhờ đó user gọi lại request hoặc nhiều node nhận cùng
+        /// request cũng không tạo run trùng.
         String idempotencyKey = buildIdempotencyKey(
                 policy.getPolicyCode(),
                 request.startDate(),
                 request.endDate(),
                 movies.stream().map(Movie::getMovieId).toList(),
-                clusters.stream().map(CinemaCluster::getClusterId).toList()
+                clusters.stream().map(CinemaCluster::getClusterId).toList(),
+                optimizerMode,
+                scenario
         );
 
         /// Nếu request tương đương đã được nhận trước đó thì trả run cũ.
@@ -106,7 +120,9 @@ public class AutoShowtimeGenerationService {
                         movies,
                         clusters,
                         idempotencyKey,
-                        requesterBy
+                        requesterBy,
+                        optimizerMode,
+                        scenario
                 ));
     }
 
@@ -116,7 +132,9 @@ public class AutoShowtimeGenerationService {
             Set<Movie> movies,
             Set<CinemaCluster> clusters,
             String idempotencyKey,
-            String requesterBy
+            String requesterBy,
+            movieservice.enums.OptimizerMode optimizerMode,
+            movieservice.enums.OptimizationScenario scenario
     ){
         /// Run chỉ lưu scope và audit ban đầu. ShowTime chưa được persist ở method này.
         /// Chặn sớm request không có MovieAvailability hợp lệ trong scope.
@@ -133,6 +151,8 @@ public class AutoShowtimeGenerationService {
                 .movies(movies)
                 .clusters(clusters)
                 .requestedBy(requesterBy)
+                .optimizerMode(optimizerMode)
+                .scenario(scenario)
                 .build();
 
         try {
@@ -282,15 +302,21 @@ public class AutoShowtimeGenerationService {
             LocalDate startDate,
             LocalDate endDate,
             List<Long> movieIds,
-            List<Long> clusterIds
+            List<Long> clusterIds,
+            movieservice.enums.OptimizerMode optimizerMode,
+            movieservice.enums.OptimizationScenario scenario
     ){
         /// Chuỗi raw phải chỉ chứa dữ liệu quyết định scope của run.
         /// requesterBy không được đưa vào vì cùng một request từ user khác vẫn phải tái sử dụng run cũ.
+        /// optimizerMode/scenario PHẢI nằm trong key: cùng scope nhưng khác optimizer sẽ ra kết quả
+        /// khác nhau, nên phải là hai run riêng biệt chứ không được trả về run cũ.
         String raw = policyCode
                 + "|" + startDate
                 + "|" + endDate
                 + "|" + sortedIds(movieIds)
-                + "|" + sortedIds(clusterIds);
+                + "|" + sortedIds(clusterIds)
+                + "|" + optimizerMode
+                + "|" + scenario;
 
         return sha256(raw);
     }
@@ -395,7 +421,15 @@ public class AutoShowtimeGenerationService {
                 ),
                 run.getStartedAt(),
                 run.getCompletedAt(),
-                run.getFailureDetail()
+                run.getFailureDetail(),
+                run.getOptimizerMode() == null ? null : run.getOptimizerMode().name(),
+                run.getScenario() == null ? null : run.getScenario().name(),
+                run.getSolverStatus() == null ? null : run.getSolverStatus().name(),
+                run.getSolveDurationMillis(),
+                run.getObjectiveScore(),
+                run.getObjectiveBreakdown(),
+                run.getSolverDiagnostics(),
+                run.getShadowComparison()
         );
     }
 

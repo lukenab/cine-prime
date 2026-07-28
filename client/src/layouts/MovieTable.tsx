@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   Eye, Pencil, Archive, ChevronLeft, ChevronRight, Clapperboard, Clock,
-  SendHorizonal, ClipboardCheck, RotateCcw, AlertCircle,
+  SendHorizonal, ClipboardCheck, RotateCcw, AlertCircle, CalendarClock,
 } from "lucide-react";
 import type { MovieApiResponse } from "../api/movieApi";
 import { formatDisplayDate } from "../api/movieApi";
@@ -17,9 +17,13 @@ type Props = {
   onEdit: (movie: MovieApiResponse) => void;
   onDelete: (id: number) => void;
   onSubmit: (id: number) => void;
-  /** Opens the dedicated PendingReviewModal (approve/reject with rejection note) - see #139. */
+  /** Opens MovieDetailModal in mode="review" (approve/reject with rejection note) - see #139. */
   onReviewClick: (movie: MovieApiResponse) => void;
   onRework: (id: number) => void;
+  /** Navigates to the standalone availability page (/admin/movies/:id/availability) — the
+   *  release-plan CRUD workflow used to be a tab inside the detail modal; it now has its
+   *  own route since it's a management action, not a detail view - see #139. */
+  onManageAvailability: (id: number) => void;
   searchQuery: string;
   genreFilter: string;
   statusFilter: string;
@@ -79,12 +83,12 @@ function ActionBtn({ icon: Icon, title, onClick, color = "var(--text-sub)" }: {
 /* ── Status-based action buttons ────────────────────────────────────────── */
 function MovieActions({
   movie, onView, onEdit, onDelete, onSubmit,
-  onReviewClick, onRework,
+  onReviewClick, onRework, onManageAvailability,
 }: {
   movie: MovieApiResponse;
   onView: () => void; onEdit: () => void; onDelete: () => void;
   onSubmit: () => void;
-  onReviewClick: () => void; onRework: () => void;
+  onReviewClick: () => void; onRework: () => void; onManageAvailability: () => void;
 }) {
   const { can } = useRole();
   const status = toMovieContentStatus(movie.movieStatus);
@@ -94,8 +98,6 @@ function MovieActions({
       {/* Always: View */}
       <ActionBtn icon={Eye} title="View details" onClick={onView} />
 
-      {/* Archive is an APPROVED → ARCHIVED content command (MOV-LC-04) — a DRAFT
-          movie was never approved, so there's nothing to archive yet. */}
       {status === "DRAFT" && <>
         {can.submit  && <ActionBtn icon={SendHorizonal} title="Submit for review" onClick={onSubmit} color="#2563eb" />}
         {can.edit    && <ActionBtn icon={Pencil}        title="Edit"              onClick={onEdit} />}
@@ -108,6 +110,7 @@ function MovieActions({
       </>}
 
       {status === "APPROVED" && <>
+        <ActionBtn icon={CalendarClock} title="Manage availability" onClick={onManageAvailability} color="#2563eb" />
         {can.archive && <ActionBtn icon={Archive} title="Archive movie" onClick={onDelete} color="#d97706" />}
       </>}
 
@@ -123,22 +126,27 @@ function MovieActions({
 /* ══════════════════════════════════════════════════════════════════════════ */
 export function MovieTable({
   movies, onView, onEdit, onDelete, onSubmit, onReviewClick,
-  onRework, searchQuery, genreFilter, statusFilter,
+  onRework, onManageAvailability, searchQuery, genreFilter, statusFilter,
 }: Props) {
   const [page, setPage] = useState(1);
   const [deleteTarget,  setDeleteTarget]  = useState<MovieApiResponse | null>(null);
 
-  const filtered = movies.filter((m) => {
-    const q = searchQuery.toLowerCase();
-    const matchSearch =
-      !q ||
-      m.movieNameEnglish?.toLowerCase().includes(q) ||
-      m.movieNameVn?.toLowerCase().includes(q) ||
-      m.director?.toLowerCase().includes(q);
-    const matchGenre = !genreFilter || m.movieType?.includes(genreFilter);
-    const matchStatus = !statusFilter || toMovieContentStatus(m.movieStatus) === statusFilter;
-    return matchSearch && matchGenre && matchStatus;
-  });
+  const filtered = movies
+    .filter((m) => {
+      const q = searchQuery.toLowerCase();
+      const matchSearch =
+        !q ||
+        m.movieNameEnglish?.toLowerCase().includes(q) ||
+        m.movieNameVn?.toLowerCase().includes(q) ||
+        m.director?.toLowerCase().includes(q);
+      const matchGenre = !genreFilter || m.movieType?.includes(genreFilter);
+      const matchStatus = !statusFilter || toMovieContentStatus(m.movieStatus) === statusFilter;
+      return matchSearch && matchGenre && matchStatus;
+    })
+    // Most recently updated first — this is what makes a movie that was just approved (or any
+    // other status change) surface at the top of its tab instead of staying wherever it landed
+    // by insertion/ID order.
+    .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
   const safePage   = Math.min(page, totalPages);
@@ -282,6 +290,7 @@ export function MovieTable({
                           onSubmit={() => onSubmit(movie.movieId)}
                           onReviewClick={() => onReviewClick(movie)}
                           onRework={() => onRework(movie.movieId)}
+                          onManageAvailability={() => onManageAvailability(movie.movieId)}
                         />
                       </td>
                     </tr>

@@ -36,9 +36,13 @@ import movieservice.dto.response.ShowTimeCandidateDto;
 import movieservice.dto.response.ShowTimeConflictDto;
 import movieservice.dto.response.ShowTimePricingResponse;
 import movieservice.dto.response.ShowTimeResponse;
+import movieservice.dto.response.LayoutPositionResponse;
 import movieservice.dto.response.ShowtimeSeatDto;
+import movieservice.dto.response.ShowtimeSeatMapResponse;
 import movieservice.entity.CinemaRoom;
 import movieservice.entity.Movie;
+import movieservice.entity.RoomLayout;
+import movieservice.entity.RoomLayoutPosition;
 import movieservice.entity.Seat;
 import movieservice.entity.ShowTime;
 import movieservice.entity.ShowtimeSeat;
@@ -49,11 +53,13 @@ import movieservice.enums.ClusterStatus;
 import movieservice.enums.LayoutStatus;
 import movieservice.enums.ShowTimeStatus;
 import movieservice.enums.ShowtimeSeatStatus;
+import movieservice.enums.ShowtimePriceSource;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.MovieRepository;
 import movieservice.repository.RoomLayoutRepository;
+import movieservice.repository.RoomLayoutPositionRepository;
 import movieservice.util.SeatLayoutUtil;
 import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeSeatRepository;
@@ -70,61 +76,65 @@ public class ShowTimeService {
     MovieRepository movieRepository;
     CinemaRoomRepository cinemaRoomRepository;
     RoomLayoutRepository roomLayoutRepository;
+    RoomLayoutPositionRepository roomLayoutPositionRepository;
     MovieMapper movieMapper;
+    ShowtimeInventoryService showtimeInventoryService;
+    PriceBookPricingService priceBookPricingService;
 
-    @Transactional
+    @Transactional(readOnly = true)
     public List<ShowtimeSeatDto> getSeatsByShowtime(Long showtimeId) {
-        ShowTime showTime = showTimeRepository.findById(showtimeId)
-                .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND)); // Or a better error code
+        showTimeRepository.findByShowTimeIdAndStatus(showtimeId, ShowTimeStatus.ON_SALE)
+                .orElseThrow(() -> new AppException(MovieErrorCode.SHOWTIME_NOT_FOUND));
 
         List<ShowtimeSeat> seats = showtimeSeatRepository.findByShowTime_ShowTimeId(showtimeId);
-        
-        // Lazy initialize seats for this showtime if they don't exist
         if (seats.isEmpty()) {
-            List<Seat> roomSeats = showTime.getCinemaRoom().getSeats();
-            if (roomSeats == null || roomSeats.isEmpty()) {
-                // If the room has no seats, return empty list
-                return List.of();
-            }
-
-            seats = roomSeats.stream().map(seat -> {
-                ShowtimeSeat showtimeSeat = new ShowtimeSeat();
-                showtimeSeat.setShowTime(showTime);
-                showtimeSeat.setSeat(seat);
-                showtimeSeat.setSeatCode(seat.getSeatCode());
-                showtimeSeat.setSeatType(seat.getSeatType() != null ? seat.getSeatType() : SeatType.STANDARD);
-                showtimeSeat.setPrice(resolveSeatPrice(showTime, seat));
-                showtimeSeat.setStatus(ShowtimeSeatStatus.AVAILABLE);
-                return showtimeSeat;
-            }).collect(Collectors.toList());
-            
-            showtimeSeatRepository.saveAll(seats);
+            throw new AppException(MovieErrorCode.SHOWTIME_INVENTORY_NOT_MATERIALIZED);
         }
 
         return seats.stream().map(this::toDto).collect(Collectors.toList());
     }
 
-    @Transactional
-    public void lockSeats(Long showtimeId, List<Long> seatIds) {
-        // Find seats
-        for (Long seatId : seatIds) {
-            ShowtimeSeat seat = showtimeSeatRepository.findById(seatId)
-                    .orElseThrow(() -> new RuntimeException("Seat not found"));
-            
-            if (seat.getStatus() != ShowtimeSeatStatus.AVAILABLE) {
-                // Check if reserved lock has expired
-                if (seat.getStatus() == ShowtimeSeatStatus.RESERVED && seat.getReservedExpiresAt() != null && seat.getReservedExpiresAt().isBefore(LocalDateTime.now())) {
-                    // Lock expired, we can proceed
-                } else {
-                    throw new RuntimeException("Seat is not available"); // Ideal: specialized exception
-                }
-            }
-            
-            seat.setStatus(ShowtimeSeatStatus.RESERVED);
-            seat.setReservedAt(LocalDateTime.now());
-            seat.setReservedExpiresAt(LocalDateTime.now().plusMinutes(15));
-            showtimeSeatRepository.save(seat);
+    /**
+     * Returns customer-bookable inventory together with the physical geometry
+     * of the layout version snapped onto the showtime. The legacy /seats
+     * endpoint deliberately remains unchanged for existing consumers.
+     */
+    @Transactional(readOnly = true)
+    public ShowtimeSeatMapResponse getSeatMapByShowtime(Long showtimeId) {
+        showTimeRepository.findByShowTimeIdAndStatus(showtimeId, ShowTimeStatus.ON_SALE)
+                .orElseThrow(() -> new AppException(MovieErrorCode.SHOWTIME_NOT_FOUND));
+
+        List<ShowtimeSeat> seats = showtimeSeatRepository.findByShowTime_ShowTimeId(showtimeId);
+        if (seats.isEmpty()) {
+            throw new AppException(MovieErrorCode.SHOWTIME_INVENTORY_NOT_MATERIALIZED);
         }
+
+        RoomLayout layout = seats.stream()
+                .map(ShowtimeSeat::getRoomLayout)
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+
+        List<LayoutPositionResponse> positions = layout == null
+                ? List.of()
+                : roomLayoutPositionRepository
+                        .findByRoomLayoutRoomLayoutIdOrderByRowIndexAscColumnIndexAsc(layout.getRoomLayoutId())
+                        .stream()
+                        .map(this::toLayoutPositionDto)
+                        .toList();
+
+        CinemaRoom room = seats.get(0).getShowTime().getCinemaRoom();
+        return ShowtimeSeatMapResponse.builder()
+                .seats(seats.stream().map(this::toDto).toList())
+                .positions(positions)
+                .presentationSystem(room.getPresentationSystem())
+                .projectionTechnologyCode(room.getProjectionTechnology() == null
+                        ? null : room.getProjectionTechnology().getTechCode())
+                .audioFormatCode(room.getAudioFormat() == null
+                        ? null : room.getAudioFormat().getFormatCode())
+                .audioFormatName(room.getAudioFormat() == null
+                        ? null : room.getAudioFormat().getFormatName())
+                .build();
     }
 
     private ShowtimeSeatDto toDto(ShowtimeSeat seat) {
@@ -163,6 +173,8 @@ public class ShowTimeService {
 
         return ShowtimeSeatDto.builder()
                 .seatId(seat.getShowtimeSeatId())
+                .seatCode(seat.getSeatCode())
+                .seatGroupId(seat.getSeatGroupId())
                 .row(row)
                 .number(number)
                 .type(seat.getSeatType() != null ? seat.getSeatType().name() : null)
@@ -170,6 +182,27 @@ public class ShowTimeService {
                 .aisleAfter(aisleAfter)
                 .status(status)
                 .price(seat.getPrice())
+                .build();
+    }
+
+    private LayoutPositionResponse toLayoutPositionDto(RoomLayoutPosition position) {
+        return LayoutPositionResponse.builder()
+                .positionId(position.getPositionId())
+                .rowIndex(position.getRowIndex())
+                .columnIndex(position.getColumnIndex())
+                .rowLabel(position.getRowLabel())
+                .positionType(position.getPositionType().name())
+                .seatNumber(position.getSeatNumber())
+                .seatCode(position.getSeatCode())
+                .seatType(position.getSeatType() == null ? null : position.getSeatType().name())
+                .seatGroupId(position.getSeatGroupId())
+                // Non-seat geometry (aisle, exit and empty space) deliberately
+                // has no seat status. Keep it null instead of failing the whole
+                // customer seat-map response.
+                .seatStatus(position.getSeatStatus() == null
+                        ? null
+                        : position.getSeatStatus().name())
+                .manualOverride(position.getManualOverride())
                 .build();
     }
 
@@ -260,12 +293,31 @@ public class ShowTimeService {
         return responses;
     }
 
+    /**
+     * Public catalogue boundary: only sessions whose sale lifecycle is ON_SALE are
+     * discoverable. The response intentionally keeps the existing DTO contract while
+     * preventing SCHEDULED/SUSPENDED/internal rows from being enumerated.
+     */
+    @Transactional(readOnly = true)
+    public List<ShowTimeResponse> getPublicOnSale() {
+        return movieMapper.toShowTimeResponseList(
+                showTimeRepository.findAllByStatusOrderByShowDateAscStartTimeAsc(ShowTimeStatus.ON_SALE));
+    }
+
     public ShowTimeResponse getById(Long id) {
         ShowTime showTime = showTimeRepository.findById(id)
                 .orElseThrow(() -> new AppException(MovieErrorCode.SHOWTIME_NOT_FOUND));
         ShowTimeResponse response = movieMapper.toShowTimeResponse(showTime);
         enrichPrices(List.of(response));
         return response;
+    }
+
+    @Transactional(readOnly = true)
+    public ShowTimeResponse getPublicOnSaleById(Long id) {
+        ShowTime showTime = showTimeRepository
+                .findByShowTimeIdAndStatus(id, ShowTimeStatus.ON_SALE)
+                .orElseThrow(() -> new AppException(MovieErrorCode.SHOWTIME_NOT_FOUND));
+        return movieMapper.toShowTimeResponse(showTime);
     }
 
     public List<ShowTimeResponse> getByMovieId(Long movieId, LocalDate date) {
@@ -278,6 +330,19 @@ public class ShowTimeService {
         List<ShowTimeResponse> responses = movieMapper.toShowTimeResponseList(results);
         enrichPrices(responses);
         return responses;
+    }
+
+    @Transactional(readOnly = true)
+    public List<ShowTimeResponse> getPublicOnSaleByMovieId(Long movieId, LocalDate date) {
+        if (!movieRepository.existsById(movieId)) {
+            throw new AppException(MovieErrorCode.MOVIE_NOT_FOUND);
+        }
+        List<ShowTime> results = date != null
+                ? showTimeRepository.findByMovieMovieIdAndShowDateAndStatusOrderByStartTimeAsc(
+                        movieId, date, ShowTimeStatus.ON_SALE)
+                : showTimeRepository.findByMovieMovieIdAndStatusOrderByShowDateAscStartTimeAsc(
+                        movieId, ShowTimeStatus.ON_SALE);
+        return movieMapper.toShowTimeResponseList(results);
     }
 
     /** Ghi gia thap nhat cua tung phong vao moi response — gom theo cinemaRoomId de chi
@@ -305,9 +370,13 @@ public class ShowTimeService {
         Movie movie = movieRepository.findById(request.getMovieId())
                 .orElseThrow(() -> new AppException(MovieErrorCode.MOVIE_NOT_FOUND));
 
-        // 2. Room exists
-        CinemaRoom room = cinemaRoomRepository.findByCinemaRoomId(request.getCinemaRoomId());
-        if (room == null) throw new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND);
+        // 2. Room exists - locked (PESSIMISTIC_WRITE) for the rest of this transaction so a
+        // concurrent create/update targeting the same room is serialized behind this one
+        // instead of racing it. Without this lock, two overlapping requests can both run the
+        // overlap check below, both see "no conflict" (default READ COMMITTED isolation does
+        // not prevent this), and both commit - producing a real overlap despite the check.
+        CinemaRoom room = cinemaRoomRepository.findByIdForUpdate(request.getCinemaRoomId())
+                .orElseThrow(() -> new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND));
         validateSchedulableRoom(room);
 
         // 3. showDate >= today + 3
@@ -338,8 +407,13 @@ public class ShowTimeService {
         showTime.setLanguageCode(request.getLanguageCode() != null ? request.getLanguageCode() : "vi");
         showTime.setSubtitleCode(request.getSubtitleCode());
         showTime.setBasePrice(request.getBasePrice());
+        showTime.setPriceSource(request.getBasePrice() == null
+                ? ShowtimePriceSource.ROOM_DEFAULT
+                : ShowtimePriceSource.SHOWTIME_OVERRIDE);
 
-        return toShowTimePricingResponse(showTimeRepository.save(showTime));
+        ShowTime saved = showTimeRepository.saveAndFlush(showTime);
+        showtimeInventoryService.materialize(saved.getShowTimeId());
+        return toShowTimePricingResponse(saved);
     }
 
     // ── Bulk Generation API ───────────────────────────────────────────────────
@@ -401,10 +475,15 @@ public class ShowTimeService {
             st.setLanguageCode(request.getLanguageCode() != null ? request.getLanguageCode() : "vi");
             st.setSubtitleCode(request.getSubtitleCode());
             st.setBasePrice(request.getBasePrice());
+            st.setPriceSource(request.getBasePrice() == null
+                    ? ShowtimePriceSource.ROOM_DEFAULT
+                    : ShowtimePriceSource.SHOWTIME_OVERRIDE);
             return st;
         }).collect(Collectors.toList());
 
         List<ShowTime> saved = showTimeRepository.saveAllAndFlush(toSave);
+        saved.forEach(showtime ->
+                showtimeInventoryService.materialize(showtime.getShowTimeId()));
         List<ShowTimeResponse> createdResponses = saved.stream()
                 .map(this::toShowTimeResponse)
                 .collect(Collectors.toList());
@@ -554,6 +633,10 @@ public class ShowTimeService {
     public ShowTimePricingResponse update(Long id, UpdateShowTimeRequest request) {
         ShowTime showTime = showTimeRepository.findById(id)
                 .orElseThrow(() -> new AppException(MovieErrorCode.SHOWTIME_NOT_FOUND));
+        boolean pricingContextChanged = request.getCinemaRoomId() != null
+                || request.getShowDate() != null
+                || request.getStartTime() != null
+                || request.isBasePricePresent();
 
         // Apply non-null field updates
         if (request.getMovieId() != null) {
@@ -563,10 +646,16 @@ public class ShowTimeService {
         }
 
         if (request.getCinemaRoomId() != null) {
-            CinemaRoom room = cinemaRoomRepository.findByCinemaRoomId(request.getCinemaRoomId());
-            if (room == null) throw new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND);
+            // Locked for the rest of this transaction - see the comment in createStandalone()
+            // for why the overlap recheck below needs the room row locked first.
+            CinemaRoom room = cinemaRoomRepository.findByIdForUpdate(request.getCinemaRoomId())
+                    .orElseThrow(() -> new AppException(MovieErrorCode.CINEMA_ROOM_NOT_FOUND));
             validateSchedulableRoom(room);
             showTime.setCinemaRoom(room);
+        } else if (request.getShowDate() != null || request.getStartTime() != null) {
+            // Room isn't changing, but date/time is: lock the existing room anyway so the
+            // overlap recheck below can't race with another create/update touching this room.
+            cinemaRoomRepository.findByIdForUpdate(showTime.getCinemaRoom().getCinemaRoomId());
         }
 
         if (request.getShowDate() != null) {
@@ -585,7 +674,15 @@ public class ShowTimeService {
         }
 
         if (request.isBasePricePresent()) {
+            if (showTime.getStatus() != null && showTime.getStatus() != ShowTimeStatus.SCHEDULED) {
+                throw new AppException(MovieErrorCode.SHOWTIME_PRICE_LOCKED);
+            }
             showTime.setBasePrice(request.getBasePrice());
+            showTime.setPriceSource(request.getBasePrice() == null
+                    ? ShowtimePriceSource.ROOM_DEFAULT
+                    : ShowtimePriceSource.SHOWTIME_OVERRIDE);
+            showTime.setPriceBook(null);
+            showTime.setPriceRate(null);
         }
 
         // Rerun overlap check (excluding self) when room, date, or time changed
@@ -602,7 +699,7 @@ public class ShowTimeService {
 
         // updatedAt được set tự động bởi @PreUpdate
         ShowTime saved = showTimeRepository.save(showTime);
-        if (request.isBasePricePresent()) {
+        if (pricingContextChanged && saved.getStatus() == ShowTimeStatus.SCHEDULED) {
             synchronizeUnbookedSeatPrices(saved);
         }
         return toShowTimePricingResponse(saved);
@@ -661,6 +758,10 @@ public class ShowTimeService {
             throw new AppException(MovieErrorCode.INVALID_STATUS_TRANSITION);
         }
 
+        if (target == ShowTimeStatus.ON_SALE) {
+            showtimeInventoryService.materialize(showTime.getShowTimeId());
+        }
+
         if (target == ShowTimeStatus.CANCELLED) {
             if (reason == null || reason.isBlank()) {
                 throw new AppException(MovieErrorCode.SHOWTIME_CANCELLATION_REASON_REQUIRED);
@@ -711,6 +812,10 @@ public class ShowTimeService {
         r.setSource(s.getSource() != null ? s.getSource().name() : null);
         r.setFormatCode(s.getFormat() != null ? s.getFormat().getFormatCode() : null);
         r.setCancellationReason(s.getCancellationReason());
+        r.setBasePrice(s.getBasePrice());
+        r.setPriceSource(s.getPriceSource() != null ? s.getPriceSource().name() : null);
+        r.setPriceBookId(s.getPriceBook() != null ? s.getPriceBook().getPriceBookId() : null);
+        r.setPriceRateId(s.getPriceRate() != null ? s.getPriceRate().getPriceRateId() : null);
         if (s.getMovie() != null) {
             r.setMovieId(s.getMovie().getMovieId());
             r.setMovieName(s.getMovie().getOriginalTitle());
@@ -745,6 +850,9 @@ public class ShowTimeService {
         response.setStatus(showTime.getStatus() != null ? showTime.getStatus().name() : null);
         response.setUpdatedAt(showTime.getUpdatedAt());
         response.setBasePrice(showTime.getBasePrice());
+        response.setPriceSource(showTime.getPriceSource() != null ? showTime.getPriceSource().name() : null);
+        response.setPriceBookId(showTime.getPriceBook() != null ? showTime.getPriceBook().getPriceBookId() : null);
+        response.setPriceRateId(showTime.getPriceRate() != null ? showTime.getPriceRate().getPriceRateId() : null);
         if (showTime.getMovie() != null) {
             response.setMovieId(showTime.getMovie().getMovieId());
             response.setMovieName(showTime.getMovie().getOriginalTitle());
@@ -756,20 +864,15 @@ public class ShowTimeService {
         return response;
     }
 
-    private BigDecimal resolveSeatPrice(ShowTime showTime, Seat seat) {
-        if (showTime.getBasePrice() != null) {
-            return showTime.getBasePrice();
-        }
-        return seat.getPrice() != null ? seat.getPrice() : ShowtimePricingDefaults.DEFAULT_SEAT_PRICE;
-    }
-
     private void synchronizeUnbookedSeatPrices(ShowTime showTime) {
+        PriceBookPricingService.PricingDecision pricing = priceBookPricingService.resolve(showTime);
+        priceBookPricingService.applyDecision(showTime, pricing);
         List<ShowtimeSeat> seats = showtimeSeatRepository
                 .findByShowTime_ShowTimeId(showTime.getShowTimeId());
         List<ShowtimeSeat> mutableSeats = seats.stream()
                 .filter(seat -> seat.getStatus() == ShowtimeSeatStatus.AVAILABLE
                         || seat.getStatus() == ShowtimeSeatStatus.BLOCKED)
-                .peek(seat -> seat.setPrice(resolveSeatPrice(showTime, seat.getSeat())))
+                .peek(seat -> seat.setPrice(pricing.priceFor(seat.getSeat())))
                 .toList();
         if (!mutableSeats.isEmpty()) {
             showtimeSeatRepository.saveAll(mutableSeats);

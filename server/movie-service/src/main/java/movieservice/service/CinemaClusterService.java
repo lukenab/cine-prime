@@ -8,12 +8,14 @@ import movieservice.dto.request.CinemaClusterRequest;
 import movieservice.dto.request.ClusterOperatingHourRequest;
 import movieservice.dto.response.CinemaClusterResponse;
 import movieservice.entity.CinemaCluster;
+import movieservice.entity.CinemaClusterDemandProfile;
 import movieservice.entity.CinemaClusterOperatingHour;
 import movieservice.entity.ClusterAuditLog;
 import movieservice.enums.ClusterAction;
 import movieservice.enums.ClusterStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
+import movieservice.repository.CinemaClusterDemandProfileRepository;
 import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.ClusterAuditLogRepository;
 import movieservice.repository.MovieAvailabilityRepository;
@@ -43,6 +45,7 @@ public class CinemaClusterService {
     CinemaClusterRepository cinemaClusterRepository;
     ClusterAuditLogRepository clusterAuditLogRepository;
     MovieAvailabilityRepository movieAvailabilityRepository;
+    CinemaClusterDemandProfileRepository cinemaClusterDemandProfileRepository;
     MovieMapper movieMapper;
 
     private static final List<ClusterAction> NON_DELETABLE_HISTORY = List.of(
@@ -230,6 +233,7 @@ public class CinemaClusterService {
         cluster.setStatus(ClusterStatus.ACTIVE);
         cluster.setUpdatedBy(actor);
         CinemaCluster saved = cinemaClusterRepository.save(cluster);
+        ensureDefaultDemandProfile(saved, actor);
         logAction(id, ClusterAction.APPROVE, actor,
                 ClusterStatus.PENDING_REVIEW, ClusterStatus.ACTIVE, null);
         return toResponseWithStats(saved);
@@ -254,6 +258,31 @@ public class CinemaClusterService {
         logAction(id, ClusterAction.REJECT, actor,
                 ClusterStatus.PENDING_REVIEW, ClusterStatus.DRAFT, note);
         return toResponseWithStats(saved);
+    }
+
+    /**
+     * Auto-creates a neutral default demand profile (NORMAL / 50.00 / 1 daily show min /
+     * 4 per movie max) the moment a cluster becomes ACTIVE, if it doesn't already have one.
+     * This replaces V33__backfill_default_cluster_demand_profile.sql (removed): that migration
+     * was a one-time stopgap backfill for clusters that predated any admin-facing way to set a
+     * profile; now every cluster gets one automatically on approval, and an admin can edit the
+     * real values afterward via CinemaClusterDemandProfileController instead of waiting on
+     * another migration. Same default values as the old migration, for continuity.
+     */
+    private void ensureDefaultDemandProfile(CinemaCluster cluster, String actor) {
+        if (cinemaClusterDemandProfileRepository.findByCluster_ClusterId(cluster.getClusterId()).isPresent()) {
+            return;
+        }
+        CinemaClusterDemandProfile profile = CinemaClusterDemandProfile.builder()
+                .cluster(cluster)
+                .demandTier(movieservice.enums.DemandTier.NORMAL)
+                .demandScore(new java.math.BigDecimal("50.00"))
+                .minDailyShows(1)
+                .maxDailyShowsPerMovie(4)
+                .createdBy(actor)
+                .updatedBy(actor)
+                .build();
+        cinemaClusterDemandProfileRepository.save(profile);
     }
 
     private CinemaCluster lockCluster(Long id) {

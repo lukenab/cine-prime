@@ -12,6 +12,7 @@ import ActivateAccountPage from "../pages/auth/ActivateAccountPage";
 import HomePage from "../pages/customer/HomePage";
 import MoviesPage from "../pages/customer/MoviesPage";
 import CinemasPage from "../pages/customer/CinemasPage";
+import CinemaShowtimesPage from "../pages/customer/CinemaShowtimesPage";
 import EventsPage from "../pages/customer/EventsPage";
 import OffersPage from "../pages/customer/OffersPage";
 import ShowtimePage from "../pages/customer/ShowtimePage";
@@ -23,8 +24,10 @@ import ManageUserPage from "../pages/admin/ManageUserPage";
 import ManageMoviePage from "../pages/admin/ManageMoviePage";
 import MovieEditorPage from "../pages/admin/MovieEditorPage";
 import MovieCreationStartPage from "../pages/admin/MovieCreationStartPage";
+import MovieAvailabilityPage from "../pages/admin/MovieAvailabilityPage";
 import TmdbCatalogPage from "../pages/admin/TmdbCatalogPage";
 import ManageCinemaClusterPage from "../pages/admin/ManageCinemaClusterPage";
+import AllRoomsPage from "../pages/admin/AllRoomsPage";
 import RoomDetailPage from "../pages/admin/RoomDetailPage";
 import ClusterDetailPage from "../pages/admin/ClusterDetailPage";
 import CinemaRoomEditorPage from "../pages/admin/CinemaRoomEditorPage";
@@ -42,6 +45,8 @@ import EditEmployeePage from "../pages/admin/EditEmployeePage";
 import ManagePersonsPage from "../pages/admin/ManagePersonsPage";
 import ManageAgeRatingsPage from "../pages/admin/ManageAgeRatingsPage";
 import ManageFormatsPage from "../pages/admin/ManageFormatsPage";
+import ManageScreeningVersionsPage from "../pages/admin/ManageScreeningVersionsPage";
+import ManagePriceBooksPage from "../pages/admin/ManagePriceBooksPage";
 import ManageCompaniesPage from "../pages/admin/ManageCompaniesPage";
 import ManagePromotionPage from "../pages/admin/ManagePromotionPage";
 import CreatePromotionPage from "../pages/admin/CreatePromotionPage";
@@ -63,6 +68,7 @@ export default function AppRoutes() {
         <Route path="/home" element={<HomePage />} />
         <Route path="/movies" element={<MoviesPage />} />
         <Route path="/cinemas" element={<CinemasPage />} />
+        <Route path="/cinemas/:clusterId/showtimes" element={<CinemaShowtimesPage />} />
         <Route path="/events" element={<EventsPage />} />
         <Route path="/offers" element={<OffersPage />} />
         <Route path="/showtime/:movieId" element={<ShowtimePage />} />
@@ -92,7 +98,9 @@ export default function AppRoutes() {
           <Route path="movies/new/catalog" element={<TmdbCatalogPage />} />
           <Route path="movies/new/manual" element={<MovieEditorPage />} />
           <Route path="movies/:movieId/edit" element={<MovieEditorPage />} />
+          <Route path="movies/:movieId/availability" element={<MovieAvailabilityPage />} />
           <Route path="clusters"  element={<ManageCinemaClusterPage />} />
+          <Route path="rooms"     element={<AllRoomsPage />} />
           <Route path="clusters/:id" element={<ClusterDetailPage />} />
           <Route path="clusters/:clusterId/rooms/new" element={<CinemaRoomEditorPage />} />
           <Route path="clusters/:clusterId/rooms/:roomId/edit" element={<CinemaRoomEditorPage />} />
@@ -103,6 +111,7 @@ export default function AppRoutes() {
 
           <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN"]} />}>
             <Route path="showtimes/auto"     element={<AutoScheduleWorkspacePage />} />
+            <Route path="price-books"        element={<ManagePriceBooksPage />} />
             <Route path="employees"          element={<ManageEmployeePage />} />
             <Route path="employees/create"   element={<CreateEmployeePage />} />
             <Route path="employees/:id"      element={<EmployeeDetailPage />} />
@@ -115,6 +124,7 @@ export default function AppRoutes() {
             <Route path="persons"            element={<ManagePersonsPage />} />
             <Route path="age-ratings"        element={<ManageAgeRatingsPage />} />
             <Route path="formats"            element={<ManageFormatsPage />} />
+            <Route path="screening-versions" element={<ManageScreeningVersionsPage />} />
             <Route path="companies"          element={<ManageCompaniesPage />} />
             <Route path="promotions"          element={<ManagePromotionPage />} />
             <Route path="promotions/create"   element={<CreatePromotionPage />} />

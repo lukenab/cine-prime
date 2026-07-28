@@ -36,6 +36,7 @@ export type MovieApiResponse = {
   movieType: string[];
   showTimes: ShowTimeResponse[];
   createAt: string | number[];
+  updatedAt?: string;
   // Extended fields (V2)
   gallery?: string[];
   backdrops?: string[];
@@ -43,6 +44,8 @@ export type MovieApiResponse = {
   releaseDate?: string;
   country?: string;
   ageRatingCode?: string;
+  originalLanguage?: string;
+  tagline?: string;
 };
 
 export type RoomResponse = {
@@ -53,10 +56,18 @@ export type RoomResponse = {
   numberOfRows: number;
   seatsPerRow: number;
   status?: string;
+  maintenanceNote?: string;
   createdBy?: string;
   clusterId: number;
   clusterName?: string;
   activeLayout?: RoomLayoutSummary;
+  // Already returned by the backend's list endpoint (movieservice.dto.response.
+  // CinemaRoomResponse) but previously not declared here nor copied through by
+  // toLegacyRoom() below, so the format/screen-tech info silently never reached
+  // the room table even though the API response body already carried it - see #139.
+  presentationSystem?: PresentationSystemValue;
+  supports2d?: boolean;
+  supports3d?: boolean;
 };
 
 /** Raw shape returned by the backend (movieservice.dto.response.CinemaRoomResponse) —
@@ -75,6 +86,9 @@ export type RoomApiResponse = {
   clusterId: number;
   clusterName?: string;
   activeLayout?: RoomLayoutSummary;
+  presentationSystem?: PresentationSystemValue;
+  supports2d?: boolean;
+  supports3d?: boolean;
 };
 
 // ── Cinema Room creation wizard (layout versioning / approval workflow) ────────
@@ -88,6 +102,7 @@ export type MasterDataItem = {
   code: string;
   name: string;
   description?: string;
+  active?: boolean;
 };
 
 export type RoomConfigurationTemplate = {
@@ -125,7 +140,7 @@ export type CinemaRoomMasterData = {
 };
 
 export type LayoutPositionType = "SEAT" | "AISLE" | "EXIT" | "EMPTY_SPACE";
-export type PresentationSystemValue = "STANDARD" | "IMAX" | "DOLBY_CINEMA" | "SCREENX";
+export type PresentationSystemValue = "STANDARD" | "IMAX" | "DOLBY_CINEMA" | "SCREENX" | "FOUR_DX";
 export type NumberingDirectionValue = "LEFT_TO_RIGHT" | "RIGHT_TO_LEFT";
 export type NumberingPolicyValue = "CONTIGUOUS_SEATS" | "PHYSICAL_POSITION";
 export type LayoutStatusValue = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "ACTIVE" | "REJECTED" | "SUPERSEDED";
@@ -213,11 +228,48 @@ export type CreateRoomWizardPayload = {
 /** Step 1/2 partial update while the room is still DRAFT — every field optional. */
 export type UpdateRoomWizardPayload = Partial<CreateRoomWizardPayload>;
 
+export type MaintenanceSeverityValue = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+/** Mirrors movieservice.dto.response.CinemaRoomMaintenanceResponse. */
+export type CinemaRoomMaintenance = {
+  maintenanceId: number;
+  cinemaRoomId: number;
+  reason: string;
+  severity: MaintenanceSeverityValue;
+  startedAt: string;
+  resolvedAt?: string;
+  resolved: boolean;
+  resolutionNote?: string;
+  createdBy?: string;
+  createdAt?: string;
+};
+
+export type ReportMaintenancePayload = {
+  reason: string;
+  severity: MaintenanceSeverityValue;
+  startedAt?: string;
+};
+
+/** Mirrors movieservice.dto.response.CinemaRoomFormatResponse — a merge of the full
+ *  screening_format catalog with this room's cinema_room_format rows. */
+export type CinemaRoomFormatCapability = {
+  formatId: number;
+  formatCode: string;
+  formatName: string;
+  surcharge: number;
+  enabled: boolean;
+  /** True for 2D/3D/IMAX/SCREENX/ATMOS/4DX — derived from supports2d/supports3d/
+   *  presentationSystem on room save; edit those instead, this endpoint rejects toggling
+   *  them directly. False for any other catalog format, which is manually toggleable. */
+  managedAutomatically: boolean;
+};
+
 export type CinemaRoomDetail = {
   cinemaRoomId: number;
   cinemaRoomName: string;
   roomCode?: string;
   status: CinemaRoomWizardStatus;
+  maintenanceNote?: string;
   clusterId: number;
   clusterName?: string;
 
@@ -262,6 +314,34 @@ export type ClusterOperatingHour = {
   closesAt?: string;
   closesNextDay: boolean;
   closed: boolean;
+};
+
+export type DemandTier = "HIGH" | "NORMAL" | "LOW";
+
+/** Mirrors CinemaClusterDemandProfileResponse.java - the per-cluster inputs the auto-showtime
+ *  allocator reads (AutoShowtimeCandidateSelector/Scorer). uniqueCustomerCount/bookingCount/
+ *  revenue are read-only analytics snapshots, not editable through the form. */
+export type ClusterDemandProfileResponse = {
+  clusterId: number;
+  clusterName?: string;
+  demandTier: DemandTier;
+  demandScore: number;
+  minDailyShows: number;
+  maxDailyShowsPerMovie: number;
+  uniqueCustomerCount?: number;
+  bookingCount?: number;
+  revenue?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
+  updatedBy?: string;
+};
+
+export type ClusterDemandProfilePayload = {
+  demandTier: DemandTier;
+  demandScore: number;
+  minDailyShows: number;
+  maxDailyShowsPerMovie: number;
 };
 
 export type ClusterResponse = {
@@ -395,6 +475,46 @@ export type ScreeningFormatResponse = {
   surcharge: number;
 };
 
+export type ScreeningVersionStatus = 'ACTIVE' | 'INACTIVE' | 'SUPERSEDED';
+
+export type MovieScreeningVersionResponse = {
+  screeningVersionId: number;
+  movieId: number;
+  formatId: number;
+  formatCode: string;
+  formatName: string;
+  audioFormatId?: number | null;
+  audioFormatCode?: string | null;
+  audioFormatName?: string | null;
+  audioLanguageCode: string;
+  subtitleLanguageCode?: string | null;
+  status: ScreeningVersionStatus;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
+  compatibleRoomCount: number;
+  compatibleClusterCount: number;
+  referenceCount: number;
+  referenced: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type MovieScreeningVersionCatalogResponse = MovieScreeningVersionResponse & {
+  movieTitle: string;
+  posterUrl?: string | null;
+  movieStatus: MovieStatus;
+  requiresAttention: boolean;
+};
+
+export type MovieScreeningVersionPayload = {
+  formatId: number;
+  audioFormatId: number;
+  audioLanguageCode: string;
+  subtitleLanguageCode?: string | null;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
+};
+
 export type ProductionCompanyResponse = {
   companyId: number;
   name: string;
@@ -484,6 +604,10 @@ export type MovieResponse = {
   translations: TranslationResponse[];
   cast: CastResponse[];
   images: MovieImageResponse[];
+  /** movie_scheduling_profile - popularity 0-100, priorityOverride optional manual override. */
+  popularityScore?: number;
+  priorityOverride?: number;
+  scoreSource?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -498,6 +622,7 @@ export type PublicMovieResponse = {
   posterUrl?: string;
   thumbnailUrl?: string;
   trailerUrl?: string;
+  releaseDate?: string;
   synopsis?: string;
   durationMinutes?: number;
   genres: GenreResponse[];
@@ -630,6 +755,9 @@ export type TmdbMovieDetails = {
    *  string as posterUrl. Use this directly; don't copy posterUrl into a thumbnail field. */
   thumbnailUrl?: string;
   overview?: string;
+  /** Backend-normalized TMDB popularity on the same 0-100 scale persisted on import. */
+  popularityScore?: number;
+  voteAverage?: number;
   /** `[Backend] Add tagline field to Movie and MovieTranslation entities` - original-language
    *  tagline; per-locale ones are in each entry of `translations` below. */
   tagline?: string;
@@ -713,6 +841,10 @@ export type CreateMovieRequest = {
   imdbId?: string;
   translations?: TranslationRequest[];
   cast?: CastRequest[];
+  /** movie_scheduling_profile - 0-100, drives the auto-showtime allocator's movieDemandWeight input. */
+  popularityScore?: number;
+  /** Optional manual override that bypasses the derived popularity ranking for this movie. */
+  priorityOverride?: number;
 };
 
 export type UpdateMovieRequest = Partial<CreateMovieRequest>;
@@ -822,6 +954,7 @@ const toLegacyMovie = (movie: MovieResponse): MovieApiResponse => {
     movieType: movie.genres?.map((item) => item.genreName) ?? [],
     showTimes: [],
     createAt: movie.createdAt ?? '',
+    updatedAt: movie.updatedAt,
     releaseDate: movie.releaseDate,
     country: movie.country,
     ageRatingCode: movie.ageRating?.ratingCode,
@@ -835,17 +968,27 @@ const toLegacyMovie = (movie: MovieResponse): MovieApiResponse => {
  *  aren't part of the public read-model and are left blank. */
 const toLegacyPublicMovie = (movie: PublicMovieResponse): MovieApiResponse => ({
   movieId: movie.movieId,
-  movieNameVn: movie.originalTitle,
-  movieNameEnglish: movie.originalTitle,
-  director: '',
-  actor: '',
-  content: movie.synopsis ?? '',
+  movieNameVn: movie.translations?.find((item) => item.languageCode === 'vi')?.title ?? movie.originalTitle,
+  movieNameEnglish: movie.translations?.find((item) => item.languageCode === 'en')?.title ?? movie.originalTitle,
+  director: movie.cast
+    ?.filter((item) => item.roleType === 'DIRECTOR')
+    .map((item) => item.fullName)
+    .join(', ') ?? '',
+  actor: movie.cast
+    ?.filter((item) => item.roleType === 'ACTOR')
+    .sort((left, right) => left.billingOrder - right.billingOrder)
+    .map((item) => item.fullName)
+    .join(', ') ?? '',
+  content: movie.translations?.find((item) => item.languageCode === 'vi')?.synopsis
+    ?? movie.translations?.find((item) => item.languageCode === 'en')?.synopsis
+    ?? movie.synopsis
+    ?? '',
   duration: movie.durationMinutes ?? 0,
-  version: '',
+  version: movie.formats?.map((item) => item.formatName).join(', ') ?? '',
   status: movie.displayStatus === 'NOW_SHOWING',
   movieStatus: undefined,
   displayStatus: movie.displayStatus,
-  movieProductionCompany: '',
+  movieProductionCompany: movie.companies?.map((item) => item.name).join(', ') ?? '',
   largeImage: movie.posterUrl ?? '',
   smallImage: movie.thumbnailUrl ?? movie.posterUrl ?? '',
   movieType: movie.genres?.map((item) => item.genreName) ?? [],
@@ -859,6 +1002,18 @@ const toLegacyPublicMovie = (movie: PublicMovieResponse): MovieApiResponse => ({
     updateAt: '',
   }] : [],
   createAt: '',
+  trailerUrl: movie.trailerUrl,
+  releaseDate: movie.releaseDate,
+  country: movie.country,
+  ageRatingCode: movie.ageRating?.ratingCode,
+  originalLanguage: movie.originalLanguage,
+  tagline: movie.tagline,
+  gallery: movie.images
+    ?.filter((item) => item.imageType === 'STILL' || item.imageType === 'PROMOTIONAL')
+    .map((item) => item.imageUrl),
+  backdrops: movie.images
+    ?.filter((item) => item.imageType === 'BACKDROP')
+    .map((item) => item.imageUrl),
 });
 
 /** Backend uses `totalSeatCapacity`; UI has used `seatQuantity` throughout —
@@ -871,10 +1026,14 @@ const toLegacyRoom = (room: RoomApiResponse): RoomResponse => ({
   numberOfRows: room.numberOfRows,
   seatsPerRow: room.seatsPerRow,
   status: room.status,
+  maintenanceNote: room.maintenanceNote,
   createdBy: room.createdBy,
   clusterId: room.clusterId,
   clusterName: room.clusterName,
   activeLayout: room.activeLayout,
+  presentationSystem: room.presentationSystem,
+  supports2d: room.supports2d,
+  supports3d: room.supports3d,
 });
 
 export const movieApi = {
@@ -958,6 +1117,43 @@ export const movieApi = {
 
   updateMovie: (id: number, payload: UpdateMovieRequest) =>
     axiosClient.put(`/api/movies/${id}`, payload) as Promise<ApiWrapper<MovieResponse>>,
+
+  listMovieScreeningVersions: (movieId: number) =>
+    axiosClient.get(`/api/movies/${movieId}/screening-versions`) as Promise<ApiWrapper<MovieScreeningVersionResponse[]>>,
+
+  createMovieScreeningVersion: (movieId: number, payload: MovieScreeningVersionPayload) =>
+    axiosClient.post(`/api/movies/${movieId}/screening-versions`, payload) as Promise<ApiWrapper<MovieScreeningVersionResponse>>,
+
+  createMovieScreeningVersions: (movieId: number, payload: MovieScreeningVersionPayload[]) =>
+    axiosClient.post(`/api/movies/${movieId}/screening-versions/batch`, payload) as Promise<ApiWrapper<MovieScreeningVersionResponse[]>>,
+
+  updateMovieScreeningVersion: (
+    movieId: number,
+    versionId: number,
+    payload: MovieScreeningVersionPayload,
+  ) =>
+    axiosClient.put(`/api/movies/${movieId}/screening-versions/${versionId}`, payload) as Promise<ApiWrapper<MovieScreeningVersionResponse>>,
+
+  activateMovieScreeningVersion: (movieId: number, versionId: number) =>
+    axiosClient.post(`/api/movies/${movieId}/screening-versions/${versionId}/activate`) as Promise<ApiWrapper<MovieScreeningVersionResponse>>,
+
+  deactivateMovieScreeningVersion: (movieId: number, versionId: number) =>
+    axiosClient.post(`/api/movies/${movieId}/screening-versions/${versionId}/deactivate`) as Promise<ApiWrapper<MovieScreeningVersionResponse>>,
+
+  searchMovieScreeningVersions: (params?: {
+    q?: string;
+    status?: ScreeningVersionStatus;
+    formatId?: number;
+    attentionOnly?: boolean;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.q?.trim()) query.set('q', params.q.trim());
+    if (params?.status) query.set('status', params.status);
+    if (params?.formatId) query.set('formatId', String(params.formatId));
+    if (params?.attentionOnly) query.set('attentionOnly', 'true');
+    const suffix = query.toString();
+    return axiosClient.get(`/api/screening-versions${suffix ? `?${suffix}` : ''}`) as Promise<ApiWrapper<MovieScreeningVersionCatalogResponse[]>>;
+  },
 
   // Lookup APIs
   getGenres: () =>
@@ -1052,6 +1248,16 @@ export const movieApi = {
   archiveMovie: (id: number) =>
     axiosClient.post(`/api/movies/${id}/archive`) as Promise<ApiWrapper<MovieResponse>>,
 
+  /** Permanently deletes a DRAFT/PENDING_REVIEW movie. Irreversible — blocked if it still has
+   *  any showtime or availability window. Use archiveMovie for an APPROVED movie instead. */
+  hardDeleteMovie: (id: number) =>
+    axiosClient.delete(`/api/movies/${id}/permanent`) as Promise<ApiWrapper<void>>,
+
+  /** Bulk cleanup: permanently deletes every DRAFT/PENDING_REVIEW movie with no showtimes or
+   *  availability windows. Movies that are skipped are reported back, not silently ignored. */
+  purgeDraftMovies: () =>
+    axiosClient.delete('/api/movies/purge-drafts') as Promise<ApiWrapper<{ deletedMovieIds: number[]; skippedMovieIds: Record<number, string> }>>,
+
   // ── Movie availability — per-cluster exhibition/release plan (MOV-LC-06) ──
 
   searchAvailabilities: (params: { movieId?: number; clusterId?: number; status?: AvailabilityStatus }) => {
@@ -1107,6 +1313,16 @@ export const movieApi = {
 
   tmdbImport: (payload: TmdbImportPayload) =>
     axiosClient.post('/api/movies/tmdb/import', payload) as Promise<ApiWrapper<TmdbImportResult>>,
+
+  // Cinema Cluster Demand Profile APIs (mirrors CinemaClusterDemandProfileController.java) —
+  // replaces the removed V33 backfill-migration stopgap; a default profile is now
+  // auto-created when a cluster is approved, and admins edit the real values here.
+  getClusterDemandProfile: (clusterId: number) =>
+    axiosClient.get(`/api/cinema-clusters/${clusterId}/demand-profile`) as Promise<ApiWrapper<ClusterDemandProfileResponse>>,
+
+  /** Upsert — creates the profile if this cluster doesn't have one yet, otherwise updates it. */
+  updateClusterDemandProfile: (clusterId: number, payload: ClusterDemandProfilePayload) =>
+    axiosClient.put(`/api/cinema-clusters/${clusterId}/demand-profile`, payload) as Promise<ApiWrapper<ClusterDemandProfileResponse>>,
 
   // Cinema Cluster APIs
   getClusters: () =>
@@ -1182,9 +1398,37 @@ export const movieApi = {
   activateRoomLayout: (roomId: number, layoutId: number) =>
     axiosClient.post(`/api/cinema-rooms/${roomId}/layouts/${layoutId}/activate`) as Promise<ApiWrapper<RoomLayoutDetail>>,
 
+  // ── Maintenance ──────────────────────────────────────────────────────────
+  /** Full history (open + resolved) for one room — newest first. */
+  listRoomMaintenance: (roomId: number) =>
+    axiosClient.get(`/api/cinema-rooms/${roomId}/maintenance`) as Promise<ApiWrapper<CinemaRoomMaintenance[]>>,
+
+  /** Reports an incident → room flips to TEMPORARILY_UNAVAILABLE server-side. */
+  reportRoomMaintenance: (roomId: number, payload: ReportMaintenancePayload) =>
+    axiosClient.post(`/api/cinema-rooms/${roomId}/maintenance`, payload) as Promise<ApiWrapper<CinemaRoomMaintenance>>,
+
+  /** Room auto-restores to ACTIVE once no open incident remains. */
+  resolveRoomMaintenance: (maintenanceId: number, resolutionNote?: string) =>
+    axiosClient.post(`/api/cinema-rooms/maintenance/${maintenanceId}/resolve`, null, {
+      params: resolutionNote ? { resolutionNote } : undefined,
+    }) as Promise<ApiWrapper<CinemaRoomMaintenance>>,
+
   /** Clones an APPROVED/ACTIVE/REJECTED/SUPERSEDED version into a new DRAFT version+1 */
   cloneRoomLayout: (roomId: number, layoutId: number) =>
     axiosClient.post(`/api/cinema-rooms/${roomId}/layouts/${layoutId}/clone`) as Promise<ApiWrapper<RoomLayoutDetail>>,
+
+  // ── Per-room format capabilities (cinema_room_format) ─────────────────────
+  /** Full catalog merged with this room's capability rows — which formats it actually
+   *  supports, and whether each is auto-derived or independently toggleable. */
+  listRoomFormats: (roomId: number) =>
+    axiosClient.get(`/api/cinema-rooms/${roomId}/formats`) as Promise<ApiWrapper<CinemaRoomFormatCapability[]>>,
+
+  /** Only valid for a format outside the auto-managed set (2D/3D/IMAX/SCREENX/ATMOS/4DX) —
+   *  the backend rejects those with ROOM_FORMAT_MANAGED_AUTOMATICALLY. */
+  setRoomFormat: (roomId: number, formatId: number, enabled: boolean) =>
+    axiosClient.patch(`/api/cinema-rooms/${roomId}/formats/${formatId}`, null, {
+      params: { enabled },
+    }) as Promise<ApiWrapper<CinemaRoomFormatCapability>>,
 };
 
 export function toDateStr(val: string | number[] | undefined): string {

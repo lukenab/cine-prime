@@ -31,6 +31,15 @@ public class MovieScreeningVersion {
     @JoinColumn(name = "format_id", nullable = false)
     ScreeningFormat format;
 
+    /**
+     * Audio mix delivered with this version. V49 backfills the unresolved
+     * legacy rows to the conservative Dolby 5.1 baseline, so every version
+     * now has an explicit content-audio capability.
+     */
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "audio_format_id", nullable = false)
+    AudioFormat audioFormat;
+
     @Column(name = "audio_language_code", nullable = false, length = 10)
     String audioLanguageCode;
 

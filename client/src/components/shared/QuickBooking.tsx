@@ -14,7 +14,7 @@ import { useNavigate } from "react-router-dom";
 import { movieApi, type ClusterResponse } from "../../api/movieApi";
 import { showtimeApi, type ShowtimeResponse } from "../../api/showtimeApi";
 
-const BOOKABLE_STATUSES = new Set(["ON_SALE", "SCHEDULED"]);
+const BOOKABLE_STATUSES = new Set(["ON_SALE"]);
 
 type BookingOption = {
   value: string;
@@ -66,7 +66,7 @@ function BookingDropdown({ id, value, options, placeholder, disabled = false, on
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
         className={`flex h-11 w-full items-center justify-between gap-2 rounded-xl border bg-white/[0.05] px-3 text-left text-sm font-semibold outline-none transition disabled:cursor-not-allowed disabled:opacity-35 ${
-          open ? "border-yellow-400/80 ring-2 ring-yellow-400/10" : "border-white/10 hover:border-white/25"
+          open ? "border-blue-400/80 ring-2 ring-blue-400/10" : "border-white/10 hover:border-white/25"
         } ${selectedOption ? "text-white" : "text-white/35"}`}
       >
         <span className="min-w-0 truncate">{selectedOption?.label ?? placeholder}</span>
@@ -103,7 +103,7 @@ function BookingDropdown({ id, value, options, placeholder, disabled = false, on
                     option.disabled
                       ? "cursor-not-allowed text-white/20 line-through"
                       : selected
-                        ? "bg-yellow-400 text-black font-bold"
+                        ? "bg-blue-600 text-white font-bold"
                         : "text-white/75 hover:bg-white/[0.07] hover:text-white"
                   }`}
                 >
@@ -283,7 +283,7 @@ export function QuickBooking() {
     return (
       <section className="bg-[#050505] px-4 py-5 sm:px-6" aria-label="Quick booking">
         <div className="mx-auto flex max-w-6xl items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] py-10 text-sm text-white/60">
-          <LoaderCircle className="mr-2 animate-spin text-yellow-400" size={18} />
+          <LoaderCircle className="mr-2 animate-spin text-blue-400" size={18} />
           Loading booking options…
         </div>
       </section>
@@ -292,9 +292,9 @@ export function QuickBooking() {
 
   return (
     <section className="bg-[#050505] px-4 py-5 sm:px-6" aria-labelledby="quick-booking-title">
-      <div className="mx-auto max-w-6xl rounded-2xl border border-yellow-400/20 bg-[#101010] p-4 shadow-[0_18px_55px_rgba(0,0,0,0.32)] sm:p-5">
+      <div className="mx-auto max-w-6xl rounded-2xl border border-blue-400/25 bg-[#101010] p-4 shadow-[0_18px_55px_rgba(0,0,0,0.32)] sm:p-5">
         <div className="mb-4 flex items-center gap-3 text-left">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-yellow-400 text-black">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-[0_8px_22px_rgba(37,99,235,0.3)]">
             <Ticket size={18} />
           </span>
           <div>
@@ -309,7 +309,7 @@ export function QuickBooking() {
           <div className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-[1.35fr_.9fr_1.35fr_1.2fr_auto]">
             <div className="min-w-0 text-left">
               <label htmlFor="quick-booking-cinema" className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-white/45">
-                <MapPin size={13} className="text-yellow-400" /> 1. Cinema
+                <MapPin size={13} className="text-blue-400" /> 1. Cinema
               </label>
               <BookingDropdown
                 id="quick-booking-cinema"
@@ -325,7 +325,7 @@ export function QuickBooking() {
 
             <div className="min-w-0 text-left">
               <label htmlFor="quick-booking-date" className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-white/45">
-                <CalendarDays size={13} className="text-yellow-400" /> 2. Date
+                <CalendarDays size={13} className="text-blue-400" /> 2. Date
               </label>
               <BookingDropdown
                 id="quick-booking-date"
@@ -342,7 +342,7 @@ export function QuickBooking() {
 
             <div className="min-w-0 text-left">
               <label htmlFor="quick-booking-movie" className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-white/45">
-                <Clapperboard size={13} className="text-yellow-400" /> 3. Movie
+                <Clapperboard size={13} className="text-blue-400" /> 3. Movie
               </label>
               <BookingDropdown
                 id="quick-booking-movie"
@@ -360,7 +360,7 @@ export function QuickBooking() {
 
             <div className="min-w-0 text-left">
               <label htmlFor="quick-booking-showtime" className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-white/45">
-                <Clock3 size={13} className="text-yellow-400" /> 4. Showtime
+                <Clock3 size={13} className="text-blue-400" /> 4. Showtime
               </label>
               <BookingDropdown
                 id="quick-booking-showtime"
@@ -384,7 +384,7 @@ export function QuickBooking() {
               type="button"
               disabled={!selectedShowtime}
               onClick={continueToSeats}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-yellow-400 to-amber-500 px-5 text-sm font-black text-black transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-30 sm:col-span-2 lg:col-span-1"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 px-5 text-sm font-black text-white shadow-[0_8px_22px_rgba(37,99,235,0.28)] transition hover:from-blue-500 hover:to-blue-400 disabled:cursor-not-allowed disabled:opacity-30 sm:col-span-2 lg:col-span-1"
             >
               Choose seats <ArrowRight size={16} />
             </button>

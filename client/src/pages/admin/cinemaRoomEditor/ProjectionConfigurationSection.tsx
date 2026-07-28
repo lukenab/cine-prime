@@ -27,6 +27,7 @@ const PRESENTATION_SYSTEM_OPTIONS: Array<{ id: PresentationSystemValue; name: st
   { id: "IMAX", name: "IMAX", description: "One IMAX screen with an IMAX-certified presentation system." },
   { id: "DOLBY_CINEMA", name: "Dolby Cinema", description: "One front screen with the Dolby Cinema presentation profile." },
   { id: "SCREENX", name: "ScreenX", description: "ScreenX panoramic presentation profile." },
+  { id: "FOUR_DX", name: "4DX", description: "4DX motion/environmental-effects presentation profile." },
 ];
 
 function aspectRatioHint(ratio: number): string {

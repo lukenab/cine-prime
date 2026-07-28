@@ -24,7 +24,7 @@ public class ScreeningFormat {
     Integer formatId;
 
     @Column(name = "format_code", nullable = false, unique = true, length = 20)
-    String formatCode;         // 2D, 3D, IMAX, 4DX, SCREENX, ATMOS
+    String formatCode;         // 2D, 3D, IMAX, 4DX, SCREENX
 
     @Column(name = "format_name", nullable = false, length = 100)
     String formatName;

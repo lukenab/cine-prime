@@ -45,7 +45,7 @@ const setStored = <T>(key: string, data: T): void => {
 const initialShowtimes: ShowtimeResponse[] = [
   { showtimeId: 1, movieId: 1, movieName: "Dune: Part Two",       duration: 166, cinemaId: 1, cinemaName: "CinePrime Central", cinemaRoomId: 1, roomName: "Cinema 1 (IMAX)",     showDate: "2026-06-25", startTime: "09:00", endTime: "11:46", basePrice: 90000,  status: "SCHEDULED" },
   { showtimeId: 2, movieId: 2, movieName: "Deadpool & Wolverine", duration: 127, cinemaId: 1, cinemaName: "CinePrime Central", cinemaRoomId: 2, roomName: "Cinema 2 (3D)",       showDate: "2026-06-25", startTime: "14:30", endTime: "16:37", basePrice: 110000, status: "ONGOING"   },
-  { showtimeId: 3, movieId: 3, movieName: "Inside Out 2",         duration: 96,  cinemaId: 2, cinemaName: "CinePrime Plaza",   cinemaRoomId: 3, roomName: "Cinema 3 (Standard)", showDate: "2026-06-25", startTime: "18:00", endTime: "19:36", basePrice: 85000,  status: "SCHEDULED" },
+  { showtimeId: 3, movieId: 3, movieName: "Inside Out 2",         duration: 96,  cinemaId: 2, cinemaName: "CinePrime Plaza",   cinemaRoomId: 3, roomName: "Cinema 3 (Standard)", showDate: "2026-06-25", startTime: "18:00", endTime: "19:36", basePrice: 90000,  status: "SCHEDULED" },
 ];
 
 export const getMockMovies   = () => getStored('mock_movies',    initialMovies);

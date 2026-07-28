@@ -3,6 +3,7 @@ package movieservice.dto.response;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -25,8 +26,6 @@ public class MovieResponse {
     LocalDate releaseDate;
     String country;
     String status;
-    /** Set when an ADMIN requests changes (PENDING_REVIEW -> CHANGES_REQUESTED). The employee
-     *  reads this to know what to fix before resubmitting. */
     String rejectionNote;
 
     AgeRatingResponse ageRating;
@@ -35,11 +34,9 @@ public class MovieResponse {
     String posterUrl;
     String thumbnailUrl;
     String trailerUrl;
-    /** TMDB = auto-selected on import; MANUAL = admin-entered/edited. */
     String trailerSource;
     String synopsis;
     String tagline;
-    /** TMDB = auto-imported on import; MANUAL = admin-entered/edited. */
     String taglineSource;
 
     List<GenreResponse> genres;
@@ -47,7 +44,15 @@ public class MovieResponse {
     List<TranslationResponse> translations;
     List<CastResponse> cast;
     List<MovieImageResponse> images;
-    
+
+    // ── Scheduling profile (movie_scheduling_profile) — see MovieSchedulingProfile.
+    //    Populated on single-movie reads (getMovie/getMovieByLang) and after create/update;
+    //    left null if the movie somehow has no profile row yet (should not happen once
+    //    createMovie() always creates one, but read paths tolerate it defensively). ──
+    BigDecimal popularityScore;
+    BigDecimal priorityOverride;
+    String scoreSource;
+
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
     String createdBy;

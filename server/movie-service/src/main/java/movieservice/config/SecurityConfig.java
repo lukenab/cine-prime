@@ -38,7 +38,11 @@ public class SecurityConfig extends JwtResourceServerSecuritySupport {
                         // gate lives in the booking flow itself, not here). Locking seats
                         // (PUT .../lock) stays behind .anyRequest().authenticated() below -
                         // any signed-in customer may hold seats for their own booking.
-                        .requestMatchers(HttpMethod.GET, "/api/showtimes/*/seats").permitAll()
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/showtimes/*/seats",
+                                "/api/showtimes/*/seat-map")
+                        .permitAll()
                         // Cinema clusters — GET public (controller filters by role internally)
                         // Audit log is further protected via @PreAuthorize on the method
                         .requestMatchers(HttpMethod.GET, "/api/cinema-clusters/**").permitAll()

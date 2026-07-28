@@ -4,7 +4,11 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import movieservice.enums.GenerationRunStatus;
+import movieservice.enums.OptimizationScenario;
+import movieservice.enums.OptimizerMode;
+import movieservice.enums.SolverStatus;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
@@ -75,6 +79,38 @@ public class ShowtimeGenerationRun {
 
     @Column(name = "failure_detail", columnDefinition = "TEXT")
     String failureDetail;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "optimizer_mode", nullable = false, length = 20)
+    OptimizerMode optimizerMode = OptimizerMode.LEGACY;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "scenario", nullable = false, length = 20)
+    OptimizationScenario scenario = OptimizationScenario.BALANCED;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "solver_status", length = 20)
+    SolverStatus solverStatus;
+
+    @Column(name = "solve_duration_millis")
+    Long solveDurationMillis;
+
+    @Column(name = "objective_score", precision = 16, scale = 4)
+    BigDecimal objectiveScore;
+
+    /** Jackson-serialized {@link movieservice.service.autoshowtime.optimizer.ObjectiveBreakdown}. */
+    @Column(name = "objective_breakdown", columnDefinition = "TEXT")
+    String objectiveBreakdown;
+
+    /** Jackson-serialized {@link movieservice.service.autoshowtime.optimizer.SolverDiagnostics}. */
+    @Column(name = "solver_diagnostics", columnDefinition = "TEXT")
+    String solverDiagnostics;
+
+    /** Only populated in SHADOW_COMPARE mode - the non-primary optimizer's comparison output. */
+    @Column(name = "shadow_comparison", columnDefinition = "TEXT")
+    String shadowComparison;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     LocalDateTime createdAt;

@@ -3,6 +3,7 @@ package movieservice.dto.response;
 import lombok.Builder;
 import lombok.Getter;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Getter
@@ -20,6 +21,10 @@ public class TmdbMovieDetailsResponse {
     // must use this, not copy posterUrl verbatim (that was the original bug this fixes).
     String thumbnailUrl;
     String overview;
+    // Normalized preview value on the same 0-100 scale persisted in
+    // movie_scheduling_profile during import. This keeps preview and import consistent.
+    BigDecimal popularityScore;
+    Double voteAverage;
     // [Backend] Add tagline field to Movie and MovieTranslation entities - original-language
     // tagline; per-locale ones are in each entry of `translations` below.
     String tagline;

@@ -68,12 +68,21 @@ class CinemaRoomControllerTest {
     }
 
     @Test
-    void setRoomStatus_usesVerifiedAuthenticationNameAsActor_notAClientHeader() {
+    void setRoomStatus_forwardsVerifiedAuthenticationForActorAndRoleDerivation() {
         Authentication authentication = admin("admin.updater");
 
         controller.setRoomStatus(10L, CinemaRoomStatus.CLOSED, authentication);
 
-        verify(cinemaRoomService).setRoomStatus(10L, CinemaRoomStatus.CLOSED, "admin.updater");
+        verify(cinemaRoomService).setRoomStatus(10L, CinemaRoomStatus.CLOSED, authentication);
+    }
+
+    @Test
+    void retireRoom_forwardsVerifiedAuthenticationAndOptionalNote() {
+        Authentication authentication = admin("admin.retirer");
+
+        controller.retireRoom(10L, "Water damage, beyond repair", authentication);
+
+        verify(cinemaRoomService).retireCinemaRoom(10L, "Water damage, beyond repair", authentication);
     }
 
     @Test

@@ -11,17 +11,21 @@ import movieservice.dto.tmdb.TmdbCreditsResponse;
 import movieservice.dto.tmdb.TmdbMovieDetail;
 import movieservice.dto.tmdb.TmdbReleaseDatesResponse;
 import movieservice.dto.tmdb.TmdbTranslationsResponse;
+import movieservice.entity.AgeRating;
 import movieservice.entity.Genre;
 import movieservice.entity.Movie;
+import movieservice.entity.MovieSchedulingProfile;
 import movieservice.entity.Person;
 import movieservice.entity.ProductionCompany;
 import movieservice.enums.GenreStatus;
+import movieservice.enums.MovieSchedulingScoreSource;
 import movieservice.enums.MovieStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.repository.AgeRatingRepository;
 import movieservice.repository.GenreRepository;
 import movieservice.repository.MovieCastRepository;
 import movieservice.repository.MovieRepository;
+import movieservice.repository.MovieSchedulingProfileRepository;
 import movieservice.repository.MovieTranslationRepository;
 import movieservice.repository.PersonRepository;
 import movieservice.repository.ProductionCompanyRepository;
@@ -35,6 +39,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
 
+import java.math.BigDecimal;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
@@ -68,6 +73,7 @@ class TmdbServiceTest {
     @Mock ProductionCompanyRepository productionCompanyRepository;
     @Mock GenreRepository genreRepository;
     @Mock AgeRatingRepository ageRatingRepository;
+    @Mock MovieSchedulingProfileRepository movieSchedulingProfileRepository;
     @Mock RestTemplate restTemplate;
 
     TmdbService tmdbService;
@@ -82,6 +88,7 @@ class TmdbServiceTest {
                 productionCompanyRepository,
                 genreRepository,
                 ageRatingRepository,
+                movieSchedulingProfileRepository,
                 "dummy-api-key",
                 10);
         // TmdbService tu new RestTemplate() trong constructor - thay bang mock qua reflection
@@ -140,8 +147,22 @@ class TmdbServiceTest {
         when(restTemplate.getForObject(any(URI.class), eq(TmdbCreditsResponse.class))).thenReturn(credits);
         when(restTemplate.getForObject(any(URI.class), eq(TmdbTranslationsResponse.class)))
                 .thenReturn(new TmdbTranslationsResponse());
-        when(restTemplate.getForObject(any(URI.class), eq(TmdbReleaseDatesResponse.class)))
+        lenient().when(restTemplate.getForObject(any(URI.class), eq(TmdbReleaseDatesResponse.class)))
                 .thenReturn(new TmdbReleaseDatesResponse());
+    }
+
+    private TmdbReleaseDatesResponse releaseDates(String countryCode, String certification, int type) {
+        TmdbReleaseDatesResponse.ReleaseDate date = new TmdbReleaseDatesResponse.ReleaseDate();
+        date.setCertification(certification);
+        date.setType(type);
+
+        TmdbReleaseDatesResponse.CountryRelease country = new TmdbReleaseDatesResponse.CountryRelease();
+        country.setCountryCode(countryCode);
+        country.setReleaseDates(List.of(date));
+
+        TmdbReleaseDatesResponse response = new TmdbReleaseDatesResponse();
+        response.setResults(List.of(country));
+        return response;
     }
 
     private TmdbImportRequest importRequest(Integer tmdbId) {
@@ -178,6 +199,8 @@ class TmdbServiceTest {
     @Test
     void getDetailsNeverWritesToAnyRepositoryWhenCompanyAndPersonAreNew() {
         TmdbMovieDetail detail = detailWithOneCompanyAndGenre();
+        detail.setPopularity(45.5);
+        detail.setVoteAverage(8.2);
         TmdbCreditsResponse credits = creditsWithOneDirectorAndOneActor();
         stubTmdbHttpCalls(detail, credits);
 
@@ -205,12 +228,58 @@ class TmdbServiceTest {
         assertEquals("ACTOR", actorPreview.getRoleType());
         assertEquals("Paul Atreides", actorPreview.getCharacterName());
         assertNull(actorPreview.getLocalPersonId());
+        assertEquals(0, new BigDecimal("45.50").compareTo(response.getPopularityScore()));
+        assertEquals(8.2, response.getVoteAverage());
 
         // Cot loi cua issue #188: preview khong duoc phep ghi bat ky repository nao.
         verify(productionCompanyRepository, never()).save(any());
         verify(personRepository, never()).save(any());
         verify(genreRepository, never()).save(any());
         verifyNoInteractions(movieRepository, movieTranslationRepository, movieCastRepository);
+    }
+
+    @Test
+    void getDetailsUsesTheSamePopularityNormalizationAsImport() {
+        TmdbMovieDetail detail = detailWithOneCompanyAndGenre();
+        detail.setPopularity(853.921);
+        stubTmdbHttpCalls(detail, creditsWithOneDirectorAndOneActor());
+        when(productionCompanyRepository.findByName("Legendary Pictures")).thenReturn(Optional.empty());
+        when(personRepository.findByTmdbId(anyInt())).thenReturn(Optional.empty());
+
+        TmdbMovieDetailsResponse response = tmdbService.getDetails(693134);
+
+        assertEquals(0, new BigDecimal("100.00").compareTo(response.getPopularityScore()));
+        verifyNoInteractions(movieRepository, movieSchedulingProfileRepository);
+    }
+
+    @Test
+    void getDetailsMapsLegacyVietnamC13CertificationToCurrentT13Rating() {
+        TmdbMovieDetail detail = detailWithOneCompanyAndGenre();
+        stubTmdbHttpCalls(detail, creditsWithOneDirectorAndOneActor());
+        org.mockito.Mockito.doReturn(releaseDates("VN", "c13", 3))
+                .when(restTemplate).getForObject(any(URI.class), eq(TmdbReleaseDatesResponse.class));
+        AgeRating t13 = AgeRating.builder().ratingId(3).ratingCode("T13").build();
+        when(ageRatingRepository.findByRatingCode("T13")).thenReturn(Optional.of(t13));
+        when(productionCompanyRepository.findByName("Legendary Pictures")).thenReturn(Optional.empty());
+        when(personRepository.findByTmdbId(anyInt())).thenReturn(Optional.empty());
+
+        TmdbMovieDetailsResponse response = tmdbService.getDetails(693134);
+
+        assertEquals(3, response.getAgeRatingId());
+        assertTrue(response.getWarnings().stream().noneMatch("AGE_RATING_NOT_AVAILABLE"::equals));
+    }
+
+    @Test
+    void getDetailsExplainsWhenTmdbHasNoRecognizedAgeRating() {
+        TmdbMovieDetail detail = detailWithOneCompanyAndGenre();
+        stubTmdbHttpCalls(detail, creditsWithOneDirectorAndOneActor());
+        when(productionCompanyRepository.findByName("Legendary Pictures")).thenReturn(Optional.empty());
+        when(personRepository.findByTmdbId(anyInt())).thenReturn(Optional.empty());
+
+        TmdbMovieDetailsResponse response = tmdbService.getDetails(693134);
+
+        assertNull(response.getAgeRatingId());
+        assertTrue(response.getWarnings().contains("AGE_RATING_NOT_AVAILABLE"));
     }
 
     @Test
@@ -324,6 +393,64 @@ class TmdbServiceTest {
         verify(movieRepository).save(captor.capture());
         assertTrue(captor.getValue().getFormats().isEmpty());
         assertEquals(MovieStatus.DRAFT, captor.getValue().getStatus());
+    }
+
+    // ── TMDB Popularity Integration (P1) ──────────────────────
+
+    @Test
+    void importMovieSeedsSchedulingProfileFromTmdbPopularityWithTmdbAsSource() {
+        TmdbMovieDetail detail = detailWithOneCompanyAndGenre();
+        detail.setPopularity(45.5);
+        stubTmdbHttpCalls(detail, creditsWithOneDirectorAndOneActor());
+        when(movieRepository.existsByTmdbId(693134)).thenReturn(false);
+        when(movieRepository.existsByImdbId("tt15239678")).thenReturn(false);
+        when(genreRepository.findByTmdbGenreId(878)).thenReturn(Optional.of(activeGenre(9L, 878, "Sci-Fi")));
+        stubCompanyAndPersonUpsertsAsNew();
+        stubMovieSaveAssignsId(1L);
+
+        tmdbService.importMovie(importRequest(693134));
+
+        ArgumentCaptor<MovieSchedulingProfile> captor = ArgumentCaptor.forClass(MovieSchedulingProfile.class);
+        verify(movieSchedulingProfileRepository).save(captor.capture());
+        assertEquals(0, new BigDecimal("45.50").compareTo(captor.getValue().getPopularityScore()));
+        assertEquals(MovieSchedulingScoreSource.TMDB, captor.getValue().getScoreSource());
+    }
+
+    @Test
+    void importMovieClampsTmdbPopularityAt100ForAViralTitle() {
+        TmdbMovieDetail detail = detailWithOneCompanyAndGenre();
+        detail.setPopularity(853.921);
+        stubTmdbHttpCalls(detail, creditsWithOneDirectorAndOneActor());
+        when(movieRepository.existsByTmdbId(693134)).thenReturn(false);
+        when(movieRepository.existsByImdbId("tt15239678")).thenReturn(false);
+        when(genreRepository.findByTmdbGenreId(878)).thenReturn(Optional.of(activeGenre(9L, 878, "Sci-Fi")));
+        stubCompanyAndPersonUpsertsAsNew();
+        stubMovieSaveAssignsId(1L);
+
+        tmdbService.importMovie(importRequest(693134));
+
+        ArgumentCaptor<MovieSchedulingProfile> captor = ArgumentCaptor.forClass(MovieSchedulingProfile.class);
+        verify(movieSchedulingProfileRepository).save(captor.capture());
+        assertEquals(0, new BigDecimal("100.00").compareTo(captor.getValue().getPopularityScore()));
+    }
+
+    @Test
+    void importMovieDefaultsPopularityScoreToZeroWhenTmdbHasNoPopularity() {
+        TmdbMovieDetail detail = detailWithOneCompanyAndGenre();
+        detail.setPopularity(null);
+        stubTmdbHttpCalls(detail, creditsWithOneDirectorAndOneActor());
+        when(movieRepository.existsByTmdbId(693134)).thenReturn(false);
+        when(movieRepository.existsByImdbId("tt15239678")).thenReturn(false);
+        when(genreRepository.findByTmdbGenreId(878)).thenReturn(Optional.of(activeGenre(9L, 878, "Sci-Fi")));
+        stubCompanyAndPersonUpsertsAsNew();
+        stubMovieSaveAssignsId(1L);
+
+        tmdbService.importMovie(importRequest(693134));
+
+        ArgumentCaptor<MovieSchedulingProfile> captor = ArgumentCaptor.forClass(MovieSchedulingProfile.class);
+        verify(movieSchedulingProfileRepository).save(captor.capture());
+        assertEquals(0, BigDecimal.ZERO.compareTo(captor.getValue().getPopularityScore()));
+        assertEquals(MovieSchedulingScoreSource.TMDB, captor.getValue().getScoreSource());
     }
 
     // ── `[Backend] Add tagline field to Movie and MovieTranslation entities` ────────

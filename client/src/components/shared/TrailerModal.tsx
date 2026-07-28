@@ -1,6 +1,5 @@
 import { X } from "lucide-react";
 import type { MovieApiResponse } from "../../api/movieApi";
-import fallbackTrailer from "../../assets/GattoTeaser.mp4";
 
 type TrailerMovie = MovieApiResponse & {
   trailerUrl?: string;
@@ -35,7 +34,7 @@ export function TrailerModal({ movie, onClose }: Props) {
 
   const title = movie.movieNameEnglish || movie.movieNameVn || "Movie trailer";
   const embedUrl = toEmbedUrl(movie.trailerUrl);
-  const isVideoFile = !embedUrl || /\.(mp4|webm|ogg)(\?.*)?$/i.test(embedUrl);
+  const isVideoFile = Boolean(embedUrl && /\.(mp4|webm|ogg)(\?.*)?$/i.test(embedUrl));
 
   return (
     <div
@@ -55,9 +54,16 @@ export function TrailerModal({ movie, onClose }: Props) {
         </button>
 
         <div className="aspect-video w-full bg-black">
-          {isVideoFile ? (
+          {!embedUrl ? (
+            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+              <p className="text-base font-semibold text-white">Trailer is not available yet</p>
+              <p className="mt-2 max-w-md text-sm text-white/45">
+                Please check back later for the official trailer.
+              </p>
+            </div>
+          ) : isVideoFile ? (
             <video
-              src={embedUrl ?? fallbackTrailer}
+              src={embedUrl}
               controls
               autoPlay
               className="h-full w-full"

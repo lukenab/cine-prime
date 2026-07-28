@@ -2,11 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import { Search, Plus, SlidersHorizontal, RefreshCw, AlertCircle } from "lucide-react";
 import { useRole } from "../../hooks/useRole";
 import { Outlet, useOutletContext, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 import { MovieStatsCards } from "../../layouts/MovieStatsCards";
 import { MovieTable } from "../../layouts/MovieTable";
 import { MovieDetailModal } from "../../layouts/MovieDetailModal";
-import { PendingReviewModal } from "../../layouts/PendingReviewModal";
 import {
   movieApi,
   type MovieApiResponse,
@@ -18,6 +18,10 @@ import {
   toMovieContentStatus,
   type MovieContentStatus,
 } from "../../utils/movieContentStatus";
+import {
+  describeMovieReadinessViolation,
+  extractMovieReadinessViolations,
+} from "../../utils/movieReadiness";
 
 export default function ManageMoviePage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
@@ -68,6 +72,8 @@ export default function ManageMoviePage() {
 
   const handleEditMovie = (movie: MovieApiResponse) => navigate(`/admin/movies/${movie.movieId}/edit`);
 
+  const handleManageAvailability = (id: number) => navigate(`/admin/movies/${id}/availability`);
+
   const handleViewMovie = async (movie: MovieApiResponse) => {
     setDetailLoading(true);
     setDetailMovie(null);
@@ -87,7 +93,7 @@ export default function ManageMoviePage() {
       await loadMovies();
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? "Archive failed.";
-      alert(`Error: ${msg}`);
+      toast.error(msg);
     }
   };
 
@@ -95,10 +101,45 @@ export default function ManageMoviePage() {
 
   const makeWorkflowHandler = (fn: () => Promise<unknown>, label: string) => async () => {
     try { await fn(); await loadMovies(); }
-    catch (err: any) { alert(`Error: ${err?.response?.data?.message ?? label + " failed."}`); }
+    catch (err: any) { toast.error(err?.response?.data?.message ?? label + " failed."); }
   };
 
-  const handleSubmit    = (id: number) => makeWorkflowHandler(() => movieApi.submitForReview(id),   "Submit")();
+  const handleSubmit = async (id: number) => {
+    try {
+      await movieApi.submitForReview(id);
+      await loadMovies();
+      toast.success("Movie submitted for review.");
+    } catch (err: any) {
+      const violations = extractMovieReadinessViolations(err);
+      if (violations.length === 0) {
+        toast.error(err?.response?.data?.message ?? "Submit failed.");
+        return;
+      }
+
+      const movie = movies.find((item) => item.movieId === id);
+      toast.error(`${movie?.movieNameEnglish || movie?.movieNameVn || "Movie"} is not ready for review`, {
+        description: (
+          <div className="mt-1">
+            <p className="mb-1.5">
+              Complete {violations.length} required {violations.length === 1 ? "item" : "items"}:
+            </p>
+            <ul className="list-disc space-y-1 pl-4">
+              {violations.map((violation) => (
+                <li key={`${violation.field}:${violation.rule}`}>
+                  {describeMovieReadinessViolation(violation)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ),
+        duration: 10_000,
+        action: {
+          label: "Add version",
+          onClick: () => navigate(`/admin/movies/${id}/edit#screening-versions`),
+        },
+      });
+    }
+  };
   const handleRework = (id: number) =>
     makeWorkflowHandler(() => movieApi.startMovieRevision(id), "Start revision")();
 
@@ -309,6 +350,7 @@ export default function ManageMoviePage() {
           onSubmit={handleSubmit}
           onReviewClick={handleReviewClick}
           onRework={handleRework}
+          onManageAvailability={handleManageAvailability}
           searchQuery={searchQuery}
           genreFilter={genreFilter}
           statusFilter={statusFilter}
@@ -322,7 +364,8 @@ export default function ManageMoviePage() {
         onClose={() => { setDetailMovie(null); setDetailLoading(false); }}
       />
 
-      <PendingReviewModal
+      <MovieDetailModal
+        mode="review"
         open={Boolean(reviewMovie) || reviewLoading}
         movie={reviewMovie}
         loading={reviewLoading}

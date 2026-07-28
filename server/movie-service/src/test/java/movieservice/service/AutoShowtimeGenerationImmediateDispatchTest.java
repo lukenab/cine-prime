@@ -98,7 +98,7 @@ class AutoShowtimeGenerationImmediateDispatchTest {
         });
 
         var response = service.submitRun(
-                new AutoShowtimeGenerationRequest(start, start, List.of(2L), List.of(1L)),
+                new AutoShowtimeGenerationRequest(start, start, List.of(2L), List.of(1L), null, null, null),
                 "admin"
         );
 

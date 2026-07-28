@@ -25,8 +25,7 @@ INSERT INTO screening_format (format_code, format_name, surcharge) VALUES
     ('3D',      '3D',                  30000),
     ('IMAX',    'IMAX',                50000),
     ('4DX',     '4DX',                 60000),
-    ('SCREENX', 'ScreenX 270°',        40000),
-    ('ATMOS',   'Dolby Atmos',         20000)
+    ('SCREENX', 'ScreenX 270°',        40000)
 ON CONFLICT (format_code) DO NOTHING;
 
 -- Auto Showtime simulated demand data. These are configuration rows for the
@@ -213,8 +212,109 @@ SELECT setval(
     true
 );
 
--- Assign any pre-existing/legacy room rows with no cluster to cluster 1.
-UPDATE cinema_room SET cluster_id = 1 WHERE cluster_id IS NULL;
+-- Clean up legacy orphan rooms (cluster_id IS NULL) whose name already exists in
+-- cluster 1 — they are duplicates left over from before the cluster feature was
+-- added.  Dependencies must be removed in FK order before deleting the room row.
+--
+-- A room is an "orphan duplicate" if either:
+--   (a) its name already exists on a room already assigned to cluster 1, or
+--   (b) it shares its name with another cluster_id-IS-NULL room and isn't the one
+--       with the lowest cinema_room_id among that group — two same-named orphans
+--       can't both survive step 5's blind reassignment to cluster 1 without
+--       tripping uq_room_name_per_cluster, since neither has a cluster-1
+--       counterpart for (a) to catch.
+--
+-- Helper: CTE of orphan room ids that are duplicates by either rule above.
+-- Referenced by each DELETE below so the condition is written only once.
+WITH orphan_rooms AS (
+    SELECT cr.cinema_room_id
+    FROM cinema_room cr
+    WHERE cr.cluster_id IS NULL
+      AND (
+          EXISTS (
+              SELECT 1 FROM cinema_room other
+              WHERE other.cluster_id = 1
+                AND LOWER(other.cinema_room_name) = LOWER(cr.cinema_room_name)
+          )
+          OR cr.cinema_room_id > (
+              SELECT MIN(dup.cinema_room_id) FROM cinema_room dup
+              WHERE dup.cluster_id IS NULL
+                AND LOWER(dup.cinema_room_name) = LOWER(cr.cinema_room_name)
+          )
+      )
+)
+-- 1. schedule_plan_slot — ON DELETE RESTRICT
+DELETE FROM schedule_plan_slot
+WHERE cinema_room_id IN (SELECT cinema_room_id FROM orphan_rooms);
+
+WITH orphan_rooms AS (
+    SELECT cr.cinema_room_id
+    FROM cinema_room cr
+    WHERE cr.cluster_id IS NULL
+      AND (
+          EXISTS (
+              SELECT 1 FROM cinema_room other
+              WHERE other.cluster_id = 1
+                AND LOWER(other.cinema_room_name) = LOWER(cr.cinema_room_name)
+          )
+          OR cr.cinema_room_id > (
+              SELECT MIN(dup.cinema_room_id) FROM cinema_room dup
+              WHERE dup.cluster_id IS NULL
+                AND LOWER(dup.cinema_room_name) = LOWER(cr.cinema_room_name)
+          )
+      )
+)
+-- 2. show_time — ON DELETE RESTRICT
+DELETE FROM show_time
+WHERE cinema_room_id IN (SELECT cinema_room_id FROM orphan_rooms);
+
+WITH orphan_rooms AS (
+    SELECT cr.cinema_room_id
+    FROM cinema_room cr
+    WHERE cr.cluster_id IS NULL
+      AND (
+          EXISTS (
+              SELECT 1 FROM cinema_room other
+              WHERE other.cluster_id = 1
+                AND LOWER(other.cinema_room_name) = LOWER(cr.cinema_room_name)
+          )
+          OR cr.cinema_room_id > (
+              SELECT MIN(dup.cinema_room_id) FROM cinema_room dup
+              WHERE dup.cluster_id IS NULL
+                AND LOWER(dup.cinema_room_name) = LOWER(cr.cinema_room_name)
+          )
+      )
+)
+-- 3. cinema_room_maintenance — no CASCADE
+DELETE FROM cinema_room_maintenance
+WHERE cinema_room_id IN (SELECT cinema_room_id FROM orphan_rooms);
+
+-- 4. Delete the orphan duplicate rooms (seat, room_layout, cinema_room_format cascade automatically).
+DELETE FROM cinema_room
+WHERE cluster_id IS NULL
+  AND (
+      EXISTS (
+          SELECT 1 FROM cinema_room other
+          WHERE other.cluster_id = 1
+            AND LOWER(other.cinema_room_name) = LOWER(cinema_room.cinema_room_name)
+      )
+      OR cinema_room.cinema_room_id > (
+          SELECT MIN(dup.cinema_room_id) FROM cinema_room dup
+          WHERE dup.cluster_id IS NULL
+            AND LOWER(dup.cinema_room_name) = LOWER(cinema_room.cinema_room_name)
+      )
+  );
+
+-- 5. Assign any remaining null-cluster rooms to cluster 1. Safe now — step 4 removed
+-- every orphan that would otherwise collide, either with an existing cluster-1 room
+-- or with another orphan of the same name, so at most one row per distinct name is
+-- left to reassign. Guarded by cluster 1 actually existing: a database whose clusters
+-- were created organically through the app (ids assigned by the sequence, not this
+-- script's demo seed) may never have a cluster_id=1 at all - in that case this is a
+-- no-op and any leftover orphan rooms stay orphaned rather than crashing the app boot.
+UPDATE cinema_room SET cluster_id = 1
+WHERE cluster_id IS NULL
+  AND EXISTS (SELECT 1 FROM cinema_cluster WHERE cluster_id = 1);
 
 -- Default operating hours (08:00-23:00 every day) for every cluster that doesn't have any yet.
 INSERT INTO cinema_cluster_operating_hour

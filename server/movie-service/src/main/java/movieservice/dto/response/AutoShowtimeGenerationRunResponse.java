@@ -19,7 +19,18 @@ public record AutoShowtimeGenerationRunResponse(
         ShowtimePage showtimes,
         LocalDateTime startedAt,
         LocalDateTime completedAt,
-        String failureDetail
+        String failureDetail,
+        String optimizerMode,
+        String scenario,
+        String solverStatus,
+        Long solveDurationMillis,
+        java.math.BigDecimal objectiveScore,
+        /** Raw JSON of {@link movieservice.service.autoshowtime.optimizer.ObjectiveBreakdown}. */
+        String objectiveBreakdown,
+        /** Raw JSON of {@link movieservice.service.autoshowtime.optimizer.SolverDiagnostics}. */
+        String solverDiagnostics,
+        /** Only present for SHADOW_COMPARE runs - raw JSON of the non-primary optimizer's result. */
+        String shadowComparison
 ) {
 
     /// Tóm tắt toàn bộ candidate của run để UI/QA nhìn nhanh kết quả allocation.

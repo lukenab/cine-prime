@@ -1,6 +1,7 @@
 package movieservice.service.autoshowtime;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.exception.AppException;
 import movieservice.entity.CinemaCluster;
 import movieservice.entity.CinemaRoom;
@@ -19,10 +20,13 @@ import movieservice.repository.ScreeningFormatRepository;
 import movieservice.repository.ShowtimeGenerationRunRepository;
 import movieservice.repository.ShowtimeGenerationSkipRepository;
 import movieservice.repository.ShowtimeGenerationPartitionRepository;
+import movieservice.service.autoshowtime.optimizer.ScheduleOptimizationResult;
+import movieservice.service.autoshowtime.optimizer.ScheduleOptimizerResolver;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +34,7 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AutoShowtimeRunExecutor {
 
     private final ShowtimeGenerationRunRepository generationRunRepository;
@@ -40,11 +45,11 @@ public class AutoShowtimeRunExecutor {
     private final CinemaRoomRepository cinemaRoomRepository;
     private final ScreeningFormatRepository screeningFormatRepository;
     private final AutoShowtimeCandidateFactory candidateFactory;
-    private final AutoShowtimeCandidateScorer candidateScorer;
-    private final AutoShowtimeCandidateSelector candidateSelector;
     private final AutoShowtimePlanValidator planValidator;
     private final SchedulePlanDraftService schedulePlanDraftService;
     private final AutoShowtimeRunStateService runStateService;
+    private final ScheduleOptimizerResolver optimizerResolver;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     /// Chạy toàn bộ pipeline Factory -> Scorer -> Selector -> Persist cho một generation run đã ACCEPTED.
     public AutoShowtimeExecutionResult execute(Long generationRunId) {
@@ -58,15 +63,22 @@ public class AutoShowtimeRunExecutor {
             ShowtimeGenerationRun run = generationRunRepository.findByGenerationRunId(generationRunId)
                     .orElseThrow(() -> new AppException(MovieErrorCode.GENERATION_RUN_NOT_FOUND));
             List<ShowtimeCandidate> rawCandidates = candidateFactory.buildRawCandidates(run);
-            List<ShowtimeCandidate> rankedCandidates = candidateScorer.scoreAndRank(run, rawCandidates);
-            AutoShowtimeSelectionResult selection = candidateSelector.select(run, rankedCandidates);
+            ScheduleOptimizationResult optimization = optimizerResolver.resolveAndOptimize(run, rawCandidates);
+            AutoShowtimeSelectionResult selection = optimization.selection();
+            recordOptimizerOutcome(generationRunId, optimization);
+
+            // selected + rejected together reconstruct the full scored/eligible candidate set
+            // both optimizers considered - every input candidate ends up in exactly one bucket -
+            // which is what the plan validator needs to check coverage against.
+            List<ShowtimeCandidate> eligibleCandidates = new ArrayList<>(selection.selectedCandidates());
+            selection.rejectedCandidates().forEach(rejection -> eligibleCandidates.add(rejection.candidate()));
 
             Map<SkipAggregateKey, SkipAggregate> skipAggregates = new LinkedHashMap<>();
             selection.rejectedCandidates().forEach(rejection -> aggregateSkip(skipAggregates, rejection));
             persistSkipAggregates(run, skipAggregates);
 
             AutoShowtimePlanValidationResult validation = planValidator.validate(
-                    run, rankedCandidates, selection.selectedCandidates());
+                    run, eligibleCandidates, selection.selectedCandidates());
             Long planId = schedulePlanDraftService.createDraftShell(generationRunId, validation)
                     .getSchedulePlanId();
 
@@ -106,7 +118,12 @@ public class AutoShowtimeRunExecutor {
                     created, selection.rejectedCandidates().size(), succeeded, failed,
                     technicalFailures.isEmpty() ? null : String.join("\n", technicalFailures));
             return toResult(finished);
-        } catch (RuntimeException exception) {
+        } catch (RuntimeException | Error exception) {
+            // Widened from RuntimeException-only: a native OR-Tools failure (UnsatisfiedLinkError,
+            // NoClassDefFoundError) is an Error, not a RuntimeException. Left uncaught here it would
+            // propagate out of the @Async worker thread entirely, so runStateService.fail() never
+            // runs and the row stays RUNNING until the 5-minute orphan sweep reclaims it - which
+            // reports "no active worker" even though a worker did pick it up and silently died.
             ShowtimeGenerationRun failed = runStateService.fail(generationRunId, rootCauseMessage(exception));
             return toResult(failed);
         }
@@ -128,7 +145,6 @@ public class AutoShowtimeRunExecutor {
         });
     }
 
-    /// Chỉ ghi một row cho từng group sau khi engine xử lý hết candidate của run.
     private void persistSkipAggregates(
             ShowtimeGenerationRun run,
             Map<SkipAggregateKey, SkipAggregate> skipAggregates
@@ -185,7 +201,24 @@ public class AutoShowtimeRunExecutor {
         );
     }
 
-    /// Lưu nguyên nhân sâu nhất để audit phân biệt overlap constraint với lỗi FK/not-null khi runtime.
+    /// Persists which optimizer ran and its solver status/objective/diagnostics onto the run row
+    /// so the API can expose them without recomputation. Serialization failures must not fail
+    /// the whole generation run - diagnostics are informational, not required for correctness.
+    private void recordOptimizerOutcome(Long generationRunId, ScheduleOptimizationResult optimization) {
+        try {
+            String objectiveBreakdownJson = objectMapper.writeValueAsString(optimization.objectiveBreakdown());
+            String diagnosticsJson = objectMapper.writeValueAsString(optimization.diagnostics());
+            String shadowComparisonJson = optimization.shadowComparison() == null
+                    ? null
+                    : objectMapper.writeValueAsString(optimization.shadowComparison());
+            runStateService.recordOptimizerOutcome(generationRunId, optimization.solverStatus(),
+                    optimization.diagnostics().solveDurationMillis(), optimization.objectiveBreakdown().finalWeightedScore(),
+                    objectiveBreakdownJson, diagnosticsJson, shadowComparisonJson);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+            log.warn("Failed to serialize optimizer diagnostics for run {}", generationRunId, exception);
+        }
+    }
+
     private String rootCauseMessage(Throwable exception) {
         Throwable rootCause = exception;
         while (rootCause.getCause() != null) {

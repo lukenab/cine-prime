@@ -16,7 +16,7 @@ import movieservice.entity.*;
 import movieservice.enums.AvailabilityStatus;
 import movieservice.enums.GenreStatus;
 import movieservice.enums.MovieStatus;
-import movieservice.enums.ScreeningVersionStatus;
+import movieservice.enums.MovieSchedulingScoreSource;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
 import movieservice.dto.response.ImageUploadResponse;
@@ -29,6 +29,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -61,7 +62,8 @@ public class MovieService {
     MovieReadinessValidator movieReadinessValidator;
     MovieAvailabilityRepository movieAvailabilityRepository;
     MovieStatusHistoryRepository movieStatusHistoryRepository;
-    MovieScreeningVersionRepository movieScreeningVersionRepository;
+    ShowTimeRepository showTimeRepository;
+    MovieSchedulingProfileRepository movieSchedulingProfileRepository;
 
     private static final long MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 
@@ -95,14 +97,17 @@ public class MovieService {
         movie.setGenres(genres);
 
         // Screening formats
-        List<ScreeningFormat> formats = screeningFormatRepository.findAllByFormatIdIn(request.getFormatIds());
-        if (formats.size() != request.getFormatIds().size()) {
+        List<Integer> requestedFormatIds = request.getFormatIds() == null
+                ? List.of()
+                : request.getFormatIds().stream().distinct().toList();
+        List<ScreeningFormat> formats = screeningFormatRepository.findAllByFormatIdIn(requestedFormatIds);
+        if (formats.size() != requestedFormatIds.size()) {
             throw new AppException(MovieErrorCode.FORMAT_NOT_FOUND);
         }
         movie.setFormats(formats);
 
         Movie saved = movieRepository.save(movie);
-        syncScreeningVersions(saved);
+        upsertSchedulingProfile(saved, request.getPopularityScore(), request.getPriorityOverride());
 
         // Translations — save và set thẳng vào entity để mapper có data
         if (request.getTranslations() != null) {
@@ -119,7 +124,9 @@ public class MovieService {
         auditLogService.logAction("SYSTEM", "Admin", "movie:" + saved.getMovieId(),
                 "Created movie: " + saved.getOriginalTitle());
 
-        return movieMapper.toMovieResponse(saved);
+        MovieResponse response = movieMapper.toMovieResponse(saved);
+        attachSchedulingProfile(response, saved.getMovieId());
+        return response;
     }
 
     // ── Read ──────────────────────────────────────────────────
@@ -132,7 +139,9 @@ public class MovieService {
         movie.getCast().size();
         movie.getGenres().size();
         movie.getFormats().size();
-        return movieMapper.toMovieResponse(movie);
+        MovieResponse response = movieMapper.toMovieResponse(movie);
+        attachSchedulingProfile(response, movie.getMovieId());
+        return response;
     }
 
     /** GET /api/movies/{id}?lang=vi — trả response với translations filter theo ngôn ngữ */
@@ -144,6 +153,7 @@ public class MovieService {
         movie.getGenres().size();
         movie.getFormats().size();
         MovieResponse response = movieMapper.toMovieResponse(movie);
+        attachSchedulingProfile(response, movie.getMovieId());
         if (lang != null && !lang.isBlank() && response.getTranslations() != null) {
             response.setTranslations(
                     response.getTranslations().stream()
@@ -179,15 +189,29 @@ public class MovieService {
                 .collect(Collectors.toList());
 
         Map<Long, Movie> movieById = new LinkedHashMap<>();
-        Map<Long, Boolean> anyOpenByMovie = new LinkedHashMap<>();
+        Map<Long, Boolean> anySaleableByMovie = new LinkedHashMap<>();
         for (MovieAvailability a : relevant) {
             Long movieId = a.getMovie().getMovieId();
             movieById.putIfAbsent(movieId, a.getMovie());
-            anyOpenByMovie.merge(movieId, a.getStatus() == AvailabilityStatus.OPEN, (existing, isOpen) -> existing || isOpen);
+            boolean saleableAtCluster = a.getStatus() == AvailabilityStatus.OPEN
+                    && showTimeService.findNextSaleableShowTime(
+                            movieId,
+                            a.getCluster().getClusterId(),
+                            today,
+                            now
+                    ).isPresent();
+            anySaleableByMovie.merge(
+                    movieId,
+                    saleableAtCluster,
+                    (existing, saleable) -> existing || saleable
+            );
         }
 
         return movieById.values().stream()
-                .map(movie -> toPublicMovieResponse(movie, Boolean.TRUE.equals(anyOpenByMovie.get(movie.getMovieId()))))
+                .map(movie -> toPublicMovieResponse(
+                        movie,
+                        Boolean.TRUE.equals(anySaleableByMovie.get(movie.getMovieId()))
+                ))
                 .collect(Collectors.toList());
     }
 
@@ -221,8 +245,16 @@ public class MovieService {
         if (clusterId != null) {
             response = toPublicMovieResponse(movie, clusterId, visible.get(0), today, now);
         } else {
-            boolean anyOpen = visible.stream().anyMatch(a -> a.getStatus() == AvailabilityStatus.OPEN);
-            response = toPublicMovieResponse(movie, anyOpen);
+            boolean anySaleable = visible.stream().anyMatch(a ->
+                    a.getStatus() == AvailabilityStatus.OPEN
+                            && showTimeService.findNextSaleableShowTime(
+                                    movieId,
+                                    a.getCluster().getClusterId(),
+                                    today,
+                                    now
+                            ).isPresent()
+            );
+            response = toPublicMovieResponse(movie, anySaleable);
         }
         applyDetailFields(response, movie);
         return response;
@@ -268,6 +300,7 @@ public class MovieService {
                 .trailerUrl(movie.getTrailerUrl())
                 .synopsis(movie.getSynopsis())
                 .durationMinutes(movie.getDurationMinutes())
+                .releaseDate(movie.getReleaseDate())
                 .genres(mapGenres(movie))
                 .displayStatus(nowShowing ? "NOW_SHOWING" : "COMING_SOON")
                 .clusterId(clusterId)
@@ -278,7 +311,7 @@ public class MovieService {
     }
 
     /** Aggregate-discovery variant (no clusterId) — see findAllPublic javadoc. */
-    private PublicMovieResponse toPublicMovieResponse(Movie movie, boolean anyClusterOpen) {
+    private PublicMovieResponse toPublicMovieResponse(Movie movie, boolean anyClusterSaleable) {
         return PublicMovieResponse.builder()
                 .movieId(movie.getMovieId())
                 .originalTitle(movie.getOriginalTitle())
@@ -287,8 +320,9 @@ public class MovieService {
                 .trailerUrl(movie.getTrailerUrl())
                 .synopsis(movie.getSynopsis())
                 .durationMinutes(movie.getDurationMinutes())
+                .releaseDate(movie.getReleaseDate())
                 .genres(mapGenres(movie))
-                .displayStatus(anyClusterOpen ? "NOW_SHOWING" : "COMING_SOON")
+                .displayStatus(anyClusterSaleable ? "NOW_SHOWING" : "COMING_SOON")
                 .bookingAvailable(false)
                 .build();
     }
@@ -417,8 +451,48 @@ public class MovieService {
         }
 
         Movie saved = movieRepository.save(movie);
-        syncScreeningVersions(saved);
-        return movieMapper.toMovieResponse(saved);
+        upsertSchedulingProfile(saved, request.getPopularityScore(), request.getPriorityOverride());
+        MovieResponse response = movieMapper.toMovieResponse(saved);
+        attachSchedulingProfile(response, saved.getMovieId());
+        return response;
+    }
+
+    /**
+     * Upserts the movie's scheduling profile row (movie_scheduling_profile) from the
+     * popularityScore/priorityOverride carried on a create/update request.
+     * popularityScore is NOT NULL in the DB, so a brand-new profile defaults it to ZERO when
+     * omitted. On an existing profile, a null popularityScore/priorityOverride means
+     * "don't touch" - same partial-update contract as every other scalar field on
+     * UpdateMovieRequest (see updateMovie's javadoc). One consequence: once priorityOverride is
+     * set, there is currently no way to clear it back to null through this API (same trade-off
+     * already accepted for trailerUrl/tagline/end date elsewhere in this service).
+     */
+    private void upsertSchedulingProfile(Movie movie, BigDecimal popularityScore, BigDecimal priorityOverride) {
+        MovieSchedulingProfile profile = movieSchedulingProfileRepository.findByMovie_MovieId(movie.getMovieId())
+                .orElseGet(() -> MovieSchedulingProfile.builder()
+                        .movie(movie)
+                        .popularityScore(BigDecimal.ZERO)
+                        .scoreSource(MovieSchedulingScoreSource.MANUAL)
+                        .build());
+        if (popularityScore != null) {
+            profile.setPopularityScore(popularityScore);
+            profile.setScoreSource(MovieSchedulingScoreSource.MANUAL);
+        }
+        if (priorityOverride != null) {
+            profile.setPriorityOverride(priorityOverride);
+        }
+        movieSchedulingProfileRepository.save(profile);
+    }
+
+    /** Attaches movie_scheduling_profile fields to a MovieResponse for single-movie reads
+     *  (getMovie/getMovieByLang/createMovie/updateMovie) - list reads (findAll/findPageWithFilters)
+     *  deliberately skip this to avoid an extra query per row. */
+    private void attachSchedulingProfile(MovieResponse response, Long movieId) {
+        movieSchedulingProfileRepository.findByMovie_MovieId(movieId).ifPresent(profile -> {
+            response.setPopularityScore(profile.getPopularityScore());
+            response.setPriorityOverride(profile.getPriorityOverride());
+            response.setScoreSource(profile.getScoreSource() != null ? profile.getScoreSource().name() : null);
+        });
     }
 
     /**
@@ -436,59 +510,6 @@ public class MovieService {
         } else {
             target.clear();
             target.addAll(replacement);
-        }
-    }
-
-    /**
-     * The auto-showtime engine only ever reads movie_screening_version (via
-     * findEffectiveVersions) - never movie_format directly - so without this sync a movie
-     * saved with formats but no matching screening version row is permanently ineligible for
-     * auto-generation despite looking complete in the catalog UI. Mirrors
-     * CinemaRoomService#syncRoomFormatCapabilities: keeps existing rows (audit trail / FK from
-     * show_time), only flips status rather than deleting when a format is no longer selected.
-     */
-    private void syncScreeningVersions(Movie movie) {
-        List<ScreeningFormat> formats = movie.getFormats() == null ? List.of() : movie.getFormats();
-
-        String audioLanguage = (movie.getOriginalLanguage() == null || movie.getOriginalLanguage().isBlank())
-                ? "und" : movie.getOriginalLanguage();
-        Set<Integer> desiredFormatIds = formats.stream()
-                .map(ScreeningFormat::getFormatId)
-                .collect(Collectors.toSet());
-
-        Map<Integer, List<MovieScreeningVersion>> existingByFormatId = movieScreeningVersionRepository
-                .findByMovie_MovieId(movie.getMovieId()).stream()
-                .collect(Collectors.groupingBy(version -> version.getFormat().getFormatId()));
-
-        for (ScreeningFormat format : formats) {
-            List<MovieScreeningVersion> versionsForFormat = existingByFormatId.getOrDefault(format.getFormatId(), List.of());
-            MovieScreeningVersion matching = versionsForFormat.stream()
-                    .filter(version -> audioLanguage.equals(version.getAudioLanguageCode())
-                            && version.getSubtitleLanguageCode() == null)
-                    .findFirst()
-                    .orElse(null);
-            if (matching == null) {
-                movieScreeningVersionRepository.save(MovieScreeningVersion.builder()
-                        .movie(movie)
-                        .format(format)
-                        .audioLanguageCode(audioLanguage)
-                        .subtitleLanguageCode(null)
-                        .status(ScreeningVersionStatus.ACTIVE)
-                        .build());
-            } else if (matching.getStatus() != ScreeningVersionStatus.ACTIVE) {
-                matching.setStatus(ScreeningVersionStatus.ACTIVE);
-                movieScreeningVersionRepository.save(matching);
-            }
-        }
-
-        for (Map.Entry<Integer, List<MovieScreeningVersion>> entry : existingByFormatId.entrySet()) {
-            if (desiredFormatIds.contains(entry.getKey())) continue;
-            for (MovieScreeningVersion stale : entry.getValue()) {
-                if (stale.getStatus() == ScreeningVersionStatus.ACTIVE) {
-                    stale.setStatus(ScreeningVersionStatus.INACTIVE);
-                    movieScreeningVersionRepository.save(stale);
-                }
-            }
         }
     }
 

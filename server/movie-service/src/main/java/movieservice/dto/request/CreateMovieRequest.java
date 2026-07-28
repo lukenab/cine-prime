@@ -5,6 +5,7 @@ import jakarta.validation.constraints.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -45,8 +46,10 @@ public class CreateMovieRequest {
     @NotEmpty
     List<Long> genreIds;
 
-    /** ScreeningFormat IDs — min 1 required */
-    @NotEmpty
+    /**
+     * Legacy presentation-format projection.
+     * New clients configure complete MovieScreeningVersion records after saving the draft.
+     */
     List<Integer> formatIds;
 
     // ── Media ─────────────────────────────────────────────────
@@ -78,4 +81,18 @@ public class CreateMovieRequest {
     // ── Cast ─────────────────────────────────────────────────
     @Valid
     List<CastRequest> cast;
+
+    // ── Scheduling profile (movie_scheduling_profile) ──────────
+    /** How strongly this title should be favored by the auto-showtime allocator relative to
+     *  other movies (AutoShowtimeCandidateScorer's movieDemandWeight input). Defaults to 0
+     *  (no signal) when omitted - an operator sets this from TMDB popularity, box-office
+     *  performance, or manual judgement. */
+    @DecimalMin(value = "0", message = "popularityScore must be between 0 and 100.")
+    @DecimalMax(value = "100", message = "popularityScore must be between 0 and 100.")
+    BigDecimal popularityScore;
+
+    /** Optional manual override that bypasses the derived popularity ranking entirely for
+     *  this movie (e.g. a tentpole release that must always win contested slots). Null means
+     *  "no override - use popularityScore normally". */
+    BigDecimal priorityOverride;
 }

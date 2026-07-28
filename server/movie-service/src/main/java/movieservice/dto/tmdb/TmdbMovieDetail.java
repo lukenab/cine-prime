@@ -35,6 +35,11 @@ public class TmdbMovieDetail {
     String overview;
     String tagline;
 
+    Double popularity;
+
+    @JsonProperty("vote_average")
+    Double voteAverage;
+
     @JsonProperty("production_countries")
     List<TmdbCountry> productionCountries;
 

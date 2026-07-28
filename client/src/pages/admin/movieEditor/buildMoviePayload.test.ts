@@ -20,6 +20,8 @@ function baseForm(overrides: Partial<MoviePayloadFormFields> = {}): MoviePayload
     en_title: "",
     en_synopsis: "",
     en_tagline: "",
+    popularityScore: 0,
+    priorityOverride: "",
     ...overrides,
   };
 }
@@ -42,6 +44,16 @@ describe("buildMoviePayload", () => {
     const payload = buildMoviePayload(baseForm({ releaseDate: "" }), [], []);
 
     expect(payload.releaseDate).toBeUndefined();
+  });
+
+  it("sends popularityScore and only parses priorityOverride when non-blank", () => {
+    const withOverride = buildMoviePayload(baseForm({ popularityScore: 72, priorityOverride: "8.5" }), [], []);
+    expect(withOverride.popularityScore).toBe(72);
+    expect(withOverride.priorityOverride).toBe(8.5);
+
+    const withoutOverride = buildMoviePayload(baseForm({ popularityScore: 0, priorityOverride: "" }), [], []);
+    expect(withoutOverride.popularityScore).toBe(0);
+    expect(withoutOverride.priorityOverride).toBeUndefined();
   });
 
   it("still builds translations, genres, formats and companies as before", () => {

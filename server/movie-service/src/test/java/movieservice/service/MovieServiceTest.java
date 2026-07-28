@@ -53,7 +53,8 @@ class MovieServiceTest {
     @Mock MovieReadinessValidator movieReadinessValidator;
     @Mock MovieAvailabilityRepository movieAvailabilityRepository;
     @Mock MovieStatusHistoryRepository movieStatusHistoryRepository;
-    @Mock MovieScreeningVersionRepository movieScreeningVersionRepository;
+    @Mock ShowTimeRepository showTimeRepository;
+    @Mock MovieSchedulingProfileRepository movieSchedulingProfileRepository;
 
     private MovieService movieService;
     private Movie movie;
@@ -65,7 +66,8 @@ class MovieServiceTest {
                 screeningFormatRepository, productionCompanyRepository, personRepository,
                 movieCastRepository, movieTranslationRepository, cinemaRoomService,
                 showTimeService, auditLogService, imageStorageService, movieReadinessValidator,
-                movieAvailabilityRepository, movieStatusHistoryRepository, movieScreeningVersionRepository);
+                movieAvailabilityRepository, movieStatusHistoryRepository,
+                showTimeRepository, movieSchedulingProfileRepository);
 
         movie = Movie.builder().movieId(1L).originalTitle("Existing Movie").build();
         // lenient(): cac test kiem tra "throw truoc khi mutate" khong bao gio toi duoc dong
@@ -208,6 +210,26 @@ class MovieServiceTest {
         var response = movieService.getPublicMovieDetail(2L, null);
 
         assertEquals(2L, response.getMovieId());
+        assertEquals("COMING_SOON", response.getDisplayStatus(),
+                "OPEN availability alone must not claim that tickets are on sale");
+    }
+
+    @Test
+    void publicDetailIsNowShowingOnlyWhenAnOpenAvailabilityHasAFutureOnSaleShowtime() {
+        Movie approved = Movie.builder()
+                .movieId(7L)
+                .originalTitle("Actually On Sale")
+                .status(MovieStatus.APPROVED)
+                .build();
+        when(movieRepository.findById(7L)).thenReturn(java.util.Optional.of(approved));
+        when(movieAvailabilityRepository.findByMovie_MovieId(7L))
+                .thenReturn(List.of(availabilityFor(approved, AvailabilityStatus.OPEN, null)));
+        when(showTimeService.findNextSaleableShowTime(any(), any(), any(), any()))
+                .thenReturn(java.util.Optional.of(ShowTime.builder().showTimeId(70L).build()));
+
+        var response = movieService.getPublicMovieDetail(7L, null);
+
+        assertEquals("NOW_SHOWING", response.getDisplayStatus());
     }
 
     @Test

@@ -6,8 +6,10 @@ import movieservice.entity.Genre;
 import movieservice.entity.Movie;
 import movieservice.entity.MovieTranslation;
 import movieservice.enums.GenreStatus;
+import movieservice.enums.ScreeningVersionStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.exception.MovieReadinessException;
+import movieservice.repository.MovieScreeningVersionRepository;
 import movieservice.repository.ShowTimeRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -29,14 +31,17 @@ import java.util.List;
 public class MovieReadinessValidator {
 
     private final ShowTimeRepository showTimeRepository;
+    private final MovieScreeningVersionRepository movieScreeningVersionRepository;
     private final Clock clock;
     private final boolean requireShowtimeForRelease;
 
     public MovieReadinessValidator(
             ShowTimeRepository showTimeRepository,
+            MovieScreeningVersionRepository movieScreeningVersionRepository,
             Clock clock,
             @Value("${movie.readiness.require-showtime-for-release:false}") boolean requireShowtimeForRelease) {
         this.showTimeRepository = showTimeRepository;
+        this.movieScreeningVersionRepository = movieScreeningVersionRepository;
         this.clock = clock;
         this.requireShowtimeForRelease = requireShowtimeForRelease;
     }
@@ -82,8 +87,14 @@ public class MovieReadinessValidator {
         if (movie.getGenres() == null || movie.getGenres().isEmpty()) {
             violations.add(violation("genres", "AT_LEAST_ONE_REQUIRED"));
         }
-        if (movie.getFormats() == null || movie.getFormats().isEmpty()) {
-            violations.add(violation("formats", "AT_LEAST_ONE_REQUIRED"));
+        boolean hasCompleteActiveVersion = movie.getMovieId() != null
+                && movieScreeningVersionRepository
+                .existsByMovie_MovieIdAndStatusAndAudioFormatIsNotNull(
+                        movie.getMovieId(), ScreeningVersionStatus.ACTIVE);
+        if (!hasCompleteActiveVersion) {
+            violations.add(violation(
+                    "screeningVersions",
+                    "AT_LEAST_ONE_COMPLETE_ACTIVE_VERSION_REQUIRED"));
         }
         return violations;
     }

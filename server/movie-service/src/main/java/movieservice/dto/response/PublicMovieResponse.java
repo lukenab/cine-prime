@@ -3,6 +3,7 @@ package movieservice.dto.response;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -25,6 +26,7 @@ public class PublicMovieResponse {
     String trailerUrl;
     String synopsis;
     Integer durationMinutes;
+    LocalDate releaseDate;
     List<GenreResponse> genres;
 
     /** NOW_SHOWING | COMING_SOON */

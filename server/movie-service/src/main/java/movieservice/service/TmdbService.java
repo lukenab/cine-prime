@@ -30,6 +30,7 @@ import movieservice.dto.tmdb.TmdbVideosResponse;
 import movieservice.dto.tmdb.TranslationDraft;
 import movieservice.entity.*;
 import movieservice.enums.GenreStatus;
+import movieservice.enums.MovieSchedulingScoreSource;
 import movieservice.enums.MovieStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.TmdbDraftMapper;
@@ -41,6 +42,8 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.net.URI;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -65,6 +68,7 @@ public class TmdbService {
     private final ProductionCompanyRepository productionCompanyRepository;
     private final GenreRepository genreRepository;
     private final AgeRatingRepository ageRatingRepository;
+    private final MovieSchedulingProfileRepository movieSchedulingProfileRepository;
     private final String apiKey;
     private final int maxStills;
     private final RestTemplate restTemplate;
@@ -112,6 +116,25 @@ public class TmdbService {
             "NC-17", "T18"
     );
 
+    /**
+     * TMDB contains both current Vietnamese T13/T16/T18 labels and historical
+     * C13/C16/C18 variants. Normalize both to the current local catalogue.
+     */
+    private static final Map<String, String> VN_CERT_TO_LOCAL = Map.ofEntries(
+            Map.entry("P", "P"),
+            Map.entry("K", "K"),
+            Map.entry("T13", "T13"),
+            Map.entry("C13", "T13"),
+            Map.entry("13+", "T13"),
+            Map.entry("T16", "T16"),
+            Map.entry("C16", "T16"),
+            Map.entry("16+", "T16"),
+            Map.entry("T18", "T18"),
+            Map.entry("C18", "T18"),
+            Map.entry("18+", "T18"),
+            Map.entry("C", "C")
+    );
+
     // TMDB genre ID → genre_code in local DB. Legacy/migration fallback only - genreRepository
     // .findByTmdbGenreId() (Genre.tmdbGenreId, TMDB-FIX-03) is now the primary, stable match.
     private static final Map<Integer, String> TMDB_GENRE_CODES = Map.ofEntries(
@@ -144,6 +167,7 @@ public class TmdbService {
             ProductionCompanyRepository productionCompanyRepository,
             GenreRepository genreRepository,
             AgeRatingRepository ageRatingRepository,
+            MovieSchedulingProfileRepository movieSchedulingProfileRepository,
             @Value("${tmdb.api-key}") String apiKey,
             @Value("${tmdb.image.max-stills:10}") int maxStills) {
         this.movieRepository = movieRepository;
@@ -153,6 +177,7 @@ public class TmdbService {
         this.productionCompanyRepository = productionCompanyRepository;
         this.genreRepository = genreRepository;
         this.ageRatingRepository = ageRatingRepository;
+        this.movieSchedulingProfileRepository = movieSchedulingProfileRepository;
         this.apiKey = apiKey;
         this.maxStills = maxStills;
         this.restTemplate = new RestTemplate();
@@ -290,6 +315,9 @@ public class TmdbService {
         AgeRating resolvedRating = resolveAgeRating(bundle.releaseDates());
 
         List<String> warnings = new ArrayList<>(draft.getWarnings());
+        if (resolvedRating == null) {
+            warnings.add("AGE_RATING_NOT_AVAILABLE");
+        }
         genreMatches.stream()
                 .filter(m -> m.mappingStatus() == GenreMappingStatus.UNMAPPED)
                 .forEach(m -> warnings.add("GENRE_UNMAPPED:" + m.tmdbGenreId()));
@@ -312,6 +340,8 @@ public class TmdbService {
                 .posterUrl(posterMedia.posterUrl())
                 .thumbnailUrl(posterMedia.thumbnailUrl())
                 .overview(draft.getOverview())
+                .popularityScore(toPopularityScore(draft.getPopularity()))
+                .voteAverage(draft.getVoteAverage())
                 .tagline(draft.getTagline())
                 .media(posterMedia.media())
                 .trailerUrl(trailer != null ? trailer.url() : null)
@@ -406,6 +436,9 @@ public class TmdbService {
         } else {
             resolvedRating = resolveAgeRating(bundle.releaseDates());
         }
+        if (resolvedRating == null) {
+            warnings.add("AGE_RATING_NOT_AVAILABLE");
+        }
 
         // 7. Screening format - never inferred from movie master; belongs to release-version/showtime
         warnings.add("SCREENING_FORMAT_NOT_SET");
@@ -450,6 +483,17 @@ public class TmdbService {
             // Closes the race window between the existsBy*() pre-checks above and this insert.
             throw new AppException(MovieErrorCode.TMDB_MOVIE_ALREADY_EXISTS);
         }
+
+        // 8b. Scheduling profile - seed popularityScore from TMDB's own popularity metric so Auto
+        // Showtime has a real priority signal from the moment a movie is imported, instead of a
+        // TMDB-imported movie silently sitting at the same default 0 as a movie with no signal at
+        // all until an admin manually sets one (MovieSchedulingScoreSource.TMDB marks it as such,
+        // distinct from a MANUAL score set later through MovieService.upsertSchedulingProfile()).
+        movieSchedulingProfileRepository.save(MovieSchedulingProfile.builder()
+                .movie(movie)
+                .popularityScore(toPopularityScore(draft.getPopularity()))
+                .scoreSource(MovieSchedulingScoreSource.TMDB)
+                .build());
 
         // 9. Translations + cast, fed from the same draft used for preview
         saveTranslations(movie, draft.getTranslations());
@@ -998,19 +1042,19 @@ public class TmdbService {
 
         for (TmdbReleaseDatesResponse.CountryRelease country : releaseDates.getResults()) {
             if (country.getReleaseDates() == null) continue;
-            String cert = country.getReleaseDates().stream()
-                    .filter(rd -> rd.getCertification() != null && !rd.getCertification().isBlank())
-                    .map(TmdbReleaseDatesResponse.ReleaseDate::getCertification)
-                    .findFirst().orElse(null);
+            String cert = selectCertification(country.getReleaseDates());
             if (cert == null) continue;
-            if ("VN".equals(country.getCountryCode())) vnCert = cert;
-            if ("US".equals(country.getCountryCode())) usCert = cert;
+            if ("VN".equalsIgnoreCase(country.getCountryCode())) vnCert = cert;
+            if ("US".equalsIgnoreCase(country.getCountryCode())) usCert = cert;
         }
 
         // 1. Try VN cert first — already matches local codes (P, K, T13, T16, T18)
         if (vnCert != null) {
-            Optional<AgeRating> found = ageRatingRepository.findByRatingCode(vnCert);
-            if (found.isPresent()) return found.get();
+            String localCode = VN_CERT_TO_LOCAL.get(vnCert);
+            if (localCode != null) {
+                Optional<AgeRating> found = ageRatingRepository.findByRatingCode(localCode);
+                if (found.isPresent()) return found.get();
+            }
         }
 
         // 2. Map US MPAA → local code
@@ -1022,6 +1066,19 @@ public class TmdbService {
         }
 
         return null;
+    }
+
+    /**
+     * Prefer a theatrical certification (TMDB type=3). If none exists, use the first
+     * non-empty certification for that country. Always normalize whitespace and case.
+     */
+    private String selectCertification(List<TmdbReleaseDatesResponse.ReleaseDate> releaseDates) {
+        return releaseDates.stream()
+                .filter(rd -> rd.getCertification() != null && !rd.getCertification().isBlank())
+                .sorted(Comparator.comparingInt(rd -> Integer.valueOf(3).equals(rd.getType()) ? 0 : 1))
+                .map(rd -> rd.getCertification().trim().toUpperCase(Locale.ROOT))
+                .findFirst()
+                .orElse(null);
     }
 
     // ── Genre resolution (shared by preview + import, TMDB-FIX-03) ────────
@@ -1158,5 +1215,16 @@ public class TmdbService {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /** TMDB's raw `popularity` is unbounded (viral titles can exceed 1000) while
+     *  movie_scheduling_profile.popularity_score is a 0-100 scale (precision 5,2) - clamp rather
+     *  than let a viral title overflow the column or dominate every other movie's priority. */
+    private BigDecimal toPopularityScore(Double tmdbPopularity) {
+        if (tmdbPopularity == null || tmdbPopularity <= 0) {
+            return BigDecimal.ZERO;
+        }
+        double clamped = Math.min(100.0, tmdbPopularity);
+        return BigDecimal.valueOf(clamped).setScale(2, RoundingMode.HALF_UP);
     }
 }

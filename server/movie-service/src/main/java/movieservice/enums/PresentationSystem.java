@@ -9,5 +9,6 @@ public enum PresentationSystem {
     STANDARD,
     IMAX,
     DOLBY_CINEMA,
-    SCREENX
+    SCREENX,
+    FOUR_DX
 }
