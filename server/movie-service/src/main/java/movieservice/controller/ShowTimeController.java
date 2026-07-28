@@ -6,7 +6,9 @@ import lombok.RequiredArgsConstructor;
 import movie.theater.common.dto.ApiResponse;
 import movie.theater.common.security.JwtSecurityUtils;
 
+import movieservice.dto.request.ConfirmShowtimeSeatHoldRequest;
 import movieservice.dto.request.HoldShowtimeSeatsRequest;
+import movieservice.dto.response.ShowtimeSeatHoldMutationResponse;
 import movieservice.dto.response.ShowtimeSeatHoldResponse;
 import movieservice.dto.response.ShowtimeSeatDto;
 import movieservice.dto.response.ShowtimeSeatMapResponse;
@@ -60,6 +62,46 @@ public class ShowTimeController {
                 .code(1000)
                 .message(hold.isReplayed() ? "Seat hold replayed" : "Seats held successfully")
                 .result(hold)
+                .build();
+    }
+
+    /**
+     * Releases a temporary inventory hold owned by the authenticated account.
+     * Booking-service calls this endpoint as compensation if its local
+     * transaction fails after the hold has been created.
+     */
+    @DeleteMapping("/{id}/seat-holds/{holdId}")
+    public ApiResponse<ShowtimeSeatHoldMutationResponse> releaseSeatHold(
+            @PathVariable("id") Long id,
+            @PathVariable("holdId") String holdId) {
+        return ApiResponse.<ShowtimeSeatHoldMutationResponse>builder()
+                .code(1000)
+                .message("Seat hold released")
+                .result(showtimeSeatHoldService.release(
+                        id,
+                        holdId,
+                        JwtSecurityUtils.getCurrentAccountId()))
+                .build();
+    }
+
+    /**
+     * Finalizes the authoritative inventory snapshot after a booking/payment
+     * workflow has succeeded. Repeating the same bookingId is idempotent.
+     */
+    @PostMapping("/{id}/seat-holds/{holdId}/confirm")
+    public ApiResponse<ShowtimeSeatHoldMutationResponse> confirmSeatHold(
+            @PathVariable("id") Long id,
+            @PathVariable("holdId") String holdId,
+            @Valid @RequestBody ConfirmShowtimeSeatHoldRequest request) {
+        ShowtimeSeatHoldMutationResponse result = showtimeSeatHoldService.confirm(
+                id,
+                holdId,
+                request,
+                JwtSecurityUtils.getCurrentAccountId());
+        return ApiResponse.<ShowtimeSeatHoldMutationResponse>builder()
+                .code(1000)
+                .message(result.isReplayed() ? "Seat sale already confirmed" : "Seat sale confirmed")
+                .result(result)
                 .build();
     }
 }

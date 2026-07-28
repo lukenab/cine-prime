@@ -33,7 +33,6 @@ public class UpdateMovieRequest {
     Integer ageRatingId;
     List<Long> companyIds;
     List<Long> genreIds;
-    List<Integer> formatIds;
 
     @Size(max = 500)
     String posterUrl;

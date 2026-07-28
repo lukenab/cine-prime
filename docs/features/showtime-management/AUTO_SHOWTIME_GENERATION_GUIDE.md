@@ -217,23 +217,8 @@ Vì vậy, không nên chờ đến lúc sinh xong mới lần đầu thông bá
 có thể vẫn phát hiện blocker nếu dữ liệu thay đổi trong lúc chạy, nhưng đó là lớp
 bảo vệ cuối chứ không phải cơ chế chính.
 
-## 6. Vì sao từng thấy 01:00 thay vì 08:00?
 
-Landmark 81 dùng timezone `Asia/Ho_Chi_Minh` (`UTC+7`). Candidate đúng được tạo
-lúc `08:00+07:00`, nhưng cột `TIMESTAMPTZ` của PostgreSQL được chuẩn hóa thành
-`01:00Z`.
-
-Lỗi cũ trả trực tiếp giá trị UTC cho frontend và frontend chỉ lấy phần `01:00`,
-nên giao diện hiển thị sớm hơn 7 giờ. Đây là lỗi chuyển timezone, không phải
-optimizer cố tình xếp lịch ngoài giờ.
-
-Quy tắc đúng:
-
-- lưu thời điểm có timezone/instant trong database;
-- chuyển về timezone của cụm rạp khi trả API và khi revalidate;
-- hiển thị `08:00`, không hiển thị wall-clock UTC `01:00`.
-
-## 7. Tiền điều kiện trước khi tạo lịch
+## 6. Tiền điều kiện trước khi tạo lịch
 
 ### Cụm rạp
 
@@ -291,7 +276,7 @@ Quy tắc đúng:
 - plan cũ không được publish lặp lại;
 - revalidate gần thời điểm submit/publish.
 
-## 8. Ý nghĩa blocker phổ biến
+## 7. Ý nghĩa blocker phổ biến
 
 ### `MINIMUM_COVERAGE`
 
@@ -376,7 +361,7 @@ Cách trình bày khi báo cáo:
 Một showtime khác được tạo sau thời điểm plan sinh, hoặc plan đã được publish
 trước đó. Cần reload/revalidate; không nên bỏ qua constraint database.
 
-## 9. Price Book là gì?
+## 8. Price Book là gì?
 
 Price Book là bộ chính sách giá vé của một cụm rạp trong một khoảng hiệu lực.
 Bên trong Price Book có các Rate Card theo:

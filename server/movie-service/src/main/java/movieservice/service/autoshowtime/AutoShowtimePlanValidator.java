@@ -8,6 +8,7 @@ import movieservice.entity.ShowtimeGenerationRun;
 import movieservice.repository.CinemaClusterDemandProfileRepository;
 import movieservice.repository.ShowTimeRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.*;
@@ -24,6 +25,13 @@ public class AutoShowtimePlanValidator {
     private final SchedulingOperationalConstraintService operationalConstraintService;
     private final ShowTimeRepository showTimeRepository;
 
+    /// AutoShowtimeRunExecutor.execute() (the only caller) has no transaction boundary of its
+    /// own, so without this every ShowTimeRepository call below would open and close its own
+    /// short-lived session (Spring Data JPA's default per-method transaction) - fine for the
+    /// fetch itself, but loadExistingCoverage()/keyFrom() then navigate the lazy ShowTime.movie
+    /// and ShowTime.cinemaRoom.cluster associations *after* that session already closed, which
+    /// is exactly the "could not initialize proxy - no session" failure this run was hitting.
+    @Transactional(readOnly = true)
     public AutoShowtimePlanValidationResult validate(
             ShowtimeGenerationRun run,
             List<ShowtimeCandidate> eligibleCandidates,

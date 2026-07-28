@@ -371,6 +371,13 @@ public enum MovieErrorCode implements BaseErrorCode {
                         HttpStatus.CONFLICT),
         SCHEDULE_PLAN_REVIEW_BLOCKED(2139,
                         "Schedule plan cannot be submitted for review while publishing blockers remain. Resolve the blockers and generate a valid replacement plan.",
+                        HttpStatus.CONFLICT),
+        SEAT_HOLD_NOT_FOUND(2140,
+                        "Seat hold was not found for this showtime.", HttpStatus.NOT_FOUND),
+        SEAT_HOLD_OWNER_MISMATCH(2141,
+                        "This seat hold belongs to another account.", HttpStatus.FORBIDDEN),
+        SEAT_HOLD_ALREADY_SOLD(2142,
+                        "Sold seats cannot be released through the temporary-hold endpoint.",
                         HttpStatus.CONFLICT);
 
         int code;
