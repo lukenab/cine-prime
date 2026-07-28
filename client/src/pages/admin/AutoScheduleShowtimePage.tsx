@@ -583,6 +583,21 @@ export default function AutoScheduleShowtimePage({
     }
   };
 
+  const revalidatePlan = async () => {
+    if (!plan) return;
+    setPlanBusy(true);
+    setPlanError(null);
+    try {
+      const response = await showtimeApi.revalidateSchedulePlan(plan.schedulePlanId);
+      setPlan(response.result);
+      setPlanLibraryRefresh((value) => value + 1);
+    } catch (error) {
+      setPlanError(extractErrorMessage(error).message);
+    } finally {
+      setPlanBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
       {!embedded && <div>
@@ -1163,6 +1178,7 @@ export default function AutoScheduleShowtimePage({
           busy={planBusy}
           error={planError}
           onNewRun={resetWizard}
+          onRevalidate={revalidatePlan}
           onTransition={transitionPlan}
         />
       )}

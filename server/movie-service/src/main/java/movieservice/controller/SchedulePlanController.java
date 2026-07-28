@@ -37,6 +37,13 @@ public class SchedulePlanController {
         return ok(schedulePlanService.get(planId));
     }
 
+    @PostMapping("/{planId}/revalidate")
+    public ApiResponse<SchedulePlanResponse> revalidate(
+            @PathVariable Long planId,
+            Authentication authentication) {
+        return ok(schedulePlanService.revalidate(planId, actor(authentication)));
+    }
+
     @PostMapping("/{planId}/submit-review")
     public ApiResponse<SchedulePlanResponse> submitReview(
             @PathVariable Long planId,

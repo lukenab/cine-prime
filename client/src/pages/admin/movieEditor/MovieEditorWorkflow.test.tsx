@@ -15,10 +15,16 @@ const sections: MovieEditorSectionDefinition[] = MOVIE_EDITOR_SECTION_META.map((
   description,
 }));
 
-function Harness({ onActiveSectionChange }: { onActiveSectionChange?: (id: MovieEditorSectionId) => void } = {}) {
+function Harness({
+  onActiveSectionChange,
+  sectionDefinitions = sections,
+}: {
+  onActiveSectionChange?: (id: MovieEditorSectionId) => void;
+  sectionDefinitions?: MovieEditorSectionDefinition[];
+} = {}) {
   const [title, setTitle] = useState("");
   return (
-    <MovieEditorWorkflow sections={sections} onActiveSectionChange={onActiveSectionChange}>
+    <MovieEditorWorkflow sections={sectionDefinitions} onActiveSectionChange={onActiveSectionChange}>
       <section
         id={movieEditorSectionDomId("overview")}
         data-editor-section="overview"
@@ -112,5 +118,26 @@ describe("MovieEditorWorkflow", () => {
     window.history.replaceState(null, "", "/admin/movies/new/manual#credits");
     const { container } = render(<Harness />);
     expect(container.querySelector("[data-movie-editor-workflow]")).toHaveAttribute("data-active-step", "media-credits");
+  });
+
+  it("blocks review navigation when the screening-version step is not persisted", () => {
+    window.history.replaceState(null, "", "/admin/movies/new/manual#screening-versions");
+    const blockedSections = sections.map((section) => (
+      section.id === "screening-versions"
+        ? {
+          ...section,
+          blockNext: true,
+          blockNextMessage: "Create and save at least one active screening version before review.",
+        }
+        : section
+    ));
+
+    const { container } = render(<Harness sectionDefinitions={blockedSections} />);
+
+    const continueButton = screen.getByRole("button", { name: /Continue to Review & submit/i });
+    expect(continueButton).toBeDisabled();
+    expect(screen.getByText("Create and save at least one active screening version before review.")).toBeInTheDocument();
+    fireEvent.click(continueButton);
+    expect(container.querySelector("[data-movie-editor-workflow]")).toHaveAttribute("data-active-step", "screening-versions");
   });
 });

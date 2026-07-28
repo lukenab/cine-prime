@@ -1,6 +1,8 @@
 package movieservice.controller;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import movie.theater.common.dto.ApiResponse;
 import movieservice.dto.request.MovieScreeningVersionRequest;
@@ -46,6 +48,23 @@ public class MovieScreeningVersionController {
                 .code(HttpStatus.CREATED.value())
                 .message("Screening version created")
                 .result(screeningVersionService.create(movieId, request))
+                .build();
+    }
+
+    @PostMapping("/batch")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<List<MovieScreeningVersionResponse>> createBulk(
+            @PathVariable Long movieId,
+            @Valid @RequestBody
+            @NotEmpty(message = "At least one screening version is required")
+            @Size(max = 10, message = "At most 10 screening versions can be created at once")
+            List<@Valid MovieScreeningVersionRequest> requests
+    ) {
+        return ApiResponse.<List<MovieScreeningVersionResponse>>builder()
+                .code(HttpStatus.CREATED.value())
+                .message("Screening versions created")
+                .result(screeningVersionService.createBulk(movieId, requests))
                 .build();
     }
 

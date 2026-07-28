@@ -74,5 +74,11 @@ public class ShowTimeResponse {
      */
     BigDecimal basePrice;
 
+    String priceSource;
+
+    Long priceBookId;
+
+    Long priceRateId;
+
     LocalDateTime updatedAt;
 }

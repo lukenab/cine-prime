@@ -21,6 +21,8 @@ export interface MovieEditorSectionDefinition {
   description: string;
   complete?: boolean;
   hasError?: boolean;
+  blockNext?: boolean;
+  blockNextMessage?: string;
 }
 
 export const MOVIE_EDITOR_SECTION_META = [
@@ -267,13 +269,21 @@ export default function MovieEditorWorkflow({
               <ChevronLeft size={16} /> Back
             </button>
             {nextSection ? (
-              <button
-                type="button"
-                onClick={() => navigateToSection(nextSection.id)}
-                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
-              >
-                Continue to {nextSection.label} <ChevronRight size={16} />
-              </button>
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                {sections[activeIndex]?.blockNext && (
+                  <span className="max-w-xs text-right text-xs font-medium text-amber-600">
+                    {sections[activeIndex]?.blockNextMessage ?? "Complete this step before continuing."}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => navigateToSection(nextSection.id)}
+                  disabled={sections[activeIndex]?.blockNext}
+                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Continue to {nextSection.label} <ChevronRight size={16} />
+                </button>
+              </div>
             ) : (
               <p className="text-xs" style={{ color: "var(--text-sub)" }}>
                 Resolve all blockers, then submit the movie for review from the page header.

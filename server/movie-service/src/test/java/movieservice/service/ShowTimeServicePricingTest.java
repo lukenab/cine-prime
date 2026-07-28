@@ -48,6 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -63,6 +64,7 @@ class ShowTimeServicePricingTest {
     @Mock RoomLayoutPositionRepository roomLayoutPositionRepository;
     @Mock MovieMapper movieMapper;
     @Mock ShowtimeInventoryService showtimeInventoryService;
+    @Mock PriceBookPricingService priceBookPricingService;
 
     @InjectMocks
     ShowTimeService showTimeService;
@@ -237,6 +239,10 @@ class ShowTimeServicePricingTest {
 
         when(showTimeRepository.findById(7L)).thenReturn(Optional.of(showTime));
         when(showTimeRepository.save(showTime)).thenReturn(showTime);
+        stubPricingDecision(
+                showTime,
+                PriceBookPricingService.PricingDecision.override(
+                        new BigDecimal("130000.00")));
         when(showtimeSeatRepository.findByShowTime_ShowTimeId(7L))
                 .thenReturn(List.of(available, reserved));
 
@@ -266,12 +272,16 @@ class ShowTimeServicePricingTest {
 
         when(showTimeRepository.findById(7L)).thenReturn(Optional.of(showTime));
         when(showTimeRepository.save(showTime)).thenReturn(showTime);
+        stubPricingDecision(
+                showTime,
+                PriceBookPricingService.PricingDecision.roomDefault(
+                        new BigDecimal("90000.00")));
         when(showtimeSeatRepository.findByShowTime_ShowTimeId(7L))
                 .thenReturn(List.of(available, reserved, sold));
 
         ShowTimePricingResponse response = showTimeService.update(7L, request);
 
-        assertNull(response.getBasePrice());
+        assertEquals(new BigDecimal("90000.00"), response.getBasePrice());
         assertEquals(new BigDecimal("90000.00"), available.getPrice());
         assertEquals(new BigDecimal("120000.00"), reserved.getPrice());
         assertEquals(new BigDecimal("120000.00"), sold.getPrice());
@@ -294,6 +304,21 @@ class ShowTimeServicePricingTest {
         assertEquals(new BigDecimal("120000.00"), response.getBasePrice());
         verify(showtimeSeatRepository, never()).findByShowTime_ShowTimeId(any());
         verify(showtimeSeatRepository, never()).saveAll(anyList());
+    }
+
+    private void stubPricingDecision(
+            ShowTime showTime,
+            PriceBookPricingService.PricingDecision decision) {
+        when(priceBookPricingService.resolve(showTime)).thenReturn(decision);
+        doAnswer(invocation -> {
+            ShowTime target = invocation.getArgument(0);
+            PriceBookPricingService.PricingDecision resolved = invocation.getArgument(1);
+            target.setBasePrice(resolved.standardPrice());
+            target.setPriceSource(resolved.source());
+            target.setPriceBook(resolved.priceBook());
+            target.setPriceRate(resolved.priceRate());
+            return null;
+        }).when(priceBookPricingService).applyDecision(showTime, decision);
     }
 
     @Test

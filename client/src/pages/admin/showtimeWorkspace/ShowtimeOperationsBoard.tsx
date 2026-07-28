@@ -777,7 +777,20 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
             {selected.status !== "CANCELLED" && selected.status !== "COMPLETED" && (
               <div className="mt-3 space-y-2 rounded-2xl border p-3" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => onEdit(selected)} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border px-2 py-2.5 text-xs font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-main)", background: "var(--bg-card)" }}><Pencil size={14} /> Edit</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const showtimeToEdit = selected;
+                      setSelected(null);
+                      setCancelPromptOpen(false);
+                      setCancelReason("");
+                      onEdit(showtimeToEdit);
+                    }}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border px-2 py-2.5 text-xs font-semibold"
+                    style={{ borderColor: "var(--border-color)", color: "var(--text-main)", background: "var(--bg-card)" }}
+                  >
+                    <Pencil size={14} /> Edit
+                  </button>
                   {selected.status !== "ON_SALE" && <button type="button" disabled={busy} onClick={() => void onStatusChange(selected, "ON_SALE").then(() => setSelected(null))} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-2 py-2.5 text-xs font-semibold text-emerald-600"><PlayCircle size={14} /> Open sales</button>}
                   {selected.status !== "SUSPENDED" && <button type="button" disabled={busy} onClick={() => void onStatusChange(selected, "SUSPENDED").then(() => setSelected(null))} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-amber-500/25 bg-amber-500/10 px-2 py-2.5 text-xs font-semibold text-amber-600"><PauseCircle size={14} /> Suspend</button>}
                 </div>

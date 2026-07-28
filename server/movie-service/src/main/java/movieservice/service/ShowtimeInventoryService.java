@@ -45,6 +45,7 @@ public class ShowtimeInventoryService {
     private final RoomLayoutRepository roomLayoutRepository;
     private final RoomLayoutPositionRepository roomLayoutPositionRepository;
     private final SeatRepository seatRepository;
+    private final PriceBookPricingService priceBookPricingService;
 
     /**
      * Materializes inventory exactly once. The showtime row lock serializes
@@ -89,6 +90,10 @@ public class ShowtimeInventoryService {
             throw new AppException(MovieErrorCode.SHOWTIME_LAYOUT_SEAT_MISMATCH);
         }
 
+        PriceBookPricingService.PricingDecision pricing =
+                priceBookPricingService.resolve(showtime);
+        priceBookPricingService.applyDecision(showtime, pricing);
+
         Map<String, Seat> seatsByCoordinate = new HashMap<>();
         for (Seat seat : activeSeats) {
             String coordinate = coordinate(seat.getRowLabel(), seat.getColNumber());
@@ -112,7 +117,7 @@ public class ShowtimeInventoryService {
                     .layoutVersion(activeLayout.getVersion())
                     .seatType(unit.seatType())
                     .seatGroupId(unit.seatGroupId())
-                    .price(ShowtimePriceResolver.resolveSeatSnapshotPrice(showtime, seat))
+                    .price(pricing.priceFor(seat))
                     .status(ShowtimeSeatStatus.AVAILABLE)
                     .build());
         }

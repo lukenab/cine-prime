@@ -32,11 +32,12 @@ public class MovieScreeningVersion {
     ScreeningFormat format;
 
     /**
-     * Audio mix delivered with this version. It remains nullable only for
-     * records created before V42; new commands require an explicit value.
+     * Audio mix delivered with this version. V49 backfills the unresolved
+     * legacy rows to the conservative Dolby 5.1 baseline, so every version
+     * now has an explicit content-audio capability.
      */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "audio_format_id")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "audio_format_id", nullable = false)
     AudioFormat audioFormat;
 
     @Column(name = "audio_language_code", nullable = false, length = 10)

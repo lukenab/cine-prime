@@ -6,7 +6,6 @@ import {
   Clock3,
   MapPin,
   Play,
-  ShieldCheck,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -355,6 +354,12 @@ export default function ShowtimePage() {
 
   const title = movie.movieNameEnglish || movie.movieNameVn;
   const ageRating = movie.ageRatingCode;
+  const primaryCast = movie.actor
+    ?.split(",")
+    .map((name) => name.trim())
+    .filter(Boolean)
+    .slice(0, 6)
+    .join(", ");
 
   return (
     <div className="min-h-screen bg-[#050914] pt-16 text-white">
@@ -370,7 +375,7 @@ export default function ShowtimePage() {
         </div>
 
         <div className="relative mx-auto max-w-6xl px-5 pb-8 pt-6 sm:px-8">
-          <div className="grid items-center gap-7 md:grid-cols-[180px_minmax(0,1fr)]">
+          <div className="grid items-start gap-7 md:grid-cols-[180px_minmax(0,1fr)]">
             <div className="relative mx-auto aspect-[2/3] w-40 overflow-hidden rounded-2xl border border-white/12 shadow-2xl md:mx-0 md:w-[180px]">
               <img
                 src={movie.smallImage || movie.largeImage}
@@ -395,8 +400,7 @@ export default function ShowtimePage() {
                 {ageRating && (
                   <>
                     <span className="h-1 w-1 rounded-full bg-white/25" />
-                    <span className="inline-flex items-center gap-1.5 rounded-md border border-red-400/25 bg-red-400/10 px-2 py-0.5 font-semibold text-red-300">
-                      <ShieldCheck size={13} />
+                    <span className="inline-flex items-center rounded-md border border-rose-400/35 bg-rose-500/15 px-2 py-0.5 text-xs font-extrabold tracking-wide text-rose-200">
                       {ageRating}
                     </span>
                   </>
@@ -409,14 +413,61 @@ export default function ShowtimePage() {
                 </p>
               )}
 
-              <button
-                type="button"
-                onClick={() => setShowTrailer(true)}
-                className="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_10px_28px_rgba(37,99,235,.24)] transition hover:bg-blue-500"
-              >
-                <Play size={14} fill="currentColor" />
-                Watch trailer
-              </button>
+              <div className="mt-4 grid max-w-3xl grid-cols-2 gap-x-6 gap-y-2 text-left text-xs sm:grid-cols-3">
+                {movie.releaseDate && (
+                  <div>
+                    <span className="block uppercase tracking-wide text-white/35">Release date</span>
+                    <span className="mt-0.5 block font-medium text-white/75">
+                      {format(new Date(`${movie.releaseDate}T00:00:00`), "dd/MM/yyyy")}
+                    </span>
+                  </div>
+                )}
+                {movie.country && (
+                  <div>
+                    <span className="block uppercase tracking-wide text-white/35">Country</span>
+                    <span className="mt-0.5 block font-medium text-white/75">{movie.country}</span>
+                  </div>
+                )}
+                {movie.originalLanguage && (
+                  <div>
+                    <span className="block uppercase tracking-wide text-white/35">Original language</span>
+                    <span className="mt-0.5 block font-medium uppercase text-white/75">
+                      {movie.originalLanguage}
+                    </span>
+                  </div>
+                )}
+                {movie.director && (
+                  <div>
+                    <span className="block uppercase tracking-wide text-white/35">Director</span>
+                    <span className="mt-0.5 block font-medium text-white/75">{movie.director}</span>
+                  </div>
+                )}
+                {movie.movieProductionCompany && (
+                  <div className="sm:col-span-2">
+                    <span className="block uppercase tracking-wide text-white/35">Production</span>
+                    <span className="mt-0.5 block font-medium text-white/75">
+                      {movie.movieProductionCompany}
+                    </span>
+                  </div>
+                )}
+                {primaryCast && (
+                  <div className="col-span-2 sm:col-span-3">
+                    <span className="block uppercase tracking-wide text-white/35">Cast</span>
+                    <span className="mt-0.5 block line-clamp-2 font-medium text-white/75">{primaryCast}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-5 flex flex-wrap justify-center gap-2 md:justify-start">
+                <button
+                  type="button"
+                  onClick={() => setShowTrailer(true)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_10px_28px_rgba(37,99,235,.24)] transition hover:bg-blue-500"
+                >
+                  <Play size={14} fill="currentColor" />
+                  Watch trailer
+                </button>
+              </div>
             </div>
           </div>
         </div>

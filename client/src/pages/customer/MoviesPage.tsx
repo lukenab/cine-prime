@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
-import { Search, Film, RefreshCw, Ticket, Star, Clock, Calendar } from "lucide-react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Search, Film, RefreshCw, Ticket, Play, Clock, Calendar } from "lucide-react";
 import { movieApi, type MovieApiResponse } from "../../api/movieApi";
 import { mockMovies } from "../../data/mockMovies";
-import { enrichMovie } from "../../utils/enrichMovie";
-import { MoviePreviewModal } from "../../components/shared/MoviePreviewModal";
+import { TrailerModal } from "../../components/shared/TrailerModal";
 
 const GENRES = ["All", "Action", "Drama", "Comedy", "Horror", "Sci-Fi", "Romance", "Thriller", "Animation", "Family", "Adventure", "Crime"];
 
@@ -15,10 +14,6 @@ function formatDuration(minutes?: number): string {
   return hours > 0 ? `${hours}h ${String(mins).padStart(2, "0")}m` : `${mins}m`;
 }
 
-function ratingOf(movie: MovieApiResponse): string {
-  return (7.6 + ((movie.movieId * 37) % 20) / 10).toFixed(1);
-}
-
 function formatReleaseDate(dateStr?: string): string {
   if (!dateStr) return "Coming Soon";
   const d = new Date(dateStr);
@@ -26,12 +21,20 @@ function formatReleaseDate(dateStr?: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function PosterCard({ movie, onOpen }: { movie: MovieApiResponse; onOpen: () => void }) {
+function PosterCard({
+  movie,
+  onBuy,
+  onTrailer,
+}: {
+  movie: MovieApiResponse;
+  onBuy: () => void;
+  onTrailer: () => void;
+}) {
   const isComingSoon = movie.displayStatus === "COMING_SOON";
 
   return (
     <div
-      onClick={onOpen}
+      onClick={onBuy}
       className="group relative cursor-pointer overflow-hidden rounded-2xl"
       style={{ border: "1px solid rgba(255,255,255,0.08)" }}
     >
@@ -58,10 +61,7 @@ function PosterCard({ movie, onOpen }: { movie: MovieApiResponse; onOpen: () => 
               <span style={{ color: "#FFD700", fontSize: "0.65rem", fontWeight: 700 }}>{formatReleaseDate(movie.releaseDate)}</span>
             </>
           ) : (
-            <>
-              <Star size={10} fill="#FFD700" style={{ color: "#FFD700" }} />
-              <span style={{ color: "#FFD700", fontSize: "0.7rem", fontWeight: 700 }}>{ratingOf(movie)}</span>
-            </>
+            <span className="text-[10px] font-bold uppercase text-white/55">Now showing</span>
           )}
         </div>
 
@@ -77,13 +77,27 @@ function PosterCard({ movie, onOpen }: { movie: MovieApiResponse; onOpen: () => 
           </div>
         </div>
 
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-          <span
-            className="flex items-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-extrabold"
-            style={{ background: "linear-gradient(135deg, #FFD700, #FFA500)", color: "#050505", boxShadow: "0 8px 24px rgba(255,215,0,0.4)" }}
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onBuy();
+            }}
+            className="flex w-full max-w-[9rem] items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 px-4 py-2.5 text-xs font-extrabold text-white shadow-[0_8px_22px_rgba(37,99,235,0.3)] transition-all duration-200 hover:-translate-y-0.5 hover:from-blue-500 hover:to-blue-400 hover:shadow-[0_10px_26px_rgba(37,99,235,0.4)]"
           >
-            <Ticket size={14} /> View Details
-          </span>
+            <Ticket size={12} /> Buy tickets
+          </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onTrailer();
+            }}
+            className="flex w-full max-w-[9rem] items-center justify-center gap-1.5 rounded-lg border border-blue-400/45 bg-slate-950/80 px-4 py-2.5 text-xs font-bold text-blue-100 backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-300/80 hover:bg-blue-950/80 hover:text-white"
+          >
+            <Play size={12} fill="currentColor" /> Watch trailer
+          </button>
         </div>
       </div>
     </div>
@@ -91,9 +105,17 @@ function PosterCard({ movie, onOpen }: { movie: MovieApiResponse; onOpen: () => 
 }
 
 function MovieSection({
-  id, title, movies, onOpen,
+  id,
+  title,
+  movies,
+  onBuy,
+  onTrailer,
 }: {
-  id: string; title: string; movies: MovieApiResponse[]; onOpen: (movie: MovieApiResponse) => void;
+  id: string;
+  title: string;
+  movies: MovieApiResponse[];
+  onBuy: (movie: MovieApiResponse) => void;
+  onTrailer: (movie: MovieApiResponse) => void;
 }) {
   if (movies.length === 0) return null;
 
@@ -106,7 +128,12 @@ function MovieSection({
       </h2>
       <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {movies.map((movie) => (
-          <PosterCard key={movie.movieId} movie={movie} onOpen={() => onOpen(movie)} />
+          <PosterCard
+            key={movie.movieId}
+            movie={movie}
+            onBuy={() => onBuy(movie)}
+            onTrailer={() => onTrailer(movie)}
+          />
         ))}
       </div>
     </div>
@@ -116,11 +143,12 @@ function MovieSection({
 export default function MoviesPage() {
   const [searchParams] = useSearchParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const [movies, setMovies] = useState<MovieApiResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState(searchParams.get("search") ?? "");
   const [activeGenre, setActiveGenre] = useState("All");
-  const [selectedMovie, setSelectedMovie] = useState<MovieApiResponse | null>(null);
+  const [trailerMovie, setTrailerMovie] = useState<MovieApiResponse | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -239,13 +267,25 @@ export default function MoviesPage() {
           </div>
         ) : (
           <>
-            <MovieSection id="now-showing" title="Now Showing" movies={nowShowing} onOpen={(movie) => setSelectedMovie(enrichMovie(movie))} />
-            <MovieSection id="coming-soon" title="Coming Soon" movies={comingSoon} onOpen={(movie) => setSelectedMovie(enrichMovie(movie))} />
+            <MovieSection
+              id="now-showing"
+              title="Now Showing"
+              movies={nowShowing}
+              onBuy={(movie) => navigate(`/showtime/${movie.movieId}`)}
+              onTrailer={setTrailerMovie}
+            />
+            <MovieSection
+              id="coming-soon"
+              title="Coming Soon"
+              movies={comingSoon}
+              onBuy={(movie) => navigate(`/showtime/${movie.movieId}`)}
+              onTrailer={setTrailerMovie}
+            />
           </>
         )}
       </div>
 
-      <MoviePreviewModal movie={selectedMovie} onClose={() => setSelectedMovie(null)} />
+      <TrailerModal movie={trailerMovie} onClose={() => setTrailerMovie(null)} />
     </div>
   );
 }

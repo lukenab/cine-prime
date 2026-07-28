@@ -8,7 +8,6 @@ import { bookingApi, Seat, BookingConfirmation, ShowtimeSeatMap, SeatMapPosition
 import { useAuth } from "../../context/AuthContext";
 import CompleteProfilePage from "../auth/CompleteProfilePage";
 import { AudioCoverageFrame, ProjectionBeamOverlay, ProjectionScreenVisualization } from "../admin/cinemaRoomEditor/AuditoriumVisualization";
-import { ProjectorLegendMarker, SpeakerLegendMarker } from "../admin/cinemaRoomEditor/SeatLegend";
 import type { AuditoriumVisualizationConfig } from "../admin/cinemaRoomEditor/cinemaRoomEditor.types";
 
 // Format a number as Vietnamese đồng, e.g. 70000 → "70.000 ₫"
@@ -68,11 +67,14 @@ function SeatBtn({
   const available = seat.status === "AVAILABLE";
   const theme = SEAT_TYPE_THEME[seat.type];
   const isDoubleSeat = seat.type === "COUPLE" || (seat.colSpan ?? 1) > 1;
+  const displayCode = seat.seatCode?.trim() || `${seat.row}${seat.number}`;
 
   // Colour + interaction per state. Shape (seat silhouette) is shared below.
   const cls = (() => {
-    if (seat.status === "BOOKED") return "bg-white/[0.025] border-white/[0.07] text-white/20 cursor-not-allowed";
-    if (seat.status === "LOCKED") return "bg-red-500/[0.12] border-red-400/50 text-red-300 cursor-not-allowed";
+    // The customer only needs to know whether the position can be selected.
+    // BOOKED and another customer's temporary LOCKED state share one neutral
+    // visual state; the internal reason remains available to the backend.
+    if (!available && !conflict) return "bg-white/[0.025] border-white/[0.08] text-white/20 cursor-not-allowed";
     if (conflict)                 return "bg-[#3d1515] border-[#e84545] text-[#ff9a9a] animate-pulse cursor-pointer";
     if (selected)                 return "bg-gradient-to-b from-[#93c5fd] to-[#2563eb] border-[#60a5fa] text-black shadow-[0_4px_14px_rgba(96,165,250,0.45)] -translate-y-0.5 cursor-pointer";
     return "hover:-translate-y-0.5 hover:brightness-125 hover:shadow-[0_4px_12px_rgba(37,99,235,0.25)] cursor-pointer";
@@ -83,7 +85,7 @@ function SeatBtn({
       type="button"
       disabled={!available && !conflict}
       onClick={() => available && onToggle(seat.seatId)}
-      title={`${seat.row}${seat.number} · ${seat.type} · ${seat.status}`}
+      title={`${displayCode} · ${seat.type}${available ? "" : " · Unavailable"}`}
       className={`relative ${isDoubleSeat ? "w-[4.875rem]" : "w-9"} h-8 rounded-md border-[1.5px] text-[10px] font-bold flex items-center justify-center select-none transition-all duration-150 will-change-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#60a5fa]/60 ${cls}`}
       style={
         seat.status === "AVAILABLE" && !selected && !conflict
@@ -91,7 +93,7 @@ function SeatBtn({
           : { fontFamily: "'Inter', sans-serif" }
       }
     >
-      {seat.number}
+      {displayCode}
     </button>
   );
 }
@@ -334,7 +336,6 @@ export default function SeatBookingPage() {
   };
   const showProjector = auditoriumConfig.projectionTechnologyCode === "LASER"
     || auditoriumConfig.projectionTechnologyCode === "XENON";
-  const showSpeakers = Boolean(auditoriumConfig.audioFormatCode);
   const formattedDate = new Date(showtimeDetails.dateTime).toLocaleDateString("en-US", {
     weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
   });
@@ -513,24 +514,39 @@ export default function SeatBookingPage() {
 
           {/* Legend */}
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2 pt-4 border-t border-white/[0.06]">
-            {(showProjector || showSpeakers) && (
-              <div className="flex items-center gap-3 rounded-full border border-white/[0.08] bg-white/[0.025] px-3 py-1.5">
-                {showProjector && <span className="flex items-center gap-1.5 text-[10px] text-white/65"><ProjectorLegendMarker /> Projector</span>}
-                {showSpeakers && <span className="flex items-center gap-1.5 text-[10px] text-white/65"><SpeakerLegendMarker /> Speaker</span>}
-              </div>
-            )}
             {[
-              { label: "Standard", style: SEAT_TYPE_THEME.STANDARD },
-              { label: "VIP", style: SEAT_TYPE_THEME.VIP },
-              { label: "Couple", style: SEAT_TYPE_THEME.COUPLE },
-              { label: "Accessible", style: SEAT_TYPE_THEME.ACCESSIBLE },
-              { label: "Selected", style: { background: "linear-gradient(to bottom, #93c5fd, #2563eb)", borderColor: "#60a5fa" } },
-              { label: "Locked", style: { background: "rgba(239,68,68,0.12)", borderColor: "rgba(248,113,113,0.5)" } },
-              { label: "Booked", style: { background: "rgba(255,255,255,0.025)", borderColor: "rgba(255,255,255,0.08)" } },
-            ].map(({ style, label }) => (
-              <div key={label} className="flex items-center gap-1.5 rounded-full bg-white/[0.03] border border-white/[0.06] px-2.5 py-1">
-                <div className="h-3 w-3 rounded-[3px] border" style={style} />
-                <span className="text-[10px] text-white/60">
+              {
+                label: "Standard",
+                swatch: { background: SEAT_TYPE_THEME.STANDARD.bg, borderColor: SEAT_TYPE_THEME.STANDARD.border },
+                color: SEAT_TYPE_THEME.STANDARD.text,
+              },
+              {
+                label: "VIP",
+                swatch: { background: SEAT_TYPE_THEME.VIP.bg, borderColor: SEAT_TYPE_THEME.VIP.border },
+                color: SEAT_TYPE_THEME.VIP.text,
+              },
+              {
+                label: "Couple",
+                swatch: { background: SEAT_TYPE_THEME.COUPLE.bg, borderColor: SEAT_TYPE_THEME.COUPLE.border },
+                color: SEAT_TYPE_THEME.COUPLE.text,
+              },
+              {
+                label: "Selected",
+                swatch: { background: "linear-gradient(to bottom, #93c5fd, #2563eb)", borderColor: "#60a5fa" },
+                color: "#93c5fd",
+              },
+              {
+                label: "Unavailable",
+                swatch: { background: "rgba(255,255,255,0.025)", borderColor: "rgba(255,255,255,0.16)" },
+                color: "rgba(255,255,255,0.5)",
+              },
+            ].map(({ swatch, color, label }) => (
+              <div
+                key={label}
+                className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.025] px-3 py-1.5"
+              >
+                <div className="h-3.5 w-3.5 rounded-[4px] border-[1.5px]" style={swatch} />
+                <span className="text-[10px] font-semibold" style={{ color }}>
                   {label}
                 </span>
               </div>
@@ -541,44 +557,59 @@ export default function SeatBookingPage() {
 
         {/* Right: summary */}
         <aside className="self-start flex flex-col gap-3 xl:sticky xl:top-40">
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0a] shadow-2xl">
+          <div className="overflow-hidden rounded-2xl border border-blue-400/15 bg-[#0b0f16] shadow-[0_24px_70px_rgba(0,0,0,0.45)]">
             {/* Header */}
             <div
-              className="flex items-center justify-between px-5 py-4"
-              style={{ background: "linear-gradient(135deg, rgba(96,165,250,0.12), rgba(37,99,235,0.04))", borderBottom: "1px solid rgba(255,255,255,0.08)" }}
+              className="flex items-start justify-between gap-3 border-b border-white/8 px-5 py-4"
+              style={{ background: "linear-gradient(135deg, rgba(96,165,250,0.12), rgba(37,99,235,0.025))" }}
             >
-              <h2 className="flex items-center gap-2 text-[1.05rem] font-semibold text-white">
-                <Ticket size={16} className="text-[#60a5fa]" /> Order Summary
-              </h2>
+              <div className="flex min-w-0 items-start gap-2.5">
+                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400">
+                  <Ticket size={16} />
+                </span>
+                <div>
+                  <h2 className="text-base font-semibold text-white">Booking summary</h2>
+                  <p className="mt-0.5 text-[11px] leading-4 text-white/45">
+                    {pickedSeats.length > 0
+                      ? `${pickedSeats.length} selected seat${pickedSeats.length !== 1 ? "s" : ""}`
+                      : "Your selected seats will appear here"}
+                  </p>
+                </div>
+              </div>
               {pickedSeats.length > 0 && (
-                <button onClick={clearAll}
-                  className="flex items-center gap-1 text-[10px] text-white/50 hover:text-white transition-colors cursor-pointer"
+                <button
+                  type="button"
+                  onClick={clearAll}
+                  className="flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium text-white/50 transition-colors hover:bg-white/[0.06] hover:text-white cursor-pointer"
                 >
-                  <RotateCcw size={10} /> Clear
+                  <RotateCcw size={12} /> Clear all
                 </button>
               )}
             </div>
 
             {/* Selected seats */}
-            <div className="px-5 py-4 min-h-[130px]">
+            <div className="min-h-[130px] px-5 py-4">
               {pickedSeats.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-2 py-5 text-center">
-                  <Armchair size={26} className="text-white/20" />
-                  <p className="text-white/40 text-[13px]">Tap a seat on the map to start</p>
+                <div className="flex flex-col items-center justify-center py-5 text-center">
+                  <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/8 text-blue-300/45">
+                    <Armchair size={22} />
+                  </span>
+                  <p className="text-sm font-medium text-white/70">Select seats from the map</p>
+                  <p className="mt-1 text-[11px] text-white/35">Prices are shown before you continue</p>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   {pickedSeats.map((seat) => (
-                    <div key={seat.seatId} className="flex items-center justify-between rounded-lg bg-white/[0.03] px-2.5 py-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => toggleSeat(seat.seatId)}
-                          className="flex h-5 w-5 items-center justify-center rounded-full text-white/40 hover:bg-[#e84545]/15 hover:text-[#e84545] transition-colors cursor-pointer">
-                          <X size={11} />
-                        </button>
-                        <span className="font-semibold text-white/90">
-                          {seat.row}{seat.number}
-                        </span>
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wide ${
+                    <div
+                      key={seat.seatId}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-white">
+                            {seat.seatCode?.trim() || `${seat.row}${seat.number}`}
+                          </span>
+                          <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
                           seat.type === "VIP"
                             ? "bg-[#60a5fa]/15 text-[#60a5fa]"
                             : seat.type === "COUPLE"
@@ -586,13 +617,25 @@ export default function SeatBookingPage() {
                             : seat.type === "ACCESSIBLE"
                             ? "bg-[#2dd4bf]/15 text-[#2dd4bf]"
                             : "bg-white/10 text-white/70"
-                        }`}>
-                          {seat.type}
-                        </span>
+                          }`}>
+                            {seat.type}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-[10px] text-white/35">Seat price</p>
                       </div>
-                      <span className="text-white/85 text-xs">
-                        {formatVND(seat.price)}
-                      </span>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="text-sm font-semibold tabular-nums text-white/85">
+                          {formatVND(seat.price)}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={`Remove seat ${seat.seatCode?.trim() || `${seat.row}${seat.number}`}`}
+                          onClick={() => toggleSeat(seat.seatId)}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg text-white/35 transition-colors hover:bg-red-500/10 hover:text-red-400 cursor-pointer"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -600,46 +643,15 @@ export default function SeatBookingPage() {
             </div>
 
             {pickedSeats.length > 0 && (
-              <div className="border-t border-white/10 px-5 py-4 space-y-3.5">
-                {/* Seat count chips */}
-                <div className="flex flex-wrap gap-1.5">
-                  {(() => {
-                    const vip = pickedSeats.filter((s) => s.type === "VIP").length;
-                    const couple = pickedSeats.filter((s) => s.type === "COUPLE").length;
-                    const accessible = pickedSeats.filter((s) => s.type === "ACCESSIBLE").length;
-                    const std = pickedSeats.length - vip - couple - accessible;
-                    return (
-                      <>
-                        {std > 0 && (
-                          <span className="rounded-full bg-white/[0.06] px-2.5 py-0.5 text-[11px] text-white/70">
-                            {std} Standard
-                          </span>
-                        )}
-                        {vip > 0 && (
-                          <span className="rounded-full bg-[#60a5fa]/12 px-2.5 py-0.5 text-[11px] text-[#60a5fa]">
-                            {vip} VIP
-                          </span>
-                        )}
-                        {couple > 0 && (
-                          <span className="rounded-full bg-[#c084fc]/12 px-2.5 py-0.5 text-[11px] text-[#c084fc]">
-                            {couple} Couple
-                          </span>
-                        )}
-                        {accessible > 0 && (
-                          <span className="rounded-full bg-[#2dd4bf]/12 px-2.5 py-0.5 text-[11px] text-[#2dd4bf]">
-                            {accessible} Accessible
-                          </span>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-
-                <div className="flex items-end justify-between">
-                  <span className="text-[10px] text-white/50 uppercase tracking-[0.15em]">
-                    Total · {pickedSeats.length} seat{pickedSeats.length !== 1 ? "s" : ""}
-                  </span>
-                  <span className="text-2xl font-bold text-[#60a5fa] drop-shadow-[0_0_14px_rgba(96,165,250,0.35)]">
+              <div className="space-y-4 border-t border-white/8 px-5 py-4">
+                <div className="flex items-end justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.13em] text-white/55">Total</p>
+                    <p className="mt-1 text-[11px] text-white/35">
+                      {pickedSeats.length} selected seat{pickedSeats.length !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                  <span className="text-[1.65rem] font-bold leading-none tabular-nums text-[#60a5fa]">
                     {formatVND(total)}
                   </span>
                 </div>
@@ -647,14 +659,17 @@ export default function SeatBookingPage() {
                 <button
                   onClick={handleConfirm}
                   disabled={screen === "confirming"}
-                  className="group flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#60a5fa] to-[#2563eb] py-3 text-base font-bold tracking-wide text-black shadow-[0_8px_26px_rgba(37,99,235,0.4)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_32px_rgba(37,99,235,0.55)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 cursor-pointer"
+                  className="group flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#60a5fa] to-[#2563eb] py-3 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(37,99,235,0.28)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(37,99,235,0.38)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 cursor-pointer"
                 >
                   {screen === "confirming" ? (
-                    <><Loader2 size={16} className="animate-spin" /> Confirming…</>
+                    <><Loader2 size={16} className="animate-spin" /> Reserving seats...</>
                   ) : (
-                    <>Confirm Booking <ChevronRight size={16} className="transition-transform group-hover:translate-x-0.5" /></>
+                    <>Continue <ChevronRight size={16} className="transition-transform group-hover:translate-x-0.5" /></>
                   )}
                 </button>
+                <p className="text-center text-[10px] leading-4 text-white/30">
+                  Seats are held for a limited time after you continue.
+                </p>
               </div>
             )}
           </div>

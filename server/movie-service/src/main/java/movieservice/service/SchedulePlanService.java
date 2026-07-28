@@ -20,11 +20,16 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 
 @Service
 @RequiredArgsConstructor
 public class SchedulePlanService {
+    private static final ZoneId DEFAULT_BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+
     private final SchedulePlanRepository schedulePlanRepository;
+    private final SchedulePlanRevalidationService revalidationService;
     private final AutoShowtimeCandidatePersistenceService persistenceService;
     private final SchedulingEligibilityService eligibilityService;
     private final SchedulingOperationalConstraintService operationalConstraintService;
@@ -47,12 +52,23 @@ public class SchedulePlanService {
                 .orElseThrow(() -> new AppException(MovieErrorCode.SCHEDULE_PLAN_NOT_FOUND)));
     }
 
+    @Transactional(readOnly = true)
+    public SchedulePlanResponse revalidate(Long planId, String actor) {
+        revalidationService.revalidate(planId, actor);
+        return toResponse(schedulePlanRepository.findDetailedById(planId)
+                .orElseThrow(() -> new AppException(MovieErrorCode.SCHEDULE_PLAN_NOT_FOUND)));
+    }
+
     @Transactional
     public SchedulePlanResponse submitReview(Long planId, String actor, String note) {
+        revalidationService.revalidate(planId, actor);
         SchedulePlan plan = loadForUpdate(planId);
         if (plan.getStatus() != SchedulePlanStatus.DRAFT_GENERATED
                 && plan.getStatus() != SchedulePlanStatus.CHANGES_REQUESTED) {
             throw new AppException(MovieErrorCode.SCHEDULE_PLAN_INVALID_TRANSITION);
+        }
+        if (plan.getBlockerCount() != null && plan.getBlockerCount() > 0) {
+            throw new AppException(MovieErrorCode.SCHEDULE_PLAN_REVIEW_BLOCKED);
         }
         validateCurrentEligibility(plan);
         plan.setStatus(SchedulePlanStatus.IN_REVIEW);
@@ -75,6 +91,7 @@ public class SchedulePlanService {
 
     @Transactional
     public SchedulePlanResponse publish(Long planId, String actor) {
+        revalidationService.revalidate(planId, actor);
         SchedulePlan plan = loadForUpdate(planId);
         if (plan.getStatus() == SchedulePlanStatus.PUBLISHED) {
             return toResponse(plan);
@@ -123,6 +140,8 @@ public class SchedulePlanService {
     }
 
     private ShowtimeCandidate toCandidate(SchedulePlanSlot slot) {
+        OffsetDateTime localStartAt = toBusinessOffset(slot, slot.getStartAt());
+        OffsetDateTime localEndAt = toBusinessOffset(slot, slot.getEndAt());
         return ShowtimeCandidate.builder()
                 .generationRunId(slot.getSchedulePlan().getGenerationRun().getGenerationRunId())
                 .movieId(slot.getMovie().getMovieId())
@@ -131,8 +150,8 @@ public class SchedulePlanService {
                 .formatId(slot.getScreeningVersion().getFormat().getFormatId())
                 .screeningVersionId(slot.getScreeningVersion().getScreeningVersionId())
                 .showDate(slot.getBusinessDate())
-                .startTime(slot.getStartAt().toLocalTime())
-                .endTime(slot.getEndAt().toLocalTime())
+                .startTime(localStartAt.toLocalTime())
+                .endTime(localEndAt.toLocalTime())
                 .startAt(slot.getStartAt())
                 .endAt(slot.getEndAt())
                 .generationReason(slot.getGenerationReason())
@@ -146,12 +165,16 @@ public class SchedulePlanService {
                 plan.getStatus().name(),
                 plan.getBlockerCount(),
                 plan.getValidationSummary(),
+                plan.getValidatedAt(),
+                plan.getValidatedBy(),
                 plan.getSlots().stream().map(this::toSlotResponse).toList(),
                 plan.getSubmittedAt(), plan.getSubmittedBy(),
                 plan.getPublishedAt(), plan.getPublishedBy(), plan.getReviewNote());
     }
 
     private SchedulePlanResponse.Slot toSlotResponse(SchedulePlanSlot slot) {
+        OffsetDateTime localStartAt = toBusinessOffset(slot, slot.getStartAt());
+        OffsetDateTime localEndAt = toBusinessOffset(slot, slot.getEndAt());
         return new SchedulePlanResponse.Slot(
                 slot.getSchedulePlanSlotId(),
                 slot.getMovie().getMovieId(),
@@ -164,11 +187,19 @@ public class SchedulePlanService {
                 slot.getScreeningVersion().getFormat().getFormatCode(),
                 slot.getScreeningVersion().getAudioLanguageCode(),
                 slot.getScreeningVersion().getSubtitleLanguageCode(),
-                slot.getBusinessDate(), slot.getStartAt(), slot.getEndAt(),
+                slot.getBusinessDate(), localStartAt, localEndAt,
                 slot.getBasePrice(), slot.getTotalSeats(),
                 slot.getGenerationReason() == null ? null : slot.getGenerationReason().name(),
                 toScoreBreakdown(slot),
                 slot.getPublishedShowtime() == null ? null : slot.getPublishedShowtime().getShowTimeId());
+    }
+
+    private OffsetDateTime toBusinessOffset(SchedulePlanSlot slot, OffsetDateTime value) {
+        String configuredZone = slot.getCinemaRoom().getCluster().getTimezone();
+        ZoneId businessZone = configuredZone == null || configuredZone.isBlank()
+                ? DEFAULT_BUSINESS_ZONE
+                : ZoneId.of(configuredZone);
+        return value.atZoneSameInstant(businessZone).toOffsetDateTime();
     }
 
     private SchedulePlanResponse.ScoreBreakdown toScoreBreakdown(SchedulePlanSlot slot) {

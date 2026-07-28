@@ -210,6 +210,26 @@ class MovieServiceTest {
         var response = movieService.getPublicMovieDetail(2L, null);
 
         assertEquals(2L, response.getMovieId());
+        assertEquals("COMING_SOON", response.getDisplayStatus(),
+                "OPEN availability alone must not claim that tickets are on sale");
+    }
+
+    @Test
+    void publicDetailIsNowShowingOnlyWhenAnOpenAvailabilityHasAFutureOnSaleShowtime() {
+        Movie approved = Movie.builder()
+                .movieId(7L)
+                .originalTitle("Actually On Sale")
+                .status(MovieStatus.APPROVED)
+                .build();
+        when(movieRepository.findById(7L)).thenReturn(java.util.Optional.of(approved));
+        when(movieAvailabilityRepository.findByMovie_MovieId(7L))
+                .thenReturn(List.of(availabilityFor(approved, AvailabilityStatus.OPEN, null)));
+        when(showTimeService.findNextSaleableShowTime(any(), any(), any(), any()))
+                .thenReturn(java.util.Optional.of(ShowTime.builder().showTimeId(70L).build()));
+
+        var response = movieService.getPublicMovieDetail(7L, null);
+
+        assertEquals("NOW_SHOWING", response.getDisplayStatus());
     }
 
     @Test

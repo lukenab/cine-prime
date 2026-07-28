@@ -42,6 +42,7 @@ class ShowtimeInventoryServiceTest {
     @Mock RoomLayoutRepository roomLayoutRepository;
     @Mock RoomLayoutPositionRepository roomLayoutPositionRepository;
     @Mock SeatRepository seatRepository;
+    @Mock PriceBookPricingService priceBookPricingService;
 
     @InjectMocks
     ShowtimeInventoryService service;
@@ -79,6 +80,9 @@ class ShowtimeInventoryServiceTest {
                 .findByRoomLayoutRoomLayoutIdOrderByRowIndexAscColumnIndexAsc(30L))
                 .thenReturn(positions);
         when(seatRepository.findByCinemaRoomCinemaRoomId(3L)).thenReturn(seats);
+        when(priceBookPricingService.resolve(showtime))
+                .thenReturn(PriceBookPricingService.PricingDecision.override(
+                        new BigDecimal("120000.00")));
         when(showtimeSeatRepository.saveAll(anyList()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
