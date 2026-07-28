@@ -50,7 +50,6 @@ public class MovieService {
     MovieMapper movieMapper;
     GenreRepository genreRepository;
     AgeRatingRepository ageRatingRepository;
-    ScreeningFormatRepository screeningFormatRepository;
     ProductionCompanyRepository productionCompanyRepository;
     PersonRepository personRepository;
     MovieCastRepository movieCastRepository;
@@ -96,15 +95,9 @@ public class MovieService {
         }
         movie.setGenres(genres);
 
-        // Screening formats
-        List<Integer> requestedFormatIds = request.getFormatIds() == null
-                ? List.of()
-                : request.getFormatIds().stream().distinct().toList();
-        List<ScreeningFormat> formats = screeningFormatRepository.findAllByFormatIdIn(requestedFormatIds);
-        if (formats.size() != requestedFormatIds.size()) {
-            throw new AppException(MovieErrorCode.FORMAT_NOT_FOUND);
-        }
-        movie.setFormats(formats);
+        // Screening formats: never set here - movie.formats is derived exclusively from
+        // MovieScreeningVersionService.ensureMovieFormatProjection() whenever a screening
+        // version is added. A brand-new draft legitimately starts with none.
 
         Movie saved = movieRepository.save(movie);
         upsertSchedulingProfile(saved, request.getPopularityScore(), request.getPriorityOverride());
@@ -433,14 +426,13 @@ public class MovieService {
             }
             movie.setGenres(genres);
         }
-        if (request.getFormatIds() != null) {
-            List<Integer> distinctFormatIds = request.getFormatIds().stream().distinct().collect(Collectors.toList());
-            List<ScreeningFormat> formats = screeningFormatRepository.findAllByFormatIdIn(distinctFormatIds);
-            if (formats.size() != distinctFormatIds.size()) {
-                throw new AppException(MovieErrorCode.FORMAT_NOT_FOUND);
-            }
-            movie.setFormats(formats);
-        }
+        // movie.formats is never written here - it's derived exclusively from
+        // MovieScreeningVersionService.ensureMovieFormatProjection(). This used to accept a
+        // formatIds field from the editor form and overwrite the whole list on every save,
+        // but the editor has no UI to manage it (formats are configured via the Screening
+        // Versions sub-form instead) - the form's stale, always-empty snapshot from page load
+        // silently wiped out real formats a screening version had just added, the moment the
+        // admin next saved the draft.
 
         // 4) Translations / cast - reconcile thay vi delete-all-then-insert.
         if (request.getTranslations() != null) {

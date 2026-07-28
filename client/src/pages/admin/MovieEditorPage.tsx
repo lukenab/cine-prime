@@ -88,7 +88,6 @@ type FormState = {
   priorityOverride: string;
   selectedCompanies: SelectedCompany[];
   genreIds: number[];
-  formatIds: number[];
   posterUrl: string;
   thumbnailUrl: string;
   trailerUrl: string;
@@ -114,7 +113,6 @@ const emptyForm: FormState = {
   priorityOverride: "",
   selectedCompanies: [],
   genreIds: [],
-  formatIds: [],
   posterUrl: "",
   thumbnailUrl: "",
   trailerUrl: "",
@@ -149,7 +147,6 @@ function movieToForm(mv: MovieResponse): FormState {
       companyId: c.companyId, name: c.name, country: c.country, logoUrl: c.logoUrl,
     })) ?? [],
     genreIds: mv.genres?.map((g) => g.genreId) ?? [],
-    formatIds: mv.formats?.map((f) => f.formatId) ?? [],
     posterUrl: mv.posterUrl ?? "",
     thumbnailUrl: mv.thumbnailUrl ?? "",
     trailerUrl: mv.trailerUrl ?? "",

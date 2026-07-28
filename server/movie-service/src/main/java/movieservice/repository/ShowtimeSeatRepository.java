@@ -19,16 +19,41 @@ public interface ShowtimeSeatRepository extends JpaRepository<ShowtimeSeat, Long
 
     Optional<ShowtimeSeat> findByShowTime_ShowTimeIdAndSeat_SeatId(Long showtimeId, Long seatId);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             SELECT s FROM ShowtimeSeat s
             WHERE s.showTime.showTimeId = :showtimeId
               AND s.showtimeSeatId IN :seatIds
             ORDER BY s.showtimeSeatId
             """)
-    List<ShowtimeSeat> findAllByShowtimeAndIdsForUpdate(
+    List<ShowtimeSeat> findAllByShowtimeAndIds(
             @Param("showtimeId") Long showtimeId,
             @Param("seatIds") List<Long> seatIds);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT s FROM ShowtimeSeat s
+            WHERE s.showTime.showTimeId = :showtimeId
+              AND (
+                    s.showtimeSeatId IN :seatIds
+                    OR (s.seatGroupId IS NOT NULL AND s.seatGroupId IN :seatGroupIds)
+              )
+            ORDER BY s.showtimeSeatId
+            """)
+    List<ShowtimeSeat> findSelectionForUpdate(
+            @Param("showtimeId") Long showtimeId,
+            @Param("seatIds") List<Long> seatIds,
+            @Param("seatGroupIds") List<String> seatGroupIds);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT s FROM ShowtimeSeat s
+            WHERE s.showTime.showTimeId = :showtimeId
+              AND s.holdId = :holdId
+            ORDER BY s.showtimeSeatId
+            """)
+    List<ShowtimeSeat> findByShowtimeAndHoldIdForUpdate(
+            @Param("showtimeId") Long showtimeId,
+            @Param("holdId") String holdId);
 
     @Query("""
             SELECT s FROM ShowtimeSeat s
@@ -48,6 +73,7 @@ public interface ShowtimeSeatRepository extends JpaRepository<ShowtimeSeat, Long
                SET s.status = movieservice.enums.ShowtimeSeatStatus.AVAILABLE,
                    s.reservedAt = NULL,
                    s.reservedExpiresAt = NULL,
+                   s.bookingId = NULL,
                    s.holdId = NULL,
                    s.reservedBy = NULL,
                    s.holdIdempotencyKey = NULL,

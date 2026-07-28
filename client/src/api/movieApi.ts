@@ -830,7 +830,6 @@ export type CreateMovieRequest = {
   /** Issue #151: all valid IDs are linked, not just one. */
   companyIds?: number[];
   genreIds: number[];
-  formatIds: number[];
   posterUrl?: string;
   thumbnailUrl?: string;
   trailerUrl?: string;

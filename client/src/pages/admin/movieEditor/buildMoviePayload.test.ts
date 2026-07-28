@@ -10,7 +10,6 @@ function baseForm(overrides: Partial<MoviePayloadFormFields> = {}): MoviePayload
     country: "South Korea",
     ageRatingId: 3,
     genreIds: [1],
-    formatIds: [1],
     posterUrl: "",
     thumbnailUrl: "",
     trailerUrl: "",
@@ -56,9 +55,9 @@ describe("buildMoviePayload", () => {
     expect(withoutOverride.priorityOverride).toBeUndefined();
   });
 
-  it("still builds translations, genres, formats and companies as before", () => {
+  it("still builds translations, genres and companies as before", () => {
     const payload = buildMoviePayload(
-      baseForm({ en_title: "Parasite", en_synopsis: "A poor family schemes...", genreIds: [1, 2], formatIds: [1, 2] }),
+      baseForm({ en_title: "Parasite", en_synopsis: "A poor family schemes...", genreIds: [1, 2] }),
       [10, 20],
       [{ personId: 1, roleType: "DIRECTOR" }],
     );
@@ -68,7 +67,12 @@ describe("buildMoviePayload", () => {
     ]);
     expect(payload.companyIds).toEqual([10, 20]);
     expect(payload.genreIds).toEqual([1, 2]);
-    expect(payload.formatIds).toEqual([1, 2]);
     expect(payload.cast).toEqual([{ personId: 1, roleType: "DIRECTOR" }]);
+  });
+
+  it("never includes formatIds in the payload - movie.formats is derived from screening versions", () => {
+    const payload = buildMoviePayload(baseForm(), [], []);
+
+    expect(payload).not.toHaveProperty("formatIds");
   });
 });

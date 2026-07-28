@@ -41,7 +41,6 @@ class MovieServiceTest {
     @Mock MovieMapper movieMapper;
     @Mock GenreRepository genreRepository;
     @Mock AgeRatingRepository ageRatingRepository;
-    @Mock ScreeningFormatRepository screeningFormatRepository;
     @Mock ProductionCompanyRepository productionCompanyRepository;
     @Mock PersonRepository personRepository;
     @Mock MovieCastRepository movieCastRepository;
@@ -63,7 +62,7 @@ class MovieServiceTest {
     void setUp() {
         movieService = new MovieService(
                 movieRepository, movieMapper, genreRepository, ageRatingRepository,
-                screeningFormatRepository, productionCompanyRepository, personRepository,
+                productionCompanyRepository, personRepository,
                 movieCastRepository, movieTranslationRepository, cinemaRoomService,
                 showTimeService, auditLogService, imageStorageService, movieReadinessValidator,
                 movieAvailabilityRepository, movieStatusHistoryRepository,
@@ -85,12 +84,12 @@ class MovieServiceTest {
     void nullCollectionsAndNullFkDoNotTouchAnyRelationshipRepository() {
         UpdateMovieRequest request = UpdateMovieRequest.builder()
                 .originalTitle("Only scalar changed")
-                .build(); // ageRatingId, companyIds, genreIds, formatIds, translations, cast: null
+                .build(); // ageRatingId, companyIds, genreIds, translations, cast: null
 
         movieService.updateMovie(1L, request);
 
         verifyNoInteractions(ageRatingRepository, productionCompanyRepository,
-                genreRepository, screeningFormatRepository,
+                genreRepository,
                 movieCastRepository, movieTranslationRepository, personRepository);
     }
 

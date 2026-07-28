@@ -13,7 +13,6 @@ export type MoviePayloadFormFields = {
   country: string;
   ageRatingId: number | null;
   genreIds: number[];
-  formatIds: number[];
   posterUrl: string;
   thumbnailUrl: string;
   trailerUrl: string;
@@ -39,6 +38,12 @@ export type MoviePayloadFormFields = {
  * availability/showtime workflow, not core content metadata. Never sending it here - not even
  * as `undefined`/`null` - means editing any other field can never clear an exhibition end date
  * already set on the backend (a partial update omits absent fields rather than nulling them).
+ *
+ * Also deliberately has no `formatIds` field: movie.formats is derived exclusively from
+ * MovieScreeningVersionService.ensureMovieFormatProjection() whenever a screening version is
+ * added (see the Screening Versions sub-form), never edited directly here. Sending a stale
+ * formatIds snapshot on every save used to silently wipe out formats a screening version had
+ * just added, since the backend historically treated a present-but-empty array as "clear all".
  */
 export function buildMoviePayload(
   sourceForm: MoviePayloadFormFields,
@@ -74,7 +79,6 @@ export function buildMoviePayload(
     ageRatingId: sourceForm.ageRatingId ?? undefined,
     companyIds: resolvedCompanyIds,
     genreIds: sourceForm.genreIds,
-    formatIds: sourceForm.formatIds,
     posterUrl: sourceForm.posterUrl.trim() || undefined,
     thumbnailUrl: sourceForm.thumbnailUrl.trim() || undefined,
     trailerUrl: sourceForm.trailerUrl.trim() || undefined,
