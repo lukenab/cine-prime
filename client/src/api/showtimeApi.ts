@@ -29,6 +29,9 @@ export interface ShowtimeResponse {
   cancellationReason?: string;
   price?: number;        // lowest active seat price in the room — "from X" display
   basePrice?: number;
+  priceSource?: 'SHOWTIME_OVERRIDE' | 'PRICE_BOOK' | 'ROOM_DEFAULT';
+  priceBookId?: number;
+  priceRateId?: number;
   updatedAt?: string;
 }
 
@@ -218,6 +221,8 @@ export interface SchedulePlanResponse {
   status: SchedulePlanStatus;
   blockerCount: number;
   validationSummary?: string;
+  validatedAt?: string;
+  validatedBy?: string;
   slots: SchedulePlanSlot[];
   submittedAt?: string;
   submittedBy?: string;
@@ -416,6 +421,9 @@ export const showtimeApi = {
 
   submitSchedulePlanReview: (id: number, note?: string) =>
     axiosClient.post(`/api/schedule-plans/${id}/submit-review`, { note }) as Promise<ApiWrapper<SchedulePlanResponse>>,
+
+  revalidateSchedulePlan: (id: number) =>
+    axiosClient.post(`/api/schedule-plans/${id}/revalidate`) as Promise<ApiWrapper<SchedulePlanResponse>>,
 
   requestSchedulePlanChanges: (id: number, note?: string) =>
     axiosClient.post(`/api/schedule-plans/${id}/request-changes`, { note }) as Promise<ApiWrapper<SchedulePlanResponse>>,

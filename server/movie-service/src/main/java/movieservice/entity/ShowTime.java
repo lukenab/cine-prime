@@ -5,6 +5,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 import movieservice.enums.GenerationReason;
 import movieservice.enums.ShowTimeStatus;
+import movieservice.enums.ShowtimePriceSource;
 import movieservice.enums.ShowtimeSource;
 
 import java.math.BigDecimal;
@@ -75,6 +76,19 @@ public class ShowTime {
     BigDecimal basePrice;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "price_source", nullable = false, length = 30)
+    @Builder.Default
+    ShowtimePriceSource priceSource = ShowtimePriceSource.ROOM_DEFAULT;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "price_book_id")
+    PriceBook priceBook;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "price_rate_id")
+    PriceRate priceRate;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
     ShowTimeStatus status = ShowTimeStatus.SCHEDULED;
@@ -132,6 +146,7 @@ public class ShowTime {
         if (soldSeats == null) soldSeats = 0;
         if (languageCode == null) languageCode = "vi";
         if (source == null) source = ShowtimeSource.MANUAL;
+        if (priceSource == null) priceSource = ShowtimePriceSource.ROOM_DEFAULT;
     }
 
     @PreUpdate

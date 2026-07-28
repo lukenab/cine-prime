@@ -46,6 +46,7 @@ import ManagePersonsPage from "../pages/admin/ManagePersonsPage";
 import ManageAgeRatingsPage from "../pages/admin/ManageAgeRatingsPage";
 import ManageFormatsPage from "../pages/admin/ManageFormatsPage";
 import ManageScreeningVersionsPage from "../pages/admin/ManageScreeningVersionsPage";
+import ManagePriceBooksPage from "../pages/admin/ManagePriceBooksPage";
 import ManageCompaniesPage from "../pages/admin/ManageCompaniesPage";
 import ManagePromotionPage from "../pages/admin/ManagePromotionPage";
 import CreatePromotionPage from "../pages/admin/CreatePromotionPage";
@@ -110,6 +111,7 @@ export default function AppRoutes() {
 
           <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN"]} />}>
             <Route path="showtimes/auto"     element={<AutoScheduleWorkspacePage />} />
+            <Route path="price-books"        element={<ManagePriceBooksPage />} />
             <Route path="employees"          element={<ManageEmployeePage />} />
             <Route path="employees/create"   element={<CreateEmployeePage />} />
             <Route path="employees/:id"      element={<EmployeeDetailPage />} />

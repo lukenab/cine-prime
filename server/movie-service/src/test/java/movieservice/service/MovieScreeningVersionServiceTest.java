@@ -80,6 +80,33 @@ class MovieScreeningVersionServiceTest {
     }
 
     @Test
+    void createBulkCreatesAllRequestedFormatsWithSharedDeliveryMetadata() {
+        ScreeningFormat twoD = format(1, "2D");
+        ScreeningFormat imax = format(2, "IMAX");
+        AudioFormat audioFormat = audioFormat(3, "DOLBY_5_1");
+        Movie movie = movie(twoD);
+
+        when(movieRepository.findById(10L)).thenReturn(Optional.of(movie));
+        when(screeningFormatRepository.findById(1)).thenReturn(Optional.of(twoD));
+        when(screeningFormatRepository.findById(2)).thenReturn(Optional.of(imax));
+        when(audioFormatRepository.findByAudioFormatIdAndActiveTrue(3))
+                .thenReturn(Optional.of(audioFormat));
+        when(versionRepository.findByMovie_MovieId(10L)).thenReturn(List.of());
+        when(versionRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<MovieScreeningVersionResponse> result = service.createBulk(
+                10L,
+                List.of(
+                        new MovieScreeningVersionRequest(1, 3, "ja", "vi", null, null),
+                        new MovieScreeningVersionRequest(2, 3, "ja", "vi", null, null)
+                )
+        );
+
+        assertEquals(2, result.size());
+        verify(versionRepository, org.mockito.Mockito.times(2)).saveAndFlush(any());
+    }
+
+    @Test
     void updateRejectsIdentityRewriteAfterVersionIsReferenced() {
         ScreeningFormat format = format(1, "2D");
         AudioFormat audioFormat = audioFormat(1, "DOLBY_5_1");

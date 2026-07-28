@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Flame, Calendar, RefreshCw } from "lucide-react";
 import { MovieCard, Movie } from "../../layouts/MovieCard";
 import type { MovieApiResponse } from "../../api/movieApi";
-import { CustomerMovieDetailModal } from "./CustomerMovieDetailModal";
+import { TrailerModal } from "./TrailerModal";
 
 type Props = {
   movies: MovieApiResponse[];
@@ -31,12 +31,12 @@ function toCardMovie(movie: MovieApiResponse, comingSoon: boolean): Movie {
     id: movie.movieId,
     title: movie.movieNameEnglish || movie.movieNameVn || "Untitled Movie",
     genre: movie.movieType?.[0] || "Cinema",
-    rating: Number((Math.random() * (9.5 - 7.5) + 7.5).toFixed(1)),
     duration: formatDuration(movie.duration),
     image: movie.largeImage || movie.smallImage,
     badge: comingSoon ? undefined : (movie.movieId % 2 === 0 ? "NEW" : "HOT"),
     badgeColor: movie.movieId % 2 === 0 ? "#8A2BE2" : "#FF4500",
-    releaseLabel: comingSoon ? formatReleaseDate(movie.showTimes?.[0]?.showDate as string) : undefined,
+    releaseLabel: comingSoon ? formatReleaseDate(movie.releaseDate) : undefined,
+    trailerUrl: movie.trailerUrl,
   };
 }
 
@@ -48,7 +48,7 @@ const TABS: { key: TabKey; label: string }[] = [
 export function MovieShowcase({ movies, loading = false, error = "" }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<TabKey>("now-showing");
-  const [selectedMovieId, setSelectedMovieId] = useState<number | null>(null);
+  const [trailerMovie, setTrailerMovie] = useState<MovieApiResponse | null>(null);
 
   const nowShowing = useMemo(() => movies.filter((m) => m.displayStatus === "NOW_SHOWING"), [movies]);
   const comingSoon = useMemo(() => movies.filter((m) => m.displayStatus === "COMING_SOON"), [movies]);
@@ -72,16 +72,12 @@ export function MovieShowcase({ movies, loading = false, error = "" }: Props) {
           <div className="flex items-center gap-3">
             <div
               className="flex items-center justify-center w-9 h-9 rounded-xl"
-              style={
-                tab === "now-showing"
-                  ? { backgroundColor: "rgba(255,69,0,0.15)", border: "1px solid rgba(255,69,0,0.25)" }
-                  : { backgroundColor: "rgba(138,43,226,0.15)", border: "1px solid rgba(138,43,226,0.3)" }
-              }
+              style={{ backgroundColor: "rgba(37,99,235,0.16)", border: "1px solid rgba(96,165,250,0.3)" }}
             >
               {tab === "now-showing" ? (
-                <Flame size={18} style={{ color: "#FF4500" }} />
+                <Flame size={18} style={{ color: "#60A5FA" }} />
               ) : (
-                <Calendar size={18} style={{ color: "#8A2BE2" }} />
+                <Calendar size={18} style={{ color: "#60A5FA" }} />
               )}
             </div>
             <div>
@@ -108,7 +104,7 @@ export function MovieShowcase({ movies, loading = false, error = "" }: Props) {
                   className="rounded-full px-4 py-1.5 text-[13px] font-semibold transition-all duration-200 cursor-pointer"
                   style={
                     tab === t.key
-                      ? { background: "linear-gradient(135deg, #FFD700, #FFA500)", color: "#050505" }
+                      ? { background: "linear-gradient(135deg, #2563EB, #3B82F6)", color: "#FFFFFF" }
                       : { color: "rgba(255,255,255,0.55)" }
                   }
                 >
@@ -128,7 +124,7 @@ export function MovieShowcase({ movies, loading = false, error = "" }: Props) {
               <button
                 onClick={() => scroll("right")}
                 className="flex items-center justify-center w-10 h-10 rounded-full transition-all duration-200 hover:scale-110"
-                style={{ background: "linear-gradient(135deg, #FFD700, #FFA500)", color: "#050505" }}
+                style={{ background: "linear-gradient(135deg, #2563EB, #3B82F6)", color: "#FFFFFF" }}
               >
                 <ChevronRight size={18} />
               </button>
@@ -163,14 +159,14 @@ export function MovieShowcase({ movies, loading = false, error = "" }: Props) {
               <MovieCard
                 key={movie.id}
                 movie={movie}
-                onBook={() => setSelectedMovieId(visibleMovies[index].movieId)}
+                onTrailer={() => setTrailerMovie(visibleMovies[index])}
               />
             ))}
           </div>
         )}
       </div>
 
-      <CustomerMovieDetailModal movieId={selectedMovieId} onClose={() => setSelectedMovieId(null)} />
+      <TrailerModal movie={trailerMovie} onClose={() => setTrailerMovie(null)} />
     </section>
   );
 }

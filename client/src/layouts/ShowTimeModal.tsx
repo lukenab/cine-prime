@@ -1,5 +1,5 @@
 import { X, CalendarClock, AlertCircle, RefreshCw } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import {
   type ShowtimeResponse,
   type ShowtimeAssignPayload,
@@ -152,10 +152,7 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime, presetMovie
   };
 
   // For the "end time calculated automatically" hint
-  const selectedMovie = useMemo(
-    () => movies.find((m) => m.movieId === form.movieId),
-    [movies, form.movieId]
-  );
+  const selectedMovie = movies.find((m) => m.movieId === form.movieId);
   const canEditPrice = !editShowtime || editShowtime.status === "SCHEDULED";
   const basePrice = Number(form.basePrice);
   const pricePreview = Number.isFinite(basePrice) && basePrice > 0
@@ -175,11 +172,11 @@ export function ShowtimeModal({ open, onClose, onSave, editShowtime, presetMovie
 
   // Narrow the room picker to the deep-linked cluster (new showtimes only); fall back to
   // every schedulable room if that cluster happens to have none.
-  const roomsForSelect = useMemo(() => {
+  const roomsForSelect = (() => {
     if (editShowtime || !presetClusterId) return rooms;
     const clusterRooms = rooms.filter((r) => r.clusterId === presetClusterId);
     return clusterRooms.length > 0 ? clusterRooms : rooms;
-  }, [rooms, presetClusterId, editShowtime]);
+  })();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">

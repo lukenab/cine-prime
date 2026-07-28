@@ -87,6 +87,25 @@ public class MovieScreeningVersionService {
         return toResponse(saved);
     }
 
+    /**
+     * Creates a reviewed set of delivery versions as one unit. This is used by
+     * the editor's recommended-setup action so operators do not need to submit
+     * the same language/audio metadata once per presentation format.
+     *
+     * <p>The transaction is intentionally owned by this method: if one
+     * combination is invalid or duplicated, none of the requested versions is
+     * retained.</p>
+     */
+    @Transactional
+    public List<MovieScreeningVersionResponse> createBulk(
+            Long movieId,
+            List<MovieScreeningVersionRequest> requests
+    ) {
+        return requests.stream()
+                .map(request -> create(movieId, request))
+                .toList();
+    }
+
     @Transactional
     public MovieScreeningVersionResponse update(
             Long movieId,

@@ -52,10 +52,10 @@ class FlywayMigrationIntegrationTest {
         MigrateResult result = flywayFor(FRESH_DB).migrate();
 
         assertTrue(result.success);
-        // V1..V10, V12..V46 (versioned - V11 is reserved on a sibling branch not yet merged)
+        // V1..V10, V12..V49 (versioned - V11 is reserved on a sibling branch not yet merged)
         // + R (repeatable seed) all actually executed — a fresh DB has no prior state for
         // baselineOnMigrate to kick in on.
-        assertEquals(46, result.migrationsExecuted);
+        assertEquals(49, result.migrationsExecuted);
 
         try (Connection conn = DriverManager.getConnection(
                 FRESH_DB.getJdbcUrl(), FRESH_DB.getUsername(), FRESH_DB.getPassword());
@@ -66,15 +66,19 @@ class FlywayMigrationIntegrationTest {
             assertTrue(tableExists(st, "movie_availability"));
             assertTrue(tableExists(st, "auditorium_class"));
             assertTrue(tableExists(st, "showtime_daypart_policy"));
+            assertTrue(tableExists(st, "price_book"));
+            assertTrue(tableExists(st, "price_rate"));
             assertFalse(tableExists(st, "type"), "legacy 'type' table must never be created fresh");
             try (ResultSet rs = st.executeQuery("""
-                    SELECT COUNT(*)
+                    SELECT COUNT(*), BOOL_AND(is_nullable = 'NO') AS required
                     FROM information_schema.columns
                     WHERE table_name = 'movie_screening_version'
                       AND column_name = 'audio_format_id'
                     """)) {
                 rs.next();
                 assertEquals(1, rs.getInt(1), "screening versions must store audio format separately");
+                assertTrue(rs.getBoolean("required"),
+                        "screening-version audio must be required after the legacy backfill");
             }
             try (ResultSet rs = st.executeQuery("""
                     SELECT COUNT(*)

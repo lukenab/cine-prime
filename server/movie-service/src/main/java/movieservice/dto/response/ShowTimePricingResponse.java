@@ -40,4 +40,10 @@ public class ShowTimePricingResponse {
 
     /** Giá vé tổng quát cho suất chiếu — null nếu dùng giá ghế mặc định. */
     BigDecimal basePrice;
+
+    String priceSource;
+
+    Long priceBookId;
+
+    Long priceRateId;
 }

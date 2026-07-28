@@ -10,6 +10,7 @@ import movieservice.entity.ShowtimeGenerationRun;
 import movieservice.enums.GenerationReason;
 import movieservice.enums.GenerationSkipReason;
 import movieservice.enums.ShowTimeStatus;
+import movieservice.enums.ShowtimePriceSource;
 import movieservice.enums.ShowtimeSource;
 import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.MovieRepository;
@@ -17,8 +18,8 @@ import movieservice.repository.MovieScreeningVersionRepository;
 import movieservice.repository.ScreeningFormatRepository;
 import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeGenerationRunRepository;
+import movieservice.service.PriceBookPricingService;
 import movieservice.service.ShowtimeInventoryService;
-import movieservice.service.ShowtimePriceResolver;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +36,7 @@ public class AutoShowtimeCandidatePersistenceService {
     private final ShowtimeGenerationRunRepository generationRunRepository;
     private final ShowTimeRepository showTimeRepository;
     private final SchedulingOperationalConstraintService operationalConstraintService;
+    private final PriceBookPricingService priceBookPricingService;
     private final ShowtimeInventoryService showtimeInventoryService;
 
     /// Mỗi candidate chạy transaction độc lập để conflict của một suất không rollback cả generation run.
@@ -106,7 +108,7 @@ public class AutoShowtimeCandidatePersistenceService {
                 .languageCode(screeningVersion.getAudioLanguageCode())
                 .subtitleCode(screeningVersion.getSubtitleLanguageCode())
                 /// Không hardcode giá; lấy base seat price thấp nhất đã cấu hình trong room.
-                .basePrice(ShowtimePriceResolver.resolveRoomStandardBasePrice(room))
+                .priceSource(ShowtimePriceSource.ROOM_DEFAULT)
                 .totalSeats(room.getTotalSeatCapacity())
                 .status(ShowTimeStatus.SCHEDULED)
                 .source(ShowtimeSource.AUTO)
@@ -115,6 +117,17 @@ public class AutoShowtimeCandidatePersistenceService {
                 .createdBy("AUTO_SCHEDULER")
                 .updatedBy("AUTO_SCHEDULER")
                 .build();
+
+        // Resolve commercial pricing before the first INSERT. The database keeps
+        // show_time.base_price NOT NULL, while materialization happens only after
+        // the showtime has been persisted.
+        PriceBookPricingService.PricingDecision pricing =
+                priceBookPricingService.resolveForSlot(
+                        room,
+                        candidate.getShowDate(),
+                        candidate.getStartTime(),
+                        format);
+        priceBookPricingService.applyDecision(showTime, pricing);
 
         /// saveAndFlush để DB exclusion constraint phát hiện race condition ngay tại candidate này.
         ShowTime persisted = showTimeRepository.saveAndFlush(showTime);

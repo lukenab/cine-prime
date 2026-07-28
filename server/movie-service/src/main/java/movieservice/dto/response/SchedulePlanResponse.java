@@ -12,6 +12,8 @@ public record SchedulePlanResponse(
         String status,
         Integer blockerCount,
         String validationSummary,
+        LocalDateTime validatedAt,
+        String validatedBy,
         List<Slot> slots,
         LocalDateTime submittedAt,
         String submittedBy,

@@ -19,6 +19,7 @@ public interface MovieScreeningVersionRepository extends JpaRepository<MovieScre
             LEFT JOIN FETCH version.audioFormat
             WHERE version.movie.movieId = :movieId
               AND version.status = :status
+              AND version.audioFormat IS NOT NULL
               AND (version.effectiveFrom IS NULL OR version.effectiveFrom <= :businessDate)
               AND (version.effectiveTo IS NULL OR version.effectiveTo >= :businessDate)
             ORDER BY version.screeningVersionId

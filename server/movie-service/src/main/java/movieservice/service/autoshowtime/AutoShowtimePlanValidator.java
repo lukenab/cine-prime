@@ -2,9 +2,11 @@ package movieservice.service.autoshowtime;
 
 import lombok.RequiredArgsConstructor;
 import movieservice.entity.CinemaClusterDemandProfile;
+import movieservice.entity.ShowTime;
 import movieservice.entity.ShowtimeAllocationPolicy;
 import movieservice.entity.ShowtimeGenerationRun;
 import movieservice.repository.CinemaClusterDemandProfileRepository;
+import movieservice.repository.ShowTimeRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -13,12 +15,14 @@ import java.util.stream.Collectors;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
+import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
 public class AutoShowtimePlanValidator {
     private final CinemaClusterDemandProfileRepository profileRepository;
     private final SchedulingOperationalConstraintService operationalConstraintService;
+    private final ShowTimeRepository showTimeRepository;
 
     public AutoShowtimePlanValidationResult validate(
             ShowtimeGenerationRun run,
@@ -30,6 +34,10 @@ public class AutoShowtimePlanValidator {
                 .collect(Collectors.groupingBy(Key::from, Collectors.counting()));
         Set<Key> expectedKeys = eligibleCandidates.stream().map(Key::from)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<Key, Long> existingCount = loadExistingCoverage(eligibleCandidates, expectedKeys);
+
+        validateSelectedCandidatesStillEligible(
+                eligibleCandidates, selectedCandidates, blockers);
 
         for (Key key : expectedKeys) {
             Optional<CinemaClusterDemandProfile> profile = profileRepository.findByCluster_ClusterId(key.clusterId());
@@ -37,7 +45,8 @@ public class AutoShowtimePlanValidator {
             int required = Math.min(
                     Math.max(policy.getMinimumCoverage(), profile.get().getMinDailyShows()),
                     profile.get().getMaxDailyShowsPerMovie());
-            long actual = selectedCount.getOrDefault(key, 0L);
+            long actual = selectedCount.getOrDefault(key, 0L)
+                    + existingCount.getOrDefault(key, 0L);
             if (actual < required) {
                 blockers.add("MINIMUM_COVERAGE: movie=%d cluster=%d date=%s required=%d actual=%d"
                         .formatted(key.movieId(), key.clusterId(), key.date(), required, actual));
@@ -72,6 +81,71 @@ public class AutoShowtimePlanValidator {
         validateConcurrentRoomShare(policy, eligibleCandidates, selectedCandidates, blockers);
         validateSameMovieStagger(policy, selectedCandidates, blockers);
         return new AutoShowtimePlanValidationResult(blockers);
+    }
+
+    /**
+     * Existing committed sessions are part of the final schedule, not a coverage
+     * deficit. They are already removed from candidate generation as hard room
+     * constraints; counting them here prevents false MINIMUM_COVERAGE blockers.
+     */
+    private Map<Key, Long> loadExistingCoverage(
+            List<ShowtimeCandidate> eligibleCandidates,
+            Set<Key> expectedKeys
+    ) {
+        if (eligibleCandidates.isEmpty() || expectedKeys.isEmpty()) {
+            return Map.of();
+        }
+
+        List<Long> roomIds = eligibleCandidates.stream()
+                .map(ShowtimeCandidate::getCinemaRoomId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (roomIds.isEmpty()) {
+            return Map.of();
+        }
+
+        LocalDate fromDate = expectedKeys.stream()
+                .map(Key::date)
+                .min(LocalDate::compareTo)
+                .orElseThrow();
+        LocalDate toDate = expectedKeys.stream()
+                .map(Key::date)
+                .max(LocalDate::compareTo)
+                .orElseThrow();
+
+        return showTimeRepository.findActiveByRoomsAndDateRange(roomIds, fromDate, toDate).stream()
+                .map(AutoShowtimePlanValidator::keyFrom)
+                .filter(expectedKeys::contains)
+                .collect(Collectors.groupingBy(key -> key, Collectors.counting()));
+    }
+
+    private static Key keyFrom(ShowTime showtime) {
+        return new Key(
+                showtime.getMovie().getMovieId(),
+                showtime.getCinemaRoom().getCluster().getClusterId(),
+                showtime.getShowDate());
+    }
+
+    private void validateSelectedCandidatesStillEligible(
+            List<ShowtimeCandidate> eligibleCandidates,
+            List<ShowtimeCandidate> selectedCandidates,
+            List<String> blockers
+    ) {
+        Set<CandidateKey> eligibleKeys = eligibleCandidates.stream()
+                .map(CandidateKey::from)
+                .collect(Collectors.toSet());
+        selectedCandidates.stream()
+                .filter(candidate -> !eligibleKeys.contains(CandidateKey.from(candidate)))
+                .map(candidate -> "SLOT_NO_LONGER_ELIGIBLE: movie=%d cluster=%d room=%d version=%d start=%s"
+                        .formatted(
+                                candidate.getMovieId(),
+                                candidate.getClusterId(),
+                                candidate.getCinemaRoomId(),
+                                candidate.getScreeningVersionId(),
+                                candidate.temporalStartAt()))
+                .distinct()
+                .forEach(blockers::add);
     }
 
     private void validateConcurrentRoomShare(
@@ -159,6 +233,25 @@ public class AutoShowtimePlanValidator {
     private record ClusterDayKey(Long clusterId, LocalDate date) {
         static ClusterDayKey from(ShowtimeCandidate candidate) {
             return new ClusterDayKey(candidate.getClusterId(), candidate.getShowDate());
+        }
+    }
+
+    private record CandidateKey(
+            Long movieId,
+            Long clusterId,
+            Long cinemaRoomId,
+            Long screeningVersionId,
+            Instant startAt,
+            Instant endAt
+    ) {
+        static CandidateKey from(ShowtimeCandidate candidate) {
+            return new CandidateKey(
+                    candidate.getMovieId(),
+                    candidate.getClusterId(),
+                    candidate.getCinemaRoomId(),
+                    candidate.getScreeningVersionId(),
+                    candidate.temporalStartAt().toInstant(),
+                    candidate.temporalEndAt().toInstant());
         }
     }
 }

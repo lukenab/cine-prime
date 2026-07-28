@@ -189,15 +189,29 @@ public class MovieService {
                 .collect(Collectors.toList());
 
         Map<Long, Movie> movieById = new LinkedHashMap<>();
-        Map<Long, Boolean> anyOpenByMovie = new LinkedHashMap<>();
+        Map<Long, Boolean> anySaleableByMovie = new LinkedHashMap<>();
         for (MovieAvailability a : relevant) {
             Long movieId = a.getMovie().getMovieId();
             movieById.putIfAbsent(movieId, a.getMovie());
-            anyOpenByMovie.merge(movieId, a.getStatus() == AvailabilityStatus.OPEN, (existing, isOpen) -> existing || isOpen);
+            boolean saleableAtCluster = a.getStatus() == AvailabilityStatus.OPEN
+                    && showTimeService.findNextSaleableShowTime(
+                            movieId,
+                            a.getCluster().getClusterId(),
+                            today,
+                            now
+                    ).isPresent();
+            anySaleableByMovie.merge(
+                    movieId,
+                    saleableAtCluster,
+                    (existing, saleable) -> existing || saleable
+            );
         }
 
         return movieById.values().stream()
-                .map(movie -> toPublicMovieResponse(movie, Boolean.TRUE.equals(anyOpenByMovie.get(movie.getMovieId()))))
+                .map(movie -> toPublicMovieResponse(
+                        movie,
+                        Boolean.TRUE.equals(anySaleableByMovie.get(movie.getMovieId()))
+                ))
                 .collect(Collectors.toList());
     }
 
@@ -231,8 +245,16 @@ public class MovieService {
         if (clusterId != null) {
             response = toPublicMovieResponse(movie, clusterId, visible.get(0), today, now);
         } else {
-            boolean anyOpen = visible.stream().anyMatch(a -> a.getStatus() == AvailabilityStatus.OPEN);
-            response = toPublicMovieResponse(movie, anyOpen);
+            boolean anySaleable = visible.stream().anyMatch(a ->
+                    a.getStatus() == AvailabilityStatus.OPEN
+                            && showTimeService.findNextSaleableShowTime(
+                                    movieId,
+                                    a.getCluster().getClusterId(),
+                                    today,
+                                    now
+                            ).isPresent()
+            );
+            response = toPublicMovieResponse(movie, anySaleable);
         }
         applyDetailFields(response, movie);
         return response;
@@ -278,6 +300,7 @@ public class MovieService {
                 .trailerUrl(movie.getTrailerUrl())
                 .synopsis(movie.getSynopsis())
                 .durationMinutes(movie.getDurationMinutes())
+                .releaseDate(movie.getReleaseDate())
                 .genres(mapGenres(movie))
                 .displayStatus(nowShowing ? "NOW_SHOWING" : "COMING_SOON")
                 .clusterId(clusterId)
@@ -288,7 +311,7 @@ public class MovieService {
     }
 
     /** Aggregate-discovery variant (no clusterId) — see findAllPublic javadoc. */
-    private PublicMovieResponse toPublicMovieResponse(Movie movie, boolean anyClusterOpen) {
+    private PublicMovieResponse toPublicMovieResponse(Movie movie, boolean anyClusterSaleable) {
         return PublicMovieResponse.builder()
                 .movieId(movie.getMovieId())
                 .originalTitle(movie.getOriginalTitle())
@@ -297,8 +320,9 @@ public class MovieService {
                 .trailerUrl(movie.getTrailerUrl())
                 .synopsis(movie.getSynopsis())
                 .durationMinutes(movie.getDurationMinutes())
+                .releaseDate(movie.getReleaseDate())
                 .genres(mapGenres(movie))
-                .displayStatus(anyClusterOpen ? "NOW_SHOWING" : "COMING_SOON")
+                .displayStatus(anyClusterSaleable ? "NOW_SHOWING" : "COMING_SOON")
                 .bookingAvailable(false)
                 .build();
     }
