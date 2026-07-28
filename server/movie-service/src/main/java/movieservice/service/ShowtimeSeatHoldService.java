@@ -4,26 +4,30 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import lombok.experimental.NonFinal;
 import movie.theater.common.exception.AppException;
+import movieservice.config.SeatHoldProperties;
 import movieservice.dto.request.ConfirmShowtimeSeatHoldRequest;
 import movieservice.dto.request.HoldShowtimeSeatsRequest;
 import movieservice.dto.response.HeldShowtimeSeatResponse;
+import movieservice.dto.response.SeatHoldPolicyResponse;
 import movieservice.dto.response.ShowtimeSeatHoldMutationResponse;
 import movieservice.dto.response.ShowtimeSeatHoldResponse;
 import movieservice.entity.ShowTime;
 import movieservice.entity.ShowtimeSeat;
+import movieservice.enums.SeatHoldChannel;
+import movieservice.enums.SeatInventoryEventType;
 import movieservice.enums.ShowTimeStatus;
 import movieservice.enums.ShowtimeSeatStatus;
 import movieservice.exception.MovieErrorCode;
@@ -42,24 +46,26 @@ import movieservice.repository.ShowtimeSeatRepository;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ShowtimeSeatHoldService {
 
-    private static final int MAX_SEATS_PER_HOLD = 8;
     private static final String NO_SEAT_GROUP_SENTINEL = "__NO_SEAT_GROUP__";
 
     ShowTimeRepository showTimeRepository;
     ShowtimeSeatRepository showtimeSeatRepository;
     Clock clock;
-
-    @NonFinal
-    @Value("${showtime.seat-hold.ttl-seconds:600}")
-    long holdTtlSeconds;
+    SeatHoldProperties properties;
+    SeatHoldRateLimitService rateLimitService;
+    SeatHoldMetrics metrics;
+    SeatInventoryOutboxService outboxService;
 
     @Transactional
     public ShowtimeSeatHoldResponse hold(
             Long showtimeId,
             HoldShowtimeSeatsRequest request,
             String ownerId,
-            String idempotencyKey) {
+            String idempotencyKey,
+            SeatHoldChannel channel,
+            String clientIp) {
         validateIdentity(ownerId, idempotencyKey);
+        rateLimitService.check(ownerId, clientIp, showtimeId);
         List<Long> requestedIds = normalizeSeatIds(request);
 
         ShowTime showtime = showTimeRepository.findByIdForUpdate(showtimeId)
@@ -98,12 +104,13 @@ public class ShowtimeSeatHoldService {
                 clearExpiredHold(seat);
             }
             if (seat.getStatus() != ShowtimeSeatStatus.AVAILABLE) {
+                metrics.conflict();
                 throw new AppException(MovieErrorCode.SEAT_NOT_AVAILABLE);
             }
         }
 
         String holdId = UUID.randomUUID().toString();
-        LocalDateTime expiresAt = now.plusSeconds(holdTtlSeconds);
+        LocalDateTime expiresAt = now.plus(properties.ttlFor(channel));
         seats.forEach(seat -> {
             seat.setStatus(ShowtimeSeatStatus.RESERVED);
             seat.setReservedAt(now);
@@ -113,8 +120,25 @@ public class ShowtimeSeatHoldService {
             seat.setHoldIdempotencyKey(idempotencyKey);
         });
         showtimeSeatRepository.saveAllAndFlush(seats);
+        List<Long> seatIds = seats.stream().map(ShowtimeSeat::getShowtimeSeatId).toList();
+        outboxService.record(
+                SeatInventoryEventType.HELD,
+                showtimeId,
+                holdId,
+                seatIds,
+                expiresAt,
+                null);
+        metrics.created();
 
         return toResponse(showtimeId, seats, expiresAt, false);
+    }
+
+    public SeatHoldPolicyResponse policy(SeatHoldChannel channel) {
+        return SeatHoldPolicyResponse.builder()
+                .channel(channel.name())
+                .ttlSeconds(properties.ttlFor(channel).toSeconds())
+                .maxSeatsPerBooking(properties.getMaxSeatsPerBooking())
+                .build();
     }
 
     /**
@@ -144,6 +168,14 @@ public class ShowtimeSeatHoldService {
         List<Long> seatIds = seats.stream().map(ShowtimeSeat::getShowtimeSeatId).toList();
         seats.forEach(this::clearHold);
         showtimeSeatRepository.saveAllAndFlush(seats);
+        outboxService.record(
+                SeatInventoryEventType.RELEASED,
+                showtimeId,
+                holdId,
+                seatIds,
+                null,
+                null);
+        metrics.released();
 
         return ShowtimeSeatHoldMutationResponse.builder()
                 .holdId(holdId)
@@ -207,13 +239,50 @@ public class ShowtimeSeatHoldService {
         showtime.setSoldSeats(soldSeats + seats.size());
         showtimeSeatRepository.saveAllAndFlush(seats);
         showTimeRepository.save(showtime);
+        List<Long> seatIds = seats.stream().map(ShowtimeSeat::getShowtimeSeatId).toList();
+        outboxService.record(
+                SeatInventoryEventType.SOLD,
+                showtimeId,
+                holdId,
+                seatIds,
+                null,
+                bookingId);
+        metrics.sold();
 
         return toMutationResponse(showtimeId, holdId, seats, bookingId, false);
     }
 
     @Transactional
     public int releaseExpiredHolds() {
-        return showtimeSeatRepository.releaseExpiredReservations(LocalDateTime.now(clock));
+        List<ShowtimeSeat> expiredSeats = showtimeSeatRepository
+                .findExpiredReservationsForUpdate(LocalDateTime.now(clock));
+        if (expiredSeats.isEmpty()) {
+            return 0;
+        }
+
+        Map<String, List<ShowtimeSeat>> holds = new LinkedHashMap<>();
+        for (ShowtimeSeat seat : expiredSeats) {
+            String key = seat.getShowTime().getShowTimeId() + ":" + seat.getHoldId();
+            holds.computeIfAbsent(key, ignored -> new ArrayList<>()).add(seat);
+        }
+
+        for (List<ShowtimeSeat> heldSeats : holds.values()) {
+            ShowtimeSeat first = heldSeats.get(0);
+            Long showtimeId = first.getShowTime().getShowTimeId();
+            String holdId = first.getHoldId();
+            List<Long> seatIds = heldSeats.stream().map(ShowtimeSeat::getShowtimeSeatId).toList();
+            heldSeats.forEach(this::clearHold);
+            outboxService.record(
+                    SeatInventoryEventType.RELEASED,
+                    showtimeId,
+                    holdId,
+                    seatIds,
+                    null,
+                    null);
+            metrics.expired();
+        }
+        showtimeSeatRepository.saveAllAndFlush(expiredSeats);
+        return holds.size();
     }
 
     private ShowtimeSeatHoldResponse replayExistingHold(
@@ -249,7 +318,7 @@ public class ShowtimeSeatHoldService {
 
     private List<Long> normalizeSeatIds(HoldShowtimeSeatsRequest request) {
         if (request == null || request.getSeatIds() == null || request.getSeatIds().isEmpty()
-                || request.getSeatIds().size() > MAX_SEATS_PER_HOLD
+                || request.getSeatIds().size() > properties.getMaxSeatsPerBooking()
                 || request.getSeatIds().stream().anyMatch(id -> id == null || id <= 0)
                 || request.getSeatIds().stream().distinct().count() != request.getSeatIds().size()) {
             throw new AppException(MovieErrorCode.SEAT_HOLD_SELECTION_INVALID);
@@ -262,7 +331,7 @@ public class ShowtimeSeatHoldService {
                 .map(ShowtimeSeat::getShowtimeSeatId)
                 .collect(java.util.stream.Collectors.toSet());
         if (!expandedIds.containsAll(requestedIds)
-                || seats.size() > MAX_SEATS_PER_HOLD
+                || seats.size() > properties.getMaxSeatsPerBooking()
                 || expandedIds.size() != seats.size()) {
             throw new AppException(MovieErrorCode.SEAT_HOLD_SELECTION_INVALID);
         }
@@ -336,7 +405,7 @@ public class ShowtimeSeatHoldService {
                     .seatType(seat.getSeatType() == null ? null : seat.getSeatType().name())
                     .price(seat.getPrice())
                     .build());
-            totalPrice = totalPrice.add(seat.getPrice());
+            totalPrice = totalPrice.add(seat.getPrice() == null ? BigDecimal.ZERO : seat.getPrice());
         }
         return ShowtimeSeatHoldResponse.builder()
                 .holdId(seats.get(0).getHoldId())

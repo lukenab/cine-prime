@@ -57,7 +57,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,flyway
+        include: health,info,flyway,metrics,prometheus
   endpoint:
     health:
       show-details: always
@@ -90,8 +90,21 @@ movie:
 
 showtime:
   seat-hold:
-    ttl-seconds: ${SHOWTIME_SEAT_HOLD_TTL_SECONDS:600}
+    max-seats-per-booking: ${SHOWTIME_SEAT_HOLD_MAX_SEATS:8}
+    ttl-by-channel:
+      WEB: ${SHOWTIME_SEAT_HOLD_TTL_WEB:10m}
+      MOBILE: ${SHOWTIME_SEAT_HOLD_TTL_MOBILE:8m}
+      COUNTER: ${SHOWTIME_SEAT_HOLD_TTL_COUNTER:3m}
+    rate-limit:
+      window: ${SHOWTIME_SEAT_HOLD_RATE_WINDOW:1m}
+      account: ${SHOWTIME_SEAT_HOLD_RATE_ACCOUNT:12}
+      ip: ${SHOWTIME_SEAT_HOLD_RATE_IP:30}
+      showtime: ${SHOWTIME_SEAT_HOLD_RATE_SHOWTIME:120}
     cleanup-delay-ms: ${SHOWTIME_SEAT_HOLD_CLEANUP_DELAY_MS:30000}
+    reconciliation-delay-ms: ${SHOWTIME_SEAT_HOLD_RECONCILIATION_DELAY_MS:60000}
+    outbox-delay-ms: ${SHOWTIME_SEAT_HOLD_OUTBOX_DELAY_MS:1000}
+    event-topic: ${SHOWTIME_SEAT_HOLD_EVENT_TOPIC:seat.inventory.events.v1}
+    websocket-group: ${SHOWTIME_SEAT_HOLD_WEBSOCKET_GROUP:${spring.application.name}-seat-ws-${random.uuid}}
 
 auto-showtime:
   # Immediate dispatch is the normal path; this poller recovers ACCEPTED runs

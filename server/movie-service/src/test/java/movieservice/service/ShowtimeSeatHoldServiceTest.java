@@ -14,6 +14,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.Duration;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Optional;
 
@@ -22,9 +24,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
-
 import movie.theater.common.exception.AppException;
+import movieservice.config.SeatHoldProperties;
 import movieservice.dto.request.ConfirmShowtimeSeatHoldRequest;
 import movieservice.dto.request.HoldShowtimeSeatsRequest;
 import movieservice.dto.response.ShowtimeSeatHoldMutationResponse;
@@ -32,6 +33,7 @@ import movieservice.dto.response.ShowtimeSeatHoldResponse;
 import movieservice.entity.ShowTime;
 import movieservice.entity.ShowtimeSeat;
 import movieservice.enums.SeatType;
+import movieservice.enums.SeatHoldChannel;
 import movieservice.enums.ShowTimeStatus;
 import movieservice.enums.ShowtimeSeatStatus;
 import movieservice.exception.MovieErrorCode;
@@ -47,6 +49,12 @@ class ShowtimeSeatHoldServiceTest {
     ShowTimeRepository showTimeRepository;
     @Mock
     ShowtimeSeatRepository showtimeSeatRepository;
+    @Mock
+    SeatHoldRateLimitService seatHoldRateLimitService;
+    @Mock
+    SeatHoldMetrics seatHoldMetrics;
+    @Mock
+    SeatInventoryOutboxService seatInventoryOutboxService;
 
     ShowtimeSeatHoldService service;
 
@@ -55,8 +63,18 @@ class ShowtimeSeatHoldServiceTest {
         Clock clock = Clock.fixed(
                 Instant.parse("2026-07-27T03:00:00Z"),
                 ZoneId.of("Asia/Ho_Chi_Minh"));
-        service = new ShowtimeSeatHoldService(showTimeRepository, showtimeSeatRepository, clock);
-        ReflectionTestUtils.setField(service, "holdTtlSeconds", 600L);
+        SeatHoldProperties properties = new SeatHoldProperties();
+        EnumMap<SeatHoldChannel, Duration> ttlByChannel = new EnumMap<>(SeatHoldChannel.class);
+        ttlByChannel.put(SeatHoldChannel.WEB, Duration.ofMinutes(10));
+        properties.setTtlByChannel(ttlByChannel);
+        service = new ShowtimeSeatHoldService(
+                showTimeRepository,
+                showtimeSeatRepository,
+                clock,
+                properties,
+                seatHoldRateLimitService,
+                seatHoldMetrics,
+                seatInventoryOutboxService);
     }
 
     @Test
@@ -67,7 +85,7 @@ class ShowtimeSeatHoldServiceTest {
         when(showtimeSeatRepository.findByHoldOwnerAndIdempotencyKey(7L, "account-1", "request-1"))
                 .thenReturn(List.of());
 
-        ShowtimeSeatHoldResponse result = service.hold(
+        ShowtimeSeatHoldResponse result = hold(
                 7L,
                 new HoldShowtimeSeatsRequest(List.of(11L, 10L)),
                 "account-1",
@@ -101,7 +119,7 @@ class ShowtimeSeatHoldServiceTest {
         when(showtimeSeatRepository.findByHoldOwnerAndIdempotencyKey(7L, "account-1", "couple-request"))
                 .thenReturn(List.of());
 
-        ShowtimeSeatHoldResponse result = service.hold(
+        ShowtimeSeatHoldResponse result = hold(
                 7L,
                 new HoldShowtimeSeatsRequest(List.of(20L)),
                 "account-1",
@@ -116,7 +134,7 @@ class ShowtimeSeatHoldServiceTest {
 
     @Test
     void rejectsDuplicateSelectionBeforeDatabaseLock() {
-        AppException exception = assertThrows(AppException.class, () -> service.hold(
+        AppException exception = assertThrows(AppException.class, () -> hold(
                 7L,
                 new HoldShowtimeSeatsRequest(List.of(10L, 10L)),
                 "account-1",
@@ -137,7 +155,7 @@ class ShowtimeSeatHoldServiceTest {
         when(showtimeSeatRepository.findByHoldOwnerAndIdempotencyKey(7L, "account-1", "request-1"))
                 .thenReturn(List.of());
 
-        AppException exception = assertThrows(AppException.class, () -> service.hold(
+        AppException exception = assertThrows(AppException.class, () -> hold(
                 7L,
                 new HoldShowtimeSeatsRequest(List.of(10L, 11L)),
                 "account-1",
@@ -162,7 +180,7 @@ class ShowtimeSeatHoldServiceTest {
         when(showtimeSeatRepository.findByHoldOwnerAndIdempotencyKey(7L, "account-1", "request-1"))
                 .thenReturn(previous);
 
-        ShowtimeSeatHoldResponse result = service.hold(
+        ShowtimeSeatHoldResponse result = hold(
                 7L,
                 new HoldShowtimeSeatsRequest(List.of(11L, 10L)),
                 "account-1",
@@ -270,6 +288,20 @@ class ShowtimeSeatHoldServiceTest {
                 .thenReturn(requestedSeats);
         when(showtimeSeatRepository.findSelectionForUpdate(7L, requestedIds, groupIds))
                 .thenReturn(lockedSeats);
+    }
+
+    private ShowtimeSeatHoldResponse hold(
+            Long showtimeId,
+            HoldShowtimeSeatsRequest request,
+            String ownerId,
+            String idempotencyKey) {
+        return service.hold(
+                showtimeId,
+                request,
+                ownerId,
+                idempotencyKey,
+                SeatHoldChannel.WEB,
+                "127.0.0.1");
     }
 
     private ShowTime onSaleShowtime() {

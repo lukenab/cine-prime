@@ -12,8 +12,11 @@ import movieservice.dto.response.ShowtimeSeatHoldMutationResponse;
 import movieservice.dto.response.ShowtimeSeatHoldResponse;
 import movieservice.dto.response.ShowtimeSeatDto;
 import movieservice.dto.response.ShowtimeSeatMapResponse;
+import movieservice.dto.response.SeatHoldPolicyResponse;
+import movieservice.enums.SeatHoldChannel;
 import movieservice.service.ShowTimeService;
 import movieservice.service.ShowtimeSeatHoldService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;
 
@@ -24,6 +27,16 @@ public class ShowTimeController {
 
     private final ShowTimeService showTimeService;
     private final ShowtimeSeatHoldService showtimeSeatHoldService;
+
+    @GetMapping("/seat-hold-policy")
+    public ApiResponse<SeatHoldPolicyResponse> getSeatHoldPolicy(
+            @RequestHeader(name = "X-Booking-Channel", required = false) String channelHeader) {
+        SeatHoldChannel channel = SeatHoldChannel.fromHeader(channelHeader);
+        return ApiResponse.<SeatHoldPolicyResponse>builder()
+                .code(1000)
+                .result(showtimeSeatHoldService.policy(channel))
+                .build();
+    }
 
     @GetMapping("/{id}/seats")
     public ApiResponse<List<ShowtimeSeatDto>> getSeats(@PathVariable("id") Long id) {
@@ -51,18 +64,30 @@ public class ShowTimeController {
     public ApiResponse<ShowtimeSeatHoldResponse> holdSeats(
             @PathVariable("id") Long id,
             @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestHeader(name = "X-Booking-Channel", required = false) String channelHeader,
+            HttpServletRequest servletRequest,
             @Valid @RequestBody HoldShowtimeSeatsRequest request) {
         ShowtimeSeatHoldResponse hold = showtimeSeatHoldService.hold(
                 id,
                 request,
                 JwtSecurityUtils.getCurrentAccountId(),
-                idempotencyKey);
+                idempotencyKey,
+                SeatHoldChannel.fromHeader(channelHeader),
+                resolveClientIp(servletRequest));
 
         return ApiResponse.<ShowtimeSeatHoldResponse>builder()
                 .code(1000)
                 .message(hold.isReplayed() ? "Seat hold replayed" : "Seats held successfully")
                 .result(hold)
                 .build();
+    }
+
+    private String resolveClientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",", 2)[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 
     /**
