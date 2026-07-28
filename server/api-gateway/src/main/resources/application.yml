@@ -24,6 +24,11 @@ spring:
               - "*"
             allow-credentials: true
       routes:
+        - id: movie-service-seat-inventory-ws
+          uri: lb:ws://movie-service
+          predicates:
+            - Path=/ws/seat-inventory/**
+
         - id: movie-service
           uri: lb://movie-service
           predicates:

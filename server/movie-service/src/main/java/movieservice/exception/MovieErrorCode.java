@@ -378,7 +378,13 @@ public enum MovieErrorCode implements BaseErrorCode {
                         "This seat hold belongs to another account.", HttpStatus.FORBIDDEN),
         SEAT_HOLD_ALREADY_SOLD(2142,
                         "Sold seats cannot be released through the temporary-hold endpoint.",
-                        HttpStatus.CONFLICT);
+                        HttpStatus.CONFLICT),
+        SEAT_HOLD_RATE_LIMITED(2143,
+                        "Too many seat-hold requests. Wait briefly before trying again.",
+                        HttpStatus.TOO_MANY_REQUESTS),
+        SEAT_HOLD_RETRYABLE_CONFLICT(2144,
+                        "Seat inventory is temporarily busy. Refresh availability and retry the same request.",
+                        HttpStatus.SERVICE_UNAVAILABLE);
 
         int code;
         String message;
