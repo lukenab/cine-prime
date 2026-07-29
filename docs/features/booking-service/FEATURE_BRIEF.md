@@ -1,193 +1,131 @@
-# FEATURE_BRIEF.md
+# Booking Service — Feature Brief
 
-## 1. Source Document Reviewed
+> Cập nhật: 30/07/2026
+> Phạm vi: P0 và P1 của luồng đặt vé, thanh toán, hậu mãi và vận hành tại cụm rạp.
 
-* `docs/feature/booking-service/BOOKING_SERVICE_PRODUCT_ISSUES.md`
+## 1. Mục tiêu
 
-> Tài liệu nguồn là product-oriented backlog đề xuất ngày 20/07/2026, không phải mô tả implementation hiện tại. Các capability, API và trạng thái dưới đây là target design cần được triển khai và kiểm chứng theo thứ tự P0 → P1 → P2.
+Booking Service điều phối giao dịch đặt vé giữa Customer, Movie Service và Payment Service:
 
-## 2. Assumptions / Missing Information
+1. Customer chọn một showtime `ON_SALE` và ghế đang khả dụng.
+2. Movie Service giữ toàn bộ ghế atomically.
+3. Booking Service tạo booking `PENDING_PAYMENT` và lưu snapshot giao dịch.
+4. Payment Service tạo phiên thanh toán VNPAY Sandbox và xử lý callback đã xác thực.
+5. Booking Service xác nhận seat hold, chuyển booking thành `CONFIRMED` và phát hành ticket pass.
+6. Expiry, cancellation, refund, compensation và reconciliation bảo vệ các nhánh lỗi.
+7. Employee thao tác theo phạm vi cinema cluster: tra cứu, counter sale và check-in.
 
-* Movie Service là nguồn tồn kho ghế có thẩm quyền duy nhất và phải cung cấp reserve/confirm/release idempotent.
-* Payment Service sở hữu payment/refund ledger; Booking Service chỉ cung cấp payment context, nhận kết quả chuẩn hóa và điều phối bước tiếp theo.
-* User, Promotion, Concession và Notification Service đã có owner khác; Booking Service chỉ lưu snapshot/reference và gọi contract tương ứng.
-* Chính sách hủy/hoàn, cutoff, giới hạn giữ ghế, tỷ lệ dùng điểm và quyền theo cluster vẫn cần Product Owner/Leader chốt trước khi triển khai đầy đủ.
-* Tên controller/handler Java chưa được khẳng định vì tài liệu nguồn là backlog, không phải source-code inventory.
+## 2. Ranh giới trách nhiệm
 
-## 3. Online Booking & Seat Reservation (P0)
+| Service | Nguồn sự thật |
+|---|---|
+| Movie Service | Showtime, room/layout, `showtime_seat`, seat hold, trạng thái ghế và final seat price |
+| Booking Service | Booking aggregate, booking item snapshot, lịch sử khách hàng, ticket, check-in, compensation và reconciliation |
+| Payment Service | Payment attempt, provider outcome và refund ledger |
+| Promotion Service | Promotion eligibility, reservation và redemption |
+| Loyalty Service | Point reservation, earn và reversal |
+| Notification Service | Email, SMS và push delivery |
 
-### Purpose
+Booking Service không đọc hoặc cập nhật database của Movie Service. Các service giao tiếp qua API hoặc event.
 
-Cho phép member chọn một suất chiếu và danh sách ghế, giữ toàn bộ ghế atomically rồi tạo order chờ thanh toán bằng một thao tác duy nhất.
+## 3. Actor
 
-### Actors / Roles
+- **Customer:** tạo booking, thanh toán, xem lịch sử/chi tiết, lấy ticket pass và yêu cầu hủy.
+- **Employee:** tra cứu booking, counter sale và check-in trong các cluster được gán.
+- **Admin/Super Admin:** tra cứu toàn hệ thống, hỗ trợ cancellation/refund và reconciliation.
+- **Payment Service:** gửi payment outcome qua internal webhook có chữ ký.
+- **Background worker:** expiry booking, retry compensation, publish outbox và rà soát payment chưa chắc chắn.
 
-* **MEMBER**: Tạo booking online và chỉ thao tác trên booking của chính mình.
-* **Booking Service**: Điều phối, lưu order/snapshot/idempotency và compensation.
-* **Movie Service**: Quyết định ghế có thể bán, giá, TTL và trạng thái `AVAILABLE/RESERVED/SOLD`.
+## 4. Luồng nghiệp vụ chính
 
-### Current Target Flow
+```text
+ON_SALE showtime
+    -> load authoritative showtime seats
+    -> atomic seat hold
+    -> PENDING_PAYMENT booking
+    -> VNPAY Sandbox payment session
+    -> verified provider callback
+    -> confirm seat inventory
+    -> CONFIRMED booking
+    -> tickets + ticket pass
+    -> employee check-in
+```
 
-1. Member gọi `POST /api/bookings` với `showtimeId`, `showtimeSeatIds` và `Idempotency-Key`.
-2. Booking Service lấy `accountId` từ JWT, tạo trước `bookingId/holdReference` và durable operation.
-3. Booking Service gọi Movie Service reserve toàn bộ lựa chọn.
-4. Movie Service trả authoritative showtime/seat/price snapshot, `holdToken` và `expiresAt`.
-5. Booking Service lưu booking `PENDING_PAYMENT`; không đánh dấu ghế `SOLD` tại bước này.
-6. Nếu lưu DB thất bại sau reserve, Booking Service release hold; nếu release lỗi thì tạo durable compensation task.
+### Snapshot được lưu tại thời điểm đặt vé
 
-### Main Entity Fields
+- `showtimeId`, `movieId`, `cinemaClusterId`, `cinemaRoomId`
+- Tên phim, cụm rạp, phòng, ngày và giờ chiếu
+- `holdId`, hold reference/token và thời điểm hết hạn
+- `showtimeSeatId`, mã ghế, loại ghế và final seat price
+- Subtotal, service fee, discount, total và currency
 
-* Booking identity: `bookingId`, `bookingCode`, `bookingType`, `accountId`.
-* Inventory orchestration: `holdReference`, `inventoryHoldToken`, `inventoryStatus`, `expiresAt`.
-* Snapshot: movie, cluster, room, showtime, seat code/type và unit price.
-* Amount: `totalAmount`, `discountAmount`, `finalAmount`, `currency`.
-* Reliability: `idempotencyKey`, canonical request hash, operation state và response snapshot.
+Frontend không được gửi giá authoritative. Booking chỉ dùng giá Movie Service trả về.
 
-### Key Rules
+## 5. Trạng thái P0
 
-* Frontend không gửi movie/cinema/price/TTL authoritative.
-* Reserve phải all-or-nothing; một ghế bận làm toàn request thất bại.
-* Cùng idempotency key và cùng payload trả cùng kết quả; khác payload trả `409`.
-* Một account bị giới hạn số active hold và rate limit theo cấu hình.
-
-## 4. Payment Confirmation, Expiry & Compensation (P0)
-
-### Purpose
-
-Hoàn tất booking sau thanh toán mà không double-confirm, không mất tiền khi service lỗi và không để ghế bị giữ vô thời hạn.
-
-### Actors / Roles
-
-* **MEMBER**: Khởi tạo thanh toán tại Payment Service bằng `bookingId`.
-* **Payment Service**: Đọc payment context authoritative và phát kết quả thanh toán chuẩn hóa.
-* **Booking Service**: Deduplicate event, xác thực snapshot, confirm inventory và issue ticket.
-* **Movie Service**: Chuyển hold `RESERVED -> SOLD` đúng một lần.
-
-### Target Flow
-
-1. Payment Service gọi `GET /internal/bookings/{bookingId}/payment-context` để lấy owner, amount, currency và expiry.
-2. Booking Service nhận event `PAYMENT_SUCCEEDED` hoặc `PAYMENT_FAILED`, lưu inbox unique theo `eventId`.
-3. Với success hợp lệ, booking sang `CONFIRM_PENDING` và gọi Movie Service confirm hold.
-4. Sau khi inventory thành `SOLD`, Booking Service chuyển booking thành `CONFIRMED`, phát hành ticket và ghi outbox event.
-5. Scheduler chuyển booking hết hạn `PENDING_PAYMENT -> EXPIRED` và release hold theo batch an toàn nhiều instance.
-6. Late payment, timeout hoặc partial failure đi vào refund/compensation/reconciliation; không tự suy diễn timeout là thất bại.
-
-### Status / Lifecycle
-
-* **Booking**: `PENDING_PAYMENT`, `CONFIRM_PENDING`, `CONFIRMED`, `CANCEL_REQUESTED`, `CANCELLED`, `EXPIRED`.
-* **Payment**: `NOT_STARTED`, `PENDING`, `PROCESSING`, `SUCCEEDED`, `FAILED`, `UNKNOWN`.
-* **Refund**: `NOT_REQUESTED`, `PENDING`, `SUCCEEDED`, `FAILED`, `UNKNOWN`.
-* **Inventory**: `HELD`, `RELEASE_PENDING`, `RELEASED`, `CONFIRM_PENDING`, `SOLD`, `CANCEL_SALE_PENDING`, `CANCELLED`.
-
-## 5. Cancellation & Refund Orchestration (P1)
-
-### Purpose
-
-Hủy booking theo policy, phân biệt booking chưa thanh toán, payment chưa rõ kết quả, booking đã xác nhận, hủy bởi khách và hủy do vận hành rạp.
-
-### Actors / Roles
-
-* **MEMBER**: Tạo và theo dõi cancellation của booking mình sở hữu.
-* **EMPLOYEE / ADMIN**: Override theo permission và cluster scope, bắt buộc reason/audit.
-* **Movie Service / Payment Service**: Thực hiện cancel-sale/release và refund theo contract riêng.
-
-### Target Flow
-
-1. Member tạo cancellation resource qua `POST /api/bookings/{bookingId}/cancellations`.
-2. Booking chưa thanh toán và chưa gửi provider có thể release hold rồi hoàn tất đồng bộ (`201`).
-3. Payment `UNKNOWN/PROCESSING`, booking `CONFIRM_PENDING` hoặc booking đã trả tiền chuyển sang workflow bất đồng bộ (`202`).
-4. Booking đã `SOLD` không dùng release; phải refund rồi gọi cancel-sale nếu policy cho phép.
-5. Ticket bị revoke/cancel khi workflow hoàn tất; ticket `USED` chặn customer auto-cancel.
-
-### Status / Lifecycle
-
-* **Cancellation**: `REQUESTED`, `PROCESSING`, `COMPLETED`, `FAILED`, `MANUAL_REVIEW`.
-* Chỉ có tối đa một cancellation workflow active cho mỗi booking.
-
-## 6. Ticket Pass & Check-in (P1)
-
-### Purpose
-
-Cung cấp một QR pass opaque cho cả booking và cho phép nhân viên/trusted gate check-in toàn bộ hoặc một phần ticket theo cách idempotent.
-
-### Main Rules
-
-* Ticket chỉ được phát hành sau payment success và inventory `SOLD`.
-* Mỗi booking detail có đúng một ticket; QR không chứa PII, giá hay permission.
-* Chỉ lưu lookup hash và ciphertext; raw token không xuất hiện trong log/audit.
-* `ALL` cập nhật atomically tất cả ticket `VALID`; `SELECTED` chỉ cập nhật ticket thuộc booking trong QR.
-* Scan lặp trả trạng thái cũ, không tạo side effect mới.
-* Check-in phải đúng cluster, permission và cửa sổ thời gian; cancel/refund làm QR vô hiệu.
-
-### Ticket Status
-
-* `VALID`, `USED`, `CANCELLED`.
-
-## 7. Customer History & Employee Operations (P1)
-
-### Customer Experience
-
-* “Vé của tôi/Lịch sử giao dịch” hỗ trợ `UPCOMING/PAST`, status, date range và pagination.
-* Detail đọc hoàn toàn từ transaction snapshot và trả các action flag `canPay`, `canCancel`, `canRefund`, `canViewTicket` do backend tính.
-* Member không thể phân biệt booking không tồn tại với booking thuộc người khác.
-
-### Employee / Admin Operations
-
-* Query booking bằng collection `/api/bookings?scope=CLUSTER...`; cluster lấy từ principal, không tin `clusterId` client gửi.
-* Counter sale dùng cùng inventory confirm/ticket state machine, có cashier, terminal, payment ledger và receipt để audit.
-* Reconciliation case ghi mismatch/evidence; controller không trực tiếp confirm/refund/unsell.
-* Operations API nằm dưới `/api/operations/**`; internal service API nằm dưới `/internal/**` và không route public.
-
-## 8. Reliable Events & Downstream Integration (P1)
-
-* Transactional outbox ghi cùng transaction với state change.
-* Event tối thiểu: `BOOKING_PENDING_PAYMENT`, `BOOKING_CONFIRMED`, `BOOKING_EXPIRED`, `BOOKING_CANCELLED`, `REFUND_COMPLETED`, `TICKET_ISSUED`.
-* Notification lỗi không rollback booking transaction.
-* Event có `eventId`, aggregate/version, `occurredAt`, `correlationId` và schema version; consumer deduplicate theo `eventId`.
-
-## 9. Commercial Extensions (P2)
-
-### Promotion-aware Checkout
-
-Tạo quote có expiry, reserve/commit/release promotion quota và lưu discount breakdown. Quote không thay thế inventory hold.
-
-### Loyalty
-
-Reserve điểm trước payment, commit khi confirmed, release khi fail/expire/cancel; Booking không sở hữu balance.
-
-### Concession
-
-Lưu combo/bắp nước như line-item snapshot, validate cluster/showtime, reserve/commit/release stock qua owner tương ứng.
-
-### Observability & Abuse Control
-
-Theo dõi hold conflict, stuck payment/refund, outbox lag, ticket scan conflict; tạo reconciliation có audit và rate limit theo account/IP/device signal.
-
-## 10. Ownership / Relationships
-
-| Capability / Data | Owner | Booking Service lưu gì? |
+| Nhóm | Trạng thái | Nội dung |
 |---|---|---|
-| Showtime, seat, price, hold TTL | Movie Service | Reference, token, expiry và snapshot |
-| Booking, state machine, ticket | Booking Service | Canonical domain data |
-| Payment/refund ledger | Payment Service | Payment/refund reference và status snapshot |
-| Loyalty balance | User Service | Reservation reference và redemption snapshot |
-| Promotion quota/rule | Promotion Service | Reservation reference và discount snapshot |
-| Notification delivery | Notification Service | Chỉ publish outbox event |
+| P0.1 Inventory prerequisites | **Hoàn thành** | Chỉ public `ON_SALE`; materialize `showtime_seat`; một nguồn tồn kho; final price snapshot; atomic hold có owner, expiry và idempotency |
+| P0.2 Booking orchestration | **Hoàn thành** | Hold trước, persist booking sau; snapshot đầy đủ; compensation khi persist lỗi; không truy cập chéo database |
+| P0.3 Payment & confirmation | **Đủ demo tích hợp** | Payment session VNPAY Sandbox, chữ ký callback, inbox chống trùng, confirm inventory, late-payment reconciliation và sandbox refund |
+| P0.4 Expiry & compensation | **Hoàn thành** | Expiry worker, release hold, retry compensation, trạng thái `DEAD` và reconciliation |
+| P0.5 Query & verification | **Hoàn thành ở mức module** | Customer detail/history/ticket pass; operations query; unit/module tests cho inventory, pricing, hold, idempotency guard, access policy và signing |
 
-## 11. High-level Flow
+> Full container E2E và race suite đa service vẫn cần chạy trong môi trường tích hợp trước khi coi là production-ready.
 
-1. Browse showtime/seat ở Movie Service.
-2. `POST /api/bookings` → reserve ghế atomic → tạo `PENDING_PAYMENT`.
-3. Payment Service lấy payment context và xử lý thanh toán.
-4. `PAYMENT_SUCCEEDED` → confirm inventory `SOLD` → booking `CONFIRMED` → issue ticket/outbox.
-5. Không thanh toán đúng hạn → booking `EXPIRED` → release hold.
-6. Hủy sau thanh toán → cancellation policy → refund/cancel-sale → revoke ticket.
-7. Mismatch hoặc kết quả chưa xác định → durable retry, compensation hoặc reconciliation; không sửa trạng thái mù quáng.
+## 6. Trạng thái P1
 
-## 12. Missing / Recommended Decisions
+### P1-A — Reliability
 
-* Chốt cancellation cutoff, refund method/fee/SLA và cinema-cancellation policy.
-* Chốt active hold limit, booking/payment timeout, scheduler interval và retention của idempotency/inbox/outbox.
-* Chốt permission model cho employee/admin, cluster scope, terminal và trusted gate.
-* Khóa error-code registry chung để các dải `2xxx`, `3xxx`, `4xxx` không trùng.
-* Thống nhất schema/versioning của Movie, Payment và Kafka event trước khi code P0.
+- Đã có transactional outbox/inbox, retry, trạng thái `DEAD`, reconciliation record/query.
+- Đã có giới hạn số booking pending đang hoạt động và request rate bằng Redis, với DB cap làm safety net.
+- Đã expose Actuator `health`, `info`, `metrics`; `metrics` vẫn yêu cầu JWT.
+- Còn production hardening: dashboard/alert, manual re-drive cho bản ghi `DEAD`, distributed tracing và load test.
+
+### P1-B — After-sales
+
+- Pending booking có thể hủy và release hold.
+- Confirmed booking đi qua cancellation policy và refund orchestration.
+- Sandbox có thể auto-approve refund để demo đầy đủ.
+- Production cần provider refund adapter/settlement thật và quy trình xử lý manual review.
+- UI phân biệt "Cancel booking" (chưa thanh toán) và "Request a refund" (đã thanh toán) theo đúng thuật ngữ ngành, với danh sách lý do riêng cho từng trường hợp — xem BR-CAN-06.
+
+### P1-C — Cinema operations
+
+- Cluster-scoped booking/reconciliation query.
+- Opaque QR ticket pass và idempotent check-in.
+- Auditable counter sale với `CASH`, `CARD`, `QR` hoặc `BANK_TRANSFER`.
+- Backend kiểm tra cluster claim; hệ thống phát hành JWT phải cung cấp đúng cluster assignment cho Employee.
+
+## 7. Làm giàu thông tin vé tại checkout
+
+Trang checkout/ticket của customer hiển thị thêm các trường không thuộc snapshot của Booking Service, lấy trực tiếp từ service khác tại thời điểm đọc (best-effort, độc lập với nhau):
+
+| Trường | Nguồn | Ghi chú |
+|---|---|---|
+| Thời lượng phim, age rating, thể loại | Movie Service — `GET /api/movies/public/{movieId}` | Dùng để tính giờ kết thúc suất chiếu phía client |
+| Địa chỉ đầy đủ cụm rạp | Movie Service — `GET /api/cinema-clusters/{clusterId}` | `cinemaClusterName` trong snapshot chỉ có tên, không có địa chỉ |
+| Tên người đặt vé | User Service — `GET /api/users/{accountId}` | Fallback về username trong JWT nếu chưa có hồ sơ |
+| Phương thức thanh toán (ngân hàng/loại thẻ) | Payment Service — `GET /api/payments/by-booking/{bookingId}` | Xem `bankCode`/`cardType` trong [API_LIST.md](API_LIST.md) |
+
+Đây là các lệnh gọi best-effort tại frontend; lỗi ở bất kỳ lệnh nào không được chặn hiển thị booking/ticket chính — trường tương ứng chỉ hiển thị "—".
+
+## 8. Tiêu chí demo
+
+- Hai request đồng thời không thể giữ thành công cùng một ghế.
+- Retry cùng `Idempotency-Key` không tạo booking hoặc counter sale thứ hai.
+- Giá booking khớp `showtime_seat.price`.
+- Duplicate callback không confirm hoặc phát hành ticket lần hai.
+- Booking hết hạn giải phóng hold và chuyển `EXPIRED`.
+- Late payment hoặc inventory confirmation thất bại tạo reconciliation case.
+- Customer chỉ đọc booking/ticket của mình.
+- Employee ngoài cluster bị từ chối.
+- Luồng chạy được: `ON_SALE -> seats -> hold -> pending -> VNPAY -> confirmed -> ticket -> check-in`.
+
+## 9. Ngoài phạm vi P0/P1
+
+- Promotion-aware checkout.
+- Loyalty reservation lifecycle.
+- Concession-aware checkout.
+- Rating & Review.
+- Production VNPAY merchant credentials, production refund settlement và hạ tầng observability tập trung.

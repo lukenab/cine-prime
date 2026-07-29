@@ -1,13 +1,12 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
-  AlertTriangle, CheckCircle2, Clock, Film,
+  AlertTriangle, Film,
   Loader2, X, ChevronRight, RotateCcw, Ticket, Armchair,
 } from "lucide-react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import {
   bookingApi,
   Seat,
-  BookingConfirmation,
   ShowtimeSeatMap,
   SeatMapPosition,
   SeatHoldPolicy,
@@ -21,55 +20,6 @@ import type { AuditoriumVisualizationConfig } from "../admin/cinemaRoomEditor/ci
 // Format a number as Vietnamese đồng, e.g. 70000 → "70.000 ₫"
 const formatVND = (v: number) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(v);
-
-// ─── CountdownTimer ─────────────────────────────────────────────────────────
-
-function CountdownTimer({
-  lockedUntil,
-  onExpired,
-}: {
-  lockedUntil: string;
-  onExpired?: () => void;
-}) {
-  const target = new Date(lockedUntil).getTime();
-  const [remaining, setRemaining] = useState(() => Math.max(0, Math.floor((target - Date.now()) / 1000)));
-  const expiredNotified = useRef(false);
-
-  useEffect(() => {
-    expiredNotified.current = false;
-    const id = setInterval(() => {
-      const next = Math.max(0, Math.floor((target - Date.now()) / 1000));
-      setRemaining(next);
-      if (next === 0 && !expiredNotified.current) {
-        expiredNotified.current = true;
-        onExpired?.();
-      }
-    }, 1000);
-    return () => clearInterval(id);
-  }, [target, onExpired]);
-
-  const m = Math.floor(remaining / 60);
-  const s = remaining % 60;
-  const warn = remaining > 0 && remaining < 120;
-  const done = remaining === 0;
-
-  return (
-    <div
-      className={`inline-flex items-center gap-2 px-3 py-2 rounded-md border text-sm font-medium transition-colors ${
-        done
-          ? "bg-[#3d1515] border-[#e84545] text-[#e84545]"
-          : warn
-          ? "bg-[#3d2a00] border-[#f5a623] text-[#f5a623]"
-          : "bg-black/30 border-white/20 text-white"
-      }`}
-      style={{ fontFamily: "'Inter', sans-serif" }}
-    >
-      <Clock size={13} />
-      {done ? "Hold expired" : `Hold expires in ${m}:${String(s).padStart(2, "0")}`}
-    </div>
-  );
-}
-
 
 // Keep the customer map visually aligned with the room-layout tools used by
 // administrators. Booking state is layered on top of the physical seat type.
@@ -85,7 +35,11 @@ function SeatBtn({
 }: {
   seat: Seat; selected: boolean; conflict: boolean; onToggle: (id: number) => void;
 }) {
-  const available = seat.status === "AVAILABLE";
+  // A LOCKED seat still held by *this* account (e.g. a hold that survived a
+  // failed/slow checkout) must stay pickable so the customer can resume the
+  // same hold instead of it looking permanently stuck until the TTL expires.
+  const isMyHold = seat.status === "LOCKED" && seat.reservedByMe === true;
+  const available = seat.status === "AVAILABLE" || isMyHold;
   const theme = SEAT_TYPE_THEME[seat.type];
   const isDoubleSeat = seat.type === "COUPLE" || (seat.colSpan ?? 1) > 1;
   const displayCode = seat.seatCode?.trim() || `${seat.row}${seat.number}`;
@@ -98,15 +52,20 @@ function SeatBtn({
     if (!available && !conflict) return "bg-white/[0.025] border-white/[0.08] text-white/20 cursor-not-allowed";
     if (conflict)                 return "bg-[#3d1515] border-[#e84545] text-[#ff9a9a] animate-pulse cursor-pointer";
     if (selected)                 return "bg-gradient-to-b from-[#93c5fd] to-[#2563eb] border-[#60a5fa] text-black shadow-[0_4px_14px_rgba(96,165,250,0.45)] -translate-y-0.5 cursor-pointer";
+    if (isMyHold)                  return "bg-[#2a2210] border-[#d4a72c] text-[#f2c94c] cursor-pointer";
     return "hover:-translate-y-0.5 hover:brightness-125 hover:shadow-[0_4px_12px_rgba(37,99,235,0.25)] cursor-pointer";
   })();
+
+  const title = isMyHold && !selected
+    ? `${displayCode} · ${seat.type} · Held by you — click to resume`
+    : `${displayCode} · ${seat.type}${available ? "" : " · Unavailable"}`;
 
   return (
     <button
       type="button"
       disabled={!available && !conflict}
       onClick={() => available && onToggle(seat.seatId)}
-      title={`${displayCode} · ${seat.type}${available ? "" : " · Unavailable"}`}
+      title={title}
       className={`relative ${isDoubleSeat ? "w-[4.875rem]" : "w-9"} h-8 rounded-md border-[1.5px] text-[10px] font-bold flex items-center justify-center select-none transition-all duration-150 will-change-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#60a5fa]/60 ${cls}`}
       style={
         seat.status === "AVAILABLE" && !selected && !conflict
@@ -120,7 +79,7 @@ function SeatBtn({
 }
 
 
-type Screen = "map" | "confirming" | "confirmed";
+type Screen = "map" | "confirming";
 
 const DEFAULT_HOLD_POLICY: SeatHoldPolicy = {
   channel: "WEB",
@@ -143,6 +102,49 @@ function seatMapErrorMessage(error: any): string {
     return "We could not connect to the cinema service. Check your connection and try again.";
   }
   return "We could not load this auditorium's seat map. Please try again.";
+}
+
+// A hold's idempotency key previously lived only in a `useRef`, so an F5
+// reload while a slow/failed "Continue" request was in flight lost it. The
+// backend still had an active RESERVED hold under the old key, but the
+// reloaded page would mint a brand-new key and the seat's own owner would
+// then be rejected as SEAT_NOT_AVAILABLE by their own hold — appearing stuck
+// until the TTL expired. Persisting the key + the seats it covers lets a
+// reload resume the exact same hold via the backend's existing replay path.
+function seatHoldStorageKey(showtimeId: string): string {
+  return `seat-hold-draft:${showtimeId}`;
+}
+
+function readPersistedSeatHold(
+  showtimeId: string | undefined
+): { idempotencyKey: string; seatIds: number[] } | null {
+  if (!showtimeId) return null;
+  try {
+    const raw = sessionStorage.getItem(seatHoldStorageKey(showtimeId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.idempotencyKey !== "string" || !Array.isArray(parsed?.seatIds)) {
+      return null;
+    }
+    return {
+      idempotencyKey: parsed.idempotencyKey,
+      seatIds: parsed.seatIds.filter(
+        (id: unknown): id is number => typeof id === "number" && Number.isFinite(id)
+      ),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function clearPersistedSeatHold(showtimeId: string | undefined): void {
+  if (!showtimeId) return;
+  try {
+    sessionStorage.removeItem(seatHoldStorageKey(showtimeId));
+  } catch {
+    // Storage may be unavailable (private mode); the draft simply won't
+    // survive a reload in that case, no worse than before this fix.
+  }
 }
 
 export default function SeatBookingPage() {
@@ -168,13 +170,23 @@ export default function SeatBookingPage() {
 
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [conflicts, setConflicts] = useState<Set<number>>(new Set());
-  const [confirmation, setConfirmation] = useState<(BookingConfirmation & { seats: Seat[], totalPrice: number }) | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [holdPolicy, setHoldPolicy] = useState<SeatHoldPolicy>(DEFAULT_HOLD_POLICY);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const persistedHoldRef = useRef(readPersistedSeatHold(showtimeId));
+  const pendingSeatRestoreRef = useRef<number[]>(
+    Array.isArray(location.state?.resumeSeatIds)
+      ? location.state.resumeSeatIds.filter(
+          (seatId: unknown): seatId is number =>
+            typeof seatId === "number" && Number.isFinite(seatId)
+        )
+      : persistedHoldRef.current?.seatIds ?? []
+  );
   const idempotencyKeyRef = useRef(
-    globalThis.crypto?.randomUUID?.() ?? `seat-hold-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    persistedHoldRef.current?.idempotencyKey
+      ?? globalThis.crypto?.randomUUID?.()
+      ?? `seat-hold-${Date.now()}-${Math.random().toString(36).slice(2)}`
   );
 
   const renewIdempotencyKey = useCallback(() => {
@@ -201,13 +213,20 @@ export default function SeatBookingPage() {
       setSeatMap(data);
       const freshSeats = data.seats || [];
       setSeats(freshSeats);
-      const unavailableIds = new Set(
-        freshSeats.filter((seat) => seat.status !== "AVAILABLE").map((seat) => seat.seatId)
+      const availableIds = new Set(
+        freshSeats
+          .filter((seat) => seat.status === "AVAILABLE" || (seat.status === "LOCKED" && seat.reservedByMe))
+          .map((seat) => seat.seatId)
       );
       setSelected((previous) => {
-        const next = new Set(Array.from(previous).filter((seatId) => !unavailableIds.has(seatId)));
-        if (next.size !== previous.size) {
-          setConflicts(new Set(Array.from(previous).filter((seatId) => unavailableIds.has(seatId))));
+        const restoredIds = pendingSeatRestoreRef.current;
+        const requestedIds = restoredIds.length > 0 ? restoredIds : Array.from(previous);
+        pendingSeatRestoreRef.current = [];
+
+        const next = new Set(requestedIds.filter((seatId) => availableIds.has(seatId)));
+        const rejectedIds = requestedIds.filter((seatId) => !availableIds.has(seatId));
+        if (rejectedIds.length > 0) {
+          setConflicts(new Set(rejectedIds));
           setErrorMsg("Seat availability changed. Please review the highlighted positions and select again.");
           renewIdempotencyKey();
         }
@@ -227,6 +246,28 @@ export default function SeatBookingPage() {
   useEffect(() => {
     loadSeats();
   }, [loadSeats]);
+
+  // Keep the in-flight hold's idempotency key + seat selection recoverable
+  // across a hard reload (see readPersistedSeatHold above).
+  useEffect(() => {
+    if (!showtimeId) return;
+    if (selected.size === 0) {
+      clearPersistedSeatHold(showtimeId);
+      return;
+    }
+    try {
+      sessionStorage.setItem(
+        seatHoldStorageKey(showtimeId),
+        JSON.stringify({
+          idempotencyKey: idempotencyKeyRef.current,
+          seatIds: Array.from(selected),
+        })
+      );
+    } catch {
+      // Private-mode/storage-quota failures just mean the draft won't
+      // survive a reload; the booking flow itself is unaffected.
+    }
+  }, [selected, showtimeId]);
 
   useEffect(() => {
     let active = true;
@@ -253,9 +294,14 @@ export default function SeatBookingPage() {
 
     const connect = () => {
       if (disposed) return;
-      socket = new WebSocket(seatInventoryWebSocketUrl(showtimeId));
+      const nextSocket = new WebSocket(seatInventoryWebSocketUrl(showtimeId));
+      socket = nextSocket;
 
-      socket.onopen = () => {
+      nextSocket.onopen = () => {
+        if (disposed || socket !== nextSocket) {
+          nextSocket.close(1000, "Seat inventory connection is no longer needed");
+          return;
+        }
         reconnectAttempt = 0;
         setRealtimeConnected(true);
         // A connection may have been offline while inventory changed.
@@ -264,7 +310,7 @@ export default function SeatBookingPage() {
         void loadSeats(true);
       };
 
-      socket.onmessage = (message) => {
+      nextSocket.onmessage = (message) => {
         try {
           const event = JSON.parse(String(message.data));
           if (["seat.held", "seat.released", "seat.sold"].includes(event?.type)) {
@@ -277,8 +323,14 @@ export default function SeatBookingPage() {
         }
       };
 
-      socket.onerror = () => socket?.close();
-      socket.onclose = () => {
+      nextSocket.onerror = () => {
+        // A failed WebSocket handshake is followed by `close` in browsers.
+        // Closing a CONNECTING socket here creates a false console error in
+        // React Strict Mode, where effects are mounted and cleaned up twice.
+        if (!disposed && socket === nextSocket) setRealtimeConnected(false);
+      };
+      nextSocket.onclose = () => {
+        if (socket === nextSocket) socket = null;
         setRealtimeConnected(false);
         if (disposed) return;
         const delay = Math.min(15_000, 1_000 * 2 ** reconnectAttempt);
@@ -298,10 +350,24 @@ export default function SeatBookingPage() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       disposed = true;
-      setRealtimeConnected(false);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (reconnectTimer) clearTimeout(reconnectTimer);
-      socket?.close();
+      const activeSocket = socket;
+      socket = null;
+      if (!activeSocket) return;
+
+      activeSocket.onmessage = null;
+      activeSocket.onerror = null;
+      activeSocket.onclose = null;
+      if (activeSocket.readyState === WebSocket.OPEN) {
+        activeSocket.close(1000, "Seat booking page closed");
+      } else if (activeSocket.readyState === WebSocket.CONNECTING) {
+        // Let the handshake finish before closing. Calling close() while the
+        // socket is CONNECTING is what produced
+        // "WebSocket is closed before the connection is established".
+        activeSocket.onopen = () =>
+          activeSocket.close(1000, "Seat booking page closed");
+      }
     };
   }, [loadSeats, showtimeId]);
 
@@ -312,13 +378,38 @@ export default function SeatBookingPage() {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [loadSeats]);
 
+  // A COUPLE/sofa seat renders as one clickable button (see seatsByGroup
+  // below) but is backed by 2+ ShowtimeSeat rows sharing a seatGroupId. The
+  // hold API expands each requested id to its full group before counting
+  // against maxSeatsPerBooking (ShowtimeSeatHoldService.validateExpandedSelection),
+  // so the client must count the same way here — otherwise the UI lets a
+  // customer pick a selection under the limit that the server then rejects
+  // as SEAT_HOLD_SELECTION_INVALID at the very last step.
+  const physicalSeatCountById = useMemo(() => {
+    const perGroup = new Map<string, number>();
+    seats.forEach((seat) => {
+      if (!seat.seatGroupId) return;
+      perGroup.set(seat.seatGroupId, (perGroup.get(seat.seatGroupId) ?? 0) + 1);
+    });
+    const perSeatId = new Map<number, number>();
+    seats.forEach((seat) => {
+      perSeatId.set(seat.seatId, seat.seatGroupId ? (perGroup.get(seat.seatGroupId) ?? 1) : 1);
+    });
+    return perSeatId;
+  }, [seats]);
+
   const toggleSeat = useCallback((id: number) => {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
       } else {
-        if (next.size >= holdPolicy.maxSeatsPerBooking) {
+        const currentPhysicalCount = Array.from(prev).reduce(
+          (sum, seatId) => sum + (physicalSeatCountById.get(seatId) ?? 1),
+          0
+        );
+        const addedPhysicalCount = physicalSeatCountById.get(id) ?? 1;
+        if (currentPhysicalCount + addedPhysicalCount > holdPolicy.maxSeatsPerBooking) {
           setErrorMsg(`You can reserve up to ${holdPolicy.maxSeatsPerBooking} seats per booking.`);
           return prev;
         }
@@ -328,7 +419,7 @@ export default function SeatBookingPage() {
       return next;
     });
     setConflicts((prev) => { const n = new Set(prev); n.delete(id); return n; });
-  }, [holdPolicy.maxSeatsPerBooking, renewIdempotencyKey]);
+  }, [holdPolicy.maxSeatsPerBooking, physicalSeatCountById, renewIdempotencyKey]);
 
   const clearAll = () => {
     renewIdempotencyKey();
@@ -342,7 +433,20 @@ export default function SeatBookingPage() {
 
     // Gate 1: chưa đăng nhập
     if (!user) {
-      navigate("/login");
+      const currentState =
+        location.state && typeof location.state === "object"
+          ? location.state
+          : {};
+
+      navigate("/login", {
+        state: {
+          returnTo: `${location.pathname}${location.search}${location.hash}`,
+          returnState: {
+            ...currentState,
+            resumeSeatIds: Array.from(selected),
+          },
+        },
+      });
       return;
     }
 
@@ -361,11 +465,16 @@ export default function SeatBookingPage() {
         idempotencyKey: idempotencyKeyRef.current,
       };
       const result = await bookingApi.createBooking(payload);
-      
-      const pickedSeats = seats.filter((s) => selected.has(s.seatId));
-      const total = pickedSeats.reduce((sum, s) => sum + s.price, 0);
-      setConfirmation({ ...result, seats: pickedSeats, totalPrice: total });
-      setScreen("confirmed");
+
+      clearPersistedSeatHold(showtimeId);
+      // The checkout page (BookingCheckoutPage) re-fetches and displays the
+      // same booking summary plus the actual payment step, so landing on an
+      // interstitial "seats reserved" screen first was a redundant extra
+      // click. Its "release without telling booking-service" behavior was
+      // also a real bug: releasing the hold directly against movie-service
+      // left the booking stuck at PENDING_PAYMENT until BookingExpiryScheduler
+      // caught up, instead of going through POST /api/bookings/{id}/cancellations.
+      navigate(`/checkout/${result.bookingId}`);
     } catch (err: any) {
       setScreen("map");
       const errResponse = err.response?.data;
@@ -386,52 +495,6 @@ export default function SeatBookingPage() {
       }
     }
   };
-
-  const handleReleaseHold = useCallback(async (mode: "change" | "cancel") => {
-    if (!showtimeId || !confirmation?.holdId) {
-      setErrorMsg("This reservation cannot be changed automatically. Please reload the seat map.");
-      setScreen("map");
-      setConfirmation(null);
-      void loadSeats(true);
-      return;
-    }
-
-    try {
-      await bookingApi.releaseSeatHold(showtimeId, confirmation.holdId);
-      setConfirmation(null);
-      setSelected(new Set());
-      setConflicts(new Set());
-      setErrorMsg(null);
-      renewIdempotencyKey();
-      await loadSeats(true);
-      if (mode === "change") {
-        setScreen("map");
-      } else {
-        navigate(-1);
-      }
-    } catch (error: any) {
-      const status = error?.response?.status;
-      setErrorMsg(
-        status === 409
-          ? "The reservation has already expired or changed. The latest seat map has been loaded."
-          : "We could not release this reservation. Please try again."
-      );
-      setConfirmation(null);
-      setSelected(new Set());
-      setScreen("map");
-      await loadSeats(true);
-    }
-  }, [confirmation?.holdId, loadSeats, navigate, renewIdempotencyKey, showtimeId]);
-
-  const handleHoldExpired = useCallback(() => {
-    setConfirmation(null);
-    setSelected(new Set());
-    setConflicts(new Set());
-    setErrorMsg("Your seat hold expired. The latest availability has been loaded.");
-    renewIdempotencyKey();
-    setScreen("map");
-    void loadSeats(true);
-  }, [loadSeats, renewIdempotencyKey]);
 
   if (isLoadingSeats) {
     return (
@@ -461,7 +524,7 @@ export default function SeatBookingPage() {
               Back to showtimes
             </button>
             <button
-              onClick={loadSeats}
+              onClick={() => void loadSeats()}
               className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
             >
               Try again
@@ -504,70 +567,6 @@ export default function SeatBookingPage() {
   const formattedDate = new Date(showtimeDetails.dateTime).toLocaleDateString("en-US", {
     weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
   });
-
-  if (screen === "confirmed" && confirmation) {
-    return (
-      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-4">
-        <div className="w-full max-w-md bg-[#0a0a0a] border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
-          <div className="bg-gradient-to-b from-[#152515] to-[#0a0a0a] px-8 pt-8 pb-6 text-center border-b border-white/5">
-            <div className="w-14 h-14 rounded-full bg-[#1a5535] border border-[#2a7a4a] flex items-center justify-center mx-auto mb-4">
-              <CheckCircle2 size={28} className="text-[#34d399]" />
-            </div>
-            <h2 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: "'Inter', sans-serif" }}>
-              Seats reserved
-            </h2>
-            <p className="text-white/60 text-sm">Complete payment before the server hold expires</p>
-          </div>
-
-          <div className="px-6 py-5 space-y-3 border-b border-white/5">
-            {[
-              { label: "Booking ID", value: confirmation.bookingId, accent: true },
-              { label: "Film", value: showtimeDetails.movieTitle, accent: false },
-              { label: "Hall", value: `${showtimeDetails.cinemaName} · ${showtimeDetails.hall}`, accent: false },
-              { label: "Seats", value: confirmation.seats.map((s) => s.seatCode?.trim() || `${s.row}${s.number}`).join(", "), accent: false },
-              { label: "Total", value: formatVND(confirmation.totalPrice), accent: true },
-            ].map(({ label, value, accent }) => (
-              <div key={label} className="flex items-start justify-between gap-4">
-                <span className="text-[10px] text-white/50 uppercase tracking-[0.15em] pt-0.5 shrink-0"
-                  style={{ fontFamily: "'Inter', sans-serif" }}>{label}</span>
-                <span className={`text-sm text-right ${accent ? "text-[#60a5fa] font-semibold" : "text-white/90"}`}
-                  style={{ fontFamily: "'Inter', sans-serif" }}>
-                  {value}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div className="px-6 py-5 flex flex-col gap-4">
-            <div className="flex justify-center">
-              <CountdownTimer lockedUntil={confirmation.lockedUntil} onExpired={handleHoldExpired} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => void handleReleaseHold("change")}
-                className="rounded-lg border border-white/15 px-3 py-2.5 text-sm font-semibold text-white/80 transition-colors hover:bg-white/[0.06] hover:text-white"
-              >
-                Change seats
-              </button>
-              <button
-                onClick={() => void handleReleaseHold("cancel")}
-                className="rounded-lg border border-red-400/20 px-3 py-2.5 text-sm font-semibold text-red-300 transition-colors hover:bg-red-400/10"
-              >
-                Cancel hold
-              </button>
-            </div>
-            <button
-              onClick={() => navigate("/")}
-              className="w-full py-3 bg-[#60a5fa] text-black rounded-lg font-semibold text-base tracking-wide hover:brightness-110 transition-colors flex items-center justify-center gap-1"
-              style={{ fontFamily: "'Inter', sans-serif" }}
-            >
-              Continue <ChevronRight size={16} />
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div

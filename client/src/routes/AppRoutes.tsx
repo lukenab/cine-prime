@@ -18,6 +18,8 @@ import OffersPage from "../pages/customer/OffersPage";
 import ShowtimePage from "../pages/customer/ShowtimePage";
 import SeatBookingPage from "../pages/customer/SeatBookingPage";
 import ProfilePage from "../pages/customer/ProfilePage";
+import BookingCheckoutPage from "../pages/customer/BookingCheckoutPage";
+import MyBookingsPage from "../pages/customer/MyBookingsPage";
 
 import AdminDashboard from "../pages/admin/AdminDashboardPage";
 import ManageUserPage from "../pages/admin/ManageUserPage";
@@ -74,6 +76,10 @@ export default function AppRoutes() {
         <Route path="/showtime/:movieId" element={<ShowtimePage />} />
         <Route path="/booking/:showtimeId" element={<SeatBookingPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route element={<ProtectedRoute allowedRoles={["ROLE_MEMBER"]} />}>
+          <Route path="/checkout/:bookingId" element={<BookingCheckoutPage />} />
+          <Route path="/my-bookings" element={<MyBookingsPage />} />
+        </Route>
       </Route>
 
       {/* Auth pages */}

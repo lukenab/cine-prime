@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Film, Search, Menu, X, LogOut, User, ChevronDown, LayoutDashboard } from "lucide-react";
+import { Film, Search, Menu, X, LogOut, User, ChevronDown, LayoutDashboard, TicketCheck } from "lucide-react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { userApi } from "../api/userApi";
@@ -281,6 +281,16 @@ export function Navbar() {
                   >
                     <User size={15} /> My Profile
                   </button>
+                  {!isStaff && (
+                    <button
+                      onClick={() => { navigate("/my-bookings"); setDropdownOpen(false); }}
+                      style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", border: "none", background: "transparent", cursor: "pointer", borderRadius: 8, color: "rgba(255,255,255,0.6)", fontSize: 13, transition: "all 0.15s" }}
+                      onMouseEnter={e => { e.currentTarget.style.background = "rgba(59,130,246,0.1)"; e.currentTarget.style.color = "#60a5fa"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "rgba(255,255,255,0.6)"; }}
+                    >
+                      <TicketCheck size={15} /> My Bookings
+                    </button>
+                  )}
                   {isStaff && (
                     <button
                       onClick={() => { navigate("/admin"); setDropdownOpen(false); }}
@@ -426,6 +436,17 @@ export function Navbar() {
             >
               <LayoutDashboard size={16} />
               Back to Admin
+            </button>
+          )}
+
+          {isLogged && !isStaff && (
+            <button
+              onClick={() => { navigate("/my-bookings"); setMenuOpen(false); }}
+              className="flex items-center justify-center gap-2 px-5 py-3 rounded-full w-full mt-1 text-sm font-semibold"
+              style={{ color: "#60a5fa", border: "1px solid rgba(59,130,246,0.4)", backgroundColor: "rgba(59,130,246,0.08)" }}
+            >
+              <TicketCheck size={16} />
+              My Bookings
             </button>
           )}
 

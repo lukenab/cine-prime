@@ -1,216 +1,302 @@
-# DEMO_SCRIPT.md
+# Kịch bản demo luồng đặt vé CinePrime
 
-## 1. Demo Mục Tiêu (Objective)
+> Cập nhật: 30/07/2026
+> Phạm vi: integration demo cho customer booking happy path trên môi trường local + VNPAY Sandbox.
 
-Kịch bản này mô tả target end-to-end của Booking Service theo `BOOKING_SERVICE_PRODUCT_ISSUES.md`: giữ ghế authoritative, tạo booking chờ thanh toán, xác nhận ghế đúng một lần, phát hành QR ticket và xử lý các nhánh lỗi quan trọng.
+## 1. Kết luận sẵn sàng demo
 
-Demo nhằm chứng minh:
+Luồng hiện tại đủ để demo:
 
-* Không thể double-book cùng một ghế khi có request đồng thời.
-* Retry không tạo booking/payment/ticket/refund trùng.
-* Frontend không quyết định giá, owner, TTL hoặc trạng thái thanh toán.
-* Payment success chỉ thành booking confirmed sau khi inventory `SOLD`.
-* Expiry/cancellation/late payment có compensation hoặc reconciliation rõ ràng.
-* Member, employee và service-to-service được phân quyền đúng namespace.
+```text
+Chọn phim/rạp
+→ chọn suất ON_SALE
+→ chọn ghế
+→ giữ ghế atomically
+→ tạo PENDING_PAYMENT booking
+→ thanh toán VNPAY Sandbox
+→ CONFIRMED
+→ xem vé/QR pass
+```
 
-> Đây là demo script cho target design/backlog. Chỉ chạy phase nào khi issue tương ứng đã được implement và test environment đã có Movie/Payment contract phù hợp.
+Đã xác minh trên môi trường tích hợp:
 
-## 2. Các Vai Trò Tham Gia (Actors)
+- API Gateway và các service chính đang phản hồi.
+- Public schedule API chỉ trả suất `ON_SALE`.
+- Tại thời điểm kiểm tra có `42` suất `ON_SALE`, trong đó `34` suất từ ngày 29/07/2026 trở đi.
+- Quick Booking lấy phim và suất chiếu thật từ API.
+- Luồng `Obsession → CinePrime Landmark 81 → 20:15 · Room 4` đã mở thành công trang chọn ghế.
+- Seat map được materialize từ active room layout, không dùng fallback 10x10.
+- Ghế có trạng thái live và final price snapshot trong khoảng `90.000đ–162.000đ`.
+- Hold policy của customer có thời hạn 10 phút.
 
-* `MEMBER`: Chọn ghế, tạo booking, thanh toán, xem/hủy booking và lấy QR ticket.
-* `EMPLOYEE`: Tra cứu booking đúng cluster và check-in ticket.
-* `ADMIN / OPERATOR`: Override cancellation và xử lý reconciliation theo permission.
-* `MOVIE_SERVICE`: Sở hữu seat inventory, price, hold TTL và transition `RESERVED/SOLD`.
-* `PAYMENT_SERVICE`: Sở hữu payment/refund ledger và phát normalized result event.
-* `BOOKING_SERVICE`: Sở hữu order/snapshot/state machine/ticket và orchestration.
+> Lưu ý: showtime ID có thể thay đổi sau khi seed hoặc publish lại. Không nên phụ thuộc cố định vào `/booking/354`; hãy chọn suất `ON_SALE` đang có ghế từ UI hoặc kết quả preflight.
 
-## 3. Dữ Liệu Chuẩn Bị
+### Cổng kiểm tra bắt buộc trước buổi demo
 
-* Showtime `55` đang mở bán, chưa qua cutoff, tại “CinePrime Quận 1 — Phòng IMAX 1”.
-* Ghế `901/G7` và `902/G8` đang `AVAILABLE`, giá authoritative `120.000 VND/ghế`.
-* Member `acc-001` có JWT hợp lệ và chưa vượt active hold limit.
-* Employee `emp-q1` có permission `TICKET_CHECK_IN` tại đúng cluster Quận 1.
-* Movie và Payment Service chấp nhận service credential của Booking Service.
+Phải diễn tập ít nhất một lượt VNPAY Sandbox hoàn chỉnh:
 
-## 4. Kịch Bản Demo P0 — Happy Path Online Booking
+```text
+Create payment session
+→ redirect sang VNPAY
+→ thanh toán thành công
+→ signed return/IPN
+→ booking CONFIRMED
+→ seat SOLD
+→ ticket được phát hành
+```
 
-### Phase 1: Tạo Hold Và Pending Booking
+Việc endpoint IPN phản hồi khi gọi không có chữ ký chỉ chứng minh route đã mở, chưa chứng minh round-trip thanh toán hợp lệ.
 
-1. **Member bấm “Tiếp tục”** và gọi `POST /api/bookings` với header `Idempotency-Key: demo-booking-001`:
+## 2. Checklist chuẩn bị
 
-   ```json
-   { "showtimeId": 55, "showtimeSeatIds": [901, 902] }
-   ```
+### 2.1. Hạ tầng và service
 
-2. **Kiểm tra request tối thiểu**:
-   * Request không có `accountId`, movie/cinema, price hoặc TTL.
-   * Booking lấy owner từ JWT và gọi Movie Service reserve all-or-nothing.
-3. **Kết quả mong đợi**:
-   * HTTP success, trả một `bookingId`, `status=PENDING_PAYMENT`, `finalAmount=240000` và `expiresAt`.
-   * DB lưu showtime/movie/cluster/room/seat/price snapshot cùng internal hold reference/token.
-   * Movie inventory là `RESERVED`, chưa phải `SOLD`.
-   * Raw hold token không xuất hiện trong public response/log.
+- [ ] PostgreSQL đang chạy.
+- [ ] Redis đang chạy.
+- [ ] Discovery Server đang chạy.
+- [ ] API Gateway đang chạy tại `http://localhost:8080`.
+- [ ] Frontend đang chạy tại `http://localhost:3000`.
+- [ ] `movie-service`, `booking-service`, `payment-service`, `auth-service` đều healthy.
+- [ ] Không bật mock booking/payment fallback.
 
-### Phase 2: Chứng Minh Idempotency
+Chạy preflight không làm thay đổi dữ liệu:
 
-1. Gửi lại đúng header `demo-booking-001` và đúng body.
-2. **Kết quả mong đợi**: Trả lại cùng booking/result; không tạo hold hoặc booking thứ hai.
-3. Gửi lại cùng key nhưng đổi seat thành `[901]`.
-4. **Kết quả mong đợi**: HTTP `409`, `IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST`.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\demo\verify-booking-demo.ps1
+```
 
-### Phase 3: Khởi Tạo Thanh Toán
+Nếu muốn kiểm tra cả đường public qua ngrok:
 
-1. Member gọi Payment Service `POST /api/payments` bằng `bookingId` vừa tạo.
-2. Payment Service gọi Booking `GET /internal/bookings/{bookingId}/payment-context` bằng service credential.
-3. **Kết quả mong đợi**:
-   * Booking trả owner `acc-001`, amount `240000`, currency `VND`, status và expiry authoritative.
-   * Frontend không gửi/ghi đè payment amount.
-   * Gọi payment-context bằng member token hoặc invalid service token bị `403`.
+```powershell
+powershell -ExecutionPolicy Bypass `
+  -File .\scripts\demo\verify-booking-demo.ps1 `
+  -NgrokBaseUrl "https://delouse-lather-ferry.ngrok-free.dev"
+```
 
-### Phase 4: Nhận Payment Success Và Confirm Inventory
+Preflight phải kết thúc với `READY`. Cảnh báo “signed VNPAY round-trip chưa được kiểm tra tự động” là bình thường và phải được xử lý bằng diễn tập thủ công.
 
-1. Payment Service phát event authenticated `PAYMENT_SUCCEEDED` với `eventId=evt-demo-001`, payment ID, booking ID, amount/currency khớp.
-2. Booking Service persist inbox, chuyển sang `CONFIRM_PENDING` và gọi Movie Service confirm bằng stable idempotency key.
-3. Movie Service chuyển hold `RESERVED -> SOLD` đúng một lần.
-4. Booking Service commit:
-   * `bookingStatus=CONFIRMED`;
-   * `paymentStatus=SUCCEEDED`;
-   * `inventoryStatus=SOLD`;
-   * một ticket cho mỗi booking detail;
-   * outbox `BOOKING_CONFIRMED` và `TICKET_ISSUED`.
-5. Gửi lại cùng payment event.
-6. **Kết quả mong đợi**: Event bị deduplicate; không tăng sold counter, không tạo ticket/outbox side effect lần hai.
+### 2.2. VNPAY Sandbox
 
-### Phase 5: Xem Booking Và Ticket
+- [ ] `TMN Code` và `Hash Secret` đã được nạp vào `payment-service`.
+- [ ] ngrok đang forward đến API Gateway `localhost:8080`.
+- [ ] IPN URL:
 
-1. Member gọi `GET /api/bookings/{bookingId}`.
-2. **Kết quả mong đợi**: Trả snapshot đầy đủ, `canPay=false`, `canViewTicket=true`.
-3. Member gọi `GET /api/bookings/{bookingId}/ticket-pass`.
-4. **Kết quả mong đợi**: Một opaque QR token cho booking và hai ticket `VALID`; QR không chứa PII/price có thể sửa.
+```text
+https://<ngrok-domain>/api/payments/vnpay/ipn
+```
 
-## 5. Kịch Bản Concurrency — Hai Người Chọn Cùng Ghế
+- [ ] Return URL:
 
-1. Chuẩn bị ghế `903/H1` là `AVAILABLE`.
-2. Cho `acc-001` và `acc-002` đồng thời gọi `POST /api/bookings` cho seat `903`, mỗi request dùng key riêng.
-3. **Kết quả mong đợi**:
-   * Đúng một request tạo hold/booking thành công.
-   * Request còn lại nhận `409 SEATS_ALREADY_TAKEN` với seat ID không khả dụng.
-   * Không có partial booking và không có hai authoritative hold cho cùng ghế.
+```text
+https://<ngrok-domain>/api/payments/vnpay/return
+```
 
-## 6. Kịch Bản Expiry — Không Thanh Toán
+- [ ] Đã thanh toán thử thành công ít nhất một lần trước giờ demo.
+- [ ] Đã kiểm tra callback lặp lại không confirm booking hoặc phát hành vé lần hai.
+- [ ] Nếu dùng ngrok bản miễn phí: đã bấm "Visit Site" trên trang cảnh báo `ERR_NGROK_6024` ít nhất một lần bằng đúng trình duyệt sẽ dùng để demo (cảnh báo chỉ hiện một lần cho mỗi trình duyệt, không phải một lần vĩnh viễn — Incognito hoặc trình duyệt khác sẽ gặp lại).
 
-1. Tạo một booking mới và không thanh toán đến đúng `expiresAt`.
-2. Chạy/đợi expiry worker claim booking theo batch.
-3. **Kết quả mong đợi**:
-   * Booking `PENDING_PAYMENT -> EXPIRED` đúng một lần.
-   * Hold được release và ghế trở lại `AVAILABLE` theo Movie Service.
-   * Scheduler chạy lại không release hoặc phát event trùng.
-   * Payment-context sau expiry trả `410 BOOKING_EXPIRED`.
+### 2.3. Dữ liệu và tài khoản
 
-## 7. Kịch Bản Failure Recovery — Mất Response Sau Commit
+- [ ] Có tài khoản `CUSTOMER` đã hoàn thiện profile và đăng nhập sẵn.
+- [ ] Có ít nhất một phim customer-visible.
+- [ ] Có suất chiếu `ON_SALE` trong ngày 29/07 hoặc 30/07.
+- [ ] Showtime đã có `showtime_seat`, ghế `AVAILABLE` và giá lớn hơn 0.
+- [ ] Mở sẵn `/my-bookings` trong một tab dự phòng.
+- [ ] Nếu demo check-in: có tài khoản `EMPLOYEE` được phân quyền đúng cinema cluster.
 
-### Case A: Movie Reserve Commit Nhưng Response Bị Mất
+## 3. Luồng demo chính trên UI
 
-1. Mô phỏng Movie Service commit hold rồi timeout response.
-2. Booking retry bằng đúng downstream idempotency key.
-3. **Kết quả mong đợi**: Nhận lại hold cũ và tiếp tục tạo đúng một booking.
+### Bước 1 — Chọn suất chiếu
 
-### Case B: Booking DB Fail Sau Reserve
+Tại homepage:
 
-1. Mô phỏng reserve thành công nhưng local booking transaction fail.
-2. **Kết quả mong đợi**: Booking gọi release bằng hold token/reference.
-3. Nếu release cũng timeout, kiểm tra có durable compensation task; không chỉ log lỗi rồi bỏ qua.
+1. Chọn `CinePrime Landmark 81`.
+2. Chọn ngày đang có suất mở bán.
+3. Chọn phim `Obsession` hoặc một phim khác mà preflight tìm được.
+4. Chọn một suất `ON_SALE`, ví dụ `20:15 · Room 4`.
+5. Nhấn `Choose seats`.
 
-### Case C: Payment Success Nhưng Confirm Inventory Chưa Rõ
+Có thể giới thiệu hai entry point:
 
-1. Mô phỏng Movie confirm timeout sau khi payment đã success.
-2. **Kết quả mong đợi**:
-   * Booking giữ `CONFIRM_PENDING`, không issue ticket sớm.
-   * Worker retry/query bằng cùng key.
-   * Nếu Movie đã `SOLD`, local state được forward-recover; tuyệt đối không release ghế `SOLD`.
+- **Movie-first:** `Now Showing → Buy tickets`.
+- **Cinema-first:** chọn cinema cluster rồi xem lịch đang mở bán.
 
-### Case D: Late Payment Sau Expiry
+Điểm trình bày:
 
-1. Expire booking trước, sau đó phát `PAYMENT_SUCCEEDED` hợp lệ.
-2. **Kết quả mong đợi**: Không revive booking và không chiếm ghế khác; tạo refund/compensation hoặc reconciliation có audit.
+- Customer chỉ thấy suất đang mở bán, không thấy draft/internal/suspended showtime.
+- Ngày, rạp, phim và suất chiếu đều lấy từ API thật.
+- Hệ thống nhiều chi nhánh vẫn dùng cùng flow nhưng inventory được tách theo showtime và room.
 
-## 8. Kịch Bản P1 — Check-in QR
+### Bước 2 — Chọn và giữ ghế
 
-1. Employee `emp-q1` scan QR bằng `POST /api/ticket-check-ins`, mode `SELECTED`, ticket `G7`, gate `Q1-GATE-02`.
-2. **Kết quả mong đợi**: G7 `VALID -> USED`, G8 vẫn `VALID`, có actor/gate/time audit.
-3. Scan lại cùng request/key.
-4. **Kết quả mong đợi**: Trả trạng thái/`checkedInAt` cũ, không check-in lần hai.
-5. Thử scan tại gate cluster khác.
-6. **Kết quả mong đợi**: `403 WRONG_CINEMA_SCOPE`.
-7. Thử token đã revoke do cancellation.
-8. **Kết quả mong đợi**: `410 QR_TOKEN_REVOKED`.
+Tại `/booking/{showtimeId}`:
 
-## 9. Kịch Bản P1 — Cancellation & Refund
+1. Giới thiệu phim, rạp, phòng và thời gian bắt đầu.
+2. Chỉ ra inventory connection đang ở trạng thái `Live`.
+3. Chọn 1–2 ghế `AVAILABLE`.
+4. Kiểm tra Order Summary:
+   - mã ghế;
+   - loại ghế;
+   - giá snapshot;
+   - tổng tiền.
+5. Nhấn `Confirm Booking`.
 
-### Case A: Hủy Trước Thanh Toán
+Kết quả mong đợi:
 
-1. Tạo booking `PENDING_PAYMENT`, payment chưa vào `PROCESSING`.
-2. Member gọi `POST /api/bookings/{bookingId}/cancellations` với idempotency key và reason.
-3. **Kết quả mong đợi**: HTTP `201`, booking `CANCELLED`, inventory `RELEASED`, refund `NOT_REQUESTED`.
+- Selection được giữ theo cơ chế all-or-nothing.
+- Ghế chuyển `AVAILABLE → HELD`.
+- Hold gắn với customer, có `holdId`, thời hạn và idempotency key.
+- Booking Service tạo booking `PENDING_PAYMENT`.
+- UI hiển thị countdown theo thời gian hết hạn của hold.
+- Giá và tổng tiền do server trả về; browser không tự quyết định giá.
 
-### Case B: Hủy Booking Đã Thanh Toán
+Giải thích ngắn khi báo cáo:
 
-1. Dùng booking `CONFIRMED`, mọi ticket còn `VALID` và còn trong cutoff.
-2. Member tạo cancellation.
-3. **Kết quả mong đợi ban đầu**: HTTP `202`, `CANCEL_REQUESTED`, refund `PENDING`, không báo hoàn tất sớm.
-4. Payment Service trả `REFUND_SUCCEEDED`; Movie Service hoàn tất cancel-sale theo policy.
-5. **Kết quả cuối**: Booking `CANCELLED`, refund `SUCCEEDED`, ticket `CANCELLED`, QR revoked, outbox tương ứng.
+> Movie Service là nguồn tồn kho ghế và final seat price duy nhất. Booking Service điều phối việc hold rồi lưu snapshot giao dịch, không đọc hoặc cập nhật trực tiếp database của Movie Service.
 
-### Case C: Hủy Sau Check-in
+### Bước 3 — Thanh toán VNPAY Sandbox
 
-1. Dùng booking có ít nhất một ticket `USED`.
-2. Member yêu cầu hủy.
-3. **Kết quả mong đợi**: HTTP `409 TICKET_ALREADY_USED`; không refund/cancel-sale tự động.
+1. Tại checkout, kiểm tra countdown còn hiệu lực.
+2. Chọn VNPAY và nhấn thanh toán.
+3. Hoàn tất giao dịch bằng tài khoản/thẻ Sandbox.
+4. Chờ redirect trở lại CinePrime.
+5. Không đóng tab trước khi UI hiển thị kết quả cuối cùng.
 
-### Case D: Cancel Race Với Payment Success
+Kết quả mong đợi:
 
-1. Gửi cancellation cùng lúc với `PAYMENT_SUCCEEDED`.
-2. **Kết quả mong đợi**: Conditional transition tạo một kết quả xác định; nếu payment authoritative success thì workflow tiếp tục refund, không mất tiền và không tạo hai cancellation.
+| Aggregate | Trước thanh toán | Sau callback hợp lệ |
+|---|---|---|
+| Payment | `INITIATED` | `PAID` |
+| Booking | `PENDING_PAYMENT` | `CONFIRMED` |
+| Seat inventory | `HELD` | `SOLD` |
 
-## 10. Kịch Bản P1 — Employee Operations
+Điểm trình bày:
 
-1. Employee gọi `GET /api/bookings?scope=CLUSTER...`.
-2. **Kết quả mong đợi**: Chỉ thấy booking trong cluster được phân công; response không lộ PII quá mức.
-3. Employee tạo counter booking qua `POST /api/bookings` với `bookingType=COUNTER`, cash và terminal hợp lệ.
-4. **Kết quả mong đợi**: Dùng cùng inventory/confirmation/ticket flow, có receipt reference và audit cashier/terminal.
-5. Thử terminal hoặc showtime thuộc cluster khác.
-6. **Kết quả mong đợi**: `403 TERMINAL_NOT_AUTHORIZED` hoặc `EMPLOYEE_OUTSIDE_CLUSTER_SCOPE`.
+- Payment Service xác minh chữ ký và số tiền trước khi phát outcome.
+- Callback được deduplicate bằng provider event/inbox.
+- Gửi lại cùng callback không được confirm inventory hoặc phát hành vé lần hai.
 
-## 11. End of Demo — Checklist
+### Bước 4 — Kiểm tra vé
 
-* [ ] Một inventory owner duy nhất; Booking DB không có competing authoritative seat lock.
-* [ ] Create booking, payment event, confirm, release, cancellation và scan đều retry an toàn.
-* [ ] Không có amount/owner/TTL/trạng thái authoritative do frontend quyết định.
-* [ ] Không có booking confirmed trước inventory `SOLD`.
-* [ ] Không release ghế đã `SOLD`.
-* [ ] Không có ticket trước confirmation hoặc ticket/QR side effect trùng.
-* [ ] Expiry, late payment và partial failure có durable recovery state.
-* [ ] Ownership, cluster scope và service credential được kiểm tra.
+1. Mở `My Bookings`.
+2. Chọn booking vừa tạo — trang checkout tự chuyển sang giao diện vé điện tử dạng ngang (boarding-pass) khi booking đã `CONFIRMED`.
+3. Kiểm tra trên vé:
+   - mã booking, mã vé;
+   - phim, poster, age rating, thời lượng và thể loại;
+   - tên và địa chỉ đầy đủ cụm rạp, phòng chiếu;
+   - giờ bắt đầu **và giờ kết thúc** suất chiếu (tính từ thời lượng phim);
+   - ghế, tên người đặt vé, phương thức thanh toán (ví dụ "NCB · Domestic ATM card");
+   - QR/ticket pass ở phần "cuống vé" bên phải, ngăn cách bằng đường xé vé.
 
-## 12. Q&A Tiềm Năng Cho Mentor / Leader
+Giải thích:
 
-**Q: Vì sao Booking Service không tự tạo bảng khóa ghế?**  
-**A:** Vì Movie Service đã sở hữu showtime seat inventory. Hai nguồn lock độc lập có thể lệch TTL/trạng thái và gây double-book hoặc ghế kẹt. Booking chỉ lưu hold token/reference và snapshot.
+> Booking lưu snapshot giao dịch nên lịch sử vé không bị thay đổi nếu catalog phim, tên phòng hoặc bảng giá được cập nhật sau đó. Các trường như thời lượng phim, age rating, địa chỉ rạp, tên người đặt và phương thức thanh toán được làm giàu tại thời điểm đọc từ Movie Service, User Service và Payment Service — xem mục "Làm giàu thông tin vé" trong [FEATURE_BRIEF.md](FEATURE_BRIEF.md).
 
-**Q: Vì sao chỉ có một `POST /api/bookings`, không cho frontend gọi hold trước?**  
-**A:** “Tiếp tục” là một use case sản phẩm. Booking Service điều phối reserve và persist order, đồng thời chịu trách nhiệm compensation nếu một bước thất bại.
+### Bước 4b — Yêu cầu hoàn vé (tùy chọn)
 
-**Q: Payment success có đồng nghĩa booking confirmed không?**  
-**A:** Chưa. Booking chỉ `CONFIRMED` sau khi Movie Service xác nhận hold thành `SOLD` và local ticket transaction hoàn tất.
+1. Trên vé vừa xem, bấm **"Request a refund"** (nút này chỉ hiện nhãn này khi booking đã `CONFIRMED`/`CONFIRM_PENDING`; với booking chưa thanh toán nút vẫn là "Cancel booking").
+2. Chọn 1 lý do trong dropdown (ví dụ "Booked the wrong showtime or cinema"), có thể ghi thêm chi tiết.
+3. Xác nhận gửi yêu cầu.
 
-**Q: Idempotency có làm service đang down hoạt động lại không?**  
-**A:** Không. Nó làm retry an toàn. Khả năng chịu lỗi còn cần timeout, bounded retry, circuit breaker, durable operation, TTL, compensation và reconciliation.
+Kết quả mong đợi:
 
-**Q: Vì sao payment timeout không chuyển ngay sang failed?**  
-**A:** Provider có thể đã thu tiền nhưng response bị mất. Trạng thái phải là `UNKNOWN`, sau đó query/reconcile bằng cùng reference/key để tránh charge hoặc refund trùng.
+- Booking chuyển `REFUND_PENDING` theo BR-CAN-02.
+- Refund amount do server tính, không nhận từ client.
+- Modal hiển thị đúng cảnh báo "A refund may be required" kèm số tiền dự kiến.
 
-**Q: Tại sao không release ghế sau khi đã `SOLD`?**  
-**A:** Release chỉ dành cho hold `RESERVED`. Sale đã xác nhận cần cancel-sale contract và refund policy riêng để tránh mở bán lại ghế sai.
+### Bước 5 — Check-in tùy chọn
 
-**Q: Vì sao QR là một token opaque cho cả booking?**  
-**A:** Token không để lộ PII/giá, có thể revoke tập trung và vẫn hỗ trợ check-in tất cả hoặc một phần ticket trong booking.
+Đăng nhập tài khoản `EMPLOYEE` của đúng cinema cluster và quét QR pass.
+
+Kết quả mong đợi:
+
+- Lần đầu check-in thành công.
+- Retry cùng idempotency key trả lại kết quả cũ.
+- Check-in lại bằng key mới trả conflict.
+- Employee của cluster khác bị từ chối.
+
+## 4. Kịch bản báo cáo ngắn
+
+> “Customer có thể bắt đầu theo movie-first hoặc cinema-first. Public API chỉ hiển thị showtime đang ON_SALE. Khi khách xác nhận lựa chọn, Movie Service giữ toàn bộ ghế atomically trong 10 phút; Booking Service tạo một booking PENDING_PAYMENT và lưu snapshot ghế, giá, phí và tổng tiền. Payment Service tạo phiên VNPAY Sandbox, xác minh signed callback rồi mới phát kết quả thanh toán. Chỉ sau payment outcome hợp lệ, ghế chuyển HELD sang SOLD, booking chuyển CONFIRMED và ticket được phát hành. Idempotency bảo vệ các thao tác retry; expiry và compensation trả ghế về AVAILABLE khi giao dịch không hoàn tất.”
+
+## 5. Nhánh lỗi và cách trình bày
+
+| Tình huống | Kết quả mong đợi | Cách phục hồi khi demo |
+|---|---|---|
+| Ghế vừa được customer khác giữ | Trả conflict; không hold một phần và không tạo booking lỗi | Refresh seat map và chọn ghế khác |
+| Hold hết hạn trước payment | Booking `EXPIRED`; ghế trở lại `AVAILABLE` | Chọn lại ghế và tạo booking mới |
+| Thanh toán thất bại | Không bán ghế; hold được release/expire | Quay lại lịch chiếu và thử lại |
+| Nhấn xác nhận/thanh toán lặp | Không tạo booking/payment trùng | Hiển thị lại aggregate đã tạo |
+| Callback VNPAY gửi lặp | Inbox replay; không confirm/ticket hai lần | Kiểm tra booking vẫn chỉ có một ticket |
+| Payment success đến sau expiry | Tạo reconciliation case; không chiếm lại ghế đã bán cho người khác | Không tự động xác nhận; xử lý reconciliation |
+| Không thấy suất chiếu | Showtime không `ON_SALE`, sai ngày/rạp hoặc đã hết thời gian bán | Chọn candidate do preflight đề xuất |
+| Bị chuyển sang login | Booking yêu cầu customer authenticated | Đăng nhập trước khi bắt đầu demo |
+| Lỗi VNPAY | Sai credential/callback, payment-service hoặc ngrok không hoạt động | Kiểm tra TMN Code, Hash Secret, gateway và ngrok |
+| Redirect sau OTP dừng ở trang "You are about to visit" của ngrok | Cảnh báo chống-lạm-dụng mặc định của ngrok bản miễn phí trên domain public, không phải lỗi hệ thống | Bấm "Visit Site" để trình duyệt tiếp tục tới `/api/payments/vnpay/return` với các tham số `vnp_*` đã ký còn nguyên; không cần thanh toán lại |
+
+## 6. API minh họa idempotency
+
+### Tạo booking
+
+```http
+POST {{baseUrl}}/api/bookings
+Authorization: Bearer {{customerToken}}
+Idempotency-Key: demo-booking-001
+Content-Type: application/json
+```
+
+```json
+{
+  "showtimeId": 354,
+  "seatIds": [1001, 1002]
+}
+```
+
+- Gửi lại cùng key và cùng payload: nhận lại cùng booking.
+- Giữ key nhưng đổi payload: nhận `409 Conflict`.
+- ID trong ví dụ phải được thay bằng ID thật lấy từ preflight/seat map.
+
+### Duplicate payment callback
+
+Provider gửi lại cùng `source + eventId`.
+
+Kỳ vọng:
+
+- inbox trả lại kết quả xử lý trước;
+- inventory không bị confirm lần hai;
+- không phát hành thêm ticket.
+
+## 7. Phạm vi có thể tuyên bố
+
+Có thể trình bày:
+
+> “Đây là integration demo hoàn chỉnh của customer booking happy path trên VNPAY Sandbox.”
+
+Chưa nên trình bày hệ thống là production-ready cho đến khi hoàn thành:
+
+- full Docker E2E và race/load suite;
+- race test expiry/payment và cancellation/payment;
+- signed VNPAY callback rehearsal ổn định;
+- production merchant/refund credentials và secret management;
+- observability, alert và reconciliation operations đầy đủ;
+- promotion, loyalty và concession checkout;
+- POS UI hoàn chỉnh.
+
+## 8. Checklist ngay trước khi trình bày
+
+- [ ] Preflight trả `READY`.
+- [ ] Có candidate showtime `ON_SALE` và ghế `AVAILABLE`.
+- [ ] Customer đã đăng nhập.
+- [ ] VNPAY Sandbox round-trip đã diễn tập.
+- [ ] Ngrok domain hiện tại khớp cấu hình callback.
+- [ ] `/my-bookings` tải được dữ liệu.
+- [ ] Có phương án dự phòng dùng một showtime/customer khác.
+- [ ] Không sử dụng showtime ID hard-code nếu dữ liệu vừa được seed lại.
+
+## 9. Tài liệu liên quan
+
+- [Booking feature brief](FEATURE_BRIEF.md)
+- [Booking business rules](BUSINESS_RULES.md)
+- [Booking API list](API_LIST.md)
+- [Booking technical specification](TECHNICAL_SPECIFICATION.md)
+- [P0/P1 implementation status](P0_P1_IMPLEMENTATION_STATUS.md)

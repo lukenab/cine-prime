@@ -88,6 +88,9 @@ movie:
     # MOV-03 release gate: require >=1 future non-cancelled showtime before COMING_SOON -> NOW_SHOWING.
     require-showtime-for-release: ${MOVIE_REQUIRE_SHOWTIME_FOR_RELEASE:false}
 
+internal-service:
+  key: ${INTERNAL_SERVICE_KEY:local-dev-only-change-me}
+
 showtime:
   seat-hold:
     max-seats-per-booking: ${SHOWTIME_SEAT_HOLD_MAX_SEATS:8}

@@ -20,6 +20,7 @@ import movie.theater.common.exception.AppException;
 import movieservice.config.SeatHoldProperties;
 import movieservice.dto.request.ConfirmShowtimeSeatHoldRequest;
 import movieservice.dto.request.HoldShowtimeSeatsRequest;
+import movieservice.dto.request.ReverseShowtimeSeatSaleRequest;
 import movieservice.dto.response.HeldShowtimeSeatResponse;
 import movieservice.dto.response.SeatHoldPolicyResponse;
 import movieservice.dto.response.ShowtimeSeatHoldMutationResponse;
@@ -118,6 +119,7 @@ public class ShowtimeSeatHoldService {
             seat.setHoldId(holdId);
             seat.setReservedBy(ownerId);
             seat.setHoldIdempotencyKey(idempotencyKey);
+            seat.setBookingId(null);
         });
         showtimeSeatRepository.saveAllAndFlush(seats);
         List<Long> seatIds = seats.stream().map(ShowtimeSeat::getShowtimeSeatId).toList();
@@ -252,6 +254,78 @@ public class ShowtimeSeatHoldService {
         return toMutationResponse(showtimeId, holdId, seats, bookingId, false);
     }
 
+    /**
+     * Reverses a previously confirmed sale after the payment authority has
+     * completed a refund. The original hold and booking references are kept as
+     * an idempotency marker until a future hold overwrites them.
+     */
+    @Transactional
+    public ShowtimeSeatHoldMutationResponse reverseSale(
+            Long showtimeId,
+            String holdId,
+            ReverseShowtimeSeatSaleRequest request,
+            String ownerId) {
+        validateHoldMutationIdentity(holdId, ownerId);
+        ShowTime showtime = showTimeRepository.findByIdForUpdate(showtimeId)
+                .orElseThrow(() -> new AppException(MovieErrorCode.SHOWTIME_NOT_FOUND));
+        List<ShowtimeSeat> seats = showtimeSeatRepository
+                .findByShowtimeAndHoldIdForUpdate(showtimeId, holdId);
+        if (seats.isEmpty()) {
+            throw new AppException(MovieErrorCode.SEAT_HOLD_NOT_FOUND);
+        }
+        validateHoldOwner(seats, ownerId);
+
+        String bookingId = request.getBookingId();
+        boolean replayed = seats.stream().allMatch(seat ->
+                seat.getStatus() == ShowtimeSeatStatus.AVAILABLE
+                        && bookingId.equals(seat.getBookingId()));
+        if (replayed) {
+            return toMutationResponse(
+                    showtimeId,
+                    holdId,
+                    seats,
+                    bookingId,
+                    ShowtimeSeatStatus.AVAILABLE,
+                    true);
+        }
+
+        boolean soldToBooking = seats.stream().allMatch(seat ->
+                seat.getStatus() == ShowtimeSeatStatus.SOLD
+                        && bookingId.equals(seat.getBookingId()));
+        if (!soldToBooking) {
+            throw new AppException(MovieErrorCode.SEAT_HOLD_OWNER_MISMATCH);
+        }
+
+        seats.forEach(seat -> {
+            seat.setStatus(ShowtimeSeatStatus.AVAILABLE);
+            seat.setReservedAt(null);
+            seat.setReservedExpiresAt(null);
+            seat.setHoldIdempotencyKey(null);
+        });
+        int soldSeats = showtime.getSoldSeats() == null ? 0 : showtime.getSoldSeats();
+        showtime.setSoldSeats(Math.max(0, soldSeats - seats.size()));
+        showtimeSeatRepository.saveAllAndFlush(seats);
+        showTimeRepository.save(showtime);
+
+        List<Long> seatIds = seats.stream().map(ShowtimeSeat::getShowtimeSeatId).toList();
+        outboxService.record(
+                SeatInventoryEventType.SALE_REVERSED,
+                showtimeId,
+                holdId,
+                seatIds,
+                null,
+                bookingId);
+        metrics.released();
+
+        return toMutationResponse(
+                showtimeId,
+                holdId,
+                seats,
+                bookingId,
+                ShowtimeSeatStatus.AVAILABLE,
+                false);
+    }
+
     @Transactional
     public int releaseExpiredHolds() {
         List<ShowtimeSeat> expiredSeats = showtimeSeatRepository
@@ -381,11 +455,27 @@ public class ShowtimeSeatHoldService {
             List<ShowtimeSeat> seats,
             String bookingId,
             boolean replayed) {
+        return toMutationResponse(
+                showtimeId,
+                holdId,
+                seats,
+                bookingId,
+                ShowtimeSeatStatus.SOLD,
+                replayed);
+    }
+
+    private ShowtimeSeatHoldMutationResponse toMutationResponse(
+            Long showtimeId,
+            String holdId,
+            List<ShowtimeSeat> seats,
+            String bookingId,
+            ShowtimeSeatStatus status,
+            boolean replayed) {
         return ShowtimeSeatHoldMutationResponse.builder()
                 .holdId(holdId)
                 .showtimeId(showtimeId)
                 .seatIds(seats.stream().map(ShowtimeSeat::getShowtimeSeatId).toList())
-                .status(ShowtimeSeatStatus.SOLD.name())
+                .status(status.name())
                 .bookingId(bookingId)
                 .replayed(replayed)
                 .build();
@@ -413,7 +503,7 @@ public class ShowtimeSeatHoldService {
                 .seatIds(seats.stream().map(ShowtimeSeat::getShowtimeSeatId).toList())
                 .seats(heldSeats)
                 .totalPrice(totalPrice)
-                .expiresAt(expiresAt)
+                .expiresAt(expiresAt.atZone(clock.getZone()).toOffsetDateTime())
                 .replayed(replayed)
                 .build();
     }

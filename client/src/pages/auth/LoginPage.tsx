@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Eye, EyeOff, User, Lock, Loader2 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
 const MOCK_EMPLOYEE_USERNAME = "employee";
@@ -38,6 +38,26 @@ function isMockEmployeeLogin(username: string, password: string): boolean {
   );
 }
 
+interface PostLoginNavigationState {
+  returnTo?: unknown;
+  returnState?: unknown;
+}
+
+function isSafeInternalPath(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.startsWith("/") &&
+    !value.startsWith("//") &&
+    !value.includes("\\")
+  );
+}
+
+function defaultPathForRole(role: string): string {
+  if (role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN") return "/admin";
+  if (role === "ROLE_EMPLOYEE") return "/admin/movies";
+  return "/";
+}
+
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState("");
@@ -48,17 +68,32 @@ export default function LoginPage() {
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const navigate = useNavigate();
-
+  const location = useLocation();
   const { user, login } = useAuth();
+  const loginNavigationState = location.state as PostLoginNavigationState | null;
+
+  const navigateAfterLogin = useCallback((role: string) => {
+    const returnTo = loginNavigationState?.returnTo;
+
+    // Customer flows may resume their exact page after authentication.
+    // Staff accounts always return to their own workspace.
+    if (role === "ROLE_MEMBER" && isSafeInternalPath(returnTo)) {
+      navigate(returnTo, {
+        replace: true,
+        state: loginNavigationState?.returnState,
+      });
+      return;
+    }
+
+    navigate(defaultPathForRole(role), { replace: true });
+  }, [loginNavigationState?.returnState, loginNavigationState?.returnTo, navigate]);
 
   // Redirect nếu user đã login sẵn (ví dụ: vào /login khi đang có token)
   useEffect(() => {
     if (user) {
-      if (user.role === "ROLE_ADMIN" || user.role === "ROLE_SUPER_ADMIN") navigate("/admin", { replace: true });
-      else if (user.role === "ROLE_EMPLOYEE") navigate("/admin/movies", { replace: true });
-      else navigate("/", { replace: true });
+      navigateAfterLogin(user.role);
     }
-  }, [user, navigate]); // Intentionally not checking needsProfileSetup here — CustomerLayout guards that
+  }, [navigateAfterLogin, user]); // Intentionally not checking needsProfileSetup here — CustomerLayout guards that
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,9 +110,7 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       const { role } = await login({ username, password });
-      if (role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN") navigate("/admin", { replace: true });
-      else if (role === "ROLE_EMPLOYEE") navigate("/admin/movies",  { replace: true });
-      else                               navigate("/",              { replace: true });
+      navigateAfterLogin(role);
     } catch (err: any) {
       const code = err?.response?.data?.code;
       if (code === 1008) {
