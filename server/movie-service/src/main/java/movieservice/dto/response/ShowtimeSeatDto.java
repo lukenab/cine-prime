@@ -19,4 +19,8 @@ public class ShowtimeSeatDto {
     private Boolean aisleAfter; // co loi di ngay sau ghe nay khong (render gap tron o so do ghe)
     private String status; // "AVAILABLE" | "LOCKED" | "BOOKED"
     private BigDecimal price;
+    // True when this LOCKED seat's active hold belongs to the requesting
+    // account, so the client can offer "resume checkout" instead of showing
+    // it as unavailable. Always false for AVAILABLE/BOOKED and for anonymous callers.
+    private boolean reservedByMe;
 }

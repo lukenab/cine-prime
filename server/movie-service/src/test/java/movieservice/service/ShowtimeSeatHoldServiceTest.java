@@ -93,7 +93,11 @@ class ShowtimeSeatHoldServiceTest {
 
         assertFalse(result.isReplayed());
         assertEquals(new BigDecimal("180000.00"), result.getTotalPrice());
-        assertEquals(NOW.plusMinutes(10), result.getExpiresAt());
+        assertEquals(
+                NOW.plusMinutes(10)
+                        .atZone(ZoneId.of("Asia/Ho_Chi_Minh"))
+                        .toOffsetDateTime(),
+                result.getExpiresAt());
         assertTrue(seats.stream().allMatch(value -> value.getStatus() == ShowtimeSeatStatus.RESERVED));
         assertTrue(seats.stream().allMatch(value -> "account-1".equals(value.getReservedBy())));
         assertEquals(1, seats.stream().map(ShowtimeSeat::getHoldId).distinct().count());

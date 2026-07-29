@@ -1,0 +1,3 @@
+ALTER TABLE payment_attempt
+    ADD COLUMN IF NOT EXISTS bank_code VARCHAR(30),
+    ADD COLUMN IF NOT EXISTS card_type VARCHAR(30);

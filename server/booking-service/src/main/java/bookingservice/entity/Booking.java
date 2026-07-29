@@ -86,6 +86,10 @@ public class Booking {
     @Builder.Default
     BigDecimal discountAmount = BigDecimal.ZERO;
 
+    @Column(name = "service_fee_amount", precision = 15, scale = 2, nullable = false)
+    @Builder.Default
+    BigDecimal serviceFeeAmount = BigDecimal.ZERO;
+
     @Column(name = "points_used", nullable = false)
     @Builder.Default
     Integer pointsUsed = 0;
@@ -150,6 +154,9 @@ public class Booking {
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     List<Ticket> tickets = new ArrayList<>();
+
+    @OneToOne(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
+    BookingTicketPass ticketPass;
 
     @OneToOne(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
     InventoryReservation inventoryReservation;

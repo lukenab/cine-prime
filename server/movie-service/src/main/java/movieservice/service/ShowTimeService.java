@@ -24,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.exception.AppException;
+import movie.theater.common.security.JwtSecurityUtils;
 import movieservice.dto.request.BulkShowTimeRequest;
 import movieservice.dto.request.BulkUpdateShowTimeStatusRequest;
 import movieservice.dto.request.CreateShowTimeRequest;
@@ -91,7 +92,8 @@ public class ShowTimeService {
             throw new AppException(MovieErrorCode.SHOWTIME_INVENTORY_NOT_MATERIALIZED);
         }
 
-        return seats.stream().map(this::toDto).collect(Collectors.toList());
+        String currentAccountId = JwtSecurityUtils.getCurrentAccountId();
+        return seats.stream().map(seat -> toDto(seat, currentAccountId)).collect(Collectors.toList());
     }
 
     /**
@@ -124,8 +126,9 @@ public class ShowTimeService {
                         .toList();
 
         CinemaRoom room = seats.get(0).getShowTime().getCinemaRoom();
+        String currentAccountId = JwtSecurityUtils.getCurrentAccountId();
         return ShowtimeSeatMapResponse.builder()
-                .seats(seats.stream().map(this::toDto).toList())
+                .seats(seats.stream().map(seat -> toDto(seat, currentAccountId)).toList())
                 .positions(positions)
                 .presentationSystem(room.getPresentationSystem())
                 .projectionTechnologyCode(room.getProjectionTechnology() == null
@@ -137,8 +140,9 @@ public class ShowTimeService {
                 .build();
     }
 
-    private ShowtimeSeatDto toDto(ShowtimeSeat seat) {
+    private ShowtimeSeatDto toDto(ShowtimeSeat seat, String currentAccountId) {
         String status = "AVAILABLE";
+        boolean reservedByMe = false;
         if (seat.getStatus() == ShowtimeSeatStatus.SOLD) {
             status = "BOOKED";
         } else if (seat.getStatus() == ShowtimeSeatStatus.RESERVED) {
@@ -146,6 +150,7 @@ public class ShowTimeService {
                 status = "AVAILABLE"; // lock expired
             } else {
                 status = "LOCKED";
+                reservedByMe = currentAccountId != null && currentAccountId.equals(seat.getReservedBy());
             }
         }
 
@@ -182,6 +187,7 @@ public class ShowTimeService {
                 .aisleAfter(aisleAfter)
                 .status(status)
                 .price(seat.getPrice())
+                .reservedByMe(reservedByMe)
                 .build();
     }
 

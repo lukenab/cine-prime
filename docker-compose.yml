@@ -99,6 +99,9 @@ services:
       SPRING_REDIS_PORT: 6379
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      MOVIE_SERVICE_URL: http://movie-service:8081
+      PAYMENT_SERVICE_URL: http://payment-service:8083
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-local-dev-only-change-me}
     depends_on:
       postgres:
         condition: service_healthy
@@ -158,6 +161,37 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+    networks:
+      - cinema-network
+
+  payment-service:
+    build:
+      context: ./server
+      dockerfile: payment-service/Dockerfile
+    container_name: payment-service
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/payment_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: "123456"
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-local-dev-only-change-me}
+      BOOKING_SERVICE_URL: http://booking-service:8082
+      BOOKING_PAYMENT_WEBHOOK_SECRET: ${BOOKING_PAYMENT_WEBHOOK_SECRET:-local-demo-payment-secret}
+      PAYMENT_FRONTEND_CHECKOUT_URL: http://localhost:3000/checkout
+      VNPAY_RETURN_URL: ${VNPAY_RETURN_URL:-http://localhost:8080/api/payments/vnpay/return}
+      VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-}
+      VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      booking-service:
+        condition: service_started
       discovery-server:
         condition: service_healthy
     networks:

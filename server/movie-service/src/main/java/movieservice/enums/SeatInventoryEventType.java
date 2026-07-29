@@ -8,7 +8,8 @@ import lombok.RequiredArgsConstructor;
 public enum SeatInventoryEventType {
     HELD("seat.held"),
     RELEASED("seat.released"),
-    SOLD("seat.sold");
+    SOLD("seat.sold"),
+    SALE_REVERSED("seat.sale_reversed");
 
     private final String wireName;
 

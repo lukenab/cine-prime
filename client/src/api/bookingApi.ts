@@ -13,6 +13,8 @@ export interface Seat {
   aisleAfter?: boolean;
   status: "AVAILABLE" | "LOCKED" | "BOOKED";
   price: number;
+  /** True when this LOCKED seat's active hold belongs to the signed-in caller. */
+  reservedByMe?: boolean;
 }
 
 /** A physical cell in the room-layout version snapped to a showtime. */
@@ -55,6 +57,104 @@ export interface BookingConfirmation {
   lockedUntil: string;
 }
 
+export type BookingStatus =
+  | "PENDING_PAYMENT"
+  | "CONFIRM_PENDING"
+  | "CONFIRMED"
+  | "CANCEL_REQUESTED"
+  | "REFUND_PENDING"
+  | "REFUNDED"
+  | "CANCELLED"
+  | "EXPIRED";
+
+export type PaymentStatus =
+  | "NOT_STARTED"
+  | "PENDING"
+  | "PROCESSING"
+  | "SUCCEEDED"
+  | "FAILED"
+  | "UNKNOWN"
+  | "CANCELLED";
+
+export type RefundStatus =
+  | "NOT_REQUESTED"
+  | "PENDING"
+  | "SUCCEEDED"
+  | "FAILED"
+  | "UNKNOWN";
+
+export interface BookingItem {
+  showtimeSeatId: number;
+  seatCode: string;
+  seatType: Seat["type"];
+  unitPrice: number;
+  finalPrice: number;
+}
+
+export interface BookingDetail {
+  bookingId: string;
+  bookingCode: string;
+  status: BookingStatus;
+  paymentStatus: PaymentStatus;
+  inventoryStatus: string;
+  showtimeId: number;
+  movieId: number;
+  movieName: string;
+  cinemaClusterId: number;
+  cinemaClusterName: string;
+  cinemaRoomId: number;
+  cinemaRoomName: string;
+  showDate: string;
+  startTime: string;
+  seats: BookingItem[];
+  subtotal: number;
+  serviceFee: number;
+  discount: number;
+  total: number;
+  currency: string;
+  expiresAt?: string;
+  paidAt?: string;
+  createdAt: string;
+}
+
+export interface TicketPass {
+  bookingId: string;
+  bookingCode: string;
+  passToken: string;
+  status: string;
+  clusterId: number;
+  clusterName: string;
+  showtimeId: number;
+  issuedAt: string;
+  seatCodes: string[];
+}
+
+export interface CancellationRequest {
+  reasonCode: string;
+  reason?: string;
+}
+
+export interface CancellationResult {
+  bookingId: string;
+  cancellationId: string;
+  bookingStatus: BookingStatus;
+  cancellationStatus: string;
+  refundStatus: RefundStatus;
+  refundAmount: number;
+  currency: string;
+  replayed: boolean;
+}
+
+export interface BookingPage {
+  content: BookingDetail[];
+  number: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first?: boolean;
+  last?: boolean;
+}
+
 export interface SeatHoldPolicy {
   channel: "WEB" | "MOBILE" | "COUNTER";
   ttlSeconds: number;
@@ -88,13 +188,6 @@ export const bookingApi = {
     return res.result || res;
   },
 
-  releaseSeatHold: async (
-    showtimeId: string | number,
-    holdId: string,
-  ): Promise<void> => {
-    await axiosClient.delete(`/api/showtimes/${showtimeId}/seat-holds/${encodeURIComponent(holdId)}`);
-  },
-
   createBooking: async (payload: BookingPayload): Promise<BookingConfirmation> => {
     const { idempotencyKey, ...requestBody } = payload;
     const res: any = await axiosClient.post("/api/bookings", requestBody, {
@@ -110,5 +203,50 @@ export const bookingApi = {
       // customer contract while booking-service is migrated incrementally.
       lockedUntil: result.lockedUntil ?? result.expiresAt,
     };
+  },
+
+  getBooking: async (bookingId: string): Promise<BookingDetail> => {
+    const res: any = await axiosClient.get(`/api/bookings/${encodeURIComponent(bookingId)}`);
+    return res.result || res;
+  },
+
+  getMyBookings: async (params?: {
+    page?: number;
+    size?: number;
+    sort?: string;
+  }): Promise<BookingPage> => {
+    const res: any = await axiosClient.get("/api/bookings", { params });
+    return res.result || res;
+  },
+
+  getTicketPass: async (bookingId: string): Promise<TicketPass> => {
+    const res: any = await axiosClient.get(
+      `/api/bookings/${encodeURIComponent(bookingId)}/ticket-pass`,
+    );
+    return res.result || res;
+  },
+
+  cancelBooking: async (
+    bookingId: string,
+    request: CancellationRequest,
+    idempotencyKey: string,
+  ): Promise<CancellationResult> => {
+    const res: any = await axiosClient.post(
+      `/api/bookings/${encodeURIComponent(bookingId)}/cancellations`,
+      request,
+      { headers: { "Idempotency-Key": idempotencyKey } },
+    );
+    return res.result || res;
+  },
+
+  getClusterBookings: async (
+    clusterId: number,
+    params?: { page?: number; size?: number; sort?: string },
+  ): Promise<BookingPage> => {
+    const res: any = await axiosClient.get(
+      `/api/booking-operations/clusters/${clusterId}/bookings`,
+      { params },
+    );
+    return res.result || res;
   },
 };
