@@ -27,6 +27,9 @@ public class BookingDetailResponse {
     LocalDate showDate;
     LocalTime startTime;
     List<BookingItemResponse> seats;
+    List<ConcessionLineResponse> concessions;
+    BigDecimal ticketSubtotal;
+    BigDecimal concessionSubtotal;
     BigDecimal subtotal;
     BigDecimal serviceFee;
     BigDecimal discount;
@@ -35,4 +38,6 @@ public class BookingDetailResponse {
     OffsetDateTime expiresAt;
     OffsetDateTime paidAt;
     OffsetDateTime createdAt;
+    String concessionOrderId;
+    String concessionPickupCode;
 }

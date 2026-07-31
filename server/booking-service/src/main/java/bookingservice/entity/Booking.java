@@ -132,6 +132,12 @@ public class Booking {
     @Column(name = "paid_at")
     OffsetDateTime paidAt;
 
+    @Column(name = "concession_order_id", length = 50)
+    String concessionOrderId;
+
+    @Column(name = "concession_pickup_code", length = 20)
+    String concessionPickupCode;
+
     @Column(name = "created_by", length = 50)
     String createdBy;
 
@@ -150,6 +156,10 @@ public class Booking {
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     List<BookingItem> bookingDetails = new ArrayList<>();
+
+    @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    List<ConcessionItem> concessionItems = new ArrayList<>();
 
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default

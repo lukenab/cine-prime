@@ -138,6 +138,7 @@ ON CONFLICT DO NOTHING;
 
 INSERT INTO roles (role_name, description) VALUES
     ('ADMIN',    'Quản trị viên hệ thống'),
+    ('BRANCH_MANAGER', 'Quản lý chi nhánh rạp'),
     ('USER',     'Khách hàng'),
     ('EMPLOYEE', 'Nhân viên rạp')
 ON CONFLICT DO NOTHING;
@@ -155,4 +156,18 @@ INSERT INTO role_permissions (role_name, permission_name) VALUES
     ('EMPLOYEE', 'READ_MOVIE'),
     ('EMPLOYEE', 'MANAGE_BOOKING'),
     ('EMPLOYEE', 'READ_BOOKING')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO permission (name, description) VALUES
+    ('CONCESSION_CATALOG_DRAFT', 'Tạo và chỉnh sửa concession product draft'),
+    ('CONCESSION_CATALOG_SUBMIT', 'Gửi concession product để duyệt'),
+    ('CONCESSION_CATALOG_APPROVE', 'Duyệt hoặc từ chối concession product')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO role_permissions (role_name, permission_name) VALUES
+    ('BRANCH_MANAGER', 'CONCESSION_CATALOG_DRAFT'),
+    ('BRANCH_MANAGER', 'CONCESSION_CATALOG_SUBMIT'),
+    ('ADMIN', 'CONCESSION_CATALOG_DRAFT'),
+    ('ADMIN', 'CONCESSION_CATALOG_SUBMIT'),
+    ('ADMIN', 'CONCESSION_CATALOG_APPROVE')
 ON CONFLICT DO NOTHING;

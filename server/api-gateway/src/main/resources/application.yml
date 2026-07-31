@@ -39,6 +39,11 @@ spring:
           predicates:
             - Path=/api/bookings/**, /api/tickets/**, /api/booking-operations/**, /api/internal/payments/webhooks/**
 
+        - id: concession-service
+          uri: lb://concession-service
+          predicates:
+            - Path=/api/public/cinemas/*/concessions, /api/public/cinemas/*/concessions/**, /api/public/concession-media/**, /api/concession-reservations/**, /api/admin/concession-products/**, /api/admin/concession-skus/**, /api/admin/concession-combos/**, /api/admin/concession-media/**, /api/admin/cinemas/*/concession-offers/**, /api/admin/cinemas/*/concession-inventory/**, /api/employee/concession-orders/**
+
         - id: payment-service
           uri: lb://payment-service
           predicates:

@@ -2,6 +2,7 @@ package bookingservice.service;
 
 import bookingservice.client.PaymentClient;
 import bookingservice.client.MovieInventoryClient;
+import bookingservice.client.ConcessionClient;
 import bookingservice.dto.request.CancelBookingRequest;
 import bookingservice.dto.request.InternalPaymentRefundRequest;
 import bookingservice.dto.request.ReverseMovieSeatSaleRequest;
@@ -18,12 +19,16 @@ public class BookingCancellationService {
     private final BookingCancellationStateService stateService;
     private final MovieInventoryClient movieInventoryClient;
     private final PaymentClient paymentClient;
+    private final ConcessionClient concessionClient;
 
     @Value("${movie-service.internal-key}")
     private String movieServiceInternalKey;
 
     @Value("${payment-service.internal-key}")
     private String paymentServiceInternalKey;
+
+    @Value("${concession-service.internal-key}")
+    private String concessionServiceInternalKey;
 
     public CancellationResponse cancel(
             String bookingId,
@@ -44,6 +49,11 @@ public class BookingCancellationService {
                     instruction.holdId(),
                     movieServiceInternalKey,
                     instruction.ownerId());
+            if (instruction.concessionReservationId() != null) {
+                concessionClient.release(
+                        instruction.concessionReservationId(),
+                        concessionServiceInternalKey);
+            }
             return stateService.completeRelease(instruction.cancellationId());
         } catch (RuntimeException exception) {
             stateService.markReleaseFailure(instruction.cancellationId(), exception);

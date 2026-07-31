@@ -31,6 +31,10 @@ public class ConcessionItem {
     @Column(name = "item_name", length = 255, nullable = false)
     String itemName;
 
+    @Column(name = "options_snapshot", columnDefinition = "TEXT", nullable = false)
+    @Builder.Default
+    String optionsSnapshot = "";
+
     @Column(name = "quantity", nullable = false)
     Integer quantity;
 

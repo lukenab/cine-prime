@@ -1,6 +1,7 @@
 package bookingservice.service;
 
 import bookingservice.client.MovieInventoryClient;
+import bookingservice.client.ConcessionClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import movie.theater.common.exception.AppException;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,16 +15,19 @@ import static org.mockito.Mockito.verifyNoInteractions;
 class PaymentWebhookServiceTest {
     private MovieInventoryClient movieInventoryClient;
     private PaymentProcessingStateService stateService;
+    private ConcessionClient concessionClient;
     private PaymentWebhookService service;
 
     @BeforeEach
     void setUp() {
         movieInventoryClient = mock(MovieInventoryClient.class);
         stateService = mock(PaymentProcessingStateService.class);
+        concessionClient = mock(ConcessionClient.class);
         service = new PaymentWebhookService(
                 new ObjectMapper(),
                 movieInventoryClient,
-                stateService);
+                stateService,
+                concessionClient);
         ReflectionTestUtils.setField(
                 service,
                 "webhookSecret",
@@ -50,6 +54,6 @@ class PaymentWebhookServiceTest {
 
         assertThatThrownBy(() -> service.process(payload, "invalid-signature"))
                 .isInstanceOf(AppException.class);
-        verifyNoInteractions(stateService, movieInventoryClient);
+        verifyNoInteractions(stateService, movieInventoryClient, concessionClient);
     }
 }

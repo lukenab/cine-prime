@@ -102,6 +102,13 @@ services:
       MOVIE_SERVICE_URL: http://movie-service:8081
       PAYMENT_SERVICE_URL: http://payment-service:8083
       INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-local-dev-only-change-me}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@cineprime.vn}
+      BRANCH_MANAGER_USERNAME: ${BRANCH_MANAGER_USERNAME:-branchmanager}
+      BRANCH_MANAGER_PASSWORD: ${BRANCH_MANAGER_PASSWORD:-BranchManager@123}
+      BRANCH_MANAGER_EMAIL: ${BRANCH_MANAGER_EMAIL:-branch.manager@cineprime.vn}
+      SEED_ACCOUNT_PASSWORDS: ${SEED_ACCOUNT_PASSWORDS:-true}
     depends_on:
       postgres:
         condition: service_healthy
@@ -156,10 +163,41 @@ services:
       SPRING_REDIS_PORT: 6379
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      MOVIE_SERVICE_URL: http://movie-service:8081
+      PAYMENT_SERVICE_URL: http://payment-service:8083
+      CONCESSION_SERVICE_URL: http://concession-service:8085
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-local-dev-only-change-me}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      concession-service:
+        condition: service_started
+    networks:
+      - cinema-network
+
+  concession-service:
+    build:
+      context: ./server
+      dockerfile: concession-service/Dockerfile
+    container_name: concession-service
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/concession_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: "123456"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-local-dev-only-change-me}
+      CONCESSION_MEDIA_DIRECTORY: /app/data/concession-media
+    volumes:
+      - ./data/concession-media:/app/data/concession-media
+    depends_on:
+      postgres:
         condition: service_healthy
       discovery-server:
         condition: service_healthy

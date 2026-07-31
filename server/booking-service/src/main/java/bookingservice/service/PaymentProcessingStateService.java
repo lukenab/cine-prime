@@ -170,7 +170,9 @@ public class PaymentProcessingStateService {
     }
 
     @Transactional
-    public PaymentOutcomeResponse completeInventoryConfirmation(PaymentInstruction instruction) {
+    public PaymentOutcomeResponse completeInventoryConfirmation(
+            PaymentInstruction instruction,
+            bookingservice.dto.response.ConcessionOrderResponse concessionOrder) {
         Booking booking = lockedBooking(instruction.bookingId());
         PaymentEventInbox inbox = inboxRepository.findById(instruction.inboxId()).orElseThrow();
         if (booking.getStatus() != BookingStatus.CONFIRMED) {
@@ -179,6 +181,11 @@ public class PaymentProcessingStateService {
             booking.setInventoryStatus(InventoryStatus.SOLD);
             booking.getInventoryReservation().setStatus(InventoryStatus.SOLD);
             booking.getInventoryReservation().setConfirmedAt(OffsetDateTime.now());
+            if (concessionOrder != null) {
+                booking.setConcessionOrderId(concessionOrder.getOrderId());
+                booking.setConcessionPickupCode(concessionOrder.getPickupCode());
+                booking.getConcessionItems().forEach(item -> item.setStatus("CONFIRMED"));
+            }
             issueTickets(booking);
             ticketPassService.issue(booking);
             bookingEventService.append(booking, "BOOKING_CONFIRMED", inbox.getCorrelationId());
@@ -260,6 +267,7 @@ public class PaymentProcessingStateService {
         booking.setInventoryStatus(InventoryStatus.RELEASED);
         booking.getInventoryReservation().setStatus(InventoryStatus.RELEASED);
         booking.getInventoryReservation().setReleasedAt(OffsetDateTime.now());
+        booking.getConcessionItems().forEach(item -> item.setStatus("RELEASED"));
         bookingEventService.append(
                 booking,
                 "COUNTER_SALE_CREATION_FAILED",
@@ -521,6 +529,8 @@ public class PaymentProcessingStateService {
                 booking.getShowtimeId(),
                 booking.getHoldReference(),
                 booking.getAccountId(),
+                concessionReservationId(booking),
+                booking.getPaymentReference(),
                 inbox.getInboxId(),
                 replayed,
                 reconciliationRequired);
@@ -556,8 +566,18 @@ public class PaymentProcessingStateService {
             Long showtimeId,
             String holdId,
             String ownerId,
+            String concessionReservationId,
+            String paymentReference,
             String inboxId,
             boolean replayed,
             boolean reconciliationRequired) {
+    }
+
+    private String concessionReservationId(Booking booking) {
+        return booking.getConcessionItems().stream()
+                .map(ConcessionItem::getExternalReservationId)
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 }

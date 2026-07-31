@@ -34,6 +34,7 @@ hcm26_cpl_java_05_group1/
 │   ├── movie-service/               # Movies, showtimes, rooms    :8081
 │   ├── user-service/                # User profiles & audit logs  :8084
 │   ├── booking-service/             # Ticket booking (WIP)        :8082
+│   ├── concession-service/          # Catalog, stock & pickup     :8085
 │   ├── payment-service/             # Payment processing (WIP)    :8083
 │   ├── promotion-service/           # Promotions & vouchers (WIP) :8086
 │   └── notification-service/        # Email via Kafka (WIP)       :8087
@@ -99,6 +100,7 @@ hcm26_cpl_java_05_group1/
 | user-service | 8084 | User profiles |
 | booking-service | 8082 | Ticket bookings *(WIP)* |
 | payment-service | 8083 | Payments *(WIP)* |
+| concession-service | 8085 | Concession catalog, reservation and fulfillment |
 | promotion-service | 8086 | Promotions *(WIP)* |
 | notification-service | 8087 | Email notifications via Kafka *(WIP)* |
 | PostgreSQL | 5433 | Mapped from container port 5432 |
@@ -181,6 +183,7 @@ Each service owns its own PostgreSQL database (DB-per-service pattern):
 | `booking_db` | booking-service |
 | `payment_db` | payment-service |
 | `promotion_db` | promotion-service |
+| `concession_db` | concession-service |
 
 Init scripts are in `postgres-init/` and run automatically on first container start.
 
@@ -209,6 +212,13 @@ The `docker-compose.yml` runs only the infrastructure layer. Microservices are s
 docker compose up -d
 ```
 
+If the PostgreSQL volume was created before `concession_db` was added, create
+the new service database once without deleting existing data:
+
+```powershell
+.\scripts\create-concession-database.ps1
+```
+
 This starts:
 | Container | Port | Description |
 |---|---|---|
@@ -234,6 +244,7 @@ Start each service in your IDE (IntelliJ / VS Code) or via Maven. Start in this 
 4. movie-service
 5. user-service
 6. booking-service    (WIP)
+7. concession-service
 ```
 
 Or run individually with Maven:
