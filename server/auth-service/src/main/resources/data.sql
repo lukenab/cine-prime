@@ -3,6 +3,7 @@
 -- ================================
 INSERT INTO roles (role_name, description) VALUES
 ('ADMIN',    'Highest privilege — full CRUD on all modules including employees, members, cinema rooms, statistics'),
+('BRANCH_MANAGER', 'Cinema branch manager — can prepare concession product proposals'),
 ('EMPLOYEE', 'Counter staff — ticket selling, ticket booking, search members, manage movies, promotions'),
 ('MEMBER',   'Registered customer — book tickets, manage account, view booking history, manage loyalty points')
 ON CONFLICT (role_name) DO NOTHING;
@@ -28,7 +29,10 @@ INSERT INTO permission (name, description) VALUES
 ('PROMOTION_READ',   'View promotions'),
 ('PROMOTION_MANAGE', 'Create and manage promotions'),
 ('STATISTICS_VIEW',  'View revenue and operational statistics'),
-('SCORE_VIEW',       'View loyalty point history')
+('SCORE_VIEW',       'View loyalty point history'),
+('CONCESSION_CATALOG_DRAFT', 'Create and edit concession product drafts'),
+('CONCESSION_CATALOG_SUBMIT', 'Submit concession products for approval'),
+('CONCESSION_CATALOG_APPROVE', 'Approve or reject concession products')
 ON CONFLICT (name) DO NOTHING;
 
 -- ================================
@@ -46,7 +50,16 @@ INSERT INTO role_permissions (role_name, permission_name) VALUES
 ('ADMIN', 'EMPLOYEE_READ'),   ('ADMIN', 'EMPLOYEE_MANAGE'),
 ('ADMIN', 'PROMOTION_READ'),  ('ADMIN', 'PROMOTION_MANAGE'),
 ('ADMIN', 'STATISTICS_VIEW'),
-('ADMIN', 'SCORE_VIEW')
+('ADMIN', 'SCORE_VIEW'),
+('ADMIN', 'CONCESSION_CATALOG_DRAFT'),
+('ADMIN', 'CONCESSION_CATALOG_SUBMIT'),
+('ADMIN', 'CONCESSION_CATALOG_APPROVE')
+ON CONFLICT DO NOTHING;
+
+-- BRANCH MANAGER:
+INSERT INTO role_permissions (role_name, permission_name) VALUES
+('BRANCH_MANAGER', 'CONCESSION_CATALOG_DRAFT'),
+('BRANCH_MANAGER', 'CONCESSION_CATALOG_SUBMIT')
 ON CONFLICT DO NOTHING;
 
 -- EMPLOYEE:

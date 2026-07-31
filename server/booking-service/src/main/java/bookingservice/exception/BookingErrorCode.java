@@ -28,6 +28,8 @@ public enum BookingErrorCode implements BaseErrorCode {
     TOO_MANY_ACTIVE_BOOKINGS(4119, "Complete or release an existing pending booking before creating another.", HttpStatus.CONFLICT),
     COUNTER_PAYMENT_INVALID(4120, "Counter payment information is invalid.", HttpStatus.BAD_REQUEST),
     COUNTER_SALE_FINALIZATION_FAILED(4121, "Seats were reserved but the counter sale requires reconciliation.", HttpStatus.CONFLICT),
+    CONCESSION_RESERVATION_FAILED(4122, "Concession items could not be reserved.", HttpStatus.CONFLICT),
+    CONCESSION_ALREADY_ATTACHED(4123, "This booking already has concession items.", HttpStatus.CONFLICT),
     SERVICE_UNAVAILABLE(4199, "A required booking dependency is temporarily unavailable.", HttpStatus.SERVICE_UNAVAILABLE);
 
     private final int code;

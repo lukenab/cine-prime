@@ -1,9 +1,12 @@
 package bookingservice.service;
 
 import bookingservice.client.MovieInventoryClient;
+import bookingservice.client.ConcessionClient;
 import bookingservice.dto.request.ConfirmMovieSeatHoldRequest;
 import bookingservice.dto.request.PaymentOutcomeRequest;
 import bookingservice.dto.response.PaymentOutcomeResponse;
+import bookingservice.dto.response.ConcessionOrderResponse;
+import bookingservice.dto.request.ConfirmConcessionReservationRequest;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -26,12 +29,16 @@ public class PaymentWebhookService {
     private final ObjectMapper objectMapper;
     private final MovieInventoryClient movieInventoryClient;
     private final PaymentProcessingStateService stateService;
+    private final ConcessionClient concessionClient;
 
     @Value("${booking.payment.webhook-secret}")
     private String webhookSecret;
 
     @Value("${movie-service.internal-key}")
     private String movieServiceInternalKey;
+
+    @Value("${concession-service.internal-key}")
+    private String concessionServiceInternalKey;
 
     public PaymentOutcomeResponse process(String rawPayload, String signature) {
         if (!validSignature(rawPayload, signature)) {
@@ -60,7 +67,21 @@ public class PaymentWebhookService {
                     movieServiceInternalKey,
                     instruction.ownerId(),
                     new ConfirmMovieSeatHoldRequest(instruction.bookingId()));
-            return stateService.completeInventoryConfirmation(instruction);
+            ConcessionOrderResponse order = null;
+            if (instruction.concessionReservationId() != null) {
+                var wrapper = concessionClient.confirm(
+                        instruction.concessionReservationId(),
+                        concessionServiceInternalKey,
+                        ConfirmConcessionReservationRequest.builder()
+                                .paymentId(instruction.paymentReference())
+                                .paidAt(null)
+                                .build());
+                order = wrapper == null ? null : wrapper.getResult();
+                if (order == null) {
+                    throw new IllegalStateException("Concession confirmation returned no order");
+                }
+            }
+            return stateService.completeInventoryConfirmation(instruction, order);
         } catch (RuntimeException exception) {
             stateService.markDependencyFailure(instruction, exception);
             throw new AppException(INVENTORY_CONFIRMATION_FAILED);
@@ -75,6 +96,11 @@ public class PaymentWebhookService {
                     instruction.holdId(),
                     movieServiceInternalKey,
                     instruction.ownerId());
+            if (instruction.concessionReservationId() != null) {
+                concessionClient.release(
+                        instruction.concessionReservationId(),
+                        concessionServiceInternalKey);
+            }
             return stateService.completeInventoryRelease(instruction);
         } catch (RuntimeException exception) {
             return stateService.markDependencyFailure(instruction, exception);

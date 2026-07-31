@@ -256,6 +256,11 @@ public class BookingCancellationStateService {
                 booking.getCurrency(),
                 cancellation.getReasonCode(),
                 cancellation.getReason(),
+                booking.getConcessionItems().stream()
+                        .map(ConcessionItem::getExternalReservationId)
+                        .filter(java.util.Objects::nonNull)
+                        .findFirst()
+                        .orElse(null),
                 replayed);
     }
 
@@ -346,6 +351,7 @@ public class BookingCancellationStateService {
             String currency,
             String reasonCode,
             String reason,
+            String concessionReservationId,
             boolean replayed) {
     }
 }

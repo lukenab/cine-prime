@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   AlertCircle,
-  CalendarDays,
   CheckCircle2,
   Clock3,
   CreditCard,
@@ -11,9 +10,7 @@ import {
   RefreshCw,
   RotateCcw,
   ShieldCheck,
-  TicketCheck,
   User,
-  WalletCards,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -26,16 +23,17 @@ import { paymentApi, type PaymentSession } from "../../api/paymentApi";
 import { movieApi, type ClusterResponse, type PublicMovieResponse } from "../../api/movieApi";
 import { userApi } from "../../api/userApi";
 import { useAuth } from "../../context/AuthContext";
+import { useBookingFlowCancelAction } from "../../context/BookingFlowContext";
 import CancelBookingModal from "../../components/booking/CancelBookingModal";
+import CheckoutProgress from "../../components/booking/CheckoutProgress";
+import BookingSummaryCard from "../../components/booking/BookingSummaryCard";
 import {
   bookingStatusMeta,
   canCancelBooking,
   formatBookingDate,
-  formatBookingDateTime,
   formatBookingMoney,
   getApiErrorMessage,
   isBookingInFlight,
-  paymentStatusLabel,
 } from "../../components/booking/bookingUi";
 import "../../components/booking/booking.css";
 
@@ -74,6 +72,7 @@ function computeShowEndTime(showDate: string, startTime: string, durationMinutes
 
 export default function BookingCheckoutPage() {
   const { bookingId = "" } = useParams();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const [booking, setBooking] = useState<BookingDetail | null>(null);
@@ -84,11 +83,28 @@ export default function BookingCheckoutPage() {
   const [paymentError, setPaymentError] = useState("");
   const [startingPayment, setStartingPayment] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [payTab, setPayTab] = useState<"payment" | "promotion">("payment");
+  const [promoCode, setPromoCode] = useState("");
+  const [promoMessage, setPromoMessage] = useState("");
   const [movieDetail, setMovieDetail] = useState<PublicMovieResponse | null>(null);
   const [clusterDetail, setClusterDetail] = useState<ClusterResponse | null>(null);
   const [bookerName, setBookerName] = useState<string | null>(null);
   const [paymentDetail, setPaymentDetail] = useState<PaymentSession | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
   const paymentResult = searchParams.get("paymentResult")?.toUpperCase();
+
+  // Same hold countdown shown on the Seats/Food steps, carried through here
+  // so the customer keeps seeing it instead of only a static expiry line.
+  useEffect(() => {
+    if (!booking?.expiresAt || booking.status !== "PENDING_PAYMENT") return;
+    const updateRemaining = () => {
+      const expiry = new Date(booking.expiresAt as string).getTime();
+      setRemainingSeconds(Math.max(0, Math.floor((expiry - Date.now()) / 1000)));
+    };
+    updateRemaining();
+    const timer = window.setInterval(updateRemaining, 1000);
+    return () => window.clearInterval(timer);
+  }, [booking?.expiresAt, booking?.status]);
 
   // Enrichment data (movie duration/age rating/genres, full cinema address,
   // booker's display name): BookingDetail only carries IDs + denormalized
@@ -168,6 +184,23 @@ export default function BookingCheckoutPage() {
     void load(true);
   };
 
+  const openCancel = useCallback(() => setCancelOpen(true), []);
+  // Locks the navbar down to logo + this action while payment is still
+  // pending; once a ticket exists the booking is no longer "in progress"
+  // so the full navbar returns.
+  useBookingFlowCancelAction(
+    "Cancel booking",
+    booking?.status === "PENDING_PAYMENT" && canCancelBooking(booking) ? openCancel : null,
+  );
+
+  // Promotions have no backend yet (no endpoint applies a code to a booking).
+  // This stays a plain, honest "not available" response instead of faking a
+  // discount, so it does not misrepresent what the system actually does.
+  const applyPromoCode = () => {
+    if (!promoCode.trim()) return;
+    setPromoMessage("Promo codes aren't available yet — check back soon.");
+  };
+
   const startPayment = async () => {
     if (!bookingId || booking?.status !== "PENDING_PAYMENT") return;
     setStartingPayment(true);
@@ -198,21 +231,23 @@ export default function BookingCheckoutPage() {
 
   if (loading) {
     return (
-      <main className="booking-shell">
-        <div className="booking-loading"><LoaderCircle className="booking-spin" size={32} /></div>
+      <main className="grid min-h-screen place-items-center bg-[#080b12] px-4 pt-24 text-white sm:px-8 sm:pt-28">
+        <LoaderCircle className="animate-spin text-blue-400" size={32} />
       </main>
     );
   }
 
   if (error || !booking) {
     return (
-      <main className="booking-shell">
-        <div className="booking-empty">
-          <div className="booking-empty__inner">
-            <AlertCircle size={38} />
-            <h2>Booking unavailable</h2>
-            <p>{error || "The booking does not exist or you do not have access to it."}</p>
-            <Link className="booking-button booking-button--primary" to="/my-bookings">View my bookings</Link>
+      <main className="min-h-screen bg-[#080b12] px-4 pb-7 pt-24 text-white sm:px-8 sm:pt-28">
+        <div className="mx-auto max-w-[1320px]">
+          <div className="booking-empty">
+            <div className="booking-empty__inner">
+              <AlertCircle size={38} />
+              <h2>Booking unavailable</h2>
+              <p>{error || "The booking does not exist or you do not have access to it."}</p>
+              <Link className="booking-button booking-button--primary" to="/my-bookings">View my bookings</Link>
+            </div>
           </div>
         </div>
       </main>
@@ -220,6 +255,7 @@ export default function BookingCheckoutPage() {
   }
 
   const status = bookingStatusMeta[booking.status];
+  const holdExpired = booking.status === "PENDING_PAYMENT" && remainingSeconds <= 0;
 
   if (booking.status === "CONFIRMED" && ticketPass) {
     const method = paymentMethodLabel(paymentDetail);
@@ -236,6 +272,8 @@ export default function BookingCheckoutPage() {
               <CheckCircle2 size={15} /> {status.label}
             </span>
           </div>
+
+          <CheckoutProgress currentStep={4} />
 
           <div className="ticket-pass">
             <div className="ticket-pass__main">
@@ -282,6 +320,7 @@ export default function BookingCheckoutPage() {
                   </div>
                   <div><span>Screening room</span><strong>{booking.cinemaRoomName}</strong></div>
                   <div><span>Seats</span><strong>{booking.seats.map((s) => s.seatCode).join(", ")}</strong></div>
+                  {booking.concessionPickupCode && <div><span>Concession pickup</span><strong>{booking.concessionPickupCode}</strong></div>}
                 </div>
 
                 <div className="ticket-pass__grid">
@@ -295,6 +334,18 @@ export default function BookingCheckoutPage() {
                   </div>
                 </div>
               </div>
+              {!!booking.concessions?.length && (
+                <div className="ticket-pass__grid">
+                  <div>
+                    <span>Concessions</span>
+                    <strong>{booking.concessions.map((item) => `${item.quantity}× ${item.itemName}`).join(", ")}</strong>
+                  </div>
+                  <div>
+                    <span>Pickup code</span>
+                    <strong>{booking.concessionPickupCode || "Preparing..."}</strong>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="ticket-pass__perforation">
@@ -350,83 +401,58 @@ export default function BookingCheckoutPage() {
   }
 
   return (
-    <main className="booking-shell">
-      <div className="booking-container">
-        <div className="booking-page-heading">
+    <main className="min-h-screen bg-[#080b12] px-4 pb-7 pt-24 text-white sm:px-8 sm:pt-28">
+      <div className="mx-auto max-w-[1320px]">
+        {/* Same shell/heading/grid dimensions as the Food step (same max
+            width, gap, right-column width) so pressing Continue there lands
+            here without anything visibly shifting. */}
+        <div className="mb-7 flex flex-wrap items-end justify-between gap-5">
           <div>
-            <span className="booking-eyebrow">Booking · {booking.bookingCode}</span>
-            <h1>{booking.status === "CONFIRMED" ? "Your ticket is ready" : "Complete your booking"}</h1>
-            <p>Booking state is updated automatically when payment or inventory changes.</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-400">Checkout</p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight">{booking.status === "CONFIRMED" ? "Your ticket is ready" : "Complete your booking"}</h1>
+            <p className="mt-2 text-sm text-white/50">Booking state is updated automatically when payment or inventory changes.</p>
           </div>
-          <span className="booking-status" style={{ color: status.color, background: status.background }}>
-            {booking.status === "CONFIRMED" ? <CheckCircle2 size={15} /> : <Clock3 size={15} />}
-            {status.label}
-          </span>
+          <div className="flex items-center gap-3">
+            {/* PENDING_PAYMENT is already unmistakable from the countdown
+                timer and the "Booking status" card below — an "Awaiting
+                payment" pill up here doesn't tell the customer anything new,
+                so it's skipped for that state. Other statuses (confirmed,
+                expired, refunded...) keep it since nothing else on the page
+                signals them this clearly at a glance. */}
+            {booking.status !== "PENDING_PAYMENT" && (
+              <span className="booking-status" style={{ color: status.color, background: status.background }}>
+                {booking.status === "CONFIRMED" ? <CheckCircle2 size={15} /> : <Clock3 size={15} />}
+                {status.label}
+              </span>
+            )}
+            {/* PENDING_PAYMENT already gets "Cancel booking" from the locked
+                navbar (see useBookingFlowCancelAction above); this stays only
+                for the paid states, where it means "request a refund". */}
+            {canCancelBooking(booking) && booking.status !== "PENDING_PAYMENT" && (
+              <button
+                type="button"
+                className="booking-button booking-button--danger booking-button--compact"
+                onClick={() => setCancelOpen(true)}
+              >
+                <RotateCcw size={14} /> {isPaidBooking(booking.status) ? "Request a refund" : "Cancel booking"}
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="booking-grid">
+        <CheckoutProgress currentStep={booking.status === "CONFIRMED" ? 4 : 3} />
+
+        <div className="grid items-start gap-7 xl:grid-cols-[minmax(0,1fr)_380px]">
           <div>
             <section className="booking-card">
               <header className="booking-card__header">
+                {/* This card holds payment method + promo code once payment
+                    is pending, not just a status readout, so the heading
+                    follows what the customer is actually here to do. */}
                 <div>
-                  <h2>{booking.movieName}</h2>
-                  <p>
-                    {movieDetail?.durationMinutes ? `${movieDetail.durationMinutes} min` : "Showtime and cinema"}
-                    {movieDetail?.ageRating ? ` · ${movieDetail.ageRating.ratingCode}` : ""}
-                  </p>
+                  <h2>{booking.status === "PENDING_PAYMENT" ? "Payment" : "Booking status"}</h2>
+                  <p>{booking.status === "PENDING_PAYMENT" ? "Choose how you'd like to pay." : status.description}</p>
                 </div>
-                <TicketCheck size={22} color="#60a5fa" />
-              </header>
-              <div className="booking-card__body">
-                <div className="booking-detail-grid">
-                  <div className="booking-detail">
-                    <span><CalendarDays size={12} /> Date</span>
-                    <strong>{formatBookingDate(booking.showDate)}</strong>
-                  </div>
-                  <div className="booking-detail">
-                    <span><Clock3 size={12} /> Showtime</span>
-                    <strong>{booking.startTime?.slice(0, 5) || "—"}</strong>
-                  </div>
-                  <div className="booking-detail">
-                    <span><MapPin size={12} /> Cinema</span>
-                    <strong>{booking.cinemaClusterName}</strong>
-                    {clusterDetail?.address && <small style={{ display: "block", fontWeight: 400, color: "#8390a2", marginTop: 3 }}>{clusterDetail.address}</small>}
-                  </div>
-                  <div className="booking-detail">
-                    <span>Screening room</span>
-                    <strong>{booking.cinemaRoomName}</strong>
-                  </div>
-                  <div className="booking-detail">
-                    <span><User size={12} /> Booked by</span>
-                    <strong>{bookerName || user?.username || "—"}</strong>
-                  </div>
-                  <div className="booking-detail">
-                    <span><CreditCard size={12} /> Payment method</span>
-                    <strong>{paymentMethodLabel(paymentDetail) || "—"}</strong>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="booking-card">
-              <header className="booking-card__header">
-                <div><h2>Selected seats</h2><p>{booking.seats.length} seat{booking.seats.length === 1 ? "" : "s"}</p></div>
-              </header>
-              <div className="booking-card__body">
-                <div className="booking-seat-list">
-                  {booking.seats.map((seat) => (
-                    <div className="booking-seat-chip" key={seat.showtimeSeatId}>
-                      <div><strong>{seat.seatCode}</strong><br /><small>{seat.seatType}</small></div>
-                      <strong>{formatBookingMoney(seat.finalPrice, booking.currency)}</strong>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-
-            <section className="booking-card">
-              <header className="booking-card__header">
-                <div><h2>Booking status</h2><p>{status.description}</p></div>
                 <button
                   className="booking-icon-button"
                   onClick={() => void load(true)}
@@ -455,18 +481,6 @@ export default function BookingCheckoutPage() {
                     </div>
                   </div>
                 )}
-                {booking.status === "PENDING_PAYMENT" && (
-                  <div className="booking-message booking-message--warning">
-                    <Clock3 size={20} />
-                    <div>
-                      <strong>Waiting for payment</strong>
-                      <p>
-                        Your seats are reserved until {formatBookingDateTime(booking.expiresAt)}.
-                        Complete payment before this time to keep the reservation.
-                      </p>
-                    </div>
-                  </div>
-                )}
                 {paymentError && (
                   <div className="booking-inline-error booking-payment-error">
                     {paymentError}
@@ -491,45 +505,103 @@ export default function BookingCheckoutPage() {
                   </div>
                 )}
 
-                <div className="booking-actions">
-                  {booking.status === "PENDING_PAYMENT" && (
-                    <button
-                      className="booking-button booking-button--primary booking-button--pay"
-                      onClick={() => void startPayment()}
-                      disabled={startingPayment}
-                    >
-                      {startingPayment ? (
-                        <LoaderCircle size={17} className="booking-spin" />
-                      ) : (
-                        <WalletCards size={17} />
-                      )}
-                      {startingPayment ? "Opening VNPAY…" : "Pay securely with VNPAY"}
-                    </button>
-                  )}
-                  <Link className="booking-button booking-button--secondary" to="/my-bookings">My bookings</Link>
-                  {canCancelBooking(booking) && (
-                    <button className="booking-button booking-button--danger" onClick={() => setCancelOpen(true)}>
-                      <RotateCcw size={16} /> {isPaidBooking(booking.status) ? "Request a refund" : "Cancel booking"}
-                    </button>
-                  )}
-                </div>
+                {/* Promo code + payment method moved here from the summary
+                    card, which now only carries the order recap and the
+                    Back / Pay actions. */}
+                {booking.status === "PENDING_PAYMENT" && (
+                  <div className="booking-payment-method">
+                    <div className="booking-tabs" role="tablist" aria-label="Payment options">
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={payTab === "payment"}
+                        className={`booking-tab ${payTab === "payment" ? "booking-tab--active" : ""}`}
+                        onClick={() => setPayTab("payment")}
+                      >
+                        Payment method
+                      </button>
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={payTab === "promotion"}
+                        className={`booking-tab ${payTab === "promotion" ? "booking-tab--active" : ""}`}
+                        onClick={() => setPayTab("promotion")}
+                      >
+                        Promotion
+                      </button>
+                    </div>
+
+                    {payTab === "payment" ? (
+                      <div className="booking-payment-option booking-payment-option--selected">
+                        <span className="booking-payment-option__logo" aria-hidden="true">
+                          <svg width="44" height="22" viewBox="0 0 44 22" xmlns="http://www.w3.org/2000/svg">
+                            <rect width="44" height="22" rx="4" fill="#ffffff" />
+                            <text x="4" y="15.5" fontFamily="Arial, sans-serif" fontSize="9.5" fontWeight="800" fill="#00509a">VN</text>
+                            <text x="20" y="15.5" fontFamily="Arial, sans-serif" fontSize="9.5" fontWeight="800" fill="#ed1c24">PAY</text>
+                          </svg>
+                        </span>
+                        <div className="booking-payment-option__info">
+                          <strong>VNPAY</strong>
+                          <span>Domestic ATM, VNPayQR &amp; international cards</span>
+                        </div>
+                        <CheckCircle2 size={18} className="booking-payment-option__check" />
+                      </div>
+                    ) : (
+                      <div className="booking-promo">
+                        <label className="booking-promo__label" htmlFor="checkout-promo-code">Promotion code</label>
+                        <div className="booking-promo__row">
+                          <input
+                            id="checkout-promo-code"
+                            type="text"
+                            value={promoCode}
+                            onChange={(event) => { setPromoCode(event.target.value); setPromoMessage(""); }}
+                            placeholder="Enter code"
+                            className="booking-promo__input"
+                          />
+                          <button type="button" className="booking-promo__apply" onClick={applyPromoCode}>Apply</button>
+                        </div>
+                        {promoMessage && <p className="booking-promo__message">{promoMessage}</p>}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </section>
           </div>
 
           <aside>
-            <section className="booking-card">
-              <header className="booking-card__header">
-                <div><h2>Order summary</h2><p>Server-calculated price snapshot</p></div>
-              </header>
-              <div className="booking-card__body">
-                <div className="booking-price-row"><span>Seats</span><strong>{formatBookingMoney(booking.subtotal, booking.currency)}</strong></div>
-                <div className="booking-price-row"><span>Service fee</span><strong>{formatBookingMoney(booking.serviceFee, booking.currency)}</strong></div>
-                {booking.discount > 0 && <div className="booking-price-row"><span>Discount</span><strong>-{formatBookingMoney(booking.discount, booking.currency)}</strong></div>}
-                <div className="booking-price-row booking-price-row--total"><span>Total</span><strong>{formatBookingMoney(booking.total, booking.currency)}</strong></div>
-                <div className="booking-price-row"><span>Payment</span><strong>{paymentStatusLabel[booking.paymentStatus]}</strong></div>
-              </div>
-            </section>
+            <BookingSummaryCard
+              movieName={booking.movieName}
+              posterUrl={movieDetail?.posterUrl}
+              ageRatingCode={movieDetail?.ageRating?.ratingCode}
+              durationMinutes={movieDetail?.durationMinutes}
+              cinemaName={booking.cinemaClusterName}
+              cinemaAddress={clusterDetail?.address}
+              roomName={booking.cinemaRoomName}
+              showDateLabel={formatBookingDate(booking.showDate)}
+              showTimeLabel={booking.startTime?.slice(0, 5) || "—"}
+              seats={booking.seats.map((seat) => ({ code: seat.seatCode, type: seat.seatType, price: seat.finalPrice }))}
+              seatsSubtotal={booking.ticketSubtotal ?? booking.subtotal}
+              comboItems={booking.concessions?.map((item) => ({ name: item.itemName, quantity: item.quantity, totalPrice: item.finalAmount }))}
+              comboSubtotal={booking.concessionSubtotal}
+              serviceFee={booking.serviceFee}
+              discount={booking.discount}
+              paymentMethod={paymentMethodLabel(paymentDetail) ?? undefined}
+              currency={booking.currency}
+              total={booking.total}
+              holdRemainingSeconds={booking.status === "PENDING_PAYMENT" ? remainingSeconds : undefined}
+              holdExpired={booking.status === "PENDING_PAYMENT" ? holdExpired : undefined}
+              backAction={booking.status === "PENDING_PAYMENT" ? {
+                label: "Back",
+                onClick: () => navigate(-1),
+              } : undefined}
+              primaryAction={booking.status === "PENDING_PAYMENT" ? {
+                label: startingPayment ? "Opening…" : "Pay now",
+                onClick: () => void startPayment(),
+                disabled: startingPayment,
+                loading: startingPayment,
+              } : undefined}
+            />
 
             {booking.status === "CONFIRMED" && ticketPass && (
               <section className="booking-card">

@@ -7,31 +7,30 @@ export const formatBookingMoney = (value: number, currency = "VND") =>
     maximumFractionDigits: currency === "VND" ? 0 : 2,
   }).format(value || 0);
 
-export const formatBookingDate = (value?: string) => {
+// "Sun, 31/07/2026" — accepts a plain date ("2026-07-31"), a full ISO
+// datetime ("2026-07-31T08:30:00"), or a Date, so every booking-flow page can
+// share one formatter instead of drifting into their own date/month/short vs
+// numeric conventions.
+export const formatBookingDate = (value?: string | Date) => {
   if (!value) return "—";
-  const parsed = new Date(`${value}T00:00:00`);
-  return Number.isNaN(parsed.getTime())
-    ? value
-    : new Intl.DateTimeFormat("en-GB", {
-        weekday: "short",
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }).format(parsed);
+  const parsed = typeof value === "string"
+    ? new Date(value.includes("T") ? value : `${value}T00:00:00`)
+    : value;
+  if (Number.isNaN(parsed.getTime())) return typeof value === "string" ? value : "—";
+  const weekday = new Intl.DateTimeFormat("en-GB", { weekday: "short" }).format(parsed);
+  const dd = String(parsed.getDate()).padStart(2, "0");
+  const mm = String(parsed.getMonth() + 1).padStart(2, "0");
+  return `${weekday}, ${dd}/${mm}/${parsed.getFullYear()}`;
 };
 
 export const formatBookingDateTime = (value?: string) => {
   if (!value) return "—";
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime())
-    ? value
-    : new Intl.DateTimeFormat("en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      }).format(parsed);
+  if (Number.isNaN(parsed.getTime())) return value;
+  const dd = String(parsed.getDate()).padStart(2, "0");
+  const mm = String(parsed.getMonth() + 1).padStart(2, "0");
+  const time = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" }).format(parsed);
+  return `${dd}/${mm}/${parsed.getFullYear()}, ${time}`;
 };
 
 export const bookingStatusMeta: Record<

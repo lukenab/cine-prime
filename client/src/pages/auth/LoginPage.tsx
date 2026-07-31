@@ -54,6 +54,7 @@ function isSafeInternalPath(value: unknown): value is string {
 
 function defaultPathForRole(role: string): string {
   if (role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN") return "/admin";
+  if (role === "ROLE_BRANCH_MANAGER") return "/admin/concessions/catalog";
   if (role === "ROLE_EMPLOYEE") return "/admin/movies";
   return "/";
 }

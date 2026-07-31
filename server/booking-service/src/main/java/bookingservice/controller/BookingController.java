@@ -2,6 +2,7 @@ package bookingservice.controller;
 
 import bookingservice.dto.request.CreateBookingRequest;
 import bookingservice.dto.request.CancelBookingRequest;
+import bookingservice.dto.request.AttachConcessionsRequest;
 import bookingservice.dto.response.BookingDetailResponse;
 import bookingservice.dto.response.CancellationResponse;
 import bookingservice.dto.response.CreateBookingResponse;
@@ -10,6 +11,7 @@ import bookingservice.service.BookingOrchestrationService;
 import bookingservice.service.BookingCancellationService;
 import bookingservice.service.BookingQueryService;
 import bookingservice.service.TicketPassService;
+import bookingservice.service.ConcessionAttachService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import movie.theater.common.dto.ApiResponse;
@@ -31,6 +33,7 @@ public class BookingController {
     private final BookingCancellationService cancellationService;
     private final BookingQueryService queryService;
     private final TicketPassService ticketPassService;
+    private final ConcessionAttachService concessionAttachService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<CreateBookingResponse>> create(
@@ -83,6 +86,18 @@ public class BookingController {
                         requireAccountId(),
                         idempotencyKey,
                         request))
+                .build();
+    }
+
+    @PostMapping("/{bookingId}/concessions")
+    public ApiResponse<BookingDetailResponse> attachConcessions(
+            @PathVariable String bookingId,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @Valid @RequestBody AttachConcessionsRequest request) {
+        return ApiResponse.<BookingDetailResponse>builder()
+                .message("Concession items are reserved and included in checkout.")
+                .result(concessionAttachService.attach(
+                        bookingId, requireAccountId(), idempotencyKey, request))
                 .build();
     }
 

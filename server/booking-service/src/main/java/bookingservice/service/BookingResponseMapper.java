@@ -3,8 +3,11 @@ package bookingservice.service;
 import bookingservice.dto.response.BookingDetailResponse;
 import bookingservice.dto.response.BookingItemResponse;
 import bookingservice.dto.response.CreateBookingResponse;
+import bookingservice.dto.response.ConcessionLineResponse;
 import bookingservice.entity.Booking;
 import bookingservice.entity.BookingItem;
+import bookingservice.entity.ConcessionItem;
+import java.math.BigDecimal;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -46,6 +49,9 @@ public class BookingResponseMapper {
                 .showDate(booking.getShowDate())
                 .startTime(booking.getStartTime())
                 .seats(toItems(booking.getBookingDetails()))
+                .concessions(toConcessions(booking.getConcessionItems()))
+                .ticketSubtotal(ticketSubtotal(booking))
+                .concessionSubtotal(concessionSubtotal(booking))
                 .subtotal(booking.getTotalAmount())
                 .serviceFee(booking.getServiceFeeAmount())
                 .discount(booking.getDiscountAmount().add(booking.getPointsDiscount()))
@@ -54,6 +60,8 @@ public class BookingResponseMapper {
                 .expiresAt(booking.getExpiresAt())
                 .paidAt(booking.getPaidAt())
                 .createdAt(booking.getCreatedAt())
+                .concessionOrderId(booking.getConcessionOrderId())
+                .concessionPickupCode(booking.getConcessionPickupCode())
                 .build();
     }
 
@@ -67,5 +75,31 @@ public class BookingResponseMapper {
                         .finalPrice(item.getFinalPrice())
                         .build())
                 .toList();
+    }
+
+    private List<ConcessionLineResponse> toConcessions(List<ConcessionItem> items) {
+        return items.stream()
+                .map(item -> ConcessionLineResponse.builder()
+                        .itemCode(item.getSku())
+                        .itemName(item.getItemName())
+                        .options(item.getOptionsSnapshot())
+                        .quantity(item.getQuantity())
+                        .unitPrice(item.getUnitPrice())
+                        .discountAmount(item.getDiscountAmount())
+                        .finalAmount(item.getFinalAmount())
+                        .build())
+                .toList();
+    }
+
+    private BigDecimal concessionSubtotal(Booking booking) {
+        return booking.getConcessionItems().stream()
+                .map(ConcessionItem::getFinalAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private BigDecimal ticketSubtotal(Booking booking) {
+        return booking.getBookingDetails().stream()
+                .map(BookingItem::getFinalPrice)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 }

@@ -1,6 +1,7 @@
 package bookingservice.service;
 
 import bookingservice.client.MovieInventoryClient;
+import bookingservice.client.ConcessionClient;
 import bookingservice.entity.BookingStatus;
 import bookingservice.repository.BookingRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,9 +18,13 @@ public class BookingExpiryCoordinator {
     private final BookingExpiryStateService stateService;
     private final MovieInventoryClient movieInventoryClient;
     private final Clock bookingClock;
+    private final ConcessionClient concessionClient;
 
     @Value("${movie-service.internal-key}")
     private String movieServiceInternalKey;
+
+    @Value("${concession-service.internal-key}")
+    private String concessionServiceInternalKey;
 
     public void expireDueBookings() {
         bookingRepository.findTop100ByStatusAndExpiresAtBeforeOrderByExpiresAtAsc(
@@ -41,6 +46,11 @@ public class BookingExpiryCoordinator {
                     instruction.holdId(),
                     movieServiceInternalKey,
                     instruction.ownerId());
+            if (instruction.concessionReservationId() != null) {
+                concessionClient.release(
+                        instruction.concessionReservationId(),
+                        concessionServiceInternalKey);
+            }
             stateService.completeRelease(instruction);
         } catch (RuntimeException exception) {
             stateService.markReleaseFailure(instruction, exception);

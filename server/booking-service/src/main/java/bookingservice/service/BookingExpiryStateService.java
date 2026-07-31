@@ -131,7 +131,12 @@ public class BookingExpiryStateService {
                 booking.getBookingId(),
                 booking.getShowtimeId(),
                 booking.getHoldReference(),
-                booking.getAccountId());
+                booking.getAccountId(),
+                booking.getConcessionItems().stream()
+                        .map(ConcessionItem::getExternalReservationId)
+                        .filter(java.util.Objects::nonNull)
+                        .findFirst()
+                        .orElse(null));
     }
 
     private String correlationId(Booking booking) {
@@ -155,6 +160,7 @@ public class BookingExpiryStateService {
             String bookingId,
             Long showtimeId,
             String holdId,
-            String ownerId) {
+            String ownerId,
+            String concessionReservationId) {
     }
 }

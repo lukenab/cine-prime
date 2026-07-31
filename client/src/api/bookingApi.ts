@@ -91,6 +91,16 @@ export interface BookingItem {
   finalPrice: number;
 }
 
+export interface BookingConcessionItem {
+  itemCode: string;
+  itemName: string;
+  options?: string;
+  quantity: number;
+  unitPrice: number;
+  discountAmount: number;
+  finalAmount: number;
+}
+
 export interface BookingDetail {
   bookingId: string;
   bookingCode: string;
@@ -107,6 +117,9 @@ export interface BookingDetail {
   showDate: string;
   startTime: string;
   seats: BookingItem[];
+  concessions: BookingConcessionItem[];
+  ticketSubtotal: number;
+  concessionSubtotal: number;
   subtotal: number;
   serviceFee: number;
   discount: number;
@@ -115,6 +128,8 @@ export interface BookingDetail {
   expiresAt?: string;
   paidAt?: string;
   createdAt: string;
+  concessionOrderId?: string;
+  concessionPickupCode?: string;
 }
 
 export interface TicketPass {
@@ -203,6 +218,24 @@ export const bookingApi = {
       // customer contract while booking-service is migrated incrementally.
       lockedUntil: result.lockedUntil ?? result.expiresAt,
     };
+  },
+
+  attachConcessions: async (
+    bookingId: string,
+    items: Array<{
+      sellableType: "SKU" | "COMBO";
+      sellableId: number;
+      quantity: number;
+      selections?: Array<{ groupCode: string; skuIds: number[] }>;
+    }>,
+    idempotencyKey: string,
+  ): Promise<BookingDetail> => {
+    const res: any = await axiosClient.post(
+      `/api/bookings/${encodeURIComponent(bookingId)}/concessions`,
+      { items },
+      { headers: { "Idempotency-Key": idempotencyKey } },
+    );
+    return res.result || res;
   },
 
   getBooking: async (bookingId: string): Promise<BookingDetail> => {
