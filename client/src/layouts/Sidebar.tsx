@@ -1,6 +1,6 @@
 import { useAuth } from "../context/AuthContext";
 import { useState, useEffect } from "react";
-import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, Users, UserCog, BarChart2, Settings, Clapperboard, Gift, ShoppingCart, MapPin, UserSquare2, ChevronDown, List, ShieldCheck, Monitor, Factory, Armchair, Languages, BadgeDollarSign } from "lucide-react";
+import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, Users, UserCog, BarChart2, Settings, Clapperboard, Gift, ShoppingCart, MapPin, UserSquare2, ChevronDown, List, ShieldCheck, Monitor, Factory, Armchair, Languages, BadgeDollarSign, Popcorn } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { movieApi } from "../api/movieApi";
 
@@ -12,9 +12,10 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { icon: LayoutDashboard, label: "Dashboard", id: "dashboard", path: "/admin", group: "main" },
+  { icon: LayoutDashboard, label: "Dashboard", id: "dashboard", path: "/admin", group: "main", roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"] },
   {
     icon: Film, label: "Movies", id: "movies", path: "/admin/movies", group: "catalog",
+    roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"],
     children: [
       { icon: List,        label: "Movie List",  path: "/admin/movies" },
       { icon: Tags,        label: "Genres",      path: "/admin/genres",      roles: ["ROLE_ADMIN"] },
@@ -35,13 +36,22 @@ const navItems: NavItem[] = [
   },
   {
     icon: Calendar, label: "Showtimes", id: "showtimes", path: "/admin/showtimes", group: "ops",
+    roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"],
     children: [
       { icon: Calendar, label: "Showtime Workspace", path: "/admin/showtimes" },
       { icon: BadgeDollarSign, label: "Price Books", path: "/admin/price-books", roles: ["ROLE_ADMIN"] },
     ],
   },
-  { icon: Ticket,      label: "Bookings",     id: "bookings",   path: "/admin/bookings",   group: "ops" },
+  { icon: Ticket,      label: "Bookings",     id: "bookings",   path: "/admin/bookings",   group: "ops", roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"] },
   { icon: ShoppingCart,label: "Sell Tickets", id: "sell",       path: "/admin/sell",       group: "ops", roles: ["ROLE_EMPLOYEE"] },
+  {
+    icon: Popcorn, label: "Concessions", id: "concessions", path: "/admin/concessions/fulfillment", group: "ops",
+    roles: ["ROLE_ADMIN", "ROLE_BRANCH_MANAGER", "ROLE_EMPLOYEE"],
+    children: [
+      { icon: ShoppingCart, label: "Fulfillment", path: "/admin/concessions/fulfillment", roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"] },
+      { icon: Tags, label: "Catalog & Stock", path: "/admin/concessions/catalog", roles: ["ROLE_ADMIN", "ROLE_BRANCH_MANAGER"] },
+    ],
+  },
   { icon: UserCog,     label: "Employees",    id: "employees",  path: "/admin/employees",  group: "ops",    roles: ["ROLE_ADMIN"] },
   { icon: Users,       label: "Users",        id: "users",      path: "/admin/users",      group: "ops",    roles: ["ROLE_ADMIN"] },
   { icon: Gift,        label: "Promotions",   id: "promotions", path: "/admin/promotions", group: "ops",    roles: ["ROLE_ADMIN"] },

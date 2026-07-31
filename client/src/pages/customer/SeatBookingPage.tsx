@@ -1,8 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import {
-  AlertTriangle, Film,
-  Loader2, X, ChevronRight, RotateCcw, Ticket, Armchair,
-} from "lucide-react";
+import { AlertTriangle, Loader2, X } from "lucide-react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import {
   bookingApi,
@@ -16,10 +13,9 @@ import { useAuth } from "../../context/AuthContext";
 import CompleteProfilePage from "../auth/CompleteProfilePage";
 import { AudioCoverageFrame, ProjectionBeamOverlay, ProjectionScreenVisualization } from "../admin/cinemaRoomEditor/AuditoriumVisualization";
 import type { AuditoriumVisualizationConfig } from "../admin/cinemaRoomEditor/cinemaRoomEditor.types";
-
-// Format a number as Vietnamese đồng, e.g. 70000 → "70.000 ₫"
-const formatVND = (v: number) =>
-  new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(v);
+import CheckoutProgress from "../../components/booking/CheckoutProgress";
+import BookingSummaryCard from "../../components/booking/BookingSummaryCard";
+import { formatBookingDate } from "../../components/booking/bookingUi";
 
 // Keep the customer map visually aligned with the room-layout tools used by
 // administrators. Booking state is layered on top of the physical seat type.
@@ -41,7 +37,6 @@ function SeatBtn({
   const isMyHold = seat.status === "LOCKED" && seat.reservedByMe === true;
   const available = seat.status === "AVAILABLE" || isMyHold;
   const theme = SEAT_TYPE_THEME[seat.type];
-  const isDoubleSeat = seat.type === "COUPLE" || (seat.colSpan ?? 1) > 1;
   const displayCode = seat.seatCode?.trim() || `${seat.row}${seat.number}`;
 
   // Colour + interaction per state. Shape (seat silhouette) is shared below.
@@ -66,7 +61,7 @@ function SeatBtn({
       disabled={!available && !conflict}
       onClick={() => available && onToggle(seat.seatId)}
       title={title}
-      className={`relative ${isDoubleSeat ? "w-[4.875rem]" : "w-9"} h-8 rounded-md border-[1.5px] text-[10px] font-bold flex items-center justify-center select-none transition-all duration-150 will-change-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#60a5fa]/60 ${cls}`}
+      className={`relative flex h-8 w-full min-w-0 items-center justify-center overflow-hidden rounded-md border-[1.5px] px-0.5 text-[clamp(7px,0.7vw,10px)] font-bold select-none transition-all duration-150 will-change-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#60a5fa]/60 ${cls}`}
       style={
         seat.status === "AVAILABLE" && !selected && !conflict
           ? { fontFamily: "'Inter', sans-serif", background: theme.bg, borderColor: theme.border, color: theme.text }
@@ -246,6 +241,14 @@ export default function SeatBookingPage() {
   useEffect(() => {
     loadSeats();
   }, [loadSeats]);
+
+  // Toast-style errors auto-dismiss so they don't linger and block the seat
+  // map; the manual close button still lets the customer dismiss early.
+  useEffect(() => {
+    if (!errorMsg) return;
+    const timer = setTimeout(() => setErrorMsg(null), 5000);
+    return () => clearTimeout(timer);
+  }, [errorMsg]);
 
   // Keep the in-flight hold's idempotency key + seat selection recoverable
   // across a hard reload (see readPersistedSeatHold above).
@@ -474,7 +477,7 @@ export default function SeatBookingPage() {
       // also a real bug: releasing the hold directly against movie-service
       // left the booking stuck at PENDING_PAYMENT until BookingExpiryScheduler
       // caught up, instead of going through POST /api/bookings/{id}/cancellations.
-      navigate(`/checkout/${result.bookingId}`);
+      navigate(`/checkout/${result.bookingId}/concessions`);
     } catch (err: any) {
       setScreen("map");
       const errResponse = err.response?.data;
@@ -554,6 +557,23 @@ export default function SeatBookingPage() {
       positions: positions.sort((left, right) => left.columnIndex - right.columnIndex),
     }));
   const physicalColumnCount = Math.max(1, ...physicalPositions.map((position) => position.columnIndex + 1));
+  // Keep a single seat close to the admin-layout proportions instead of stretching
+  // every column to fill the auditorium. Wide rooms may shrink to fit the panel,
+  // while narrow rooms stay centred at their natural visual width.
+  const seatGridGap = 6;
+  const seatGridLabelSpace = 48;
+  const seatGridMaxWidth = physicalColumnCount * 44
+    + Math.max(0, physicalColumnCount - 1) * seatGridGap
+    + seatGridLabelSpace;
+  const seatGridMinWidth = Math.min(
+    seatGridMaxWidth,
+    Math.max(
+      480,
+      physicalColumnCount * 32
+        + Math.max(0, physicalColumnCount - 1) * seatGridGap
+        + seatGridLabelSpace,
+    ),
+  );
   const seatsByCode = new Map(seats.filter((seat) => seat.seatCode).map((seat) => [seat.seatCode!, seat]));
   const seatsByGroup = new Map(seats.filter((seat) => seat.seatGroupId).map((seat) => [seat.seatGroupId!, seat]));
   const auditoriumConfig: AuditoriumVisualizationConfig = {
@@ -564,9 +584,6 @@ export default function SeatBookingPage() {
   };
   const showProjector = auditoriumConfig.projectionTechnologyCode === "LASER"
     || auditoriumConfig.projectionTechnologyCode === "XENON";
-  const formattedDate = new Date(showtimeDetails.dateTime).toLocaleDateString("en-US", {
-    weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-  });
 
   return (
     <div
@@ -577,6 +594,33 @@ export default function SeatBookingPage() {
           "radial-gradient(90% 60% at 50% -5%, rgba(96,165,250,0.07), transparent 60%), radial-gradient(60% 50% at 50% 120%, rgba(96,165,250,0.04), transparent 70%)",
       }}
     >
+
+      {/* Error toast */}
+      {errorMsg && (
+        <div className="pointer-events-none fixed right-4 top-20 z-[60] w-[min(360px,calc(100vw-2rem))] sm:right-6">
+          <style>{`
+            @keyframes seatToastIn {
+              from { opacity: 0; transform: translateY(-10px) scale(0.98); }
+              to { opacity: 1; transform: translateY(0) scale(1); }
+            }
+          `}</style>
+          <div
+            className="pointer-events-auto flex items-start gap-3 rounded-xl border border-[#e84545]/40 bg-[#2a1515]/95 p-4 text-sm text-[#f87171] shadow-[0_12px_32px_rgba(0,0,0,0.45)] backdrop-blur"
+            style={{ animation: "seatToastIn 0.25s ease-out" }}
+            role="alert"
+          >
+            <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+            <span className="flex-1">{errorMsg}</span>
+            <button
+              onClick={() => setErrorMsg(null)}
+              className="text-[#f87171]/50 transition-colors hover:text-[#f87171] cursor-pointer"
+              aria-label="Dismiss"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <header
@@ -590,66 +634,39 @@ export default function SeatBookingPage() {
           >
             <X size={18} />
           </button>
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg shrink-0"
-            style={{ background: "rgba(96,165,250,0.1)", border: "1px solid rgba(96,165,250,0.2)" }}>
-            <Film size={16} className="text-[#60a5fa]" />
-          </div>
           <div className="flex-1 min-w-0">
             <h1 className="text-base sm:text-lg font-bold text-white leading-tight truncate"
               style={{ fontFamily: "'Inter', sans-serif" }}>
               {showtimeDetails.movieTitle}
             </h1>
-            <p className="text-[11px] text-white/55 truncate">
-              {showtimeDetails.cinemaName} · {showtimeDetails.hall} · {formattedDate} · {showtimeDetails.duration} min
-            </p>
           </div>
-          <span
-            className={`hidden md:inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${
-              realtimeConnected
-                ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
-                : "border-white/10 bg-white/[0.03] text-white/45"
-            }`}
-            title={realtimeConnected ? "Live inventory updates connected" : "REST refresh fallback is active"}
-          >
-            <span className={`h-1.5 w-1.5 rounded-full ${realtimeConnected ? "bg-emerald-400" : "bg-white/30"}`} />
-            {realtimeConnected ? "Live" : "Reconnecting"}
-          </span>
-
-          {/* Step indicator */}
-          <div className="hidden sm:flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider">
-            <span className="flex items-center gap-1.5" style={{ color: "#60a5fa" }}>
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#60a5fa] text-[10px] text-black">1</span>
-              Seats
+          {/* Only surface this as an alert when live inventory sync drops —
+              a permanent "Live" badge carries no information the customer
+              acts on, so we stay silent while the connection is healthy. */}
+          {!realtimeConnected && (
+            <span
+              className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[10px] font-semibold text-amber-300"
+              title="Live inventory updates unavailable — falling back to periodic refresh"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+              Reconnecting
             </span>
-            <span className="text-white/20">→</span>
-            <span className="flex items-center gap-1.5 text-white/35">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full border border-white/20 text-[10px]">2</span>
-              Payment
-            </span>
-          </div>
+          )}
         </div>
       </header>
 
       {/* Body */}
-      <div className="mx-auto grid w-full max-w-[1540px] grid-cols-1 gap-6 px-4 py-8 pb-20 sm:px-6 lg:px-8 xl:grid-cols-[minmax(0,1fr)_340px] xl:gap-8">
+      <div className="mx-auto w-full max-w-[1540px] px-4 pt-8 sm:px-6 lg:px-8">
+        <CheckoutProgress currentStep={1} />
+      </div>
+      <div className="mx-auto grid w-full max-w-[1540px] grid-cols-1 gap-6 px-4 pb-20 sm:px-6 lg:px-8 xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-8">
 
         {/* Left: map */}
-        <div className="flex flex-col gap-5">
-
-          {/* Error banner */}
-          {errorMsg && (
-            <div className="flex items-start gap-3 bg-[#2a1515] border border-[#e84545]/40 rounded-lg p-4 text-sm text-[#f87171]">
-              <AlertTriangle size={15} className="shrink-0 mt-0.5" />
-              <span className="flex-1">{errorMsg}</span>
-              <button onClick={() => setErrorMsg(null)} className="text-[#f87171]/50 hover:text-[#f87171] transition-colors">
-                <X size={13} />
-              </button>
-            </div>
-          )}
+        <div className="flex min-w-0 flex-col gap-5">
 
           {/* Seat map panel */}
           <div
-            className="relative rounded-2xl border border-white/10 px-3 py-6 sm:px-6"
+            className="relative min-w-0 overflow-hidden rounded-2xl border border-white/10 px-3 py-6 sm:px-6"
             style={{ background: "radial-gradient(120% 80% at 50% 0%, rgba(96,165,250,0.05), rgba(255,255,255,0.015) 45%, transparent 75%)" }}
           >
             <div className={`relative ${showProjector ? "pb-7" : ""}`}>
@@ -658,8 +675,14 @@ export default function SeatBookingPage() {
               <AudioCoverageFrame config={auditoriumConfig}>
 
           {/* Seat rows */}
-          <div className="flex flex-col items-center overflow-x-auto pb-2">
-              <div className="flex w-max flex-col gap-2 px-5">
+          <div className="flex min-w-0 flex-col items-center overflow-x-auto pb-2">
+              <div
+                className="flex w-full flex-col gap-2 px-1"
+                style={{
+                  minWidth: `${seatGridMinWidth}px`,
+                  maxWidth: `${seatGridMaxWidth}px`,
+                }}
+              >
                 {physicalRows.map(({ rowIndex, rowLabel, positions }) => {
                   const renderedGroups = new Set<string>();
                   const rowSeat = positions
@@ -668,9 +691,12 @@ export default function SeatBookingPage() {
                   const rowTheme = SEAT_TYPE_THEME[rowSeat?.type ?? "STANDARD"];
 
                   return (
-                    <div key={rowIndex} className="flex items-center gap-2">
-                      <span className="w-5 shrink-0 text-center text-[11px] font-bold" style={{ color: rowTheme.text }}>{rowLabel}</span>
-                      <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${physicalColumnCount}, 2.25rem)` }}>
+                    <div key={rowIndex} className="flex w-full min-w-0 items-center gap-1 sm:gap-2">
+                      <span className="w-4 shrink-0 text-center text-[10px] font-bold sm:w-5 sm:text-[11px]" style={{ color: rowTheme.text }}>{rowLabel}</span>
+                      <div
+                        className="grid min-w-0 flex-1 gap-1 sm:gap-1.5"
+                        style={{ gridTemplateColumns: `repeat(${physicalColumnCount}, minmax(0, 1fr))` }}
+                      >
                         {positions.map((position) => {
                           const positionKey = position.positionId ?? `${rowIndex}-${position.columnIndex}`;
                           if (position.positionType === "AISLE") return <span key={positionKey} className="h-8" aria-label="Aisle" />;
@@ -684,13 +710,13 @@ export default function SeatBookingPage() {
                           if (!seat) return <span key={positionKey} className="h-8 rounded-md border border-white/[0.08] bg-white/[0.025]" title="Unavailable" />;
                           const colSpan = Math.max(1, seat.colSpan ?? (seat.type === "COUPLE" ? 2 : 1));
                           return (
-                            <div key={positionKey} style={{ gridColumn: `span ${colSpan}` }}>
+                            <div key={positionKey} className="min-w-0" style={{ gridColumn: `span ${colSpan}` }}>
                               <SeatBtn seat={seat} selected={selected.has(seat.seatId)} conflict={conflicts.has(seat.seatId)} onToggle={toggleSeat} />
                             </div>
                           );
                         })}
                       </div>
-                      <span className="w-5 shrink-0 text-center text-[11px] font-bold" style={{ color: rowTheme.text }}>{rowLabel}</span>
+                      <span className="w-4 shrink-0 text-center text-[10px] font-bold sm:w-5 sm:text-[11px]" style={{ color: rowTheme.text }}>{rowLabel}</span>
                     </div>
                   );
                 })}
@@ -745,127 +771,35 @@ export default function SeatBookingPage() {
         </div>
 
         {/* Right: summary */}
-        <aside className="self-start flex flex-col gap-3 xl:sticky xl:top-40">
-          <div className="overflow-hidden rounded-2xl border border-blue-400/15 bg-[#0b0f16] shadow-[0_24px_70px_rgba(0,0,0,0.45)]">
-            {/* Header */}
-            <div
-              className="flex items-start justify-between gap-3 border-b border-white/8 px-5 py-4"
-              style={{ background: "linear-gradient(135deg, rgba(96,165,250,0.12), rgba(37,99,235,0.025))" }}
-            >
-              <div className="flex min-w-0 items-start gap-2.5">
-                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400">
-                  <Ticket size={16} />
-                </span>
-                <div>
-                  <h2 className="text-base font-semibold text-white">Booking summary</h2>
-                  <p className="mt-0.5 text-[11px] leading-4 text-white/45">
-                    {pickedSeats.length > 0
-                      ? `${pickedSeats.length} selected seat${pickedSeats.length !== 1 ? "s" : ""}`
-                      : "Your selected seats will appear here"}
-                  </p>
-                </div>
-              </div>
-              {pickedSeats.length > 0 && (
-                <button
-                  type="button"
-                  onClick={clearAll}
-                  className="flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium text-white/50 transition-colors hover:bg-white/[0.06] hover:text-white cursor-pointer"
-                >
-                  <RotateCcw size={12} /> Clear all
-                </button>
-              )}
-            </div>
-
-            {/* Selected seats */}
-            <div className="min-h-[130px] px-5 py-4">
-              {pickedSeats.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-5 text-center">
-                  <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/8 text-blue-300/45">
-                    <Armchair size={22} />
-                  </span>
-                  <p className="text-sm font-medium text-white/70">Select seats from the map</p>
-                  <p className="mt-1 text-[11px] text-white/35">Prices are shown before you continue</p>
-                  <p className="mt-1 text-[10px] text-white/25">
-                    Maximum {holdPolicy.maxSeatsPerBooking} seats · {Math.round(holdPolicy.ttlSeconds / 60)}-minute web hold
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2.5">
-                  {pickedSeats.map((seat) => (
-                    <div
-                      key={seat.seatId}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-2.5"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-white">
-                            {seat.seatCode?.trim() || `${seat.row}${seat.number}`}
-                          </span>
-                          <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
-                          seat.type === "VIP"
-                            ? "bg-[#60a5fa]/15 text-[#60a5fa]"
-                            : seat.type === "COUPLE"
-                            ? "bg-[#c084fc]/15 text-[#c084fc]"
-                            : seat.type === "ACCESSIBLE"
-                            ? "bg-[#2dd4bf]/15 text-[#2dd4bf]"
-                            : "bg-white/10 text-white/70"
-                          }`}>
-                            {seat.type}
-                          </span>
-                        </div>
-                        <p className="mt-0.5 text-[10px] text-white/35">Seat price</p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <span className="text-sm font-semibold tabular-nums text-white/85">
-                          {formatVND(seat.price)}
-                        </span>
-                        <button
-                          type="button"
-                          aria-label={`Remove seat ${seat.seatCode?.trim() || `${seat.row}${seat.number}`}`}
-                          onClick={() => toggleSeat(seat.seatId)}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg text-white/35 transition-colors hover:bg-red-500/10 hover:text-red-400 cursor-pointer"
-                        >
-                          <X size={13} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {pickedSeats.length > 0 && (
-              <div className="space-y-4 border-t border-white/8 px-5 py-4">
-                <div className="flex items-end justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.13em] text-white/55">Total</p>
-                    <p className="mt-1 text-[11px] text-white/35">
-                      {pickedSeats.length} selected seat{pickedSeats.length !== 1 ? "s" : ""}
-                    </p>
-                  </div>
-                  <span className="text-[1.65rem] font-bold leading-none tabular-nums text-[#60a5fa]">
-                    {formatVND(total)}
-                  </span>
-                </div>
-
-                <button
-                  onClick={handleConfirm}
-                  disabled={screen === "confirming"}
-                  className="group flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#60a5fa] to-[#2563eb] py-3 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(37,99,235,0.28)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(37,99,235,0.38)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 cursor-pointer"
-                >
-                  {screen === "confirming" ? (
-                    <><Loader2 size={16} className="animate-spin" /> Reserving seats...</>
-                  ) : (
-                    <>Continue <ChevronRight size={16} className="transition-transform group-hover:translate-x-0.5" /></>
-                  )}
-                </button>
-                <p className="text-center text-[10px] leading-4 text-white/30">
-                  Seats are held for a limited time after you continue.
-                </p>
-              </div>
-            )}
-          </div>
-        </aside>
+        <BookingSummaryCard
+          movieName={showtimeDetails.movieTitle}
+          posterUrl={showtimeDetails.posterUrl}
+          ageRatingCode={showtimeDetails.ageRatingCode}
+          durationMinutes={showtimeDetails.duration || undefined}
+          cinemaName={showtimeDetails.cinemaName}
+          roomName={showtimeDetails.hall}
+          showDateLabel={formatBookingDate(new Date(showtimeDetails.dateTime))}
+          showTimeLabel={new Date(showtimeDetails.dateTime).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+          seats={pickedSeats.map((seat) => ({
+            id: seat.seatId,
+            code: seat.seatCode?.trim() || `${seat.row}${seat.number}`,
+            type: seat.type,
+            price: seat.price,
+          }))}
+          onRemoveSeat={(seat) => toggleSeat(seat.id!)}
+          maxSeats={holdPolicy.maxSeatsPerBooking}
+          holdMinutes={Math.round(holdPolicy.ttlSeconds / 60)}
+          emptyHint="Select seats from the map"
+          total={total}
+          headerAction={pickedSeats.length > 0 ? { label: "Clear all", onClick: clearAll } : undefined}
+          backAction={{ label: "Back", onClick: () => navigate(-1) }}
+          primaryAction={pickedSeats.length > 0 ? {
+            label: screen === "confirming" ? "Reserving seats..." : "Continue",
+            onClick: handleConfirm,
+            disabled: screen === "confirming",
+            loading: screen === "confirming",
+          } : undefined}
+        />
       </div>
 
       {/* Profile completion modal — overlays the booking page */}

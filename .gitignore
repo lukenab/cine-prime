@@ -65,3 +65,6 @@ build/
 *.p12
 *.jks
 secrets.yml
+# Runtime-uploaded concession media
+data/concession-media/
+server/concession-service/data/concession-media/

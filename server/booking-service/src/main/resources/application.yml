@@ -66,6 +66,10 @@ payment-service:
   url: ${PAYMENT_SERVICE_URL:http://localhost:8083}
   internal-key: ${INTERNAL_SERVICE_KEY:local-dev-only-change-me}
 
+concession-service:
+  url: ${CONCESSION_SERVICE_URL:http://localhost:8085}
+  internal-key: ${INTERNAL_SERVICE_KEY:local-dev-only-change-me}
+
 management:
   endpoints:
     web:
