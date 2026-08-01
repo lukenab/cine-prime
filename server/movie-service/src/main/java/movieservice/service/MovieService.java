@@ -349,13 +349,16 @@ public class MovieService {
         return movieRepository.findAll(pageable).map(movieMapper::toMovieResponse);
     }
 
-    /** GET /api/movies?status=NOW_SHOWING&genreId=1&date=2026-07-09 */
+    /** GET /api/movies?q=avenger&status=APPROVED&genreId=1&date=2026-07-09 */
     @Transactional
     public Page<MovieResponse> findPageWithFilters(
             int page, int size,
-            MovieStatus status, Long genreId, LocalDate releaseDate) {
+            String q, MovieStatus status, Long genreId, LocalDate releaseDate) {
         Pageable pageable = PageRequest.of(page, size);
-        return movieRepository.findWithFilters(status, genreId, releaseDate, pageable)
+        String queryPattern = q == null || q.isBlank()
+                ? null
+                : "%" + q.trim().toLowerCase(java.util.Locale.ROOT) + "%";
+        return movieRepository.findWithFilters(status, genreId, releaseDate, queryPattern, pageable)
                 .map(movieMapper::toMovieResponse);
     }
 
