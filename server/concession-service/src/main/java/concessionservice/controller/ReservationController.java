@@ -34,18 +34,20 @@ public class ReservationController {
 
     @GetMapping("/api/concession-reservations/{id}")
     public ApiResponse<ReservationResponse> get(@PathVariable String id) {
+        service.requireReservationOwner(id, requireAccountId());
         return result(service.reservation(id, false));
     }
 
     @DeleteMapping("/api/concession-reservations/{id}")
     public ApiResponse<ReservationResponse> release(@PathVariable String id) {
+        service.requireReservationOwner(id, requireAccountId());
         return result(service.release(id, false));
     }
 
     @PostMapping("/api/internal/concession-reservations")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<ReservationResponse> reserveInternal(
-            @RequestHeader("X-Internal-Key") String key,
+            @RequestHeader("X-Internal-Service-Key") String key,
             @Valid @RequestBody ReservationRequest request) {
         requireInternal(key);
         return result(service.reserve(request));
@@ -53,7 +55,7 @@ public class ReservationController {
 
     @GetMapping("/api/internal/concession-reservations/{id}")
     public ApiResponse<ReservationResponse> getInternal(
-            @RequestHeader("X-Internal-Key") String key,
+            @RequestHeader("X-Internal-Service-Key") String key,
             @PathVariable String id) {
         requireInternal(key);
         return result(service.reservation(id, false));
@@ -61,7 +63,7 @@ public class ReservationController {
 
     @PostMapping("/api/internal/concession-reservations/{id}/confirm")
     public ApiResponse<OrderResponse> confirm(
-            @RequestHeader("X-Internal-Key") String key,
+            @RequestHeader("X-Internal-Service-Key") String key,
             @PathVariable String id,
             @RequestBody(required = false) ConfirmRequest request) {
         requireInternal(key);
@@ -70,14 +72,26 @@ public class ReservationController {
 
     @PostMapping("/api/internal/concession-reservations/{id}/release")
     public ApiResponse<ReservationResponse> releaseInternal(
-            @RequestHeader("X-Internal-Key") String key,
+            @RequestHeader("X-Internal-Service-Key") String key,
             @PathVariable String id) {
         requireInternal(key);
         return result(service.release(id, false));
     }
 
     private void requireInternal(String key) {
-        if (key == null || !key.equals(internalKey)) throw new AppException(INTERNAL_UNAUTHORIZED);
+        if (key == null || !java.security.MessageDigest.isEqual(
+                key.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                internalKey.getBytes(java.nio.charset.StandardCharsets.UTF_8))) {
+            throw new AppException(INTERNAL_UNAUTHORIZED);
+        }
+    }
+
+    private String requireAccountId() {
+        String accountId = JwtSecurityUtils.getCurrentAccountId();
+        if (accountId == null || accountId.isBlank()) {
+            throw new AppException(INVALID_REQUEST);
+        }
+        return accountId;
     }
 
     private <T> ApiResponse<T> result(T value) {

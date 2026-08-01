@@ -1,5 +1,7 @@
 package authservice.service;
 
+import authservice.client.UserBranchScopeClient;
+import authservice.dto.InternalBranchScopeResponse;
 import authservice.entity.Account;
 import authservice.entity.AuthToken;
 import authservice.repository.AuthTokenRepository;
@@ -24,6 +26,7 @@ import java.text.ParseException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
+import java.util.List;
 import java.util.StringJoiner;
 import java.util.UUID;
 
@@ -33,6 +36,7 @@ import java.util.UUID;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class JwtService {
     private final AuthTokenRepository authTokenRepository;
+    private final UserBranchScopeClient userBranchScopeClient;
     @NonFinal
     @Value("${jwt.signerKey}")
     private String SIGNER_KEY;
@@ -45,10 +49,14 @@ public class JwtService {
     @Value("${jwt.refreshable-duration}")
     private long REFRESHABLE_DURATION;
 
+    @NonFinal
+    @Value("${app.internal-service-key}")
+    private String internalServiceKey;
+
     public String generateToken(Account account) {
         JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
 
-        JWTClaimsSet claimsSet = new JWTClaimsSet.Builder()
+        JWTClaimsSet.Builder claimsBuilder = new JWTClaimsSet.Builder()
                 .subject(account.getUsername())
                 .issueTime(new Date())
                 .expirationTime(
@@ -57,8 +65,11 @@ public class JwtService {
                 .issuer("cineprime.com")
                 .claim("accountId", account.getAccountId())
                 .claim("scope", buildScope(account))
-                .jwtID(UUID.randomUUID().toString())
-                .build();
+                .jwtID(UUID.randomUUID().toString());
+        if (isBranchScopedStaff(account)) {
+            claimsBuilder.claim("cinemaClusterIds", resolveBranchScope(account));
+        }
+        JWTClaimsSet claimsSet = claimsBuilder.build();
 
         Payload payload = new Payload(claimsSet.toJSONObject());
 
@@ -84,6 +95,31 @@ public class JwtService {
             });
         }
         return stringJoiner.toString();
+    }
+
+    private boolean isBranchScopedStaff(Account account) {
+        return !CollectionUtils.isEmpty(account.getRoles())
+                && account.getRoles().stream()
+                .anyMatch(role -> "BRANCH_MANAGER".equals(role.getRoleName())
+                        || "EMPLOYEE".equals(role.getRoleName()));
+    }
+
+    private List<String> resolveBranchScope(Account account) {
+        try {
+            var response = userBranchScopeClient.getBranchScope(
+                    account.getAccountId(), internalServiceKey);
+            InternalBranchScopeResponse scope = response == null ? null : response.getResult();
+            return scope == null || scope.cinemaClusterIds() == null
+                    ? List.of()
+                    : scope.cinemaClusterIds().stream()
+                    .filter(value -> value != null && !value.isBlank())
+                    .map(String::trim)
+                    .distinct()
+                    .toList();
+        } catch (RuntimeException exception) {
+            log.error("Cannot resolve branch assignments for account {}", account.getAccountId(), exception);
+            throw new AppException(GlobalErrorCode.UNCATEGORIZED_EXCEPTION);
+        }
     }
 
     public SignedJWT parseAndVerifySignature(String token) throws ParseException, JOSEException {

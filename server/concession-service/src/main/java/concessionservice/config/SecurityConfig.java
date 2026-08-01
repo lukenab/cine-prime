@@ -29,8 +29,11 @@ public class SecurityConfig extends JwtResourceServerSecuritySupport {
                             .hasAnyRole("BRANCH_MANAGER", "ADMIN", "SUPER_ADMIN")
                         .requestMatchers("/api/admin/concession-media/**")
                             .hasAnyRole("BRANCH_MANAGER", "ADMIN", "SUPER_ADMIN")
+                        .requestMatchers("/api/admin/cinemas/**")
+                            .hasAnyRole("BRANCH_MANAGER", "ADMIN", "SUPER_ADMIN")
                         .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
-                        .requestMatchers("/api/employee/**").hasAnyRole("EMPLOYEE", "ADMIN", "SUPER_ADMIN")
+                        .requestMatchers("/api/employee/**")
+                            .hasAnyRole("BRANCH_MANAGER", "EMPLOYEE", "ADMIN", "SUPER_ADMIN")
                         .anyRequest().authenticated());
         configureJwtResourceServer(http);
         return http.build();
