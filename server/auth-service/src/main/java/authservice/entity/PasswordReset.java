@@ -1,5 +1,6 @@
 package authservice.entity;
 
+import authservice.enums.PasswordResetPurpose;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -29,6 +30,10 @@ public class PasswordReset {
 
    @Column(name = "token", nullable = false, unique = true, length = 255)
    String token;
+
+   @Enumerated(EnumType.STRING)
+   @Column(name = "purpose", length = 30)
+   PasswordResetPurpose purpose;
 
    @Column(name = "expires_at", nullable = false)
    OffsetDateTime expiresAt;

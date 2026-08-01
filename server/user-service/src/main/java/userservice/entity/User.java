@@ -36,7 +36,7 @@
         @Column(name = "full_name", length = 100)
         private String fullName;
 
-        @Column(name = "phone_number", length = 15)
+        @Column(name = "phone_number", length = 15, unique = true)
         private String phoneNumber;
 
         @Column(name = "date_of_birth")
@@ -48,7 +48,7 @@
         @Column(name = "address", length = 255)
         private String address;
 
-        @Column(name = "identity_card", length = 20)
+        @Column(name = "identity_card", length = 20, unique = true)
         private String identityCard;
 
         @Column(name = "email", length = 255)

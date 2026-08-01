@@ -11,6 +11,11 @@ export interface CreateAccountPayload {
     fullName: string;
     email: string;
     role: string;
+    phoneNumber?: string;
+    dateOfBirth?: string;
+    gender?: string;
+    identityCard?: string;
+    address?: string;
 }
 
 export interface ActivateAccountPayload {
@@ -84,6 +89,14 @@ export const authApi = {
     
     resendOtp: (payload: { email: string }) => {
         return axiosClient.post('/api/auth/resend-otp', payload);
+    },
+
+    forgotPassword: (email: string) => {
+        return axiosClient.post('/api/auth/password/forgot', { email });
+    },
+
+    resetPassword: (payload: { token: string; newPassword: string }) => {
+        return axiosClient.post('/api/auth/password/reset', payload);
     },
 
     /** Admin-only. Issue #161/#162: payload is now { fullName, email, role } — no

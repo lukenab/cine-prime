@@ -8,6 +8,8 @@ import LoginPage from "../pages/auth/LoginPage";
 import RegisterPage from "../pages/auth/RegisterPage";
 import CompleteProfilePage from "../pages/auth/CompleteProfilePage";
 import ActivateAccountPage from "../pages/auth/ActivateAccountPage";
+import ForgotPasswordPage from "../pages/auth/ForgotPasswordPage";
+import ResetPasswordPage from "../pages/auth/ResetPasswordPage";
 
 import HomePage from "../pages/customer/HomePage";
 import MoviesPage from "../pages/customer/MoviesPage";
@@ -91,10 +93,17 @@ export default function AppRoutes() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/activate-account" element={<ActivateAccountPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
       </Route>
 
       {/* Profile setup — standalone page, no layout wrapper */}
-      <Route path="/profile-setup" element={<CompleteProfilePage />} />
+      <Route element={<ProtectedRoute
+        allowedRoles={["ROLE_MEMBER", "ROLE_EMPLOYEE", "ROLE_BRANCH_MANAGER"]}
+        allowIncompleteProfile
+      />}>
+        <Route path="/profile-setup" element={<CompleteProfilePage />} />
+      </Route>
 
       {/* Admin + Employee */}
       <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_BRANCH_MANAGER", "ROLE_EMPLOYEE"]} />}>

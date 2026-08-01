@@ -61,6 +61,25 @@ public class EmailService {
         }
     }
 
+    public void sendPasswordResetEmail(String to, String resetLink, int expiryMinutes) {
+        try {
+            Context context = new Context();
+            context.setVariable("resetLink", resetLink);
+            context.setVariable("expiryMinutes", expiryMinutes);
+
+            String html = templateEngine.process("email/password-reset-email", context);
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setTo(to);
+            helper.setSubject("CinePrime - Reset Your Password");
+            helper.setText(html, true);
+            mailSender.send(message);
+            log.info("Password reset email sent to: {}", to);
+        } catch (Exception e) {
+            logSendFailure("password reset", to, e);
+        }
+    }
+
     // Deliberately does not rethrow: the Kafka listeners that call sendOtpEmail/
     // sendAccountActivationEmail have no retry/DLT handling yet (tracked separately
     // in Issue #266/#269), so throwing here would just be swallowed by the default

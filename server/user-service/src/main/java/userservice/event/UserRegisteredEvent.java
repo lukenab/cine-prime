@@ -2,6 +2,7 @@ package userservice.event;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import java.time.LocalDate;
 
 @Data
 @AllArgsConstructor
@@ -11,4 +12,10 @@ import lombok.experimental.FieldDefaults;
 public class UserRegisteredEvent {
     String accountId;
     String email;
+    String fullName;
+    String phoneNumber;
+    LocalDate dateOfBirth;
+    String gender;
+    String identityCard;
+    String address;
 }

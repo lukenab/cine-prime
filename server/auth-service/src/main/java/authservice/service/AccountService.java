@@ -11,6 +11,7 @@ import authservice.entity.Account;
 import authservice.entity.PasswordReset;
 import authservice.entity.Role;
 import authservice.enums.AccountStatus;
+import authservice.enums.PasswordResetPurpose;
 import authservice.event.AccountActivationRequestedEvent;
 import authservice.event.UserRegisteredEvent;
 import authservice.event.AccountStatusChangedEvent;
@@ -158,10 +159,6 @@ public class AccountService {
             account.setEmail(request.getEmail().trim().toLowerCase());
         }
 
-        if (StringUtils.hasText(request.getPassword())) {
-            account.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-        }
-
         if (!CollectionUtils.isEmpty(request.getRoles())) {
             List<Role> roles = roleRepository.findAllById(request.getRoles());
             if (roles.size() != request.getRoles().stream().distinct().count()) {
@@ -192,7 +189,6 @@ public class AccountService {
                 auditLogService.metadata(
                         "username", account.getUsername(),
                         "email", account.getEmail(),
-                        "passwordChanged", StringUtils.hasText(request.getPassword()),
                         "oldRoles", oldRoles,
                         "newRoles", account.getRoles() != null ? account.getRoles().toString() : null,
                         "statusChanged", request.getStatus() != null
@@ -244,6 +240,12 @@ public class AccountService {
         authEventPublisher.sendRegisteredEvent(UserRegisteredEvent.builder()
                 .accountId(account.getAccountId())
                 .email(account.getEmail())
+                .fullName(request.getFullName())
+                .phoneNumber(request.getPhoneNumber())
+                .dateOfBirth(request.getDateOfBirth())
+                .gender(request.getGender())
+                .identityCard(request.getIdentityCard())
+                .address(request.getAddress())
                 .build());
 
         auditLogService.success("ACCOUNT_CREATED", account.getAccountId(),
@@ -263,7 +265,8 @@ public class AccountService {
      */
     @Transactional
     public void activateAccount(ActivateAccountRequest request) {
-        PasswordReset reset = passwordResetRepository.findByToken(request.getToken())
+        PasswordReset reset = passwordResetRepository.findActivationToken(
+                        request.getToken(), PasswordResetPurpose.ACTIVATION)
                 .orElseThrow(() -> new AppException(AuthErrorCode.ACTIVATION_TOKEN_INVALID));
 
         if (Boolean.TRUE.equals(reset.getIsUsed())) {
@@ -292,7 +295,7 @@ public class AccountService {
 
         // Belt-and-braces: invalidate any other pending tokens for this account
         // (e.g. if resend-activation was called more than once).
-        passwordResetRepository.invalidatePendingResets(account);
+        passwordResetRepository.invalidatePendingResets(account, PasswordResetPurpose.ACTIVATION);
 
         auditLogService.success("ACCOUNT_ACTIVATED", account.getAccountId(),
                 "Account activated by employee", auditLogService.metadata(
@@ -314,7 +317,7 @@ public class AccountService {
             throw new AppException(AuthErrorCode.ACCOUNT_ALREADY_ACTIVE);
         }
 
-        passwordResetRepository.invalidatePendingResets(account);
+        passwordResetRepository.invalidatePendingResets(account, PasswordResetPurpose.ACTIVATION);
         // auth-service does not persist fullName (user-service owns the profile) — fall
         // back to username for the email greeting on resend.
         issueActivationToken(account, account.getUsername());
@@ -336,6 +339,7 @@ public class AccountService {
         passwordResetRepository.save(PasswordReset.builder()
                 .account(account)
                 .token(token)
+                .purpose(PasswordResetPurpose.ACTIVATION)
                 .expiresAt(OffsetDateTime.now().plusHours(activationTtlHours))
                 .isUsed(false)
                 .build());

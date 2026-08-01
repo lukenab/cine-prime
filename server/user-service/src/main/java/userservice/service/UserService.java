@@ -63,17 +63,31 @@ public class UserService {
      */
     @Transactional
     public void createUserProfile(UserRegisteredEvent event) {
-        if (userRepository.existsById(event.getAccountId())) {
-            log.warn("[KAFKA] Skeleton profile for accountId {} already exists. Skipping.", event.getAccountId());
-            return;
+        User user = userRepository.findById(event.getAccountId()).orElseGet(() -> User.builder()
+                .accountId(event.getAccountId()).isActive(true).profileCompleted(false).build());
+
+        if (event.getPhoneNumber() != null && !event.getPhoneNumber().equals(user.getPhoneNumber())
+                && userRepository.existsByPhoneNumber(event.getPhoneNumber())) {
+            throw new AppException(ErrorCode.PHONE_EXISTED);
+        }
+        if (event.getIdentityCard() != null) {
+            identityCardService.validate(event.getIdentityCard());
+            if (!event.getIdentityCard().equals(user.getIdentityCard())
+                    && userRepository.existsByIdentityCard(event.getIdentityCard())) {
+                throw new AppException(ErrorCode.IDENTITY_CARD_EXISTED);
+            }
         }
 
-        User user = User.builder()
-                .accountId(event.getAccountId())
-                .email(event.getEmail())
-                .isActive(true)
-                .profileCompleted(false)   // skeleton — chưa điền form
-                .build();
+        // Merge makes the event idempotent and also handles the case where employee-service
+        // created a verified skeleton before Kafka delivered this richer profile event.
+        user.setEmail(event.getEmail());
+        if (event.getFullName() != null) user.setFullName(event.getFullName());
+        if (event.getPhoneNumber() != null) user.setPhoneNumber(event.getPhoneNumber());
+        if (event.getDateOfBirth() != null) user.setDateOfBirth(event.getDateOfBirth());
+        if (event.getGender() != null) user.setGender(event.getGender());
+        if (event.getIdentityCard() != null) user.setIdentityCard(event.getIdentityCard());
+        if (event.getAddress() != null) user.setAddress(event.getAddress());
+        user.setProfileCompleted(isProfileComplete(user));
 
         User saved = userRepository.save(user);
         auditLogService.log("User", saved.getAccountId(), "CREATE", null, saved, "SYSTEM");

@@ -40,6 +40,11 @@ public class AbuseProtectionService {
         consume("availability:ip:" + fingerprint(clientIp()), 30, Duration.ofMinutes(10));
     }
 
+    public void guardPasswordReset(String email) {
+        consume("password-reset:ip:" + fingerprint(clientIp()), 10, Duration.ofHours(1));
+        consume("password-reset:email:" + fingerprint(normalize(email)), 3, Duration.ofHours(1));
+    }
+
     public void guardOtpVerification(String email) {
         consume("otp:ip:" + fingerprint(clientIp()), 30, Duration.ofMinutes(10));
         consume("otp:email:" + fingerprint(normalize(email)), 5, Duration.ofMinutes(10));

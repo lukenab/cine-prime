@@ -10,7 +10,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+		"JWT_SIGNER_KEY=test-only-signing-key-with-at-least-sixty-four-characters-1234567890"
+})
 class AuthServiceApplicationTests {
 
 	@Autowired

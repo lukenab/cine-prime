@@ -27,6 +27,8 @@ public class SecurityConfig {
             "/api/auth/register/verify",
             "/api/auth/resend-otp",
             "/api/auth/activate-account",
+            "/api/auth/password/forgot",
+            "/api/auth/password/reset",
     };
 
     private final CustomJwtDecoder customJwtDecoder;

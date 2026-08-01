@@ -146,7 +146,7 @@ export default function ProfileSetupSheet({
 
   const { identityCardHint, parsedIdentityCard } = useIdentityCardAutofill(
     form.identityCard,
-    (updater) => setForm(prev => typeof updater === "function" ? updater(prev) : { ...prev, ...updater })
+    setForm
   );
 
   const birthYearMismatch =

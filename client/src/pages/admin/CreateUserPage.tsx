@@ -31,7 +31,7 @@ export default function CreateUserPage() {
     fullName: "",
     email: "",
     phoneNumber: "",
-    gender: "MALE",
+    gender: "Male",
     dateOfBirth: "",
     identityCard: "",
     address: "",
@@ -45,6 +45,11 @@ export default function CreateUserPage() {
         fullName: data.fullName,
         email: data.email,
         role: data.role,
+        phoneNumber: data.phoneNumber,
+        dateOfBirth: data.dateOfBirth,
+        gender: data.gender,
+        identityCard: data.identityCard,
+        address: data.address,
       });
 
       const generatedUsername = res?.data?.result?.username ?? res?.result?.username;

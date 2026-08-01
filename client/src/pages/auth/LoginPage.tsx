@@ -110,7 +110,11 @@ export default function LoginPage() {
 
     setIsLoading(true);
     try {
-      const { role } = await login({ username, password });
+      const { role, needsSetup } = await login({ username, password });
+      if (needsSetup) {
+        navigate("/profile-setup", { replace: true });
+        return;
+      }
       navigateAfterLogin(role);
     } catch (err: any) {
       const code = err?.response?.data?.code;
@@ -234,14 +238,14 @@ export default function LoginPage() {
             <label htmlFor="password" style={{ color: "rgba(255,255,255,0.6)", fontSize: "12px", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>
               Password
             </label>
-            <a
-              href="#"
+            <Link
+              to="/forgot-password"
               style={{ color: "#3b82f6", fontSize: "12px", fontWeight: 500, textDecoration: "none" }}
               onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
               onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
             >
               Forgot Password?
-            </a>
+            </Link>
           </div>
           <div style={{ position: "relative" }}>
             <Lock
