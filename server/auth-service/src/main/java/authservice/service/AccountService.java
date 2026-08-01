@@ -4,16 +4,21 @@ import authservice.dto.request.ActivateAccountRequest;
 import authservice.dto.request.CreateAccountRequest;
 import authservice.dto.request.UpdateAccountRequest;
 import authservice.dto.response.AccountResponse;
+import authservice.dto.response.PageResponse;
+import authservice.dto.response.InternalAccountResponse;
+import authservice.dto.response.AccountStatsResponse;
 import authservice.entity.Account;
 import authservice.entity.PasswordReset;
 import authservice.entity.Role;
 import authservice.enums.AccountStatus;
 import authservice.event.AccountActivationRequestedEvent;
 import authservice.event.UserRegisteredEvent;
+import authservice.event.AccountStatusChangedEvent;
 import authservice.exception.AuthErrorCode;
 import authservice.mapper.AccountMapper;
 import authservice.messaging.AuthEventPublisher;
 import authservice.repository.AccountRepository;
+import authservice.repository.AuthTokenRepository;
 import authservice.repository.PasswordResetRepository;
 import authservice.repository.RoleRepository;
 import jakarta.transaction.Transactional;
@@ -26,6 +31,9 @@ import movie.theater.common.exception.AppException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
@@ -46,6 +54,7 @@ import java.util.regex.Pattern;
 public class AccountService {
 
     AccountRepository accountRepository;
+    AuthTokenRepository authTokenRepository;
     AccountMapper accountMapper;
     PasswordEncoder passwordEncoder;
     RoleRepository roleRepository;
@@ -68,10 +77,73 @@ public class AccountService {
         return accountMapper.toAccountResponseList(accountRepository.findAll());
     }
 
+    public PageResponse<AccountResponse> searchAccounts(
+            String query, AccountStatus status, String role, int page, int size) {
+        if (page < 1 || size < 1 || size > 100) {
+            throw new AppException(AuthErrorCode.INVALID_PAGE_REQUEST);
+        }
+
+        Specification<Account> specification = Specification.where(null);
+        if (StringUtils.hasText(query)) {
+            String pattern = "%" + query.trim().toLowerCase() + "%";
+            specification = specification.and((root, ignored, cb) -> cb.or(
+                    cb.like(cb.lower(root.get("username")), pattern),
+                    cb.like(cb.lower(root.get("email")), pattern)
+            ));
+        }
+        if (status != null) {
+            specification = specification.and((root, ignored, cb) -> cb.equal(root.get("status"), status));
+        }
+        if (StringUtils.hasText(role)) {
+            String normalizedRole = role.trim().toUpperCase();
+            specification = specification.and((root, querySpec, cb) -> {
+                querySpec.distinct(true);
+                return cb.equal(root.join("roles").get("roleName"), normalizedRole);
+            });
+        }
+
+        Page<Account> result = accountRepository.findAll(specification, PageRequest.of(page - 1, size));
+        return PageResponse.<AccountResponse>builder()
+                .currentPage(page)
+                .totalPages(result.getTotalPages())
+                .pageSize(result.getSize())
+                .totalElements(result.getTotalElements())
+                .data(result.getContent().stream().map(accountMapper::toAccountResponse).toList())
+                .build();
+    }
+
+    public AccountStatsResponse getAccountStats() {
+        LocalDateTime monthStart = LocalDateTime.now().withDayOfMonth(1).toLocalDate().atStartOfDay();
+        return AccountStatsResponse.builder()
+                .total(accountRepository.count())
+                .active(accountRepository.countByStatus(AccountStatus.ACTIVE))
+                .pending(accountRepository.countByStatus(AccountStatus.PENDING))
+                .inactive(accountRepository.countByStatus(AccountStatus.INACTIVE))
+                .employees(accountRepository.countByRole("EMPLOYEE"))
+                .newThisMonth(accountRepository.countByCreatedAtGreaterThanEqual(monthStart))
+                .build();
+    }
+
     public AccountResponse getAccountById(String accountId) {
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new AppException(AuthErrorCode.ACCOUNT_NOT_FOUND));
         return accountMapper.toAccountResponse(account);
+    }
+
+    public InternalAccountResponse getInternalAccount(String accountId) {
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new AppException(AuthErrorCode.ACCOUNT_NOT_FOUND));
+        return InternalAccountResponse.builder()
+                .accountId(account.getAccountId())
+                .email(account.getEmail())
+                .status(account.getStatus().name())
+                .roles(account.getRoles().stream().map(Role::getRoleName).collect(java.util.stream.Collectors.toSet()))
+                .build();
+    }
+
+    @Transactional
+    public void updateInternalStatus(String accountId, AccountStatus status) {
+        updateAccount(accountId, UpdateAccountRequest.builder().status(status).build());
     }
 
     @Transactional
@@ -92,14 +164,29 @@ public class AccountService {
 
         if (!CollectionUtils.isEmpty(request.getRoles())) {
             List<Role> roles = roleRepository.findAllById(request.getRoles());
+            if (roles.size() != request.getRoles().stream().distinct().count()) {
+                throw new AppException(AuthErrorCode.ROLE_NOT_FOUND);
+            }
             account.setRoles(new HashSet<>(roles));
         }
 
+        AccountStatus previousStatus = account.getStatus();
         if (request.getStatus() != null) {
             account.setStatus(request.getStatus());
         }
 
         accountRepository.save(account);
+
+        if (previousStatus != AccountStatus.INACTIVE && account.getStatus() == AccountStatus.INACTIVE) {
+            int revoked = authTokenRepository.revokeAllByAccountId(accountId, OffsetDateTime.now());
+            log.info("Revoked {} active sessions after account {} was deactivated", revoked, accountId);
+        }
+        if (request.getStatus() != null && previousStatus != account.getStatus()) {
+            authEventPublisher.sendAccountStatusChangedEvent(AccountStatusChangedEvent.builder()
+                    .accountId(accountId)
+                    .status(account.getStatus().name())
+                    .build());
+        }
 
         auditLogService.success("ACCOUNT_UPDATED", accountId, "Account updated",
                 auditLogService.metadata(
@@ -128,9 +215,7 @@ public class AccountService {
             throw new AppException(AuthErrorCode.EMAIL_EXISTED);
         }
 
-        String requestedRole = (request.getRole() != null && !request.getRole().isBlank())
-                ? request.getRole().toUpperCase().trim()
-                : "MEMBER";
+        String requestedRole = request.getRole().name();
 
         Role accountRole = roleRepository.findById(requestedRole)
                 .orElseThrow(() -> new AppException(AuthErrorCode.ROLE_NOT_FOUND));
@@ -195,6 +280,11 @@ public class AccountService {
         account.setStatus(AccountStatus.ACTIVE);
         account.setEmailVerifiedAt(LocalDateTime.now());
         accountRepository.save(account);
+
+        authEventPublisher.sendAccountStatusChangedEvent(AccountStatusChangedEvent.builder()
+                .accountId(account.getAccountId())
+                .status(AccountStatus.ACTIVE.name())
+                .build());
 
         reset.setIsUsed(true);
         reset.setUsedAt(OffsetDateTime.now());

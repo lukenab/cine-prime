@@ -9,6 +9,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 import userservice.event.UserRegisteredEvent;
 import userservice.event.UserUpdatedEvent;
+import userservice.event.AccountStatusChangedEvent;
 import userservice.service.UserService;
 
 @Service
@@ -34,6 +35,12 @@ public class UserEventConsumer {
     public void consumeUpdatedEvent(UserUpdatedEvent event) {
         if (event == null) return;
         userService.updateUserProfile(event);
+    }
+
+    @KafkaListener(topics = "account-status-topic", groupId = "user-service-group")
+    public void consumeAccountStatusChangedEvent(AccountStatusChangedEvent event) {
+        if (event == null) return;
+        userService.synchronizeAccountStatus(event);
     }
 
     /**

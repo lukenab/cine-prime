@@ -3,6 +3,9 @@ package authservice.controller;
 import authservice.dto.request.UpdateAccountRequest;
 import authservice.dto.request.CreateAccountRequest;
 import authservice.dto.response.AccountResponse;
+import authservice.dto.response.PageResponse;
+import authservice.dto.response.AccountStatsResponse;
+import authservice.enums.AccountStatus;
 import authservice.service.AccountService;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
@@ -32,6 +35,25 @@ public class AccountController {
     ApiResponse<AccountResponse> getAccountById(@PathVariable String accountId){
         return ApiResponse.<AccountResponse>builder()
                 .result(accountService.getAccountById(accountId))
+                .build();
+    }
+
+    @GetMapping("/search")
+    ApiResponse<PageResponse<AccountResponse>> searchAccounts(
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) AccountStatus status,
+            @RequestParam(required = false) String role,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ApiResponse.<PageResponse<AccountResponse>>builder()
+                .result(accountService.searchAccounts(query, status, role, page, size))
+                .build();
+    }
+
+    @GetMapping("/stats")
+    ApiResponse<AccountStatsResponse> getAccountStats() {
+        return ApiResponse.<AccountStatsResponse>builder()
+                .result(accountService.getAccountStats())
                 .build();
     }
 

@@ -8,14 +8,18 @@ import java.util.Map;
 import jakarta.transaction.Transactional;
 
 import lombok.extern.slf4j.Slf4j;
+import lombok.experimental.NonFinal;
 import movie.theater.common.exception.AppException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.util.StringUtils;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.multipart.MultipartFile;
 
 import lombok.AccessLevel;
@@ -27,9 +31,13 @@ import userservice.dto.UserUpdateRequest;
 import userservice.entity.User;
 import userservice.event.UserRegisteredEvent;
 import userservice.event.UserUpdatedEvent;
+import userservice.event.AccountStatusChangedEvent;
+import userservice.enums.EmployeeStatus;
 import userservice.exception.ErrorCode;
 import userservice.mapper.UserMapper;
 import userservice.repository.UserRepository;
+import userservice.client.AuthAccountClient;
+import userservice.dto.AuthAccountStatusRequest;
 import userservice.service.ImageStorageService;
 
 @Service
@@ -42,6 +50,11 @@ public class UserService {
     AuditLogService auditLogService;
     IdentityCardService identityCardService;
     ImageStorageService imageStorageService;
+    AuthAccountClient authAccountClient;
+
+    @NonFinal
+    @Value("${app.internal-service-key}")
+    String internalServiceKey;
 
     /**
      * Tạo skeleton profile khi nhận UserRegisteredEvent từ auth-service.
@@ -68,6 +81,19 @@ public class UserService {
     }
 
     @Transactional
+    public void synchronizeAccountStatus(AccountStatusChangedEvent event) {
+        userRepository.findById(event.getAccountId()).ifPresent(user -> {
+            boolean active = "ACTIVE".equals(event.getStatus()) || "PENDING".equals(event.getStatus());
+            user.setIsActive(active);
+            if (!active && user.getEmployee() != null) {
+                user.getEmployee().setStatus(EmployeeStatus.DISABLED);
+            }
+            userRepository.save(user);
+            auditLogService.log("User", user.getAccountId(), "ACCOUNT_STATUS_SYNC", null, user, "SYSTEM");
+        });
+    }
+
+    @Transactional
     public UserResponse getUserById(String id) {
         User user = userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
@@ -80,21 +106,10 @@ public class UserService {
 
     @Transactional
     public UserResponse updateUser(String id, UserUpdateRequest request) {
-        /*
-         * UPSERT pattern — tạo skeleton nếu chưa tồn tại.
-         * Xảy ra khi: (1) Kafka event chưa kịp consume, (2) ddl-auto:create xóa data khi
-         * dev restart, (3) bất kỳ lý do nào khiến skeleton profile bị thiếu.
-         * Đây là intentional fallback của Progressive Profiling — REST endpoint luôn là
-         * last-resort để đảm bảo user không bị block.
-         */
-        User user = userRepository.findById(id).orElseGet(() -> {
-            log.warn("[UPSERT] User {} not found — creating skeleton before update (Kafka lag / dev reset)", id);
-            return userRepository.save(User.builder()
-                    .accountId(id)
-                    .isActive(true)
-                    .profileCompleted(false)
-                    .build());
-        });
+        // Profiles are provisioned only from a trusted auth-service event. Creating one
+        // from a caller-controlled path id would let an authenticated user forge records.
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
         if (request.getIdentityCard() != null) {
             identityCardService.validate(request.getIdentityCard());
             if (!request.getIdentityCard().equals(user.getIdentityCard())
@@ -134,6 +149,9 @@ public class UserService {
             throw new AppException(ErrorCode.USER_ALREADY_INACTIVE);
         }
 
+        // Login eligibility belongs to auth-service. Revoke sessions before hiding the
+        // profile so no API caller can create a "disabled profile / active login" split.
+        authAccountClient.updateStatus(id, internalServiceKey, new AuthAccountStatusRequest("INACTIVE"));
         user.setIsActive(false);
         user.setUpdatedAt(LocalDateTime.now());
 
@@ -195,10 +213,26 @@ public class UserService {
         }
     }
 
-    public PageResponse<UserResponse> getAllUser(int page, int size) {
+    public PageResponse<UserResponse> getAllUser(int page, int size, String query, Boolean active) {
+        if (page < 1 || size < 1 || size > 200) {
+            throw new AppException(ErrorCode.INVALID_INPUT);
+        }
         Pageable pageable = PageRequest.of(page - 1, size);
 
-        Page<User> pageData = userRepository.findAll(pageable);
+        Specification<User> specification = Specification.where(null);
+        if (StringUtils.hasText(query)) {
+            String pattern = "%" + query.trim().toLowerCase() + "%";
+            specification = specification.and((root, ignored, cb) -> cb.or(
+                    cb.like(cb.lower(root.get("fullName")), pattern),
+                    cb.like(cb.lower(root.get("email")), pattern),
+                    cb.like(cb.lower(root.get("phoneNumber")), pattern)
+            ));
+        }
+        if (active != null) {
+            specification = specification.and((root, ignored, cb) -> cb.equal(root.get("isActive"), active));
+        }
+
+        Page<User> pageData = userRepository.findAll(specification, pageable);
 
         List<UserResponse> userResponses = pageData.getContent().stream()
                 .map(userMapper::toUserResponse)

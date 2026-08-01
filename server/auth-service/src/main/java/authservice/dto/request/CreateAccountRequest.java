@@ -1,7 +1,9 @@
 package authservice.dto.request;
 
+import authservice.enums.AccountProvisioningRole;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -28,5 +30,6 @@ public class CreateAccountRequest {
     String email;
 
     /** Role name, e.g. "MEMBER" / "EMPLOYEE" / "ADMIN". Free-text for now — see Issue #157. */
-    String role;
+    @NotNull(message = "Role is required")
+    AccountProvisioningRole role;
 }

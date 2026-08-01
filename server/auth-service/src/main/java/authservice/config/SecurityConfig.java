@@ -38,12 +38,16 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/check").permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS).permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/accounts").hasAuthority("ROLE_ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/api/accounts/*/resend-activation").hasAuthority("ROLE_ADMIN")
+                        .requestMatchers("/api/internal/**").permitAll()
+                        .requestMatchers("/api/accounts/my-info").authenticated()
+                        .requestMatchers("/api/accounts/**", "/api/roles/**", "/api/permissions/**")
+                            .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
                         .anyRequest().authenticated());
 
         http.oauth2ResourceServer(oauth2 -> oauth2
-                .jwt(jwt -> jwt.decoder(customJwtDecoder))
+                .jwt(jwt -> jwt
+                        .decoder(customJwtDecoder)
+                        .jwtAuthenticationConverter(jwtAuthenticationConverter()))
                 .authenticationEntryPoint(new JwtAuthEntryPoint())
         );
 
