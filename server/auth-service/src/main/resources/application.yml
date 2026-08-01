@@ -4,6 +4,13 @@ server:
 spring:
   application:
     name: auth-service
+  config:
+    # Support repository-level .env files for local IDE/Maven runs.
+    # Real environment variables still take precedence in deployed environments.
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:../.env[.properties]
+      - optional:file:../../.env[.properties]
 
   data:
       redis:
@@ -48,7 +55,7 @@ eureka:
       defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
 
 jwt:
-  signerKey: ${JWT_SIGNER_KEY:873bcf3b6023c6cfac735831cc01cbd59c6f64c2341050f12e5f0224d7edea62}
+  signerKey: ${JWT_SIGNER_KEY}
   valid-duration: ${JWT_VALID_DURATION:1800}    
   refreshable-duration: ${JWT_REFRESHABLE_DURATION:36000}
 

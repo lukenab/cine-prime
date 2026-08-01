@@ -156,6 +156,17 @@
 						refresh in particular) fails locally on machines set to this zone.
 					-->
 					<argLine>-Duser.timezone=UTC</argLine>
+					<!-- Production secrets are mandatory environment variables. Tests use
+					     non-sensitive local placeholders so context tests remain hermetic. -->
+					<systemPropertyVariables>
+						<SPRING_DATASOURCE_PASSWORD>test-only-password</SPRING_DATASOURCE_PASSWORD>
+						<JWT_SIGNER_KEY>test-only-jwt-signer-key-that-is-at-least-sixty-four-characters-long-0001</JWT_SIGNER_KEY>
+						<TMDB_API_KEY>test-only-tmdb-key</TMDB_API_KEY>
+						<INTERNAL_SERVICE_KEY>test-only-internal-key</INTERNAL_SERVICE_KEY>
+						<CLOUDINARY_CLOUD_NAME>test-cloud</CLOUDINARY_CLOUD_NAME>
+						<CLOUDINARY_API_KEY>test-cloudinary-key</CLOUDINARY_API_KEY>
+						<CLOUDINARY_API_SECRET>test-cloudinary-secret</CLOUDINARY_API_SECRET>
+					</systemPropertyVariables>
 				</configuration>
 			</plugin>
 
