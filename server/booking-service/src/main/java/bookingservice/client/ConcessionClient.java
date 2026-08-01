@@ -12,17 +12,17 @@ import org.springframework.web.bind.annotation.*;
 public interface ConcessionClient {
     @PostMapping("/api/internal/concession-reservations")
     ApiResponse<ConcessionReservationResponse> reserve(
-            @RequestHeader("X-Internal-Key") String internalKey,
+            @RequestHeader("X-Internal-Service-Key") String internalKey,
             @RequestBody ConcessionReservationRequest request);
 
     @PostMapping("/api/internal/concession-reservations/{id}/confirm")
     ApiResponse<ConcessionOrderResponse> confirm(
             @PathVariable String id,
-            @RequestHeader("X-Internal-Key") String internalKey,
+            @RequestHeader("X-Internal-Service-Key") String internalKey,
             @RequestBody ConfirmConcessionReservationRequest request);
 
     @PostMapping("/api/internal/concession-reservations/{id}/release")
     ApiResponse<ConcessionReservationResponse> release(
             @PathVariable String id,
-            @RequestHeader("X-Internal-Key") String internalKey);
+            @RequestHeader("X-Internal-Service-Key") String internalKey);
 }

@@ -48,6 +48,10 @@ public class OutboxPublishingStateService {
                 event.getEventId(),
                 event.getPartitionKey(),
                 event.getEventType(),
+                event.getSchemaVersion(),
+                event.getOccurredAt(),
+                event.getCorrelationId(),
+                event.getCausationId(),
                 event.getPayload());
     }
 
@@ -91,6 +95,10 @@ public class OutboxPublishingStateService {
             String eventId,
             String partitionKey,
             String eventType,
+            String eventVersion,
+            OffsetDateTime occurredAt,
+            String correlationId,
+            String causationId,
             String payload) {
     }
 }

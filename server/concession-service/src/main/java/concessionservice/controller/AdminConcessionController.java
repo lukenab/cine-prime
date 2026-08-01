@@ -1,6 +1,7 @@
 package concessionservice.controller;
 
 import concessionservice.dto.ConcessionModels.*;
+import concessionservice.service.ClusterAccessPolicy;
 import concessionservice.service.ConcessionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AdminConcessionController {
     private final ConcessionService service;
+    private final ClusterAccessPolicy clusterAccessPolicy;
 
     @GetMapping("/concession-products")
     @PreAuthorize("hasAnyRole('BRANCH_MANAGER','ADMIN','SUPER_ADMIN')")
@@ -135,6 +137,7 @@ public class AdminConcessionController {
 
     @GetMapping("/cinemas/{clusterId}/concession-offers")
     public ApiResponse<List<OfferResponse>> offers(@PathVariable Long clusterId) {
+        clusterAccessPolicy.requireAccess(clusterId);
         return result(service.offers(clusterId));
     }
 
@@ -145,6 +148,7 @@ public class AdminConcessionController {
             @PathVariable Long sellableId,
             @Valid @RequestBody OfferRequest request,
             Authentication authentication) {
+        clusterAccessPolicy.requireAccess(clusterId);
         return result(service.upsertOffer(
                 clusterId, type, sellableId, request, actor(authentication)));
     }
@@ -154,6 +158,7 @@ public class AdminConcessionController {
             @PathVariable Long clusterId,
             @Valid @RequestBody BulkOfferRequest request,
             Authentication authentication) {
+        clusterAccessPolicy.requireAccess(clusterId);
         return result(service.bulkUpsertOffers(clusterId, request, actor(authentication)));
     }
 
@@ -162,6 +167,8 @@ public class AdminConcessionController {
             @PathVariable Long clusterId,
             @Valid @RequestBody CopyOffersRequest request,
             Authentication authentication) {
+        clusterAccessPolicy.requireAccess(clusterId);
+        clusterAccessPolicy.requireAccess(request.sourceClusterId());
         return result(service.copyOffers(clusterId, request, actor(authentication)));
     }
 
@@ -169,11 +176,13 @@ public class AdminConcessionController {
     public ApiResponse<List<OfferAuditResponse>> offerAudit(
             @PathVariable Long clusterId,
             @RequestParam(defaultValue = "100") int limit) {
+        clusterAccessPolicy.requireAccess(clusterId);
         return result(service.offerAudit(clusterId, limit));
     }
 
     @GetMapping("/cinemas/{clusterId}/concession-inventory")
     public ApiResponse<List<InventoryResponse>> inventory(@PathVariable Long clusterId) {
+        clusterAccessPolicy.requireAccess(clusterId);
         return result(service.inventory(clusterId));
     }
 
@@ -182,6 +191,7 @@ public class AdminConcessionController {
             @PathVariable Long clusterId,
             @PathVariable Long skuId,
             @Valid @RequestBody InventoryRequest request) {
+        clusterAccessPolicy.requireAccess(clusterId);
         return result(service.setInventory(clusterId, skuId, request));
     }
 

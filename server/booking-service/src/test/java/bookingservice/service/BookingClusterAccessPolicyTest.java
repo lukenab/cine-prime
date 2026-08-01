@@ -40,6 +40,15 @@ class BookingClusterAccessPolicyTest {
     }
 
     @Test
+    void branchManagerMayOperateOnlyAssignedCluster() {
+        authenticate("BRANCH_MANAGER", Map.of("cinemaClusterIds", List.of(81L)));
+
+        assertThatCode(() -> policy.requireAccess(81L)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> policy.requireAccess(82L))
+                .isInstanceOf(AppException.class);
+    }
+
+    @Test
     void customerCannotUseClusterOperations() {
         authenticate("CUSTOMER", Map.of("cinemaClusterId", 43L));
 

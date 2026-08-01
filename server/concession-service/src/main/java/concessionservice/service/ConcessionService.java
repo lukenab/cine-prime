@@ -787,6 +787,17 @@ public class ConcessionService {
                 total(lines), (String) reservation.get("currency"), replayed, lines);
     }
 
+    @Transactional(readOnly = true)
+    public void requireReservationOwner(String reservationId, String accountId) {
+        Integer owned = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM concession_reservation
+                WHERE id=? AND customer_id=?
+                """, Integer.class, reservationId, accountId);
+        if (owned == null || owned == 0) {
+            throw new AppException(RESERVATION_ACCESS_DENIED);
+        }
+    }
+
     @Transactional
     public OrderResponse confirm(String reservationId, ConfirmRequest request) {
         Map<String, Object> reservation = lockedReservation(reservationId);

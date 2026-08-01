@@ -34,7 +34,7 @@ public class BookingOperationsController {
     private final CounterSaleService counterSaleService;
 
     @GetMapping("/clusters/{clusterId}/bookings")
-    @PreAuthorize("hasAnyRole('ADMIN','EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN','BRANCH_MANAGER','EMPLOYEE')")
     public ApiResponse<Page<BookingDetailResponse>> clusterBookings(
             @PathVariable Long clusterId,
             Pageable pageable) {
@@ -45,7 +45,7 @@ public class BookingOperationsController {
     }
 
     @GetMapping("/clusters/{clusterId}/reconciliation-cases")
-    @PreAuthorize("hasAnyRole('ADMIN','EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN','BRANCH_MANAGER','EMPLOYEE')")
     public ApiResponse<Page<ReconciliationCaseResponse>> reconciliationCases(
             @PathVariable Long clusterId,
             Pageable pageable) {
@@ -56,7 +56,7 @@ public class BookingOperationsController {
     }
 
     @PostMapping("/clusters/{clusterId}/check-ins")
-    @PreAuthorize("hasAnyRole('ADMIN','EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN','BRANCH_MANAGER','EMPLOYEE')")
     public ApiResponse<TicketCheckInResponse> checkIn(
             @PathVariable Long clusterId,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
@@ -73,7 +73,7 @@ public class BookingOperationsController {
     }
 
     @PostMapping("/clusters/{clusterId}/counter-sales")
-    @PreAuthorize("hasAnyRole('ADMIN','EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN','BRANCH_MANAGER','EMPLOYEE')")
     public ApiResponse<CounterSaleResponse> counterSale(
             @PathVariable Long clusterId,
             @RequestHeader("Authorization") String authorization,

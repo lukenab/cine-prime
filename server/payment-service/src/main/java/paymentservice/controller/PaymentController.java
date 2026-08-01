@@ -84,7 +84,7 @@ public class PaymentController {
     }
 
     @GetMapping("/admin/attempts")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public ApiResponse<Page<PaymentSessionResponse>> attempts(Pageable pageable) {
         return ApiResponse.<Page<PaymentSessionResponse>>builder()
                 .result(paymentService.listAttempts(pageable))
@@ -92,7 +92,7 @@ public class PaymentController {
     }
 
     @GetMapping("/admin/reconciliation")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public ApiResponse<Page<ReconciliationCaseResponse>> reconciliation(
             Pageable pageable) {
         return ApiResponse.<Page<ReconciliationCaseResponse>>builder()

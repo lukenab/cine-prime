@@ -18,7 +18,8 @@ public enum ConcessionErrorCode implements BaseErrorCode {
     PRODUCT_WORKFLOW_INVALID(5109, "The product is not in a valid state for this action.", HttpStatus.CONFLICT),
     CATALOG_ACCESS_DENIED(5110, "You cannot modify this concession product.", HttpStatus.FORBIDDEN),
     PRODUCT_VARIANT_REQUIRED(5111, "Add at least one active product variant before submitting for approval.", HttpStatus.CONFLICT),
-    REJECTION_REASON_REQUIRED(5112, "A rejection reason is required.", HttpStatus.BAD_REQUEST);
+    REJECTION_REASON_REQUIRED(5112, "A rejection reason is required.", HttpStatus.BAD_REQUEST),
+    RESERVATION_ACCESS_DENIED(5113, "You cannot access this concession reservation.", HttpStatus.FORBIDDEN);
 
     private final int code;
     private final String message;
