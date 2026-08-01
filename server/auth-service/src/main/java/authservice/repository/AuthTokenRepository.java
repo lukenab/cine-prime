@@ -22,6 +22,13 @@ public interface AuthTokenRepository extends JpaRepository<AuthToken, Long> {
     @Query("UPDATE AuthToken t SET t.isRevoked = true, t.revokedAt = :revokedAt WHERE t.jwtId = :jwtId")
     void revokeByJwtId(@Param("jwtId") String jwtId, @Param("revokedAt") OffsetDateTime revokedAt);
 
+    @Modifying
+    @Transactional
+    @Query("UPDATE AuthToken t SET t.isRevoked = true, t.revokedAt = :revokedAt " +
+            "WHERE t.account.accountId = :accountId AND t.isRevoked = false")
+    int revokeAllByAccountId(@Param("accountId") String accountId,
+                             @Param("revokedAt") OffsetDateTime revokedAt);
+
     // Dùng bởi TokenCleanupScheduler chạy hàng đêm
     @Modifying
     @Transactional

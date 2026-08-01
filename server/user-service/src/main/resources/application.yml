@@ -43,7 +43,7 @@ spring:
         "[spring.deserializer.value.delegate.class]": org.springframework.kafka.support.serializer.JsonDeserializer
         "[spring.json.trusted.packages]": "*"
         "[spring.json.use.type.headers]": true
-        "[spring.json.type.mapping]": "userRegistered:userservice.event.UserRegisteredEvent,userUpdated:userservice.event.UserUpdatedEvent"
+        "[spring.json.type.mapping]": "userRegistered:userservice.event.UserRegisteredEvent,userUpdated:userservice.event.UserUpdatedEvent,accountStatusChanged:userservice.event.AccountStatusChangedEvent"
     # Producer cần thiết để DefaultErrorHandler publish message thất bại sang DLT
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -56,6 +56,9 @@ cloudinary:
 
 jwt:
   signerKey: ${JWT_SIGNER_KEY}
+
+app:
+  internal-service-key: ${INTERNAL_SERVICE_KEY:local-dev-internal-key-change-before-deploy}
 
 eureka:
   instance:

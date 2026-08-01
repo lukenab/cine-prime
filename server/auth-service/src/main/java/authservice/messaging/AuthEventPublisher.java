@@ -3,6 +3,7 @@ package authservice.messaging;
 import authservice.event.AccountActivationRequestedEvent;
 import authservice.event.OtpRequestedEvent;
 import authservice.event.UserRegisteredEvent;
+import authservice.event.AccountStatusChangedEvent;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -25,6 +26,10 @@ public class AuthEventPublisher {
 
     public void sendRegisteredEvent(UserRegisteredEvent event) {
         sendAndWait("user-register-topic", event);
+    }
+
+    public void sendAccountStatusChangedEvent(AccountStatusChangedEvent event) {
+        sendAndWait("account-status-topic", event);
     }
 
     public void sendOtpRequestedEvent(OtpRequestedEvent event) {

@@ -202,7 +202,9 @@ export default function ManageUserPage() {
 
   const handleDeactivate = async (id: string) => {
     try {
-      await userApi.deleteUser(id);
+      // auth-service owns login eligibility. Deactivate it first so all active sessions
+      // are revoked immediately; the account-status event synchronizes user-service.
+      await authApi.updateAccount(id, { status: "INACTIVE" });
       setUsers((prev) => prev.map((u) => u.id === id ? { ...u, status: "Inactive" } : u));
     } catch (err: any) {
       const code = err?.response?.data?.code;

@@ -49,6 +49,7 @@ public class RegistrationService {
     AuditLogService auditLogService;
     ObjectMapper objectMapper;
     StringRedisTemplate redisTemplate;
+    AbuseProtectionService abuseProtectionService;
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final String PENDING_REGISTER_KEY_PREFIX = "pending:register:";
@@ -68,6 +69,7 @@ public class RegistrationService {
     long otpCooldownSeconds;
 
     public void checkAvailability(String username, String email) {
+        abuseProtectionService.guardAvailabilityCheck();
         if (username != null && accountRepository.existsByUsername(username.trim())) {
             throw new AppException(AuthErrorCode.USERNAME_EXISTED);
         }
@@ -79,6 +81,7 @@ public class RegistrationService {
     @Auditable(action = "REGISTER_INITIATED", successMessage = "Registration OTP sent")
     public void initiateRegistration(RegisterRequest request) {
         String emailKey = request.getEmail().trim().toLowerCase();
+        abuseProtectionService.guardRegistration(emailKey);
         checkAvailability(request.getUsername(), emailKey);
 
         String cooldownKey = OTP_COOLDOWN_KEY_PREFIX + emailKey;
@@ -95,6 +98,7 @@ public class RegistrationService {
     @Auditable(action = "OTP_RESEND_REQUESTED", successMessage = "Registration OTP resent")
     public void resendOtp(ResendOtpRequest request) {
         String emailKey = request.getEmail().trim().toLowerCase();
+        abuseProtectionService.guardRegistration(emailKey);
         if (accountRepository.existsByEmail(emailKey)) {
             throw new AppException(AuthErrorCode.EMAIL_EXISTED);
         }
@@ -119,6 +123,7 @@ public class RegistrationService {
     @Transactional
     public RegisterResponse completeRegistration(VerifyOtpRequest request) {
         String emailKey = request.getEmail().trim().toLowerCase();
+        abuseProtectionService.guardOtpVerification(emailKey);
         String inputOtp = request.getOtp().trim();
 
         RegisterRequest pending = resolvePendingRegistration(emailKey, inputOtp);
@@ -126,6 +131,7 @@ public class RegistrationService {
         checkAvailability(pending.getUsername(), emailKey);
 
         Account account = provisionAccount(pending);
+        abuseProtectionService.otpVerified(emailKey);
 
         authEventPublisher.sendRegisteredEvent(UserRegisteredEvent.builder()
                 .accountId(account.getAccountId())

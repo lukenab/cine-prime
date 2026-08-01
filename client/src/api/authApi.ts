@@ -108,6 +108,14 @@ export const authApi = {
         return axiosClient.get('/api/accounts');
     },
 
+    searchAccounts: (params: { query?: string; status?: string; role?: string; page?: number; size?: number }) => {
+        return axiosClient.get('/api/accounts/search', { params });
+    },
+
+    getAccountStats: () => {
+        return axiosClient.get('/api/accounts/stats');
+    },
+
     getAccountById: (accountId: string) => {
         return axiosClient.get(`/api/accounts/${accountId}`);
     },

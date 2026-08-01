@@ -43,7 +43,7 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
         "[spring.json.add.type.headers]": true
-        "[spring.json.type.mapping]": "userRegistered:authservice.event.UserRegisteredEvent,otpRequested:authservice.event.OtpRequestedEvent,accountActivation:authservice.event.AccountActivationRequestedEvent"
+        "[spring.json.type.mapping]": "userRegistered:authservice.event.UserRegisteredEvent,otpRequested:authservice.event.OtpRequestedEvent,accountActivation:authservice.event.AccountActivationRequestedEvent,accountStatusChanged:authservice.event.AccountStatusChangedEvent"
 
 eureka:
   instance:
@@ -60,6 +60,7 @@ jwt:
   refreshable-duration: ${JWT_REFRESHABLE_DURATION:36000}
 
 app:
+  internal-service-key: ${INTERNAL_SERVICE_KEY:local-dev-internal-key-change-before-deploy}
   admin:
     username: ${ADMIN_USERNAME:admin}
     password: ${ADMIN_PASSWORD:admin}
