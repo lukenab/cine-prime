@@ -19,6 +19,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -76,6 +78,32 @@ class MovieServiceTest {
         lenient().when(movieRepository.findById(1L)).thenReturn(java.util.Optional.of(movie));
         lenient().when(movieRepository.save(any(Movie.class))).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(movieMapper.toMovieResponse(any())).thenReturn(null);
+    }
+
+    // -- Issue #149: paged keyword search ------------------------------------
+
+    @Test
+    void keywordSearchTrimsQueryAndKeepsExistingFiltersAndPagination() {
+        LocalDate releaseDate = LocalDate.of(2026, 7, 9);
+        when(movieRepository.findWithFilters(
+                MovieStatus.APPROVED, 7L, releaseDate, "%avenger%", PageRequest.of(1, 25)))
+                .thenReturn(Page.empty());
+
+        movieService.findPageWithFilters(
+                1, 25, "  Avenger  ", MovieStatus.APPROVED, 7L, releaseDate);
+
+        verify(movieRepository).findWithFilters(
+                MovieStatus.APPROVED, 7L, releaseDate, "%avenger%", PageRequest.of(1, 25));
+    }
+
+    @Test
+    void blankKeywordDisablesKeywordFilter() {
+        when(movieRepository.findWithFilters(null, null, null, null, PageRequest.of(0, 10)))
+                .thenReturn(Page.empty());
+
+        movieService.findPageWithFilters(0, 10, "   ", null, null, null);
+
+        verify(movieRepository).findWithFilters(null, null, null, null, PageRequest.of(0, 10));
     }
 
     // ── Null / missing collections: khong duoc dong toi repository nao ──────
