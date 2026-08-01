@@ -50,11 +50,12 @@ matrix when introduced; a missing endpoint is not treated as completed security.
 
 ## JWT and gateway contract
 
-`auth-service` already emits roles/permissions in the signed `scope` claim.
-Branch-scoped staff tokens must additionally carry the authoritative assignment
-from employee management in `cinemaClusterIds`; a token without an assignment
-fails closed. API Gateway must strip externally supplied identity/branch headers
-and must not expose `/api/internal/**` routes.
+`auth-service` emits roles/permissions in the signed `scope` claim and resolves
+active employee assignments from the internal user-service scope endpoint when
+issuing an EMPLOYEE/BRANCH_MANAGER token. Assignments are stored in
+`cinemaClusterIds`; a missing/disabled assignment fails closed. API Gateway does
+not route `/api/internal/employees/**`, and must continue to strip externally
+supplied identity/branch headers.
 
 ## Verification checklist for each new endpoint
 
