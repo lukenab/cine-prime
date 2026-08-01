@@ -5,6 +5,14 @@ server:
 spring:
   application:
     name: payment-service
+  config:
+    # Local IDE/Maven runs do not load the repository .env automatically.
+    # These optional imports support the common working directories while
+    # real environment variables still take precedence in Docker/production.
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:../.env[.properties]
+      - optional:file:../../.env[.properties]
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/payment_db}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}

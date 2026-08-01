@@ -445,8 +445,19 @@ export default function RegisterPage() {
                 boxShadow: loading ? "none" : "0 4px 24px rgba(59,130,246,0.35)",
               }}
             >
-              {loading ? "Verifying..." : "Verify & Create Account"}
+              {loading ? "Verifying..." : "Verify Code"}
             </button>
+
+            <p
+              style={{
+                marginTop: "10px",
+                textAlign: "center",
+                fontSize: "12px",
+                color: "rgba(255,255,255,0.35)",
+              }}
+            >
+              Your account will be created instantly once verified.
+            </p>
 
             <div
               style={{

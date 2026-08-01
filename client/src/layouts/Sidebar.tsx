@@ -1,6 +1,6 @@
 import { useAuth } from "../context/AuthContext";
 import { useState, useEffect } from "react";
-import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, Users, UserCog, BarChart2, Settings, Clapperboard, Gift, ShoppingCart, MapPin, UserSquare2, ChevronDown, List, ShieldCheck, Monitor, Factory, Armchair, Languages, BadgeDollarSign, Popcorn } from "lucide-react";
+import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, Users, UserCog, BarChart2, Settings, Clapperboard, Gift, ShoppingCart, MapPin, UserSquare2, ChevronDown, List, ShieldCheck, Monitor, Factory, Armchair, Languages, CircleDollarSign, Popcorn } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { movieApi } from "../api/movieApi";
 
@@ -39,7 +39,7 @@ const navItems: NavItem[] = [
     roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"],
     children: [
       { icon: Calendar, label: "Showtime Workspace", path: "/admin/showtimes" },
-      { icon: BadgeDollarSign, label: "Price Books", path: "/admin/price-books", roles: ["ROLE_ADMIN"] },
+      { icon: CircleDollarSign, label: "Price Books", path: "/admin/price-books", roles: ["ROLE_ADMIN"] },
     ],
   },
   { icon: Ticket,      label: "Bookings",     id: "bookings",   path: "/admin/bookings",   group: "ops", roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"] },

@@ -327,6 +327,8 @@ export default function ShowtimePage() {
           hall: showtime.cinemaRoomName,
           dateTime: `${showtime.showDate}T${showtime.startTime}`,
           duration: movie?.duration || 0,
+          posterUrl: movie?.smallImage || movie?.largeImage,
+          ageRatingCode: movie?.ageRatingCode,
         },
       },
     });

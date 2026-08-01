@@ -1,5 +1,6 @@
 package notificationservice.service;
 
+import jakarta.mail.AuthenticationFailedException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,7 +35,7 @@ public class EmailService {
             mailSender.send(message);
             log.info("OTP email sent to: {}", to);
         } catch (Exception e) {
-            log.error("Failed to send OTP email to {}: {}", to, e.getMessage(), e);
+            logSendFailure("OTP", to, e);
         }
     }
 
@@ -56,7 +57,27 @@ public class EmailService {
             mailSender.send(message);
             log.info("Account activation email sent to: {}", to);
         } catch (Exception e) {
-            log.error("Failed to send account activation email to {}: {}", to, e.getMessage(), e);
+            logSendFailure("account activation", to, e);
+        }
+    }
+
+    // Deliberately does not rethrow: the Kafka listeners that call sendOtpEmail/
+    // sendAccountActivationEmail have no retry/DLT handling yet (tracked separately
+    // in Issue #266/#269), so throwing here would just be swallowed by the default
+    // Kafka error handler with no extra benefit. What was missing before was a loud,
+    // unambiguous log line - a caught AuthenticationFailedException from Jakarta Mail
+    // almost always means MAIL_USERNAME/MAIL_PASSWORD in application.yml/.env is wrong,
+    // unset, or the Gmail App Password was revoked, which previously looked identical
+    // in the logs to a transient network blip and was easy to miss.
+    private void logSendFailure(String emailKind, String to, Exception e) {
+        if (e instanceof AuthenticationFailedException) {
+            log.error(
+                    "MAIL SEND FAILED (auth rejected) - {} email to {} was NOT sent. "
+                            + "MAIL_USERNAME/MAIL_PASSWORD is missing, wrong, or the Gmail App Password "
+                            + "was revoked. Check env vars and see Issue #268. Cause: {}",
+                    emailKind, to, e.getMessage(), e);
+        } else {
+            log.error("MAIL SEND FAILED - {} email to {} was NOT sent: {}", emailKind, to, e.getMessage(), e);
         }
     }
 }

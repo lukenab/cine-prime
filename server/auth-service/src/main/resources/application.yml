@@ -57,6 +57,12 @@ app:
     username: ${ADMIN_USERNAME:admin}
     password: ${ADMIN_PASSWORD:admin}
     email: ${ADMIN_EMAIL:admin@cineprime.vn}
+  branch-manager:
+    username: ${BRANCH_MANAGER_USERNAME:branchmanager}
+    password: ${BRANCH_MANAGER_PASSWORD:BranchManager@123}
+    email: ${BRANCH_MANAGER_EMAIL:branch.manager@cineprime.vn}
+  seed:
+    sync-account-passwords: ${SEED_ACCOUNT_PASSWORDS:true}
   frontend-url: ${FRONTEND_URL:http://localhost:3000}
 
 auth:

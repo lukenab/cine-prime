@@ -10,7 +10,8 @@ export function useRole() {
   // Fallback to localStorage for ProtectedRoute compatibility
   const role = user?.role ?? localStorage.getItem("role") ?? "";
 
-  const isAdmin    = role === "ROLE_ADMIN";
+  const isAdmin    = role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN";
+  const isBranchManager = role === "ROLE_BRANCH_MANAGER";
   const isEmployee = role === "ROLE_EMPLOYEE";
   const isMember   = role === "ROLE_MEMBER";
 
@@ -18,6 +19,7 @@ export function useRole() {
     role,
     username: user?.username ?? "",
     isAdmin,
+    isBranchManager,
     isEmployee,
     isMember,
     /**
@@ -26,10 +28,10 @@ export function useRole() {
      */
     can: {
       // ADMIN or EMPLOYEE
-      submit  : isAdmin || isEmployee,
+      submit  : isAdmin || isEmployee || isBranchManager,
       startRevision: isAdmin || isEmployee, // CHANGES_REQUESTED → DRAFT
-      edit    : isAdmin || isEmployee,
-      view    : isAdmin || isEmployee,
+      edit    : isAdmin || isEmployee || isBranchManager,
+      view    : isAdmin || isEmployee || isBranchManager,
       archive : isAdmin,
 
       // ADMIN only

@@ -22,6 +22,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -40,6 +41,15 @@ public class AutoShowtimeCandidateFactory {
         ShowtimeAllocationPolicy policy = run.getPolicy();
 
         Map<Integer, Integer> formatPriorityById = loadFormatPriorities(policy.getPolicyId());
+
+        /// Room bị loại trừ cho riêng run này (đã được cluster-scope ở service layer) không được
+        /// sinh candidate ngay từ đầu, thay vì sinh ra rồi lọc bỏ sau - giữ candidate count/solver
+        /// diagnostics phản ánh đúng "0 candidate từ room này" chứ không phải "bị prune".
+        Set<Long> excludedRoomIds = run.getExcludedRooms() == null
+                ? Set.of()
+                : run.getExcludedRooms().stream()
+                        .map(CinemaRoom::getCinemaRoomId)
+                        .collect(Collectors.toSet());
 
         List<ShowtimeCandidate> candidates = new ArrayList<>();
 
@@ -98,6 +108,10 @@ public class AutoShowtimeCandidateFactory {
                         /// Khi mà query room thì có thể trả room nhiều cluster nên lọc thêm để chỉ dùng cho room thuộc cluster hiện tại
                         for (CinemaRoom room : rooms) {
                             if (!room.getCluster().getClusterId().equals(cluster.getClusterId())){
+                                continue;
+                            }
+                            /// Room bị loại trừ cho run này: không sinh candidate nào từ room này.
+                            if (excludedRoomIds.contains(room.getCinemaRoomId())) {
                                 continue;
                             }
 
