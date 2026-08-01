@@ -29,17 +29,21 @@ import movieservice.dto.tmdb.TmdbTranslationsResponse;
 import movieservice.dto.tmdb.TmdbVideosResponse;
 import movieservice.dto.tmdb.TranslationDraft;
 import movieservice.entity.*;
+import movieservice.config.TmdbClientProperties;
 import movieservice.enums.GenreStatus;
 import movieservice.enums.MovieSchedulingScoreSource;
 import movieservice.enums.MovieStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.TmdbDraftMapper;
 import movieservice.repository.*;
+import movieservice.service.tmdb.TmdbRequestExecutor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.math.BigDecimal;
@@ -72,6 +76,7 @@ public class TmdbService {
     private final String apiKey;
     private final int maxStills;
     private final RestTemplate restTemplate;
+    private final TmdbRequestExecutor requestExecutor;
 
     private static final String TMDB_BASE = "https://api.themoviedb.org/3";
 
@@ -102,8 +107,6 @@ public class TmdbService {
 
     /** Fetched once and cached - TMDB's image configuration (base URL, available size profiles)
      *  is effectively static for the lifetime of the app. */
-    private volatile TmdbConfigurationResponse cachedConfig;
-
     /**
      * Maps US MPAA certification → local VN rating code.
      * VN certifications from TMDB (P/K/T13/T16/T18) already match local codes directly.
@@ -159,6 +162,7 @@ public class TmdbService {
             Map.entry(37,    "western")
     );
 
+    @Autowired
     public TmdbService(
             MovieRepository movieRepository,
             MovieTranslationRepository movieTranslationRepository,
@@ -169,7 +173,47 @@ public class TmdbService {
             AgeRatingRepository ageRatingRepository,
             MovieSchedulingProfileRepository movieSchedulingProfileRepository,
             @Value("${tmdb.api-key}") String apiKey,
-            @Value("${tmdb.image.max-stills:10}") int maxStills) {
+            @Value("${tmdb.image.max-stills:10}") int maxStills,
+            TmdbClientProperties clientProperties) {
+        this(
+                movieRepository, movieTranslationRepository, movieCastRepository, personRepository,
+                productionCompanyRepository, genreRepository, ageRatingRepository,
+                movieSchedulingProfileRepository, apiKey, maxStills,
+                createRestTemplate(clientProperties), new TmdbRequestExecutor(clientProperties));
+    }
+
+    /** Compatibility constructor used by the focused unit tests in this module. */
+    public TmdbService(
+            MovieRepository movieRepository,
+            MovieTranslationRepository movieTranslationRepository,
+            MovieCastRepository movieCastRepository,
+            PersonRepository personRepository,
+            ProductionCompanyRepository productionCompanyRepository,
+            GenreRepository genreRepository,
+            AgeRatingRepository ageRatingRepository,
+            MovieSchedulingProfileRepository movieSchedulingProfileRepository,
+            String apiKey,
+            int maxStills) {
+        this(
+                movieRepository, movieTranslationRepository, movieCastRepository, personRepository,
+                productionCompanyRepository, genreRepository, ageRatingRepository,
+                movieSchedulingProfileRepository, apiKey, maxStills,
+                new RestTemplate(), new TmdbRequestExecutor(unitTestClientProperties()));
+    }
+
+    private TmdbService(
+            MovieRepository movieRepository,
+            MovieTranslationRepository movieTranslationRepository,
+            MovieCastRepository movieCastRepository,
+            PersonRepository personRepository,
+            ProductionCompanyRepository productionCompanyRepository,
+            GenreRepository genreRepository,
+            AgeRatingRepository ageRatingRepository,
+            MovieSchedulingProfileRepository movieSchedulingProfileRepository,
+            String apiKey,
+            int maxStills,
+            RestTemplate restTemplate,
+            TmdbRequestExecutor requestExecutor) {
         this.movieRepository = movieRepository;
         this.movieTranslationRepository = movieTranslationRepository;
         this.movieCastRepository = movieCastRepository;
@@ -180,7 +224,43 @@ public class TmdbService {
         this.movieSchedulingProfileRepository = movieSchedulingProfileRepository;
         this.apiKey = apiKey;
         this.maxStills = maxStills;
-        this.restTemplate = new RestTemplate();
+        this.restTemplate = restTemplate;
+        this.requestExecutor = requestExecutor;
+    }
+
+    private static RestTemplate createRestTemplate(TmdbClientProperties properties) {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(toTimeoutMillis(properties.getConnectTimeout()));
+        requestFactory.setReadTimeout(toTimeoutMillis(properties.getReadTimeout()));
+        return new RestTemplate(requestFactory);
+    }
+
+    private static int toTimeoutMillis(java.time.Duration duration) {
+        long millis = Math.max(1, duration.toMillis());
+        return (int) Math.min(Integer.MAX_VALUE, millis);
+    }
+
+    private static TmdbClientProperties unitTestClientProperties() {
+        TmdbClientProperties properties = new TmdbClientProperties();
+        properties.setRequestsPerSecond(0);
+        properties.setInitialBackoff(java.time.Duration.ZERO);
+        properties.setMaxBackoff(java.time.Duration.ZERO);
+        properties.setCacheTtl(java.time.Duration.ZERO);
+        return properties;
+    }
+
+    private <T> T getForObject(URI uri, Class<T> responseType) {
+        return requestExecutor.get(restTemplate, uri, responseType);
+    }
+
+    private String tmdbFailureCode(RestClientException failure) {
+        if (failure instanceof org.springframework.web.client.HttpStatusCodeException statusFailure) {
+            return "HTTP_" + statusFailure.getStatusCode().value();
+        }
+        if (failure instanceof org.springframework.web.client.ResourceAccessException) {
+            return "NETWORK_OR_TIMEOUT";
+        }
+        return failure.getClass().getSimpleName();
     }
 
     public int getMaxStills() {
@@ -196,12 +276,11 @@ public class TmdbService {
                 .queryParam("language", "vi")
                 .build().encode().toUri();
         try {
-            TmdbSearchResponse response = restTemplate.getForObject(uri, TmdbSearchResponse.class);
+            TmdbSearchResponse response = getForObject(uri, TmdbSearchResponse.class);
             if (response == null || response.getResults() == null) return List.of();
             return mapToResultItems(response.getResults());
         } catch (RestClientException e) {
-            log.error("TMDB search failed [{}]: {}", e.getClass().getSimpleName(), e.getMessage());
-            if (e.getCause() != null) log.error("  Caused by [{}]: {}", e.getCause().getClass().getSimpleName(), e.getCause().getMessage());
+            log.error("TMDB search failed [{}]", tmdbFailureCode(e));
             throw new AppException(MovieErrorCode.TMDB_API_ERROR);
         }
     }
@@ -224,12 +303,11 @@ public class TmdbService {
                 .queryParam("language", "vi")
                 .build().encode().toUri();
         try {
-            TmdbSearchResponse response = restTemplate.getForObject(uri, TmdbSearchResponse.class);
+            TmdbSearchResponse response = getForObject(uri, TmdbSearchResponse.class);
             if (response == null || response.getResults() == null) return List.of();
             return mapToResultItems(response.getResults());
         } catch (RestClientException e) {
-            log.error("TMDB now_playing failed [{}]: {}", e.getClass().getSimpleName(), e.getMessage());
-            if (e.getCause() != null) log.error("  Caused by [{}]: {}", e.getCause().getClass().getSimpleName(), e.getCause().getMessage());
+            log.error("TMDB now_playing failed [{}]", tmdbFailureCode(e));
             throw new AppException(MovieErrorCode.TMDB_API_ERROR);
         }
     }
@@ -247,12 +325,11 @@ public class TmdbService {
                 .queryParam("language", "vi")
                 .build().encode().toUri();
         try {
-            TmdbSearchResponse response = restTemplate.getForObject(uri, TmdbSearchResponse.class);
+            TmdbSearchResponse response = getForObject(uri, TmdbSearchResponse.class);
             if (response == null || response.getResults() == null) return List.of();
             return mapToResultItems(response.getResults());
         } catch (RestClientException e) {
-            log.error("TMDB upcoming failed [{}]: {}", e.getClass().getSimpleName(), e.getMessage());
-            if (e.getCause() != null) log.error("  Caused by [{}]: {}", e.getCause().getClass().getSimpleName(), e.getCause().getMessage());
+            log.error("TMDB upcoming failed [{}]", tmdbFailureCode(e));
             throw new AppException(MovieErrorCode.TMDB_API_ERROR);
         }
     }
@@ -523,9 +600,9 @@ public class TmdbService {
                 .build().toUri();
         TmdbGenreListResponse response;
         try {
-            response = restTemplate.getForObject(uri, TmdbGenreListResponse.class);
+            response = getForObject(uri, TmdbGenreListResponse.class);
         } catch (RestClientException e) {
-            log.error("TMDB genre list fetch failed: {}", e.getMessage());
+            log.error("TMDB genre list fetch failed [{}]", tmdbFailureCode(e));
             throw new AppException(MovieErrorCode.TMDB_API_ERROR);
         }
         List<TmdbGenreListResponse.TmdbGenreEntry> entries =
@@ -573,11 +650,11 @@ public class TmdbService {
                 .queryParam("language", "en")
                 .build().toUri();
         try {
-            TmdbMovieDetail detail = restTemplate.getForObject(uri, TmdbMovieDetail.class);
+            TmdbMovieDetail detail = getForObject(uri, TmdbMovieDetail.class);
             if (detail == null) throw new AppException(MovieErrorCode.TMDB_API_ERROR);
             return detail;
         } catch (RestClientException e) {
-            log.error("TMDB fetchMovieDetail failed for tmdbId={}: {}", tmdbId, e.getMessage());
+            log.error("TMDB fetchMovieDetail failed for tmdbId={} [{}]", tmdbId, tmdbFailureCode(e));
             throw new AppException(MovieErrorCode.TMDB_API_ERROR);
         }
     }
@@ -587,10 +664,10 @@ public class TmdbService {
                 .queryParam("api_key", apiKey)
                 .build().toUri();
         try {
-            TmdbCreditsResponse credits = restTemplate.getForObject(uri, TmdbCreditsResponse.class);
+            TmdbCreditsResponse credits = getForObject(uri, TmdbCreditsResponse.class);
             return credits != null ? credits : new TmdbCreditsResponse();
         } catch (RestClientException e) {
-            log.warn("TMDB fetchCredits failed for tmdbId={}: {}", tmdbId, e.getMessage());
+            log.warn("TMDB fetchCredits failed for tmdbId={} [{}]", tmdbId, tmdbFailureCode(e));
             return new TmdbCreditsResponse();
         }
     }
@@ -600,10 +677,10 @@ public class TmdbService {
                 .queryParam("api_key", apiKey)
                 .build().toUri();
         try {
-            TmdbTranslationsResponse tr = restTemplate.getForObject(uri, TmdbTranslationsResponse.class);
+            TmdbTranslationsResponse tr = getForObject(uri, TmdbTranslationsResponse.class);
             return tr != null ? tr : new TmdbTranslationsResponse();
         } catch (RestClientException e) {
-            log.warn("TMDB fetchTranslations failed for tmdbId={}: {}", tmdbId, e.getMessage());
+            log.warn("TMDB fetchTranslations failed for tmdbId={} [{}]", tmdbId, tmdbFailureCode(e));
             return new TmdbTranslationsResponse();
         }
     }
@@ -613,10 +690,10 @@ public class TmdbService {
                 .queryParam("api_key", apiKey)
                 .build().toUri();
         try {
-            TmdbReleaseDatesResponse r = restTemplate.getForObject(uri, TmdbReleaseDatesResponse.class);
+            TmdbReleaseDatesResponse r = getForObject(uri, TmdbReleaseDatesResponse.class);
             return r != null ? r : new TmdbReleaseDatesResponse();
         } catch (RestClientException e) {
-            log.warn("TMDB fetchReleaseDates failed for tmdbId={}: {}", tmdbId, e.getMessage());
+            log.warn("TMDB fetchReleaseDates failed for tmdbId={} [{}]", tmdbId, tmdbFailureCode(e));
             return new TmdbReleaseDatesResponse();
         }
     }
@@ -628,10 +705,10 @@ public class TmdbService {
                 .queryParam("include_image_language", IMAGE_LANGUAGE_PARAM)
                 .build().toUri();
         try {
-            TmdbImagesResponse r = restTemplate.getForObject(uri, TmdbImagesResponse.class);
+            TmdbImagesResponse r = getForObject(uri, TmdbImagesResponse.class);
             return r != null ? r : new TmdbImagesResponse();
         } catch (RestClientException e) {
-            log.warn("TMDB fetchImages failed for tmdbId={}: {}", tmdbId, e.getMessage());
+            log.warn("TMDB fetchImages failed for tmdbId={} [{}]", tmdbId, tmdbFailureCode(e));
             return new TmdbImagesResponse();
         }
     }
@@ -642,30 +719,27 @@ public class TmdbService {
                 .queryParam("api_key", apiKey)
                 .build().toUri();
         try {
-            TmdbVideosResponse r = restTemplate.getForObject(uri, TmdbVideosResponse.class);
+            TmdbVideosResponse r = getForObject(uri, TmdbVideosResponse.class);
             return r != null ? r : new TmdbVideosResponse();
         } catch (RestClientException e) {
-            log.warn("TMDB fetchVideos failed for tmdbId={}: {}", tmdbId, e.getMessage());
+            log.warn("TMDB fetchVideos failed for tmdbId={} [{}]", tmdbId, tmdbFailureCode(e));
             return new TmdbVideosResponse();
         }
     }
 
-    /** Cached - TMDB's image configuration (base URL, size profiles) is effectively static. */
+    /** TMDB image configuration is cached by {@link TmdbRequestExecutor} using the configured TTL. */
     TmdbConfigurationResponse getImageConfig() {
-        TmdbConfigurationResponse cached = cachedConfig;
-        if (cached != null) return cached;
         URI uri = UriComponentsBuilder.fromHttpUrl(TMDB_BASE + "/configuration")
                 .queryParam("api_key", apiKey)
                 .build().toUri();
         try {
-            TmdbConfigurationResponse fetched = restTemplate.getForObject(uri, TmdbConfigurationResponse.class);
+            TmdbConfigurationResponse fetched = getForObject(uri, TmdbConfigurationResponse.class);
             if (fetched == null || fetched.getImages() == null) {
                 fetched = fallbackConfig();
             }
-            cachedConfig = fetched;
             return fetched;
         } catch (RestClientException e) {
-            log.warn("TMDB fetchConfiguration failed, using fallback size profile: {}", e.getMessage());
+            log.warn("TMDB fetchConfiguration failed [{}], using fallback size profile", tmdbFailureCode(e));
             return fallbackConfig();
         }
     }

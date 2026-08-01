@@ -40,7 +40,7 @@ eureka:
       defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
 
 jwt:
-  signerKey: ${JWT_SIGNER_KEY:873bcf3b6023c6cfac735831cc01cbd59c6f64c2341050f12e5f0224d7edea62}
+  signerKey: ${JWT_SIGNER_KEY}
 
 booking-service:
   url: ${BOOKING_SERVICE_URL:http://localhost:8082}
@@ -49,7 +49,7 @@ booking-service:
 payment:
   session-ttl-minutes: ${PAYMENT_SESSION_TTL_MINUTES:15}
   frontend-checkout-url: ${PAYMENT_FRONTEND_CHECKOUT_URL:http://localhost:3000/checkout}
-  internal-service-key: ${INTERNAL_SERVICE_KEY:local-dev-only-change-me}
+  internal-service-key: ${INTERNAL_SERVICE_KEY}
   delivery:
     fixed-delay-ms: ${PAYMENT_DELIVERY_FIXED_DELAY_MS:5000}
     max-attempts: ${PAYMENT_DELIVERY_MAX_ATTEMPTS:12}

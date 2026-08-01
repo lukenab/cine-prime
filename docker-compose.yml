@@ -9,7 +9,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: "123456"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     ports:
       - "5433:5432"
     volumes:
@@ -94,14 +94,15 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/auth_db
       SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: "123456"
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
       MOVIE_SERVICE_URL: http://movie-service:8081
       PAYMENT_SERVICE_URL: http://payment-service:8083
-      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-local-dev-only-change-me}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      JWT_SIGNER_KEY: ${JWT_SIGNER_KEY:?Set JWT_SIGNER_KEY in .env}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@cineprime.vn}
@@ -133,10 +134,15 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/movie_db
       SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: "123456"
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
-      TMDB_API_KEY: 4cf6e7ff7b2095ae0d09da1cae2f1606
+      TMDB_API_KEY: ${TMDB_API_KEY:?Set TMDB_API_KEY in .env}
+      JWT_SIGNER_KEY: ${JWT_SIGNER_KEY:?Set JWT_SIGNER_KEY in .env}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:?Set CLOUDINARY_CLOUD_NAME in .env}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:?Set CLOUDINARY_API_KEY in .env}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:?Set CLOUDINARY_API_SECRET in .env}
     depends_on:
       postgres:
         condition: service_healthy
@@ -158,7 +164,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/booking_db
       SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: "123456"
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
@@ -166,7 +172,8 @@ services:
       MOVIE_SERVICE_URL: http://movie-service:8081
       PAYMENT_SERVICE_URL: http://payment-service:8083
       CONCESSION_SERVICE_URL: http://concession-service:8085
-      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-local-dev-only-change-me}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      JWT_SIGNER_KEY: ${JWT_SIGNER_KEY:?Set JWT_SIGNER_KEY in .env}
     depends_on:
       postgres:
         condition: service_healthy
@@ -190,9 +197,10 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/concession_db
       SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: "123456"
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
-      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-local-dev-only-change-me}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      JWT_SIGNER_KEY: ${JWT_SIGNER_KEY:?Set JWT_SIGNER_KEY in .env}
       CONCESSION_MEDIA_DIRECTORY: /app/data/concession-media
     volumes:
       - ./data/concession-media:/app/data/concession-media
@@ -215,10 +223,11 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/payment_db
       SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: "123456"
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
-      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-local-dev-only-change-me}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      JWT_SIGNER_KEY: ${JWT_SIGNER_KEY:?Set JWT_SIGNER_KEY in .env}
       BOOKING_SERVICE_URL: http://booking-service:8082
       BOOKING_PAYMENT_WEBHOOK_SECRET: ${BOOKING_PAYMENT_WEBHOOK_SECRET:-local-demo-payment-secret}
       PAYMENT_FRONTEND_CHECKOUT_URL: http://localhost:3000/checkout
@@ -246,9 +255,13 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/user_db
       SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: "123456"
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      JWT_SIGNER_KEY: ${JWT_SIGNER_KEY:?Set JWT_SIGNER_KEY in .env}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:?Set CLOUDINARY_CLOUD_NAME in .env}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:?Set CLOUDINARY_API_KEY in .env}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:?Set CLOUDINARY_API_SECRET in .env}
     depends_on:
       postgres:
         condition: service_healthy
