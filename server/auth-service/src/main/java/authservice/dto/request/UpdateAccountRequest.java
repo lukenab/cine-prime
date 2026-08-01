@@ -15,7 +15,6 @@ public class UpdateAccountRequest {
 
     // Auth-service only owns these fields
     String email;
-    String password;
     List<String> roles;
     AccountStatus status;
 }

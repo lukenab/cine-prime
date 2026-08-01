@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Check, ArrowRight, ArrowLeft, X, Clapperboard, ShieldCheck, Info } from "lucide-react";
 import { userApi } from "../../api/userApi";
 import { useAuth } from "../../context/AuthContext";
@@ -169,6 +169,7 @@ const STEPS = [
 
 export default function CompleteProfilePage({ onClose, onDone }: CompleteProfilePageProps = {}) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, setNeedsProfileSetup } = useAuth();
 
   const [step, setStep] = useState(1);
@@ -195,7 +196,7 @@ export default function CompleteProfilePage({ onClose, onDone }: CompleteProfile
 
   const { identityCardHint, parsedIdentityCard } = useIdentityCardAutofill(
     form.identityCard,
-    (updater) => setForm(prev => typeof updater === "function" ? updater(prev) : { ...prev, ...updater })
+    setForm
   );
 
   const birthYearMismatch = parsedIdentityCard && form.dobYear && form.dobYear !== String(parsedIdentityCard.birthYear);
@@ -258,7 +259,13 @@ export default function CompleteProfilePage({ onClose, onDone }: CompleteProfile
         address: form.address.trim() || undefined,
       });
       setNeedsProfileSetup(false);
-      if (onDone) onDone(); else navigate(-1);
+      if (onDone) onDone();
+      else {
+        const requested = (location.state as { returnTo?: string } | null)?.returnTo;
+        const fallback = user.role === "ROLE_MEMBER" ? "/home"
+          : user.role === "ROLE_BRANCH_MANAGER" ? "/admin/concessions/catalog" : "/admin/movies";
+        navigate(requested?.startsWith("/") && !requested.startsWith("//") ? requested : fallback, { replace: true });
+      }
     } catch (err: any) {
       const msg = err.response?.data?.message || "Failed to save profile. Please try again.";
       const low = msg.toLowerCase();

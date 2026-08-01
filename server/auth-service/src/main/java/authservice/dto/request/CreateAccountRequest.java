@@ -5,8 +5,10 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Pattern;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import java.time.LocalDate;
 
 /**
  * Admin creates an account with only fullName + email + role — NO password field.
@@ -29,7 +31,21 @@ public class CreateAccountRequest {
     @Email(message = "Invalid email format")
     String email;
 
-    /** Role name, e.g. "MEMBER" / "EMPLOYEE" / "ADMIN". Free-text for now — see Issue #157. */
+    /** Provisioning is intentionally limited to non-administrative roles. */
     @NotNull(message = "Role is required")
     AccountProvisioningRole role;
+
+    @Pattern(regexp = "^(0|\\+84)[0-9]{9,10}$", message = "Invalid phone number format")
+    String phoneNumber;
+
+    LocalDate dateOfBirth;
+
+    @Pattern(regexp = "^(Male|Female|Other)$", message = "Gender must be Male, Female, or Other")
+    String gender;
+
+    @Pattern(regexp = "^[0-9]{12}$", message = "Identity card must contain exactly 12 digits")
+    String identityCard;
+
+    @Size(max = 255)
+    String address;
 }

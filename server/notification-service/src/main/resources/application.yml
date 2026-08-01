@@ -31,7 +31,7 @@ spring:
       auto-offset-reset: earliest
       properties:
         "[spring.json.trusted.packages]": "notificationservice.event"
-        "[spring.json.type.mapping]": "otpRequested:notificationservice.event.OtpRequestedEvent,accountActivation:notificationservice.event.AccountActivationRequestedEvent"
+        "[spring.json.type.mapping]": "otpRequested:notificationservice.event.OtpRequestedEvent,accountActivation:notificationservice.event.AccountActivationRequestedEvent,passwordResetRequested:notificationservice.event.PasswordResetRequestedEvent"
 
 eureka:
   client:

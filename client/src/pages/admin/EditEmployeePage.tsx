@@ -78,7 +78,7 @@ export default function EditEmployeePage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
 
   const [formData, setFormData] = useState<EmployeeFormData>({
-    username: "", email: "", password: "", fullName: "", phoneNumber: "",
+    email: "", fullName: "", phoneNumber: "",
     gender: "Male", dateOfBirth: "", identityCard: "", address: "",
     cinemaId: "", position: "", department: "", employmentType: "", hireDate: "",
   });
@@ -101,9 +101,7 @@ export default function EditEmployeePage() {
         const emp: EmployeeResponse = (res as any)?.result;
         setAccountId(emp.accountId);
         setFormData({
-          username:     "",           // fetched from auth-service; read-only in form
           email:        "",
-          password:     "",
           fullName:     emp.fullName     ?? "",
           phoneNumber:  emp.phoneNumber  ?? "",
           gender:       normalizeGender(emp.gender),
@@ -162,9 +160,9 @@ export default function EditEmployeePage() {
       // Update employee fields (position + hireDate)
       await employeeApi.update(id, {
         cinemaId: formData.cinemaId.trim() || undefined,
-        position: formData.position || undefined,
-        department: formData.department || undefined,
-        employmentType: formData.employmentType || undefined,
+        position: (formData.position as EmployeePosition) || undefined,
+        department: (formData.department as EmployeeDepartment) || undefined,
+        employmentType: (formData.employmentType as EmploymentType) || undefined,
         hireDate: formData.hireDate,
       });
 

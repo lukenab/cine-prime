@@ -43,7 +43,7 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
         "[spring.json.add.type.headers]": true
-        "[spring.json.type.mapping]": "userRegistered:authservice.event.UserRegisteredEvent,otpRequested:authservice.event.OtpRequestedEvent,accountActivation:authservice.event.AccountActivationRequestedEvent,accountStatusChanged:authservice.event.AccountStatusChangedEvent"
+        "[spring.json.type.mapping]": "userRegistered:authservice.event.UserRegisteredEvent,otpRequested:authservice.event.OtpRequestedEvent,accountActivation:authservice.event.AccountActivationRequestedEvent,accountStatusChanged:authservice.event.AccountStatusChangedEvent,passwordResetRequested:authservice.event.PasswordResetRequestedEvent"
 
 eureka:
   instance:
@@ -80,3 +80,5 @@ auth:
   default-role: MEMBER
   activation:
     ttl-hours: 24
+  password-reset:
+    ttl-minutes: 30

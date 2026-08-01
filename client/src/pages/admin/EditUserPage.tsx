@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, KeyRound, Save } from "lucide-react";
 import { useNavigate, useParams, useOutletContext } from "react-router-dom";
 import { authApi } from "../../api/authApi";
 import { userApi } from "../../api/userApi";
@@ -10,7 +10,6 @@ interface FormData {
   fullName: string;
   username: string;
   email: string;
-  password: string;
   phoneNumber: string;
   gender: string;
   dateOfBirth: string;
@@ -21,15 +20,14 @@ interface FormData {
 type FormErrors = Partial<Record<keyof FormData, string>>;
 
 const INITIAL: FormData = {
-  role: "MEMBER", fullName: "", username: "", email: "", password: "",
-  phoneNumber: "", gender: "MALE", dateOfBirth: "", identityCard: "", address: "",
+  role: "MEMBER", fullName: "", username: "", email: "",
+  phoneNumber: "", gender: "Male", dateOfBirth: "", identityCard: "", address: "",
 };
 
 // ── Validation ────────────────────────────────────────────────────────────────
 function validate(data: FormData): FormErrors {
   const e: FormErrors = {};
   if (!data.fullName.trim())                          e.fullName     = "Full name is required.";
-  if (data.password && data.password.length < 6)     e.password     = "Password must be at least 6 characters.";
   if (data.phoneNumber && !/^0[35789][0-9]{8}$/.test(data.phoneNumber))
                                                       e.phoneNumber  = "Invalid Vietnamese phone number.";
   if (data.identityCard && !/^[0-9]{12}$/.test(data.identityCard))
@@ -91,31 +89,30 @@ export default function EditUserPage() {
   const [fetchError, setFetchError]     = useState("");
   const [submitError, setSubmitError]   = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [resetMessage, setResetMessage] = useState("");
+  const [isSendingReset, setIsSendingReset] = useState(false);
 
   // ── Load existing data ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!id) return;
     setFetching(true);
     Promise.all([
-      userApi.getAllUsers(1, 1000).catch(() => ({ result: { data: [] } })),
-      authApi.getAllAccounts().catch(() => ({ result: [] })),
+      userApi.getUserById(id),
+      authApi.getAccountById(id),
     ])
       .then(([userRes, authRes]) => {
-        const profiles = userRes?.result?.data || [];
-        const accounts = authRes?.result || [];
-        const profile  = profiles.find((p: any) => p.accountId === id) || {};
-        const account  = accounts.find((a: any) => a.accountId === id);
+        const profile  = (userRes as any)?.result || {};
+        const account  = (authRes as any)?.result;
         if (!account) { setFetchError("User not found."); return; }
 
-        const rawRole = account?.roles?.[0]?.name || "MEMBER";
+        const rawRole = account?.roles?.[0]?.roleName || "MEMBER";
         setForm({
           role:          String(rawRole).toUpperCase(),
           fullName:      profile.fullName     || "",
           username:      account.username     || "",
           email:         account.email        || "",
-          password:      "",
           phoneNumber:   profile.phoneNumber  || "",
-          gender:        profile.gender       || "MALE",
+          gender:        profile.gender       || "Male",
           dateOfBirth:   profile.dateOfBirth  || "",
           identityCard:  profile.identityCard || "",
           address:       profile.address      || "",
@@ -138,14 +135,37 @@ export default function EditUserPage() {
     setIsSubmitting(true);
     setSubmitError("");
     try {
-      const payload: any = { ...form };
-      if (!payload.password || payload.password.trim() === "") delete payload.password;
-      await authApi.updateAccount(id, payload);
+      await Promise.all([
+        userApi.updateUser(id!, {
+          fullName: form.fullName,
+          phoneNumber: form.phoneNumber,
+          gender: form.gender,
+          dateOfBirth: form.dateOfBirth,
+          identityCard: form.identityCard,
+          address: form.address,
+        }),
+        authApi.updateAccount(id, { roles: [form.role] }),
+      ]);
       navigate(`/admin/users/${id}`);
     } catch (err: any) {
       setSubmitError(err.response?.data?.message || err.message || "Update failed.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleSendPasswordReset = async () => {
+    if (!form.email || isSendingReset) return;
+    setIsSendingReset(true);
+    setResetMessage("");
+    setSubmitError("");
+    try {
+      await authApi.forgotPassword(form.email);
+      setResetMessage("If this account is active, a password reset email has been sent.");
+    } catch (err: any) {
+      setSubmitError(err.response?.data?.message || err.message || "Unable to request a password reset.");
+    } finally {
+      setIsSendingReset(false);
     }
   };
 
@@ -195,7 +215,12 @@ export default function EditUserPage() {
           </div>
         </div>
 
-        <div />
+        <button type="button" onClick={handleSendPasswordReset} disabled={isSendingReset}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium hover:opacity-80 transition-all disabled:opacity-60"
+          style={{ color: "var(--text-main)", borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+          <KeyRound size={16} />
+          {isSendingReset ? "Sending..." : "Send password reset"}
+        </button>
       </div>
 
       {/* Global submit error */}
@@ -203,6 +228,12 @@ export default function EditUserPage() {
         <div className="mb-5 p-3.5 rounded-xl border text-sm font-medium"
           style={{ background: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.2)", color: "#ef4444" }}>
           {submitError}
+        </div>
+      )}
+      {resetMessage && (
+        <div className="mb-5 p-3.5 rounded-xl border text-sm font-medium"
+          style={{ background: "rgba(16,185,129,0.08)", borderColor: "rgba(16,185,129,0.2)", color: "#10b981" }}>
+          {resetMessage}
         </div>
       )}
 
@@ -239,7 +270,7 @@ export default function EditUserPage() {
               </p>
             </div>
             <div style={{ display: "grid", gap: "16px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                 <FormField label="Role" required>
                   <select value={form.role} onChange={(e) => update("role", e.target.value)}
                     style={{ ...inputStyle(), appearance: "none" }}>
@@ -248,11 +279,6 @@ export default function EditUserPage() {
                 </FormField>
                 <FormField label="Username" hint="Cannot be changed.">
                   <input type="text" value={form.username} disabled style={disabledInputStyle} />
-                </FormField>
-                <FormField label="Password" error={errors.password} hint="Blank = keep current.">
-                  <input type="password" placeholder="Leave blank to keep current"
-                    value={form.password} onChange={(e) => update("password", e.target.value)}
-                    autoComplete="new-password" style={inputStyle(!!errors.password)} />
                 </FormField>
               </div>
               <FormField label="Email" hint="Cannot be changed here — requires a dedicated OTP verification flow.">
@@ -287,9 +313,9 @@ export default function EditUserPage() {
                 <FormField label="Gender">
                   <select value={form.gender} onChange={(e) => update("gender", e.target.value)}
                     style={{ ...inputStyle(), appearance: "none" }}>
-                    <option value="MALE"   style={{ background: "var(--bg-card)" }}>Male</option>
-                    <option value="FEMALE" style={{ background: "var(--bg-card)" }}>Female</option>
-                    <option value="OTHER"  style={{ background: "var(--bg-card)" }}>Other</option>
+                    <option value="Male"   style={{ background: "var(--bg-card)" }}>Male</option>
+                    <option value="Female" style={{ background: "var(--bg-card)" }}>Female</option>
+                    <option value="Other"  style={{ background: "var(--bg-card)" }}>Other</option>
                   </select>
                 </FormField>
               </div>

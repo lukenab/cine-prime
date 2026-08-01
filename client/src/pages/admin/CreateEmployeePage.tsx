@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, Save, User, Camera, AlertCircle, X, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, AlertCircle, X, CheckCircle2, ShieldCheck, UserRoundPlus } from "lucide-react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { authApi } from "../../api/authApi";
 import { employeeApi, type EmployeeDepartment, type EmployeePosition, type EmploymentType } from "../../api/employeeApi";
@@ -92,7 +92,7 @@ export default function CreateEmployeePage() {
     email:          "",
     fullName:       "",
     phoneNumber:    "",
-    gender:         "MALE",
+    gender:         "Male",
     dateOfBirth:    "",
     identityCard:   "",
     address:        "",
@@ -162,6 +162,11 @@ export default function CreateEmployeePage() {
           fullName: formData.fullName,
           email:    formData.email,
           role:     "EMPLOYEE",
+          phoneNumber: formData.phoneNumber,
+          dateOfBirth: formData.dateOfBirth,
+          gender: formData.gender,
+          identityCard: formData.identityCard,
+          address: formData.address,
         });
 
         accountId = accountRes?.data?.result?.accountId ?? accountRes?.result?.accountId;
@@ -238,25 +243,21 @@ export default function CreateEmployeePage() {
       <form onSubmit={handleSubmit} noValidate>
         {/* ── Section 1: Account Info ──────────────────────────────────────── */}
         <div className="p-6 rounded-2xl border mb-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-          <h2 className="text-sm font-bold mb-5 pb-3 border-b" style={{ color: "var(--text-main)", borderColor: "var(--border-color)" }}>
-            Account Information
-          </h2>
-
-          {/* Avatar placeholder */}
-          <div className="mb-6">
-            <div className="relative w-20 h-20 rounded-full bg-slate-500 flex items-center justify-center shadow-inner">
-              <User size={36} color="#cbd5e1" className="mt-1" />
-              <button
-                type="button"
-                className="absolute bottom-0 right-0 w-7 h-7 rounded-full flex items-center justify-center border-2 hover:opacity-90 transition-all"
-                style={{ background: accentColor, borderColor: "var(--bg-card)" }}
-              >
-                <Camera size={12} color="white" />
-              </button>
+          <div className="flex items-start gap-4 mb-5 pb-4 border-b" style={{ borderColor: "var(--border-color)" }}>
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: `${accentColor}18`, color: accentColor }}>
+              <UserRoundPlus size={21} />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold" style={{ color: "var(--text-main)" }}>Account Information</h2>
+              <p className="text-xs mt-1" style={{ color: "var(--text-sub)" }}>
+                Create the employee identity before assigning their workplace.
+              </p>
             </div>
           </div>
 
-          <div className="mb-5 p-3.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-sm" style={{ color: "var(--text-sub)" }}>
+          <div className="mb-5 flex items-start gap-3 p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-sm" style={{ color: "var(--text-sub)" }}>
+            <ShieldCheck size={18} className="mt-0.5 shrink-0 text-blue-500" />
             No password needed here — an activation email will be sent to the employee so
             they can set their own password. Username is generated automatically.
           </div>
@@ -316,9 +317,9 @@ export default function CreateEmployeePage() {
             <FormField label="Gender" required>
               <select name="gender" value={formData.gender} onChange={handleChange}
                 className={inputCls} style={{ ...inputStyle, background: "var(--bg-card)" }}>
-                <option value="MALE"   style={{ background: "var(--bg-card)" }}>Male</option>
-                <option value="FEMALE" style={{ background: "var(--bg-card)" }}>Female</option>
-                <option value="OTHER"  style={{ background: "var(--bg-card)" }}>Other</option>
+                <option value="Male"   style={{ background: "var(--bg-card)" }}>Male</option>
+                <option value="Female" style={{ background: "var(--bg-card)" }}>Female</option>
+                <option value="Other"  style={{ background: "var(--bg-card)" }}>Other</option>
               </select>
             </FormField>
 
