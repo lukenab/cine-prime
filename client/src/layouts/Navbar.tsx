@@ -4,6 +4,7 @@ import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { userApi } from "../api/userApi";
 import { movieApi } from "../api/movieApi";
+import { useBookingFlow } from "../context/BookingFlowContext";
 
 const ACCENT = "#3b82f6";
 const navItems: { label: string; to: string; children?: { label: string; to: string }[] }[] = [
@@ -36,6 +37,7 @@ export function Navbar() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { cancelAction } = useBookingFlow();
 
   const token = localStorage.getItem("accessToken");
   const isLogged = !!token;
@@ -94,48 +96,77 @@ export function Navbar() {
     setMenuOpen(false);
   };
 
+  const logo = (
+    <Link to="/" className="flex items-center gap-2.5 cursor-pointer select-none group">
+      <div
+        className="flex items-center justify-center rounded-xl transition-all duration-300 group-hover:scale-105"
+        style={{
+          width: "38px",
+          height: "38px",
+          background: "linear-gradient(135deg, rgba(96,165,250,0.18), rgba(37,99,235,0.10))",
+          border: "1px solid rgba(96,165,250,0.45)",
+          boxShadow: "0 0 18px rgba(59,130,246,0.35), inset 0 0 10px rgba(96,165,250,0.15)",
+        }}
+      >
+        <Film size={20} style={{ color: "#60a5fa", filter: "drop-shadow(0 0 6px rgba(96,165,250,0.7))" }} />
+      </div>
+      <span
+        className="uppercase leading-none"
+        style={{
+          fontSize: "1.3rem",
+          fontWeight: 800,
+          letterSpacing: "0.18em",
+          fontFamily: "'Inter', sans-serif",
+          textShadow: "0 0 22px rgba(59,130,246,0.45)",
+        }}
+      >
+        <span style={{ color: "#f0f6ff" }}>Cine</span>
+        <span
+          style={{
+            background: "linear-gradient(135deg, #93c5fd 0%, #3b82f6 50%, #2563eb 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            backgroundClip: "text",
+          }}
+        >
+          Prime
+        </span>
+      </span>
+    </Link>
+  );
+
+  // While a Food/Payment step is registering a cancel action, the full
+  // navigation would just tempt the customer away mid-checkout (and doubles
+  // up on branding with the step's own header). Lock down to logo + exit.
+  if (cancelAction) {
+    return (
+      <nav
+        style={{ backgroundColor: "rgba(5,5,5,0.85)", backdropFilter: "blur(12px)" }}
+        className="fixed top-0 left-0 right-0 z-50 border-b border-white/10"
+      >
+        <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-16">
+          {logo}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={cancelAction.onClick}
+              className="flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-semibold text-rose-300/80 transition-colors hover:bg-rose-400/10 hover:text-rose-300"
+            >
+              <X size={15} /> {cancelAction.label}
+            </button>
+          </div>
+        </div>
+      </nav>
+    );
+  }
+
   return (
     <nav
       style={{ backgroundColor: "rgba(5,5,5,0.85)", backdropFilter: "blur(12px)" }}
       className="fixed top-0 left-0 right-0 z-50 border-b border-white/10"
     >
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-16">
-        <Link to="/" className="flex items-center gap-2.5 cursor-pointer select-none group">
-          <div
-            className="flex items-center justify-center rounded-xl transition-all duration-300 group-hover:scale-105"
-            style={{
-              width: "38px",
-              height: "38px",
-              background: "linear-gradient(135deg, rgba(96,165,250,0.18), rgba(37,99,235,0.10))",
-              border: "1px solid rgba(96,165,250,0.45)",
-              boxShadow: "0 0 18px rgba(59,130,246,0.35), inset 0 0 10px rgba(96,165,250,0.15)",
-            }}
-          >
-            <Film size={20} style={{ color: "#60a5fa", filter: "drop-shadow(0 0 6px rgba(96,165,250,0.7))" }} />
-          </div>
-          <span
-            className="uppercase leading-none"
-            style={{
-              fontSize: "1.3rem",
-              fontWeight: 800,
-              letterSpacing: "0.18em",
-              fontFamily: "'Inter', sans-serif",
-              textShadow: "0 0 22px rgba(59,130,246,0.45)",
-            }}
-          >
-            <span style={{ color: "#f0f6ff" }}>Cine</span>
-            <span
-              style={{
-                background: "linear-gradient(135deg, #93c5fd 0%, #3b82f6 50%, #2563eb 100%)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
-              }}
-            >
-              Prime
-            </span>
-          </span>
-        </Link>
+        {logo}
 
         <div className="hidden md:flex items-center gap-8">
           {resolvedNavItems.map((item) =>

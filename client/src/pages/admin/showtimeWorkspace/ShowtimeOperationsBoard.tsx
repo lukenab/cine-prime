@@ -31,6 +31,9 @@ type Props = {
   onEdit: (showtime: ShowtimeResponse) => void;
   onMove: (showtime: ShowtimeResponse, roomId: number, showDate: string, startTime: string) => Promise<void>;
   onStatusChange: (showtime: ShowtimeResponse, status: ShowtimeStatus, reason?: string) => Promise<void>;
+  /** Bulk sibling of onStatusChange — lets ops open/suspend a whole batch (e.g.
+   *  every session of one movie today) in one call instead of one at a time. */
+  onBulkStatusChange?: (showtimeIds: number[], status: ShowtimeStatus, reason?: string) => Promise<void>;
   draftPlan?: SchedulePlanResponse | null;
 };
 
@@ -287,7 +290,7 @@ function DraftComparison({
   );
 }
 
-export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdit, onMove, onStatusChange, draftPlan }: Props) {
+export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdit, onMove, onStatusChange, onBulkStatusChange, draftPlan }: Props) {
   const datesWithSessions = useMemo(() => Array.from(new Set(showtimes.map((item) => item.showDate))).sort(), [showtimes]);
 
   // A continuous day-by-day strip (not just days that already have a session) so admins can
@@ -312,6 +315,7 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
   // than the extra navigation the continuous strip is meant to enable.
   const [selectedDate, setSelectedDate] = useState(() => datesWithSessions[0] ?? new Date().toISOString().slice(0, 10));
   const [clusterId, setClusterId] = useState("all");
+  const [movieId, setMovieId] = useState("all");
   const [mode, setMode] = useState<BoardMode>("timeline");
   const [onlyIssues, setOnlyIssues] = useState(false);
   const [selected, setSelected] = useState<ShowtimeResponse | null>(null);
@@ -319,6 +323,12 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
   const [comparisonOpen, setComparisonOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelPromptOpen, setCancelPromptOpen] = useState(false);
+  // Bulk selection lives only on the Schedule board view (individual session
+  // cards, unlike the drag-driven Timeline) — see the checkboxes below.
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkCancelReason, setBulkCancelReason] = useState("");
+  const [bulkCancelPromptOpen, setBulkCancelPromptOpen] = useState(false);
 
   useEffect(() => {
     if (availableDates.length > 0 && !availableDates.includes(selectedDate)) setSelectedDate(availableDates[0]);
@@ -350,6 +360,17 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
     if (clusterId !== "all" && !clusterOptions.some(([id]) => id === Number(clusterId))) setClusterId("all");
   }, [clusterId, clusterOptions]);
 
+  // Scoped to the selected date, same as clusterOptions - a movie filter that
+  // still listed titles with nothing playing today would be more confusing
+  // than useful for a "bulk-open today's sessions of X" workflow.
+  const movieOptions = useMemo(() => Array.from(new Map(showtimes
+    .filter((item) => item.showDate === selectedDate)
+    .map((item) => [item.movieId, item.movieName ?? `Movie #${item.movieId}`])).entries())
+    .sort((a, b) => a[1].localeCompare(b[1])), [showtimes, selectedDate]);
+  useEffect(() => {
+    if (movieId !== "all" && !movieOptions.some(([id]) => id === Number(movieId))) setMovieId("all");
+  }, [movieId, movieOptions]);
+
   const conflictIds = useMemo(() => findConflictIds(showtimes), [showtimes]);
   useEffect(() => {
     if (conflictIds.size === 0 && onlyIssues) setOnlyIssues(false);
@@ -364,8 +385,47 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
   const scoped = useMemo(() => showtimes.filter((item) =>
     item.showDate === selectedDate
     && (clusterId === "all" || item.clusterId === Number(clusterId))
+    && (movieId === "all" || item.movieId === Number(movieId))
     && (!onlyIssues || conflictIds.has(item.showTimeId))),
-  [clusterId, conflictIds, onlyIssues, selectedDate, showtimes]);
+  [clusterId, conflictIds, movieId, onlyIssues, selectedDate, showtimes]);
+
+  // Selection is intersected with what's currently visible on every relevant
+  // change, so switching the movie/cluster filter (or the day) can't leave
+  // stale ids selected that the admin can no longer see on screen.
+  useEffect(() => {
+    const visible = new Set(scoped.map((item) => item.showTimeId));
+    setSelectedIds((current) => {
+      const next = new Set(Array.from(current).filter((id) => visible.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [scoped]);
+
+  const selectableScoped = useMemo(
+    () => scoped.filter((item) => item.status !== "CANCELLED" && item.status !== "COMPLETED"),
+    [scoped],
+  );
+  const toggleSelected = (id: number) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+  const selectAllVisible = () => setSelectedIds(new Set(selectableScoped.map((item) => item.showTimeId)));
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const runBulkStatusChange = async (status: ShowtimeStatus, reason?: string) => {
+    if (!onBulkStatusChange || selectedIds.size === 0) return;
+    setBulkBusy(true);
+    try {
+      await onBulkStatusChange(Array.from(selectedIds), status, reason);
+      clearSelection();
+      setBulkCancelPromptOpen(false);
+      setBulkCancelReason("");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   const rooms = useMemo(() => {
     const groups = new Map<number, RoomGroup>();
@@ -511,6 +571,16 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={movieId}
+                onChange={(event) => setMovieId(event.target.value)}
+                aria-label="Filter by movie"
+                className="h-9 rounded-lg border px-2 text-xs outline-none"
+                style={{ background: "var(--bg-main)", borderColor: "var(--border-color)", color: "var(--text-main)" }}
+              >
+                <option value="all">All movies</option>
+                {movieOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+              </select>
               <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold" style={{ color: conflictIds.size ? "#dc2626" : "#059669", background: conflictIds.size ? "rgba(220,38,38,.10)" : "rgba(5,150,105,.10)" }}>
                 {conflictIds.size ? <AlertTriangle size={13} /> : <ShieldCheck size={13} />}
                 {conflictIds.size ? "Action required" : "No room overlaps"}
@@ -530,6 +600,81 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
             </div>
           </div>
         </header>
+
+        {mode === "schedule" && onBulkStatusChange && (
+          <div
+            className="flex flex-wrap items-center gap-3 border-b px-4 py-2.5"
+            style={{ borderColor: "var(--border-color)", background: selectedIds.size ? "rgba(37,99,235,.06)" : "var(--bg-main)" }}
+          >
+            {selectedIds.size === 0 ? (
+              <button
+                type="button"
+                onClick={selectAllVisible}
+                disabled={selectableScoped.length === 0}
+                className="text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+                style={{ color: "#2563eb" }}
+              >
+                Select all {selectableScoped.length} visible sessions
+              </button>
+            ) : (
+              <>
+                <span className="text-xs font-bold" style={{ color: "var(--text-main)" }}>{selectedIds.size} selected</span>
+                <button type="button" onClick={selectAllVisible} className="text-xs font-semibold" style={{ color: "#2563eb" }}>Select all visible</button>
+                <button type="button" onClick={clearSelection} className="text-xs font-semibold" style={{ color: "var(--text-sub)" }}>Clear</button>
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={bulkBusy}
+                    onClick={() => void runBulkStatusChange("ON_SALE")}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <PlayCircle size={13} /> Open sales
+                  </button>
+                  <button
+                    type="button"
+                    disabled={bulkBusy}
+                    onClick={() => void runBulkStatusChange("SUSPENDED")}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <PauseCircle size={13} /> Suspend
+                  </button>
+                  <button
+                    type="button"
+                    disabled={bulkBusy}
+                    onClick={() => setBulkCancelPromptOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/25 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <XCircle size={13} /> Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {mode === "schedule" && bulkCancelPromptOpen && (
+          <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2.5" style={{ borderColor: "var(--border-color)", background: "rgba(220,38,38,.06)" }}>
+            <input
+              type="text"
+              value={bulkCancelReason}
+              onChange={(event) => setBulkCancelReason(event.target.value)}
+              placeholder={`Reason for cancelling ${selectedIds.size} session${selectedIds.size === 1 ? "" : "s"}...`}
+              className="h-9 min-w-[240px] flex-1 rounded-lg border px-3 text-xs outline-none"
+              style={{ background: "var(--bg-card)", borderColor: "var(--border-color)", color: "var(--text-main)" }}
+            />
+            <button
+              type="button"
+              disabled={bulkBusy || !bulkCancelReason.trim()}
+              onClick={() => void runBulkStatusChange("CANCELLED", bulkCancelReason.trim())}
+              className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Confirm cancellation
+            </button>
+            <button type="button" onClick={() => { setBulkCancelPromptOpen(false); setBulkCancelReason(""); }} className="text-xs font-semibold" style={{ color: "var(--text-sub)" }}>
+              Back
+            </button>
+          </div>
+        )}
 
         {rooms.length === 0 ? (
           <div className="flex min-h-64 flex-col items-center justify-center text-center">
@@ -618,6 +763,7 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
                               const conflict = conflictIds.has(item.showTimeId);
                               const draggable = item.status !== "CANCELLED" && item.status !== "COMPLETED";
                               const soldSeats = item.soldSeats ?? Math.max(0, (item.totalSeats ?? 0) - (item.availableSeats ?? item.totalSeats ?? 0));
+                              const checked = selectedIds.has(item.showTimeId);
                               return (
                                 <button
                                   key={item.showTimeId}
@@ -626,15 +772,31 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
                                   onDragStart={(event) => event.dataTransfer.setData("text/showtime-id", String(item.showTimeId))}
                                   onClick={() => { setSelected(item); setCancelReason(""); setCancelPromptOpen(false); }}
                                   title={`${meta.label}${item.totalSeats != null ? ` · ${soldSeats}/${item.totalSeats} seats` : ""}`}
-                                  className="rounded-lg border px-2 py-1.5 text-left transition hover:-translate-y-0.5"
+                                  className="relative rounded-lg border px-2 py-1.5 text-left transition hover:-translate-y-0.5"
                                   style={{
-                                    borderColor: conflict ? "#dc2626" : meta.border,
+                                    borderColor: checked ? "#2563eb" : conflict ? "#dc2626" : meta.border,
                                     background: conflict ? "rgba(220,38,38,.10)" : meta.background,
+                                    boxShadow: checked ? "0 0 0 2px rgba(37,99,235,.35)" : "none",
                                     opacity: item.status === "CANCELLED" ? .55 : 1,
                                     cursor: draggable ? "grab" : "pointer",
                                     textDecoration: item.status === "CANCELLED" ? "line-through" : "none",
                                   }}
                                 >
+                                  {onBulkStatusChange && draggable && (
+                                    <span
+                                      role="checkbox"
+                                      aria-checked={checked}
+                                      onClick={(event) => { event.stopPropagation(); toggleSelected(item.showTimeId); }}
+                                      className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full border"
+                                      style={{
+                                        borderColor: checked ? "#2563eb" : "var(--border-color)",
+                                        background: checked ? "#2563eb" : "var(--bg-card)",
+                                        color: "#fff",
+                                      }}
+                                    >
+                                      {checked && <CheckCircle2 size={11} />}
+                                    </span>
+                                  )}
                                   <span className="block text-[11px] font-bold tabular-nums" style={{ color: conflict ? "#dc2626" : meta.color }}>{formatTime(item.startTime)}–{formatTime(item.endTime)}</span>
                                   {item.totalSeats != null && <span className="mt-0.5 block text-[9px]" style={{ color: "var(--text-sub)" }}>{soldSeats}/{item.totalSeats} sold</span>}
                                 </button>

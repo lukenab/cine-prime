@@ -97,15 +97,23 @@ public class AutoShowtimeGenerationService {
         Set<Movie> movies = loadMovies(request.movieIds());
         Set<CinemaCluster> clusters = loadClusters(request.cinemaClusterIds());
 
-        /// Cùng policy + date range + movie scope + cluster scope + optimizer + scenario sẽ tạo
-        /// ra cùng một idempotency key. Nhờ đó user gọi lại request hoặc nhiều node nhận cùng
-        /// request cũng không tạo run trùng.
+        /// Room không thuộc cluster nào trong scope bị âm thầm bỏ qua thay vì reject request -
+        /// đúng theo hợp đồng frontend đã thống nhất (client chỉ hiện room của cluster đang chọn,
+        /// nhưng scope có thể đổi giữa lúc load trang và lúc submit).
+        Set<CinemaRoom> excludedRooms = resolveExcludedRooms(request.excludedRoomIds(), clusters);
+
+        /// Cùng policy + date range + movie scope + cluster scope + excluded room scope +
+        /// optimizer + scenario sẽ tạo ra cùng một idempotency key. Nhờ đó user gọi lại request
+        /// hoặc nhiều node nhận cùng request cũng không tạo run trùng. Excluded rooms PHẢI nằm
+        /// trong key: cùng scope nhưng khác room bị loại trừ phải là hai run khác nhau, không
+        /// được âm thầm trả về run cũ (đã generate mà chưa áp exclusion mới).
         String idempotencyKey = buildIdempotencyKey(
                 policy.getPolicyCode(),
                 request.startDate(),
                 request.endDate(),
                 movies.stream().map(Movie::getMovieId).toList(),
                 clusters.stream().map(CinemaCluster::getClusterId).toList(),
+                excludedRooms.stream().map(CinemaRoom::getCinemaRoomId).toList(),
                 optimizerMode,
                 scenario
         );
@@ -119,6 +127,7 @@ public class AutoShowtimeGenerationService {
                         request,
                         movies,
                         clusters,
+                        excludedRooms,
                         idempotencyKey,
                         requesterBy,
                         optimizerMode,
@@ -126,11 +135,28 @@ public class AutoShowtimeGenerationService {
                 ));
     }
 
+    /// Chuyển excludedRoomIds thô của request thành entity CinemaRoom đã xác thực thuộc
+    /// scope cluster của run. Id không tồn tại hoặc thuộc cluster khác bị bỏ qua thay vì
+    /// ném lỗi - đây là hành vi hợp đồng, không phải fallback tạm.
+    private Set<CinemaRoom> resolveExcludedRooms(List<Long> excludedRoomIds, Set<CinemaCluster> clusters) {
+        if (excludedRoomIds == null || excludedRoomIds.isEmpty()) {
+            return Set.of();
+        }
+        Set<Long> clusterIds = clusters.stream()
+                .map(CinemaCluster::getClusterId)
+                .collect(Collectors.toSet());
+        List<Long> distinctIds = excludedRoomIds.stream().distinct().toList();
+        return cinemaRoomRepository.findAllById(distinctIds).stream()
+                .filter(room -> clusterIds.contains(room.getCluster().getClusterId()))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
     private AutoShowtimeGenerationAcceptedResponse createRun(
             ShowtimeAllocationPolicy policy,
             AutoShowtimeGenerationRequest request,
             Set<Movie> movies,
             Set<CinemaCluster> clusters,
+            Set<CinemaRoom> excludedRooms,
             String idempotencyKey,
             String requesterBy,
             movieservice.enums.OptimizerMode optimizerMode,
@@ -141,7 +167,9 @@ public class AutoShowtimeGenerationService {
         /// Admin sẽ nhận 400 thay vì ACCEPTED rồi một phút sau thấy run có ba count = 0.
         /// Preflight dùng chính CandidateFactory để kiểm tra giờ hoạt động, room ACTIVE và format capability.
         /// Bước này chỉ tạo candidate trong bộ nhớ, chưa persist ShowTime hay generation run.
-        validateEligibleCandidates(policy, request, movies, clusters);
+        /// excludedRooms phải được truyền vào preflight, nếu không một movie chỉ khớp room bị loại
+        /// trừ sẽ bị coi là eligible nhầm ở bước này rồi mới thất bại thật ở execute step sau.
+        validateEligibleCandidates(policy, request, movies, clusters, excludedRooms);
 
         ShowtimeGenerationRun run = ShowtimeGenerationRun.builder()
                 .policy(policy)
@@ -150,6 +178,7 @@ public class AutoShowtimeGenerationService {
                 .endDate(request.endDate())
                 .movies(movies)
                 .clusters(clusters)
+                .excludedRooms(excludedRooms)
                 .requestedBy(requesterBy)
                 .optimizerMode(optimizerMode)
                 .scenario(scenario)
@@ -175,7 +204,8 @@ public class AutoShowtimeGenerationService {
             ShowtimeAllocationPolicy policy,
             AutoShowtimeGenerationRequest request,
             Set<Movie> movies,
-            Set<CinemaCluster> clusters
+            Set<CinemaCluster> clusters,
+            Set<CinemaRoom> excludedRooms
     ) {
         ShowtimeGenerationRun preflightRun = ShowtimeGenerationRun.builder()
                 .policy(policy)
@@ -183,6 +213,7 @@ public class AutoShowtimeGenerationService {
                 .endDate(request.endDate())
                 .movies(movies)
                 .clusters(clusters)
+                .excludedRooms(excludedRooms)
                 .build();
 
         Set<Long> eligibleMovieIds = candidateFactory.buildRawCandidates(preflightRun).stream()
@@ -303,6 +334,7 @@ public class AutoShowtimeGenerationService {
             LocalDate endDate,
             List<Long> movieIds,
             List<Long> clusterIds,
+            List<Long> excludedRoomIds,
             movieservice.enums.OptimizerMode optimizerMode,
             movieservice.enums.OptimizationScenario scenario
     ){
@@ -310,11 +342,14 @@ public class AutoShowtimeGenerationService {
         /// requesterBy không được đưa vào vì cùng một request từ user khác vẫn phải tái sử dụng run cũ.
         /// optimizerMode/scenario PHẢI nằm trong key: cùng scope nhưng khác optimizer sẽ ra kết quả
         /// khác nhau, nên phải là hai run riêng biệt chứ không được trả về run cũ.
+        /// excludedRoomIds cũng phải nằm trong key vì cùng lý do: cùng scope nhưng loại trừ room
+        /// khác nhau phải sinh candidate khác nhau.
         String raw = policyCode
                 + "|" + startDate
                 + "|" + endDate
                 + "|" + sortedIds(movieIds)
                 + "|" + sortedIds(clusterIds)
+                + "|" + sortedIds(excludedRoomIds)
                 + "|" + optimizerMode
                 + "|" + scenario;
 
@@ -429,7 +464,10 @@ public class AutoShowtimeGenerationService {
                 run.getObjectiveScore(),
                 run.getObjectiveBreakdown(),
                 run.getSolverDiagnostics(),
-                run.getShadowComparison()
+                run.getShadowComparison(),
+                run.getExcludedRooms() == null
+                        ? List.of()
+                        : run.getExcludedRooms().stream().map(CinemaRoom::getCinemaRoomId).toList()
         );
     }
 

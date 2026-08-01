@@ -492,6 +492,7 @@ export default function ManageShowtimePage() {
           onEdit={(showtime) => { setEditShowtime(showtime); setModalOpen(true); }}
           onMove={handleMoveShowtime}
           onStatusChange={handleStatusChange}
+          onBulkStatusChange={handleBulkStatusChange}
           draftPlan={draftPlan}
         />
       ) : workspaceView === "list" ? (

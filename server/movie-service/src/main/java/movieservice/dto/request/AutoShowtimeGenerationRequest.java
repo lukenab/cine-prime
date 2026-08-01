@@ -32,6 +32,16 @@ public record AutoShowtimeGenerationRequest (
      * matches the target API shape, but a request with replanMode=true is rejected rather than
      * silently treated as a normal fresh-generation run.
      */
-    Boolean replanMode
+    Boolean replanMode,
+
+    /**
+     * Rooms to exclude from candidate generation for this run only (e.g. held for a private
+     * booking, or under short-notice maintenance not yet reflected in room status). Optional -
+     * null or empty means the optimizer considers every eligible room as usual. Any id that does
+     * not belong to one of {@link #cinemaClusterIds} is silently ignored rather than rejected,
+     * since the frontend only offers rooms from the selected clusters but scope can change
+     * between page load and submit.
+     */
+    List<Long> excludedRoomIds
 ){
 }

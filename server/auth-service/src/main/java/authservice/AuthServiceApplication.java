@@ -12,8 +12,13 @@ import java.util.TimeZone;
 @EnableScheduling
 public class AuthServiceApplication {
 
-	public static void main(String[] args) {
+	static {
+		// PostgreSQL does not accept the legacy Windows/JVM alias "Asia/Saigon".
+		// Set the canonical zone before the datasource is initialized (including tests).
 		TimeZone.setDefault(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
+	}
+
+	public static void main(String[] args) {
 		SpringApplication.run(AuthServiceApplication.class, args);
 	}
 

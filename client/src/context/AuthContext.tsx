@@ -3,7 +3,7 @@ import { userApi } from "../api/userApi";
 import { jwtDecode } from "jwt-decode";
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
-const ROLE_PRIORITY = ["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_EMPLOYEE", "ROLE_MEMBER"];
+const ROLE_PRIORITY = ["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_BRANCH_MANAGER", "ROLE_EMPLOYEE", "ROLE_MEMBER"];
 
 function extractPrimaryRole(rolesClaim: string): string {
     const roles = (rolesClaim || "").split(" ").filter(r => r.startsWith("ROLE_"));
@@ -85,7 +85,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     const login = async (credentials: any): Promise<{ role: string; needsSetup: boolean }> => {
-        const response = await authApi.login(credentials);
+        const response: any = await authApi.login(credentials);
         const resBody = response?.data ?? response;
         const token = resBody?.result?.token || resBody?.token || response?.result?.token;
 

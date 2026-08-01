@@ -119,6 +119,11 @@ export interface AutoShowtimeGenerationRequestPayload {
   optimizer?: OptimizerMode;
   /** Ignored when optimizer is LEGACY. Defaults to BALANCED server-side. */
   scenario?: OptimizationScenario;
+  /** Rooms to exclude from candidate generation for this run only (e.g. rooms held for a
+   *  private/corporate booking, or under short-notice maintenance). Optional — omit or send
+   *  an empty array to let the optimizer consider every eligible room as usual. Rooms outside
+   *  the selected cinemaClusterIds are ignored server-side. */
+  excludedRoomIds?: number[];
 }
 
 export interface AutoShowtimeGenerationAcceptedResponse {

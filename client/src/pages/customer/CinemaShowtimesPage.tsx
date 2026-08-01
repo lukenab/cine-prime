@@ -160,6 +160,11 @@ export default function CinemaShowtimesPage() {
 
   function selectShowtime(showtime: ShowtimeResponse) {
     if ((showtime.availableSeats ?? 1) <= 0) return;
+    const start = new Date(`${showtime.showDate}T${showtime.startTime}`);
+    const end = new Date(`${showtime.showDate}T${showtime.endTime}`);
+    const durationMinutes = !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())
+      ? Math.round((end.getTime() - start.getTime()) / 60_000)
+      : 0;
     navigate(`/booking/${showtime.showTimeId}`, {
       state: {
         showtime: {
@@ -167,6 +172,8 @@ export default function CinemaShowtimesPage() {
           cinemaName: cluster?.clusterName,
           hall: showtime.cinemaRoomName,
           dateTime: `${showtime.showDate}T${showtime.startTime}`,
+          duration: durationMinutes,
+          posterUrl: showtime.moviePosterUrl,
         },
       },
     });

@@ -268,9 +268,11 @@ services:
     environment:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
-      # Override mail credentials via .env file if needed
-      # MAIL_USERNAME: your@gmail.com
-      # MAIL_PASSWORD: your-app-password
+      # Pulled from the root .env file - these were previously commented out here,
+      # which meant the container silently fell back to application.yml's default
+      # and never actually received the real credential (Issue #268 follow-up).
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
     depends_on:
       discovery-server:
         condition: service_healthy

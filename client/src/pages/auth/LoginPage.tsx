@@ -118,6 +118,10 @@ export default function LoginPage() {
         setError("Incorrect username or password. Please try again.");
       } else if (code === 1020) {
         setError("Your account has been deactivated. Please contact support.");
+      } else if (code === 1029) {
+        setError("Your account hasn't been activated yet. Check your email for the activation link (or ask an admin to resend it).");
+      } else if (code === 1021) {
+        setError("Your account is temporarily locked after too many failed attempts. Please try again later.");
       } else {
         setError("Something went wrong. Please try again later.");
       }

@@ -137,6 +137,20 @@ public class ShowtimeGenerationRun {
     )
     Set<CinemaCluster> clusters = new LinkedHashSet<>();
 
+    /**
+     * Rooms excluded from candidate generation for this run only - already validated to belong
+     * to one of {@link #clusters} by the time it's set (see AutoShowtimeGenerationService). Empty
+     * by default so existing runs/tests that never set this behave exactly as before.
+     */
+    @Builder.Default
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "showtime_generation_run_excluded_room",
+            joinColumns = @JoinColumn(name = "generation_run_id"),
+            inverseJoinColumns = @JoinColumn(name = "cinema_room_id")
+    )
+    Set<CinemaRoom> excludedRooms = new LinkedHashSet<>();
+
     @OneToMany(mappedBy = "generationRun", fetch = FetchType.LAZY)
     @OrderBy("showDate ASC, startTime ASC ")
     List<ShowTime> generateShowtimes;
