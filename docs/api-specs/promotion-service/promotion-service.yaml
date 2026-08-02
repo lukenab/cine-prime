@@ -1,0 +1,108 @@
+openapi: 3.0.3
+info:
+  title: Promotion Service - Admin API
+  version: 1.0.0
+  description: CRUD and lifecycle contract for promotion administration.
+servers:
+  - url: http://localhost:8080
+security:
+  - bearerAuth: []
+paths:
+  /api/promotions:
+    post:
+      summary: Create a DRAFT promotion
+      tags: [Promotion Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PromotionUpsertRequest'}
+      responses:
+        '201': {description: Created}
+        '400': {description: Invalid rule, target, or validity window}
+        '409': {description: Promotion code already exists}
+    get:
+      summary: Search promotions
+      tags: [Promotion Admin]
+      parameters:
+        - {name: status, in: query, schema: {type: string, enum: [DRAFT, ACTIVE, PAUSED, ARCHIVED]}}
+        - {name: page, in: query, schema: {type: integer, default: 0}}
+        - {name: size, in: query, schema: {type: integer, default: 20, maximum: 100}}
+      responses:
+        '200': {description: Paginated promotion list}
+  /api/promotions/{promotionId}:
+    get:
+      summary: Get promotion detail
+      tags: [Promotion Admin]
+      parameters: [{$ref: '#/components/parameters/PromotionId'}]
+      responses:
+        '200': {description: Promotion detail}
+        '404': {description: Promotion not found}
+    put:
+      summary: Update a DRAFT promotion
+      tags: [Promotion Admin]
+      parameters: [{$ref: '#/components/parameters/PromotionId'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PromotionUpsertRequest'}
+      responses:
+        '200': {description: Updated}
+        '409': {description: Promotion is not DRAFT or code already exists}
+  /api/promotions/{promotionId}/{action}:
+    post:
+      summary: Change promotion lifecycle state
+      tags: [Promotion Admin]
+      parameters:
+        - {$ref: '#/components/parameters/PromotionId'}
+        - name: action
+          in: path
+          required: true
+          schema: {type: string, enum: [activate, pause, retire]}
+      responses:
+        '200': {description: Lifecycle state changed}
+        '409': {description: Invalid lifecycle transition}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+  parameters:
+    PromotionId:
+      name: promotionId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  schemas:
+    PromotionUpsertRequest:
+      type: object
+      required: [code, name, priceRule]
+      properties:
+        code: {type: string, maxLength: 64, example: SUMMER26}
+        name: {type: string, maxLength: 160}
+        description: {type: string, nullable: true}
+        validFrom: {type: string, format: date-time, nullable: true}
+        validUntil: {type: string, format: date-time, nullable: true}
+        globalUsageLimit: {type: integer, minimum: 1, nullable: true}
+        perAccountUsageLimit: {type: integer, minimum: 1, nullable: true}
+        priceRule: {$ref: '#/components/schemas/PriceRule'}
+        targets:
+          type: array
+          description: Empty or absent means global promotion; targets are OR conditions.
+          items: {$ref: '#/components/schemas/Target'}
+    PriceRule:
+      type: object
+      required: [discountType]
+      properties:
+        discountType: {type: string, enum: [PERCENTAGE, FIXED_AMOUNT]}
+        percentage: {type: number, maximum: 100, nullable: true}
+        fixedAmount: {type: number, nullable: true}
+        maxDiscountAmount: {type: number, nullable: true}
+        minimumOrderAmount: {type: number, minimum: 0, nullable: true}
+        currency: {type: string, default: VND}
+    Target:
+      type: object
+      required: [targetType]
+      properties:
+        targetType: {type: string, enum: [MOVIE, SHOWTIME]}
+        movieId: {type: integer, format: int64, nullable: true}
+        showtimeId: {type: integer, format: int64, nullable: true}

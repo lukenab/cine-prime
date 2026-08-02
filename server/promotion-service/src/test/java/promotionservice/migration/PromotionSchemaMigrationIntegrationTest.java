@@ -36,7 +36,7 @@ class PromotionSchemaMigrationIntegrationTest {
     void freshDatabaseCreatesPromotionSchemaAndEnforcesCoreInvariants() throws Exception {
         MigrateResult result = flyway().migrate();
         assertTrue(result.success);
-        assertEquals(1, result.migrationsExecuted);
+        assertEquals(2, result.migrationsExecuted);
 
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
@@ -47,6 +47,7 @@ class PromotionSchemaMigrationIntegrationTest {
             assertTrue(tableExists(statement, "promotion_price_rule"));
             assertTrue(tableExists(statement, "promotion_reservation"));
             assertTrue(tableExists(statement, "promotion_usage_ledger"));
+            assertTrue(tableExists(statement, "promotion_audit_log"));
 
             statement.execute("""
                     INSERT INTO promotion (code, name, status, global_usage_limit)
