@@ -83,6 +83,14 @@ public class AccountController {
                 .build();
     }
 
+    @PostMapping("/{accountId}/revoke-sessions")
+    ApiResponse<Void> revokeSessions(@PathVariable String accountId) {
+        accountService.revokeSessions(accountId);
+        return ApiResponse.<Void>builder()
+                .message("All active sessions revoked.")
+                .build();
+    }
+
     @GetMapping("/my-info")
     ApiResponse<AccountResponse> myInfo() {
         return ApiResponse.<AccountResponse>builder()

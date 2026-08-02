@@ -4,14 +4,21 @@ import movie.theater.common.dto.ApiResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestBody;
 import userservice.dto.AuthAccountSummary;
 import userservice.dto.AuthAccountStatusRequest;
+import userservice.dto.AuthAccountInvitationRequest;
 
 @FeignClient(name = "auth-service", path = "/api/internal/accounts")
 public interface AuthAccountClient {
+
+    @PostMapping("/invitations")
+    ApiResponse<AuthAccountSummary> inviteStaff(
+            @RequestHeader("X-Internal-Service-Key") String internalKey,
+            @RequestBody AuthAccountInvitationRequest request);
 
     @GetMapping("/{accountId}")
     ApiResponse<AuthAccountSummary> getAccount(

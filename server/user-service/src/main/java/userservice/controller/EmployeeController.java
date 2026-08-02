@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.access.prepost.PreAuthorize;
 import userservice.dto.EmployeeCreateRequest;
+import userservice.dto.EmployeeInvitationRequest;
 import userservice.dto.EmployeeResponse;
 import userservice.dto.EmployeeUpdateRequest;
 import userservice.dto.PageResponse;
@@ -28,6 +29,15 @@ import userservice.service.EmployeeService;
 public class EmployeeController {
 
     EmployeeService employeeService;
+
+    @PostMapping("/invitations")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN')")
+    public ApiResponse<EmployeeResponse> inviteEmployee(@Valid @RequestBody EmployeeInvitationRequest request) {
+        return ApiResponse.<EmployeeResponse>builder()
+                .message("Staff invitation sent")
+                .result(employeeService.inviteEmployee(request))
+                .build();
+    }
 
     @PostMapping
     @PreAuthorize("@employeeAccessPolicy.canCreate(#request, authentication)")
@@ -75,6 +85,15 @@ public class EmployeeController {
         employeeService.disableEmployee(id);
         return ApiResponse.<Void>builder()
                 .message("Employee has been disabled")
+                .build();
+    }
+
+    @PostMapping("/{id}/reactivate")
+    @PreAuthorize("@employeeAccessPolicy.canAccess(#id, authentication)")
+    public ApiResponse<EmployeeResponse> reactivateEmployee(@PathVariable String id) {
+        return ApiResponse.<EmployeeResponse>builder()
+                .message("Employee has been reactivated")
+                .result(employeeService.reactivateEmployee(id))
                 .build();
     }
 }

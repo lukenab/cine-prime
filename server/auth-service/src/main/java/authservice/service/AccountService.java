@@ -326,6 +326,16 @@ public class AccountService {
                 "Activation email resent by admin", null);
     }
 
+    @Transactional
+    public void revokeSessions(String accountId) {
+        accountRepository.findById(accountId)
+                .orElseThrow(() -> new AppException(AuthErrorCode.ACCOUNT_NOT_FOUND));
+        int revoked = authTokenRepository.revokeAllByAccountId(accountId, OffsetDateTime.now());
+        auditLogService.success("ACCOUNT_SESSIONS_REVOKED", accountId,
+                "Administrator revoked all active sessions",
+                auditLogService.metadata("revokedTokens", revoked));
+    }
+
     public AccountResponse myInfo() {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         Account account = accountRepository.findByUsername(username)
