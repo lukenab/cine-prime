@@ -231,9 +231,13 @@ services:
       BOOKING_SERVICE_URL: http://booking-service:8082
       BOOKING_PAYMENT_WEBHOOK_SECRET: ${BOOKING_PAYMENT_WEBHOOK_SECRET:-local-demo-payment-secret}
       PAYMENT_FRONTEND_CHECKOUT_URL: http://localhost:3000/checkout
+      PAYMENT_REFUND_SANDBOX_AUTO_APPROVE: ${PAYMENT_REFUND_SANDBOX_AUTO_APPROVE:-false}
+      VNPAY_API_URL: ${VNPAY_API_URL:-https://sandbox.vnpayment.vn/merchant_webapi/api/transaction}
       VNPAY_RETURN_URL: ${VNPAY_RETURN_URL:-http://localhost:8080/api/payments/vnpay/return}
       VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-}
       VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-}
+      VNPAY_REFUND_CREATE_BY: ${VNPAY_REFUND_CREATE_BY:-CinePrime}
+      VNPAY_REFUND_IP_ADDRESS: ${VNPAY_REFUND_IP_ADDRESS:-127.0.0.1}
     depends_on:
       postgres:
         condition: service_healthy

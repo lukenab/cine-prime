@@ -56,15 +56,18 @@ payment:
   rate-guard:
     max-sessions-per-minute: ${PAYMENT_MAX_SESSIONS_PER_MINUTE:10}
   refund:
-    sandbox-auto-approve: ${PAYMENT_REFUND_SANDBOX_AUTO_APPROVE:true}
+    sandbox-auto-approve: ${PAYMENT_REFUND_SANDBOX_AUTO_APPROVE:false}
   vnpay:
     payment-url: ${VNPAY_PAYMENT_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+    api-url: ${VNPAY_API_URL:https://sandbox.vnpayment.vn/merchant_webapi/api/transaction}
     return-url: ${VNPAY_RETURN_URL:http://localhost:8080/api/payments/vnpay/return}
     tmn-code: ${VNPAY_TMN_CODE:}
     hash-secret: ${VNPAY_HASH_SECRET:}
     version: 2.1.0
     locale: vn
     timezone: Asia/Ho_Chi_Minh
+    refund-create-by: ${VNPAY_REFUND_CREATE_BY:CinePrime}
+    refund-ip-address: ${VNPAY_REFUND_IP_ADDRESS:127.0.0.1}
 
 management:
   endpoints:

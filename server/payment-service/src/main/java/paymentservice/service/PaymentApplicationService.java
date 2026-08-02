@@ -7,6 +7,8 @@ import movie.theater.common.security.JwtSecurityUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.ConnectionCallback;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import paymentservice.client.BookingGateway;
@@ -15,6 +17,8 @@ import paymentservice.config.VnpayProperties;
 import paymentservice.dto.*;
 import paymentservice.entity.*;
 import paymentservice.provider.VnpaySigner;
+import paymentservice.provider.ProviderRefundGateway;
+import paymentservice.provider.ProviderRefundResult;
 import paymentservice.repository.PaymentAttemptRepository;
 import paymentservice.repository.PaymentEventInboxRepository;
 import paymentservice.repository.PaymentReconciliationCaseRepository;
@@ -26,6 +30,7 @@ import java.math.RoundingMode;
 import java.net.URLEncoder;
 import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
+import java.sql.PreparedStatement;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -50,6 +55,8 @@ public class PaymentApplicationService {
     private final VnpayProperties vnpayProperties;
     private final PaymentProperties paymentProperties;
     private final PaymentOutcomePublisher outcomePublisher;
+    private final ProviderRefundGateway providerRefundGateway;
+    private final JdbcTemplate jdbcTemplate;
 
     @Transactional
     public PaymentSessionResponse createSession(
@@ -104,6 +111,7 @@ public class PaymentApplicationService {
                 .accountId(accountId)
                 .provider(PROVIDER)
                 .providerTxnRef(txnRef)
+                .providerCreatedAt(now)
                 .idempotencyKey(idempotencyKey)
                 .requestHash(requestHash)
                 .amount(money(booking.getTotal()))
@@ -243,10 +251,9 @@ public class PaymentApplicationService {
      * has passed its cancellation policy. The idempotency key is the source of
      * truth for retry safety; a key may never be reused with another payload.
      *
-     * <p>The local/demo profile completes refunds synchronously so the full
-     * compensation flow can be demonstrated without provider refund
-     * credentials. Production keeps the refund in manual review until a
-     * provider adapter/webhook completes it.</p>
+     * <p>A local/demo override may complete refunds without a provider call.
+     * Otherwise the provider-specific gateway signs and submits the request,
+     * and the authoritative response is written back to the payment ledger.</p>
      */
     @Transactional
     public PaymentRefundResponse refund(
@@ -263,6 +270,8 @@ public class PaymentApplicationService {
                 normalizedCurrency,
                 request.getReasonCode(),
                 Objects.toString(request.getReason(), "")));
+
+        lockRefundIdempotencyKey(request.getIdempotencyKey());
 
         PaymentRefund replay = refundRepository
                 .findByIdempotencyKey(request.getIdempotencyKey())
@@ -310,16 +319,59 @@ public class PaymentApplicationService {
             refund.setCompletedAt(OffsetDateTime.now());
             attempt.setStatus(PaymentStatus.REFUNDED);
         } else {
-            refund.setStatus(PaymentRefundStatus.MANUAL_REVIEW);
-            attempt.setStatus(PaymentStatus.REFUND_PENDING);
-            openReconciliation(
+            applyProviderRefundResult(
                     attempt,
-                    "REFUND_PROVIDER_SUBMISSION_REQUIRED",
-                    "Refund " + request.getIdempotencyKey()
-                            + " requires a configured payment-provider refund adapter.");
+                    refund,
+                    providerRefundGateway.submit(attempt, refund));
         }
         refundRepository.save(refund);
         return refundResponse(refund, false);
+    }
+
+    private void applyProviderRefundResult(
+            PaymentAttempt attempt,
+            PaymentRefund refund,
+            ProviderRefundResult result) {
+        refund.setProviderRefundReference(result.providerReference());
+        switch (result.outcome()) {
+            case SUCCEEDED -> {
+                refund.setStatus(PaymentRefundStatus.SUCCEEDED);
+                refund.setCompletedAt(OffsetDateTime.now());
+                attempt.setStatus(PaymentStatus.REFUNDED);
+            }
+            case PENDING -> {
+                refund.setStatus(PaymentRefundStatus.PENDING);
+                attempt.setStatus(PaymentStatus.REFUND_PENDING);
+            }
+            case FAILED -> {
+                refund.setStatus(PaymentRefundStatus.FAILED);
+                refund.setFailureCode(result.responseCode());
+                refund.setFailureMessage(truncate(result.message(), 500));
+                refund.setCompletedAt(OffsetDateTime.now());
+                attempt.setStatus(PaymentStatus.PAID);
+            }
+            case UNKNOWN -> {
+                refund.setStatus(PaymentRefundStatus.MANUAL_REVIEW);
+                refund.setFailureCode(result.responseCode());
+                refund.setFailureMessage(truncate(result.message(), 500));
+                attempt.setStatus(PaymentStatus.REFUND_PENDING);
+                openReconciliation(
+                        attempt,
+                        "REFUND_PROVIDER_RESULT_UNKNOWN",
+                        "Refund " + refund.getIdempotencyKey() + ": " + result.message());
+            }
+        }
+    }
+
+    private void lockRefundIdempotencyKey(String idempotencyKey) {
+        jdbcTemplate.execute((ConnectionCallback<Void>) connection -> {
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))")) {
+                statement.setString(1, idempotencyKey);
+                statement.execute();
+            }
+            return null;
+        });
     }
 
     public String checkoutRedirect(ProviderCallbackResult result) {
