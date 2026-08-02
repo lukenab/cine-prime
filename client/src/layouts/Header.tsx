@@ -35,6 +35,7 @@ const pageTitles: Record<string, string> = {
   sell:       "Sell Tickets",
   employees:  "Employees",
   users:      "Users",
+  people:     "People & Access",
   promotions: "Promotions",
   reports:    "Reports",
   settings:   "Settings",

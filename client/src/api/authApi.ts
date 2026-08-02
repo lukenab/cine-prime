@@ -117,6 +117,10 @@ export const authApi = {
         return axiosClient.post(`/api/accounts/${accountId}/resend-activation`);
     },
 
+    revokeSessions: (accountId: string) => {
+        return axiosClient.post(`/api/accounts/${accountId}/revoke-sessions`);
+    },
+
     getAllAccounts: () => {
         return axiosClient.get('/api/accounts');
     },

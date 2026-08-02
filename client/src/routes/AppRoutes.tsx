@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 
 import AuthLayout from "../layouts/AuthLayout";
 import CustomerLayout from "../layouts/CustomerLayout";
@@ -25,7 +25,7 @@ import MyBookingsPage from "../pages/customer/MyBookingsPage";
 import ConcessionSelectionPage from "../pages/customer/ConcessionSelectionPage";
 
 import AdminDashboard from "../pages/admin/AdminDashboardPage";
-import ManageUserPage from "../pages/admin/ManageUserPage";
+import PeopleAccessPage from "../pages/admin/PeopleAccessPage";
 import ManageMoviePage from "../pages/admin/ManageMoviePage";
 import MovieEditorPage from "../pages/admin/MovieEditorPage";
 import MovieCreationStartPage from "../pages/admin/MovieCreationStartPage";
@@ -37,14 +37,11 @@ import RoomDetailPage from "../pages/admin/RoomDetailPage";
 import ClusterDetailPage from "../pages/admin/ClusterDetailPage";
 import CinemaRoomEditorPage from "../pages/admin/CinemaRoomEditorPage";
 import ManageGenresPage from "../pages/admin/ManageGenresPage";
-import CreateUserPage from "../pages/admin/CreateUserPage";
 import EditUserPage from "../pages/admin/EditUserPage";
 import UserDetailPage from "../pages/admin/UserDetailPage";
 import ManageShowtimePage from "../pages/admin/ManageShowTimePage";
 import AutoScheduleWorkspacePage from "../pages/admin/AutoScheduleWorkspacePage";
 import ManageBookingPage from "../pages/admin/ManageBookingPage";
-import ManageEmployeePage from "../pages/admin/ManageEmployeePage";
-import CreateEmployeePage from "../pages/admin/CreateEmployeePage";
 import EmployeeDetailPage from "../pages/admin/EmployeeDetailPage";
 import EditEmployeePage from "../pages/admin/EditEmployeePage";
 import ManagePersonsPage from "../pages/admin/ManagePersonsPage";
@@ -136,12 +133,13 @@ export default function AppRoutes() {
           <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN"]} />}>
             <Route path="showtimes/auto"     element={<AutoScheduleWorkspacePage />} />
             <Route path="price-books"        element={<ManagePriceBooksPage />} />
-            <Route path="employees"          element={<ManageEmployeePage />} />
-            <Route path="employees/create"   element={<CreateEmployeePage />} />
+            <Route path="people"             element={<PeopleAccessPage />} />
+            <Route path="employees"          element={<Navigate to="/admin/people?tab=staff" replace />} />
+            <Route path="employees/create"   element={<Navigate to="/admin/people?tab=staff&invite=1" replace />} />
             <Route path="employees/:id"      element={<EmployeeDetailPage />} />
             <Route path="employees/edit/:id" element={<EditEmployeePage />} />
-            <Route path="users"              element={<ManageUserPage />} />
-            <Route path="users/create"       element={<CreateUserPage />} />
+            <Route path="users"              element={<Navigate to="/admin/people?tab=customers" replace />} />
+            <Route path="users/create"       element={<Navigate to="/admin/people?tab=customers" replace />} />
             <Route path="users/edit/:id"     element={<EditUserPage />} />
             <Route path="users/:id"          element={<UserDetailPage />} />
             <Route path="genres"             element={<ManageGenresPage />} />

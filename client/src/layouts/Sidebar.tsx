@@ -1,6 +1,6 @@
 import { useAuth } from "../context/AuthContext";
 import { useState, useEffect } from "react";
-import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, Users, UserCog, BarChart2, Settings, Clapperboard, Gift, ShoppingCart, MapPin, UserSquare2, ChevronDown, List, ShieldCheck, Monitor, Factory, Armchair, Languages, CircleDollarSign, Popcorn } from "lucide-react";
+import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, UserCog, BarChart2, Settings, Clapperboard, Gift, ShoppingCart, MapPin, UserSquare2, ChevronDown, List, ShieldCheck, Monitor, Factory, Armchair, Languages, CircleDollarSign, Popcorn } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { movieApi } from "../api/movieApi";
 
@@ -52,8 +52,7 @@ const navItems: NavItem[] = [
       { icon: Tags, label: "Catalog & Stock", path: "/admin/concessions/catalog", roles: ["ROLE_ADMIN", "ROLE_BRANCH_MANAGER"] },
     ],
   },
-  { icon: UserCog,     label: "Employees",    id: "employees",  path: "/admin/employees",  group: "ops",    roles: ["ROLE_ADMIN"] },
-  { icon: Users,       label: "Users",        id: "users",      path: "/admin/users",      group: "ops",    roles: ["ROLE_ADMIN"] },
+  { icon: UserCog,     label: "People & Access", id: "people", path: "/admin/people", group: "ops", roles: ["ROLE_ADMIN"] },
   { icon: Gift,        label: "Promotions",   id: "promotions", path: "/admin/promotions", group: "ops",    roles: ["ROLE_ADMIN"] },
   { icon: BarChart2,   label: "Reports",      id: "reports",    path: "/admin/reports",    group: "system", roles: ["ROLE_ADMIN"] },
   { icon: Settings,    label: "Settings",     id: "settings",   path: "/admin/settings",   group: "system", roles: ["ROLE_ADMIN"] },

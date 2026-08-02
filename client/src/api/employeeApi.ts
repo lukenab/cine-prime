@@ -17,6 +17,18 @@ export interface EmployeeUpdatePayload {
   hireDate?: string;
 }
 
+export interface EmployeeInvitationPayload {
+  fullName: string;
+  email: string;
+  phoneNumber?: string;
+  cinemaId: string;
+  position: EmployeePosition;
+  department: EmployeeDepartment;
+  employmentType: EmploymentType;
+  hireDate: string;
+  accessRole: 'EMPLOYEE' | 'BRANCH_MANAGER';
+}
+
 export type EmployeePosition =
   | 'STAFF'
   | 'SUPERVISOR'
@@ -71,9 +83,15 @@ export const employeeApi = {
   create: (payload: EmployeeCreatePayload) =>
     axiosClient.post<any>('/api/employees', payload),
 
+  invite: (payload: EmployeeInvitationPayload) =>
+    axiosClient.post<any>('/api/employees/invitations', payload),
+
   update: (id: string, payload: EmployeeUpdatePayload) =>
     axiosClient.put<any>(`/api/employees/${id}`, payload),
 
   disable: (id: string) =>
     axiosClient.delete<any>(`/api/employees/${id}`),
+
+  reactivate: (id: string) =>
+    axiosClient.post<any>(`/api/employees/${id}/reactivate`),
 };
