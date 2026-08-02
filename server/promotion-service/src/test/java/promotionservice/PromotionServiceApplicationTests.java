@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import promotionservice.service.PromotionAdminService;
+import promotionservice.service.PromotionEligibilityService;
 
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
@@ -16,6 +17,9 @@ class PromotionServiceApplicationTests {
 
 	@MockBean
 	PromotionAdminService promotionAdminService;
+
+	@MockBean
+	PromotionEligibilityService promotionEligibilityService;
 
 	@Test
 	void contextLoads() {

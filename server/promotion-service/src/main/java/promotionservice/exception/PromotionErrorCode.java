@@ -15,7 +15,13 @@ public enum PromotionErrorCode implements BaseErrorCode {
     PROMOTION_INVALID_TARGET(2604, "Promotion target is invalid.", HttpStatus.BAD_REQUEST),
     PROMOTION_INVALID_WINDOW(2605, "Promotion validity window is invalid.", HttpStatus.BAD_REQUEST),
     PROMOTION_NOT_DRAFT(2606, "Only a DRAFT promotion can be edited.", HttpStatus.CONFLICT),
-    PROMOTION_INVALID_TRANSITION(2607, "Promotion lifecycle transition is invalid.", HttpStatus.CONFLICT);
+    PROMOTION_INVALID_TRANSITION(2607, "Promotion lifecycle transition is invalid.", HttpStatus.CONFLICT),
+    PROMOTION_NOT_APPLICABLE(2701, "Promotion is not applicable.", HttpStatus.CONFLICT),
+    PROMOTION_QUOTA_EXHAUSTED(2702, "Promotion quota is exhausted.", HttpStatus.CONFLICT),
+    PROMOTION_RESERVATION_NOT_FOUND(2703, "Promotion reservation not found.", HttpStatus.NOT_FOUND),
+    PROMOTION_RESERVATION_EXPIRED(2704, "Promotion reservation has expired.", HttpStatus.GONE),
+    PROMOTION_RESERVATION_INVALID_STATE(2705, "Promotion reservation lifecycle is invalid.", HttpStatus.CONFLICT),
+    PROMOTION_IDEMPOTENCY_CONFLICT(2706, "Idempotency key is already used by another reservation request.", HttpStatus.CONFLICT);
 
     private final int code;
     private final String message;

@@ -50,6 +50,28 @@ paths:
       responses:
         '200': {description: Updated}
         '409': {description: Promotion is not DRAFT or code already exists}
+  /api/promotions/quote:
+    post:
+      summary: Quote eligibility from Booking Service price snapshot
+      tags: [Promotion Eligibility]
+      responses: {'200': {description: Eligible/ineligible quote}}
+  /api/promotions/reservations:
+    post:
+      summary: Reserve promotion quota idempotently for 15 minutes
+      tags: [Promotion Eligibility]
+      responses: {'201': {description: Reservation created or replayed}, '409': {description: Inapplicable or quota exhausted}}
+  /api/promotions/reservations/{reservationId}/commit:
+    post:
+      summary: Commit a RESERVED promotion reservation
+      tags: [Promotion Eligibility]
+      parameters: [{$ref: '#/components/parameters/ReservationId'}]
+      responses: {'200': {description: Committed}, '410': {description: Expired}}
+  /api/promotions/reservations/{reservationId}/release:
+    post:
+      summary: Release a RESERVED promotion reservation
+      tags: [Promotion Eligibility]
+      parameters: [{$ref: '#/components/parameters/ReservationId'}]
+      responses: {'200': {description: Released}, '410': {description: Expired}}
   /api/promotions/{promotionId}/{action}:
     post:
       summary: Change promotion lifecycle state
@@ -69,6 +91,11 @@ components:
   parameters:
     PromotionId:
       name: promotionId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    ReservationId:
+      name: reservationId
       in: path
       required: true
       schema: {type: string, format: uuid}

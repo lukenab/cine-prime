@@ -98,3 +98,25 @@ DRAFT  ──activate──> ACTIVE ──pause──> PAUSED ──activate─�
 ## 6. Audit
 
 Every create, DRAFT update, and lifecycle action appends an audit row. The actor account ID is read from the authenticated JWT; clients cannot provide or override it.
+
+## 7. Eligibility and reservation contract
+
+| Method | Endpoint | Purpose |
+| :--- | :--- | :--- |
+| `POST` | `/api/promotions/quote` | Calculate eligibility and discount; does not consume quota |
+| `POST` | `/api/promotions/reservations` | Atomically reserve quota with idempotency key and 15-minute TTL |
+| `POST` | `/api/promotions/reservations/{id}/commit` | Commit reservation after booking confirmation |
+| `POST` | `/api/promotions/reservations/{id}/release` | Release reservation after payment failure/cancel |
+
+Quote/reserve receives a server-side Booking Service snapshot: `bookingId`, `accountId`, `movieId`, `showtimeId`, `subtotalAmount`, and `currency`. Frontend must not calculate or supply an authoritative amount.
+
+`quote` returns HTTP `200` with `eligible: false` for inapplicable/expired/quota-exhausted promotion. `reserve` returns the existing reservation when its idempotency key, booking and account match. Reservation states are `RESERVED -> COMMITTED` or `RESERVED -> RELEASED/EXPIRED`; committed reservations cannot be released.
+
+| Code | HTTP | Meaning |
+| :--- | :---: | :--- |
+| `2701` | 409 | Promotion is not applicable at reserve time |
+| `2702` | 409 | Global or per-account quota exhausted |
+| `2703` | 404 | Reservation not found |
+| `2704` | 410 | Reservation expired; quota released |
+| `2705` | 409 | Invalid reservation lifecycle state |
+| `2706` | 409 | Idempotency key belongs to a different booking/account |
