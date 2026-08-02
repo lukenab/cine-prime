@@ -160,6 +160,27 @@ services:
     networks:
       - cinema-network
 
+  promotion-service:
+    build:
+      context: ./server
+      dockerfile: promotion-service/Dockerfile
+    container_name: promotion-service
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/promotion_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: "123456"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+    depends_on:
+      postgres:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+    networks:
+      - cinema-network
+
   user-service:
     build:
       context: ./server

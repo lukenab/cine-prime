@@ -22,19 +22,26 @@
    - [member](#32-bảng-member)
    - [employee](#33-bảng-employee)
    - [audit_logs](#34-bảng-audit_logs)
-4. [Quyết định thiết kế quan trọng](#4-quyết-định-thiết-kế-quan-trọng)
-5. [Các flow chính liên quan đến DB](#5-các-flow-chính-liên-quan-đến-db)
+4. [promotion_db](#4-promotion_db)
+   - [promotion](#41-bảng-promotion)
+   - [promotion_target](#42-bảng-promotion_target)
+   - [promotion_price_rule](#43-bảng-promotion_price_rule)
+   - [promotion_reservation](#44-bảng-promotion_reservation)
+   - [promotion_usage_ledger](#45-bảng-promotion_usage_ledger)
+5. [Quyết định thiết kế quan trọng](#5-quyết-định-thiết-kế-quan-trọng)
+6. [Các flow chính liên quan đến DB](#6-các-flow-chính-liên-quan-đến-db)
 
 ---
 
 ## 1. Tổng quan kiến trúc
 
-CinePrime sử dụng **2 database độc lập** theo nguyên tắc *Database per Service* của microservices:
+Tài liệu này mô tả **3 database độc lập** theo nguyên tắc *Database per Service* của microservices:
 
 | Database | Service | Mục đích |
 |---|---|---|
 | `auth_db` | auth-service | Xác thực: tài khoản, phân quyền, JWT, audit log, password reset |
 | `user_db` | user-service | Hồ sơ: thông tin cá nhân, thành viên tích điểm, nhân viên |
+| `promotion_db` | promotion-service | Promotion, target, pricing rule, reservation và usage ledger |
 
 > **Quan trọng:** Hai database **không kết nối trực tiếp qua FK**. Đồng bộ dữ liệu qua **Kafka events** (Transactional Outbox Pattern).
 
@@ -302,7 +309,108 @@ Request → check Redis "blacklist:{jti}" O(1)
 
 ---
 
-## 4. Quyết định thiết kế quan trọng
+## 4. promotion_db
+
+**Migration nguồn:** `docs/database/promotion-service/V1__baseline_promotion_schema.sql`. Maven copy migration này vào classpath của promotion-service khi build để Flyway chạy lúc service khởi động.
+
+`promotion_db` chỉ sở hữu dữ liệu promotion. `movie_id`, `showtime_id`, `booking_id` và `account_id` là **logical reference** tới service khác; không tạo foreign key cross-database.
+
+```
+promotion ──(1:N)──► promotion_target
+promotion ──(1:1)──► promotion_price_rule
+promotion ──(1:N)──► promotion_reservation ──(1:N)──► promotion_usage_ledger
+```
+
+### 4.1 Bảng `promotion`
+
+**Mục đích:** Định nghĩa promotion, cửa sổ hiệu lực và quota toàn cục/per-account.
+
+| Field | Type | Constraint | Mô tả |
+|---|---|---|---|
+| `promotion_id` | `UUID` | PK | ID nội bộ của promotion |
+| `code` | `VARCHAR(64)` | UNIQUE, normalized | Trigger tự `TRIM` + uppercase trước khi lưu, nên unique không phân biệt hoa thường |
+| `name`, `description` | `VARCHAR`, `TEXT` | name NOT NULL | Nội dung hiển thị |
+| `status` | `VARCHAR(20)` | `DRAFT` \| `ACTIVE` \| `PAUSED` \| `ARCHIVED` | Lifecycle quản trị promotion |
+| `valid_from`, `valid_until` | `TIMESTAMPTZ` | `valid_from < valid_until` | Mốc thời gian UTC; `NULL` là không giới hạn ở đầu/cuối tương ứng |
+| `global_usage_limit` | `INTEGER` | NULL hoặc > 0 | Tổng số lượt được phép dùng |
+| `per_account_usage_limit` | `INTEGER` | NULL hoặc > 0 | Số lượt tối đa của mỗi account |
+| `active_reservation_count`, `committed_usage_count` | `INTEGER` | >= 0 | Counters được cập nhật atomically cùng reservation/ledger |
+| `version` | `BIGINT` | >= 0 | Optimistic locking (`@Version`) |
+
+### 4.2 Bảng `promotion_target`
+
+**Mục đích:** Giới hạn promotion theo movie hoặc showtime bằng row riêng lẻ, tuyệt đối không dùng comma-separated string.
+
+| Field | Type | Constraint | Mô tả |
+|---|---|---|---|
+| `promotion_target_id` | `UUID` | PK | ID target |
+| `promotion_id` | `UUID` | FK → `promotion` | Promotion sở hữu target; delete promotion sẽ cascade |
+| `target_type` | `VARCHAR(20)` | `MOVIE` \| `SHOWTIME` | Kiểu logical reference |
+| `movie_id` | `BIGINT` | Có khi `target_type=MOVIE` | ID movie của movie-service |
+| `showtime_id` | `BIGINT` | Có khi `target_type=SHOWTIME` | ID showtime của movie-service |
+
+Constraint đảm bảo mỗi row chỉ chứa đúng một loại target, đồng thời unique index chặn target trùng trong cùng promotion. Promotion không có row target áp dụng cho mọi movie/showtime.
+
+### 4.3 Bảng `promotion_price_rule`
+
+**Mục đích:** Là nguồn cấu hình giảm giá duy nhất; không lưu discount tự do trên `promotion` hoặc nhận giá giảm do client tính.
+
+| Field | Type | Constraint | Mô tả |
+|---|---|---|---|
+| `promotion_id` | `UUID` | FK, UNIQUE | Mỗi promotion có đúng tối đa một rule hiện hành |
+| `discount_type` | `VARCHAR(20)` | `PERCENTAGE` \| `FIXED_AMOUNT` | Loại công thức |
+| `percentage` | `NUMERIC(5,2)` | > 0 và <= 100 khi percentage | Phần trăm giảm |
+| `fixed_amount` | `NUMERIC(14,2)` | > 0 khi fixed amount | Tiền giảm cố định |
+| `max_discount_amount` | `NUMERIC(14,2)` | > 0 hoặc NULL | Mức trần cho percentage |
+| `minimum_order_amount` | `NUMERIC(14,2)` | >= 0 | Giá trị booking tối thiểu |
+| `currency` | `CHAR(3)` | ISO uppercase | Mặc định `VND` |
+
+CHECK constraint buộc chỉ một trong `percentage` hoặc `fixed_amount` được dùng đúng theo `discount_type`.
+
+### 4.4 Bảng `promotion_reservation`
+
+**Mục đích:** Giữ chỗ quota trước thanh toán và lưu money snapshot để reserve/commit/release idempotent.
+
+| Field | Type | Constraint | Mô tả |
+|---|---|---|---|
+| `promotion_reservation_id` | `UUID` | PK | ID reservation |
+| `promotion_id` | `UUID` | FK → `promotion` | Promotion được reserve |
+| `booking_id`, `account_id` | `VARCHAR(50)` | logical reference | Booking và account sở hữu request |
+| `idempotency_key` | `VARCHAR(128)` | UNIQUE, trimmed | Retry cùng request trả lại reservation cũ, không trừ quota hai lần |
+| `status` | `VARCHAR(20)` | `RESERVED` \| `COMMITTED` \| `RELEASED` \| `EXPIRED` | Lifecycle reservation |
+| `subtotal_amount`, `discount_amount`, `final_amount` | `NUMERIC(14,2)` | non-negative; final = subtotal - discount | Snapshot server tính tại thời điểm reserve; trigger chặn sửa sau đó |
+| `expires_at` | `TIMESTAMPTZ` | > `reserved_at` | Hạn giữ quota |
+| `committed_at`, `released_at`, `expired_at` | `TIMESTAMPTZ` | Theo status | Audit mốc kết thúc lifecycle |
+| `version` | `BIGINT` | >= 0 | Optimistic locking |
+
+### 4.5 Bảng `promotion_usage_ledger`
+
+**Mục đích:** Audit trail append-only cho thay đổi quota. Không update/delete ledger row.
+
+| Field | Type | Constraint | Mô tả |
+|---|---|---|---|
+| `promotion_usage_ledger_id` | `UUID` | PK | ID ledger event |
+| `promotion_id`, `promotion_reservation_id` | `UUID` | FK nội bộ | Liên kết promotion và reservation |
+| `account_id`, `booking_id` | `VARCHAR(50)` | logical reference | Snapshot truy vết cross-service |
+| `event_type` | `VARCHAR(20)` | `RESERVED` \| `COMMITTED` \| `RELEASED` \| `EXPIRED` | Event lifecycle |
+| `usage_delta` | `SMALLINT` | 1, 0 hoặc -1 theo event | `RESERVED=1`, `COMMITTED=0`, `RELEASED/EXPIRED=-1` |
+| `occurred_at` | `TIMESTAMPTZ` | NOT NULL | Thời điểm UTC của event |
+
+### 4.6 Flow reservation promotion
+
+```
+1. Reserve: validate promotion ACTIVE, validity window, target và price rule ở server.
+2. Trong một transaction: lock/update promotion theo version, kiểm tra global/per-account limit,
+   INSERT promotion_reservation(status=RESERVED), tăng active_reservation_count,
+   INSERT promotion_usage_ledger(event=RESERVED, usage_delta=1).
+3. Commit: chỉ reservation RESERVED chưa hết hạn được chuyển COMMITTED; giảm active count,
+   tăng committed count và INSERT ledger COMMITTED (delta=0).
+4. Release hoặc expiry: chỉ xử lý reservation RESERVED; giảm active count và INSERT ledger
+   RELEASED/EXPIRED (delta=-1).
+5. Retry cùng idempotency key chỉ đọc reservation cũ; không tạo ledger/counter mới.
+```
+
+## 5. Quyết định thiết kế quan trọng
 
 ### `FetchType.LAZY` cho tất cả quan hệ (`@ManyToOne`, `@ManyToMany`)
 
@@ -338,9 +446,9 @@ PostgreSQL không tự động cast `VARCHAR` sang `inet` khi INSERT. Không có
 
 ---
 
-## 5. Các flow chính liên quan đến DB
+## 6. Các flow chính liên quan đến DB
 
-### 5.1 Đăng ký (Registration)
+### 6.1 Đăng ký (Registration)
 
 ```
 1. POST /api/auth/register { username, email, password }
@@ -354,7 +462,7 @@ PostgreSQL không tự động cast `VARCHAR` sang `inet` khi INSERT. Không có
    → Redis check → UPDATE account SET status=ACTIVE, email_verified_at=NOW()
 ```
 
-### 5.2 Đăng nhập (Login)
+### 6.2 Đăng nhập (Login)
 
 ```
 1. POST /api/auth/login { username, password }
@@ -369,7 +477,7 @@ PostgreSQL không tự động cast `VARCHAR` sang `inet` khi INSERT. Không có
 8. UPDATE account SET last_login_at = NOW(), failed_login_attempts = 0
 ```
 
-### 5.3 Đăng xuất (Logout)
+### 6.3 Đăng xuất (Logout)
 
 ```
 1. POST /api/auth/logout (Authorization: Bearer <token>)
@@ -378,7 +486,7 @@ PostgreSQL không tự động cast `VARCHAR` sang `inet` khi INSERT. Không có
 4. UPDATE auth_token SET is_revoked=true, revoked_at=NOW() WHERE jwt_id=?
 ```
 
-### 5.4 Xác thực request (Token Validation)
+### 6.4 Xác thực request (Token Validation)
 
 ```
 1. API Gateway nhận request có Bearer token
