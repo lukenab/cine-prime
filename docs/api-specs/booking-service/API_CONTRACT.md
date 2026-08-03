@@ -37,6 +37,8 @@ Booking Service owns the following tables:
 
 ```txt
 booking
+booking_quote
+booking_quote_item
 booking_detail
 ticket
 seat_lock
@@ -80,8 +82,13 @@ The schema below reflects the current database structure. Final schema, constrai
 | points_used      | int           | Total loyalty points applied                               |
 | points_discount  | decimal(12,2) | Monetary discount derived from points                      |
 | final_amount     | decimal(12,2) | Amount actually charged to customer                        |
+| promotion_id     | varchar(36)   | Immutable logical reference â†’ promotion-service promotion |
+| promotion_code   | varchar(100)  | Normalized promotion code snapshot                         |
+| promotion_reservation_id | varchar(36) | Immutable quota reservation reference                  |
+| promotion_discount_amount | decimal(12,2) | Discount snapshot returned by Promotion Service        |
+| promotion_currency | varchar(10) | Currency of the promotion amount snapshot                   |
 | booking_type     | varchar(20)   | ONLINE \| COUNTER                                          |
-| status           | varchar(20)   | PENDING \| CONFIRMED \| CANCELLED                          |
+| status           | varchar(20)   | PENDING \| CONFIRMED \| CANCELLED \| EXPIRED                |
 | created_by       | varchar(36)   | account_id of the creator                                  |
 | created_at       | timestamp     | Creation timestamp (auto-set by `@CreationTimestamp`)      |
 | updated_at       | timestamp     | Last update timestamp (auto-set by `@UpdateTimestamp`)     |
@@ -227,11 +234,13 @@ YYYY-MM-DDTHH:mm:ss
 
 ### 7.5. Timezone
 
-Default business timezone:
+Storage and checkout-expiry timezone:
 
 ```txt
-Asia/Ho_Chi_Minh
+UTC (ISO-8601 responses include `Z`)
 ```
+
+The frontend may display an expiry in the branch/business timezone, but must calculate its countdown from the UTC instant.
 
 ### 7.6. Currency
 
@@ -375,7 +384,43 @@ Inherits all Member and Employee API access. Admin role is checked via `JwtSecur
 
 # 11. Member Booking APIs
 
-## 11.1. Create Booking
+## 11.1. Quote Checkout
+
+```http
+POST /api/booking-quotes
+Authorization: Bearer <member-token>
+```
+
+```json
+{
+  "showtimeId": 55,
+  "showtimeSeatIds": [901, 902],
+  "promotionCode": "SUMMER26"
+}
+```
+
+Movie Service is the source of seat availability, price, `movieId` and `clusterId`; the browser never sends a total,
+discount, movie or branch ID. The quote checks promotion eligibility but does **not** create a Movie seat hold and does
+**not** reserve promotion quota. It expires after five minutes (`booking.quote.ttl-seconds`).
+
+```json
+{
+  "code": 1000,
+  "result": {
+    "quoteId": "quote-uuid",
+    "lineItems": [{"seatId": 901, "seatLabel": "G7", "price": 120000}],
+    "subTotal": 120000,
+    "discountAmount": 24000,
+    "finalAmount": 96000,
+    "expiresAt": "2026-08-03T10:05:00"
+  }
+}
+```
+
+Errors: invalid/empty selection `400/2505`, locked seat `409/2011`, ineligible promotion `409/2501`, exhausted quota
+`409/2502`, and Movie/Promotion dependency unavailable `503/2013|2503`.
+
+## 11.2. Create Booking
 
 ### Endpoint
 
@@ -396,9 +441,21 @@ Content-Type: application/json
 {
   "showtimeId": 1,
   "seatIds": [101, 102],
-  "pointsUsed": 0
+  "pointsUsed": 0,
+  "promotionCode": "SUMMER26"
 }
 ```
+
+Alternatively create from the immutable quote snapshot:
+
+```json
+{ "quoteId": "quote-uuid", "pointsUsed": 0 }
+```
+
+The creation call receives an `Idempotency-Key` header. Booking Service holds the requested seats at this moment,
+re-checks the held prices against the quote, reserves promotion quota atomically, and persists the promotion snapshot.
+An expired quote returns `410/2507`; a quote owned by another account returns `403/2508`; price changes return
+`409/2509` so the UI must quote again.
 
 ### Field Definitions
 
@@ -407,6 +464,7 @@ Content-Type: application/json
 | showtimeId | long          | Yes      | `@NotNull`, `@Min(1)`                           |
 | seatIds    | array\<long\> | Yes      | `@NotEmpty`, max 8 seats (`@Size(max=8)`)       |
 | pointsUsed | integer       | No       | `@Min(0)`, defaults to `0`                      |
+| promotionCode | string      | No       | Maximum 100 characters; only the code comes from UI |
 
 ### Processing Rules
 
@@ -415,9 +473,10 @@ Content-Type: application/json
 3. Seats already booked/confirmed are rejected (`SEATS_ALREADY_TAKEN`).
 4. Expired seat locks for other accounts are released; active locks raise `SEAT_ALREADY_LOCKED`.
 5. If the caller already holds an active lock on a seat: `SEAT_ALREADY_HELD_BY_YOU`.
-6. New `seat_lock` rows are inserted for each seat with `expires_at = now + 10 minutes`.
-7. A `Booking` with `status = PENDING` is persisted.
-8. Seat price is currently hardcoded at `85,000 VND` per seat (Movie Service integration pending).
+6. Movie Service creates the authoritative inventory hold and returns the held seat prices, `movieId`, and `clusterId` from its `ShowTime` data. The client never provides these values.
+7. If `promotionCode` is present, Booking Service sends the Movie Service price snapshot and authoritative `movieId`/`showtimeId` to Promotion Service for quote then atomic quota reservation.
+8. If a promotion is ineligible or its quota is exhausted, no Booking is persisted. The Movie Service hold expires naturally according to its TTL.
+9. A `Booking` with `status = PENDING` is persisted with immutable promotion/discount/reservation snapshot fields. Cancelling a pending booking releases its promotion reservation.
 
 ### Response Success
 
@@ -432,6 +491,9 @@ Status: `201 Created`
     "showtimeId": 1,
     "status": "PENDING",
     "totalPrice": 170000,
+    "discountAmount": 34000,
+    "finalAmount": 136000,
+    "promotionCode": "SUMMER26",
     "items": [
       {
         "seatId": 101,
@@ -457,6 +519,9 @@ Status: `201 Created`
 | showtimeId  | long                      | The requested showtime                      |
 | status      | string                    | Always `PENDING` on creation                |
 | totalPrice  | decimal                   | Sum of all seat prices                      |
+| discountAmount | decimal                 | Promotion discount; null when no promotion  |
+| finalAmount | decimal                   | Non-negative amount after promotion         |
+| promotionCode | string                  | Normalized applied promotion; null if absent |
 | items       | array\<BookingItemResponse\> | One entry per seat                       |
 | lockedUntil | datetime                  | Seat lock expiry (`now + 10 minutes`)       |
 
@@ -477,11 +542,14 @@ Status: `201 Created`
 | Seats already booked | 400  | 2006 | The selected seats are already locked or booked by another user |
 | Seat locked by other | 409  | 2011 | The seat is already locked or reserved by another user        |
 | You already hold it  | 400  | 2012 | You have already held this seat and the lock is still valid   |
+| Promotion not applicable | 409 | 2501 | `PROMOTION_NOT_APPLICABLE`                              |
+| Promotion quota exhausted | 409 | 2502 | `PROMOTION_QUOTA_EXHAUSTED`                            |
+| Promotion Service unavailable | 503 | 2503 | `PROMOTION_SERVICE_UNAVAILABLE`                         |
 | Unauthenticated      | 401  | 1008 | Unauthenticated                                               |
 
 ---
 
-## 11.2. Get My Bookings
+## 11.3. Get My Bookings
 
 ### Endpoint
 
@@ -889,6 +957,14 @@ Actual values from `BookingErrorCode` enum:
 | `MEMBER_ONLY_ACTION`       | 2010 | 403         | Only registered members can create a booking and hold seats      |
 | `SEAT_ALREADY_LOCKED`      | 2011 | 409         | The seat is already locked or reserved by another user           |
 | `SEAT_ALREADY_HELD_BY_YOU` | 2012 | 400         | You have already held this seat and the lock is still valid      |
+| `PROMOTION_NOT_APPLICABLE` | 2501 | 409 | `PROMOTION_NOT_APPLICABLE` |
+| `PROMOTION_QUOTA_EXHAUSTED` | 2502 | 409 | `PROMOTION_QUOTA_EXHAUSTED` |
+| `PROMOTION_SERVICE_UNAVAILABLE` | 2503 | 503 | `PROMOTION_SERVICE_UNAVAILABLE` |
+| `INVALID_QUOTE_REQUEST` | 2505 | 400 | `INVALID_QUOTE_REQUEST` |
+| `QUOTE_NOT_FOUND` | 2506 | 404 | `QUOTE_NOT_FOUND` |
+| `QUOTE_EXPIRED` | 2507 | 410 | `QUOTE_EXPIRED` |
+| `QUOTE_OWNER_MISMATCH` | 2508 | 403 | `QUOTE_OWNER_MISMATCH` |
+| `QUOTE_PRICE_CHANGED` | 2509 | 409 | `QUOTE_PRICE_CHANGED` |
 
 Common error codes from `common` module:
 
@@ -966,7 +1042,20 @@ Frontend must:
 
 ---
 
-# 24. Open Questions for Reviewer
+# 24. Promotion-aware Payment Lifecycle
+
+```http
+PATCH /api/bookings/{bookingId}/confirm
+Authorization: Bearer <employee-or-admin-token>
+```
+
+Payment orchestration calls this endpoint after provider confirmation. For a `PENDING` booking it commits the
+existing Promotion Service reservation exactly once, then changes the booking to `CONFIRMED`. Repeating the call for
+an already confirmed booking is safe. `PENDING` bookings past `expiresAt` are swept every minute: their reservation is
+released and booking status becomes `EXPIRED`. Customer cancellation also releases a pending reservation; committed
+reservations follow the separate refund policy.
+
+# 25. Open Questions for Reviewer
 
 1. Is a 10-minute seat lock window appropriate for the business? (Currently hardcoded in service.)
 2. What is the `minsBeforeShowtime` value that blocks cancellation? (Configured via `application.yml`.)

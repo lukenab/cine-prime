@@ -7,15 +7,19 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @ComponentScan(basePackages = {"movie.theater", "bookingservice"})
 @EnableFeignClients
 @EnableDiscoveryClient
+@EnableScheduling
 public class BookingServiceApplication {
 
 	public static void main(String[] args) {
-		TimeZone.setDefault(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
+		// Inter-service timestamps are stored and compared in UTC. Business-zone
+		// formatting belongs at the API/UI boundary, never in checkout lifecycle.
+		TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 		SpringApplication.run(BookingServiceApplication.class, args);
 	}
 

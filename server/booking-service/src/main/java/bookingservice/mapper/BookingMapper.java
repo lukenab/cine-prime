@@ -43,8 +43,11 @@ public interface BookingMapper {
     @Mapping(source = "booking.showtimeId", target = "showtimeId")
     @Mapping(source = "booking.status", target = "status")
     @Mapping(source = "booking.totalAmount", target = "totalPrice")
+    @Mapping(source = "booking.promotionDiscountAmount", target = "discountAmount")
+    @Mapping(source = "booking.finalAmount", target = "finalAmount")
+    @Mapping(source = "booking.promotionCode", target = "promotionCode")
     @Mapping(source = "items", target = "items")
-    @Mapping(source = "expiredAt", target = "lockedUntil")
+    @Mapping(target = "lockedUntil", expression = "java(expiredAt == null ? null : expiredAt.atOffset(java.time.ZoneOffset.UTC))")
     CreateBookingResponse toCreateBookingResponse(Booking booking, List<BookingItemResponse> items,
             LocalDateTime expiredAt);
 

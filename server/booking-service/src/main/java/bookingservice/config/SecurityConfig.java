@@ -18,6 +18,7 @@ public class SecurityConfig extends JwtResourceServerSecuritySupport {
         http.csrf(csrf -> csrf.disable());
 
         http.authorizeHttpRequests(auth -> auth
+            .requestMatchers("/api/booking-quotes/**").authenticated()
             .requestMatchers("/api/bookings/**").authenticated()
             .anyRequest().permitAll()
         );

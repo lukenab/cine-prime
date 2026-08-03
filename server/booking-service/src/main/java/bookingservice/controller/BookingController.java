@@ -86,4 +86,15 @@ public class BookingController {
                                 "Booking cancelled successfully",
                                 responseData);
         }
+
+        /** Internal payment confirmation: commits the already-created promotion reservation once. */
+        @PatchMapping("/{id}/confirm")
+        public ApiResponse<CreateBookingResponse> confirmBooking(@PathVariable("id") String id) {
+                boolean canConfirm = JwtSecurityUtils.hasRole("ROLE_ADMIN")
+                                || JwtSecurityUtils.hasRole("ROLE_EMPLOYEE");
+                return ApiResponse.<CreateBookingResponse>builder()
+                                .code(1000)
+                                .result(bookingService.confirmBooking(id, canConfirm))
+                                .build();
+        }
 }

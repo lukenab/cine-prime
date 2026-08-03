@@ -30,7 +30,16 @@ public enum BookingErrorCode implements BaseErrorCode {
                         HttpStatus.BAD_REQUEST),
         SHOWTIME_INVENTORY_UNAVAILABLE(2013,
                         "Seat inventory is temporarily unavailable. Refresh the seat map and try again.",
-                        HttpStatus.SERVICE_UNAVAILABLE);
+                        HttpStatus.SERVICE_UNAVAILABLE),
+        PROMOTION_NOT_APPLICABLE(2501, "PROMOTION_NOT_APPLICABLE", HttpStatus.CONFLICT),
+        PROMOTION_QUOTA_EXHAUSTED(2502, "PROMOTION_QUOTA_EXHAUSTED", HttpStatus.CONFLICT),
+        PROMOTION_SERVICE_UNAVAILABLE(2503, "PROMOTION_SERVICE_UNAVAILABLE", HttpStatus.SERVICE_UNAVAILABLE),
+        INVALID_QUOTE_REQUEST(2505, "INVALID_QUOTE_REQUEST", HttpStatus.BAD_REQUEST),
+        QUOTE_NOT_FOUND(2506, "QUOTE_NOT_FOUND", HttpStatus.NOT_FOUND),
+        QUOTE_EXPIRED(2507, "QUOTE_EXPIRED", HttpStatus.GONE),
+        QUOTE_OWNER_MISMATCH(2508, "QUOTE_OWNER_MISMATCH", HttpStatus.FORBIDDEN),
+        QUOTE_PRICE_CHANGED(2509, "QUOTE_PRICE_CHANGED", HttpStatus.CONFLICT),
+        PAYMENT_CONFIRM_PERMISSION_DENIED(2510, "PAYMENT_CONFIRM_PERMISSION_DENIED", HttpStatus.FORBIDDEN);
 
         int code;
         String message;

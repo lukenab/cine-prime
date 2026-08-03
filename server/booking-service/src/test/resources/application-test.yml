@@ -1,0 +1,25 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+booking:
+  cancel:
+    mins-before-showtime: 30
+  quote:
+    ttl-seconds: 300
+  expiry-sweep-ms: 60000
+
+jwt:
+  signerKey: 873bcf3b6023c6cfac735831cc01cbd59c6f64c2341050f12e5f0224d7edea62
+  valid-duration: 3600
+  refreshable-duration: 2592000

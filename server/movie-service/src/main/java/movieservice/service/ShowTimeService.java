@@ -121,9 +121,13 @@ public class ShowTimeService {
                         .map(this::toLayoutPositionDto)
                         .toList();
 
-        CinemaRoom room = seats.get(0).getShowTime().getCinemaRoom();
-        return ShowtimeSeatMapResponse.builder()
-                .seats(seats.stream().map(this::toDto).toList())
+          CinemaRoom room = seats.get(0).getShowTime().getCinemaRoom();
+          return ShowtimeSeatMapResponse.builder()
+                  .movieId(seats.get(0).getShowTime().getMovie() == null
+                          ? null : seats.get(0).getShowTime().getMovie().getMovieId())
+                  .clusterId(room == null || room.getCluster() == null
+                          ? null : room.getCluster().getClusterId())
+                  .seats(seats.stream().map(this::toDto).toList())
                 .positions(positions)
                 .presentationSystem(room.getPresentationSystem())
                 .projectionTechnologyCode(room.getProjectionTechnology() == null

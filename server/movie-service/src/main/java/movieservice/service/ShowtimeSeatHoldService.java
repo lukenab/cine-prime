@@ -98,7 +98,7 @@ public class ShowtimeSeatHoldService {
         });
         showtimeSeatRepository.saveAllAndFlush(seats);
 
-        return toResponse(showtimeId, seats, expiresAt, false);
+        return toResponse(showtime, seats, expiresAt, false);
     }
 
     @Transactional
@@ -128,7 +128,7 @@ public class ShowtimeSeatHoldService {
         }
 
         return toResponse(
-                showtime.getShowTimeId(),
+                showtime,
                 previousAttempt,
                 previousAttempt.get(0).getReservedExpiresAt(),
                 true);
@@ -163,7 +163,7 @@ public class ShowtimeSeatHoldService {
     }
 
     private ShowtimeSeatHoldResponse toResponse(
-            Long showtimeId,
+            ShowTime showtime,
             List<ShowtimeSeat> seats,
             LocalDateTime expiresAt,
             boolean replayed) {
@@ -180,7 +180,11 @@ public class ShowtimeSeatHoldService {
         }
         return ShowtimeSeatHoldResponse.builder()
                 .holdId(seats.get(0).getHoldId())
-                .showtimeId(showtimeId)
+                .showtimeId(showtime.getShowTimeId())
+                .movieId(showtime.getMovie().getMovieId())
+                .clusterId(showtime.getCinemaRoom() == null || showtime.getCinemaRoom().getCluster() == null
+                        ? null
+                        : showtime.getCinemaRoom().getCluster().getClusterId())
                 .seatIds(seats.stream().map(ShowtimeSeat::getShowtimeSeatId).toList())
                 .seats(heldSeats)
                 .totalPrice(totalPrice)

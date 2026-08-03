@@ -32,7 +32,7 @@ spring:
         - id: booking-service
           uri: lb://booking-service
           predicates:
-            - Path=/api/bookings/**, /api/tickets/**
+            - Path=/api/bookings/**, /api/booking-quotes/**, /api/tickets/**
 
         - id: promotion-service
           uri: lb://promotion-service
