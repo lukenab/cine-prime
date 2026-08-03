@@ -2,6 +2,8 @@ package promotionservice;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import promotionservice.service.PromotionAdminService;
 
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
@@ -11,6 +13,9 @@ import org.springframework.boot.test.context.SpringBootTest;
         "eureka.client.enabled=false"
 })
 class PromotionServiceApplicationTests {
+
+	@MockBean
+	PromotionAdminService promotionAdminService;
 
 	@Test
 	void contextLoads() {
