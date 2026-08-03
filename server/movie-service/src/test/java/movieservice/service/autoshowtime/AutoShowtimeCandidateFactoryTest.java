@@ -90,7 +90,10 @@ class AutoShowtimeCandidateFactoryTest {
         when(cinemaRoomFormatRepository.findEligibleActiveRoomsByMovieIdAndFormatId(anyLong(), anyInt()))
                 .thenReturn(List.of(room));
         when(formatPriorityRepository.findAllByPolicyIdWithFormat(1L)).thenReturn(List.of());
-        when(maintenanceRepository.findBlockingMaintenanceInRange(any(), any(), any()))
+        /// lenient: khi toàn bộ room bị loại trừ, không candidate nào được sinh ra nên
+        /// removeCandidatesConflictingWithMaintenance() early-return trước khi gọi repo này -
+        /// hợp lệ với test loại trừ room, không phải stub thừa.
+        org.mockito.Mockito.lenient().when(maintenanceRepository.findBlockingMaintenanceInRange(any(), any(), any()))
                 .thenReturn(List.of());
     }
 
@@ -151,7 +154,36 @@ class AutoShowtimeCandidateFactoryTest {
                 .map(ShowtimeCandidate::getStartTime).toList());
     }
 
+    @Test
+    void buildRawCandidatesProducesNoCandidatesForAnExcludedRoom() {
+        cluster.setOperatingHours(List.of(operatingHour(LocalTime.of(8, 0), LocalTime.of(10, 0))));
+
+        /// Room duy nhất của cluster này bị loại trừ nên candidates rỗng ngay từ vòng lặp room -
+        /// removeCandidatesConflictingWith*() sẽ early-return, không gọi showTimeRepository.
+        List<ShowtimeCandidate> candidates = factory.buildRawCandidates(run(15, Set.of(room)));
+
+        /// Room bị loại trừ duy nhất của cluster này - không candidate nào được sinh ra,
+        /// không phải "sinh ra rồi bị lọc bỏ" ở bước selector/scoring.
+        assertEquals(0, candidates.size());
+    }
+
+    @Test
+    void buildRawCandidatesIgnoresExclusionSetWhenEmpty() {
+        /// Regression: một run không loại trừ room nào (Set.of() mặc định từ @Builder.Default)
+        /// phải sinh candidate y hệt như trước khi có tính năng exclusion.
+        cluster.setOperatingHours(List.of(operatingHour(LocalTime.of(8, 0), LocalTime.of(10, 0))));
+        when(showTimeRepository.findActiveByRoomsAndTemporalRange(any(), any(), any())).thenReturn(List.of());
+
+        List<ShowtimeCandidate> candidates = factory.buildRawCandidates(run(15, Set.of()));
+
+        assertEquals(4, candidates.size());
+    }
+
     private ShowtimeGenerationRun run(int timeSlotIntervalMinutes) {
+        return run(timeSlotIntervalMinutes, Set.of());
+    }
+
+    private ShowtimeGenerationRun run(int timeSlotIntervalMinutes, Set<CinemaRoom> excludedRooms) {
         return ShowtimeGenerationRun.builder()
                 .generationRunId(1L)
                 .policy(ShowtimeAllocationPolicy.builder()
@@ -163,6 +195,7 @@ class AutoShowtimeCandidateFactoryTest {
                 .endDate(SHOW_DATE)
                 .movies(Set.of(movie))
                 .clusters(Set.of(cluster))
+                .excludedRooms(excludedRooms)
                 .build();
     }
 

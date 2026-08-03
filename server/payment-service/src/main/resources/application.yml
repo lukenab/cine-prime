@@ -1,19 +1,73 @@
 server:
   port: 8083
+  forward-headers-strategy: framework
 
 spring:
   application:
     name: payment-service
-
+  config:
+    # Local IDE/Maven runs do not load the repository .env automatically.
+    # These optional imports support the common working directories while
+    # real environment variables still take precedence in Docker/production.
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:../.env[.properties]
+      - optional:file:../../.env[.properties]
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/payment_db}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:123456}
+    driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true    
+      ddl-auto: validate
+    open-in-view: false
+    show-sql: false
     properties:
       hibernate:
-        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
 
 eureka:
+  instance:
+    prefer-ip-address: true
   client:
     service-url:
-      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/http://localhost:8761/eureka/}
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
+
+jwt:
+  signerKey: ${JWT_SIGNER_KEY}
+
+booking-service:
+  url: ${BOOKING_SERVICE_URL:http://localhost:8082}
+  payment-webhook-secret: ${BOOKING_PAYMENT_WEBHOOK_SECRET:local-demo-payment-secret}
+
+payment:
+  session-ttl-minutes: ${PAYMENT_SESSION_TTL_MINUTES:15}
+  frontend-checkout-url: ${PAYMENT_FRONTEND_CHECKOUT_URL:http://localhost:3000/checkout}
+  internal-service-key: ${INTERNAL_SERVICE_KEY}
+  delivery:
+    fixed-delay-ms: ${PAYMENT_DELIVERY_FIXED_DELAY_MS:5000}
+    max-attempts: ${PAYMENT_DELIVERY_MAX_ATTEMPTS:12}
+  rate-guard:
+    max-sessions-per-minute: ${PAYMENT_MAX_SESSIONS_PER_MINUTE:10}
+  refund:
+    sandbox-auto-approve: ${PAYMENT_REFUND_SANDBOX_AUTO_APPROVE:true}
+  vnpay:
+    payment-url: ${VNPAY_PAYMENT_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+    return-url: ${VNPAY_RETURN_URL:http://localhost:8080/api/payments/vnpay/return}
+    tmn-code: ${VNPAY_TMN_CODE:}
+    hash-secret: ${VNPAY_HASH_SECRET:}
+    version: 2.1.0
+    locale: vn
+    timezone: Asia/Ho_Chi_Minh
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

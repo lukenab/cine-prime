@@ -6,11 +6,12 @@ import movieservice.entity.*;
 import movieservice.exception.MovieErrorCode;
 import movieservice.repository.*;
 import movieservice.enums.GenerationPartitionStatus;
-import movieservice.service.ShowtimePriceResolver;
+import movieservice.service.PriceBookPricingService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,6 +24,7 @@ public class SchedulePlanDraftService {
     private final CinemaRoomRepository cinemaRoomRepository;
     private final MovieScreeningVersionRepository screeningVersionRepository;
     private final ShowtimeGenerationPartitionRepository partitionRepository;
+    private final PriceBookPricingService priceBookPricingService;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public SchedulePlan createDraftShell(Long generationRunId,
@@ -33,6 +35,8 @@ public class SchedulePlanDraftService {
             SchedulePlan plan = existing.get();
             plan.setBlockerCount(validation.blockers().size());
             plan.setValidationSummary(validation.summary());
+            plan.setValidatedAt(LocalDateTime.now());
+            plan.setValidatedBy("SYSTEM:GENERATOR");
             return plan;
         }
 
@@ -42,6 +46,8 @@ public class SchedulePlanDraftService {
                 .generationRun(run)
                 .blockerCount(validation.blockers().size())
                 .validationSummary(validation.summary())
+                .validatedAt(LocalDateTime.now())
+                .validatedBy("SYSTEM:GENERATOR")
                 .build();
 
         return schedulePlanRepository.save(plan);
@@ -76,7 +82,11 @@ public class SchedulePlanDraftService {
                     .startAt(candidate.temporalStartAt())
                     .endAt(candidate.temporalEndAt())
                     .businessDate(candidate.getShowDate())
-                    .basePrice(ShowtimePriceResolver.resolveRoomStandardBasePrice(room))
+                    .basePrice(priceBookPricingService.resolveForSlot(
+                            room,
+                            candidate.getShowDate(),
+                            candidate.getStartTime(),
+                            version.getFormat()).standardPrice())
                     .totalSeats(room.getTotalSeatCapacity())
                     .allocationScore(candidate.getScore())
                     .daypartCode(breakdown == null ? null : breakdown.daypart())

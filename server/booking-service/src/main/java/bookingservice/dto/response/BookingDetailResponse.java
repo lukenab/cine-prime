@@ -1,36 +1,43 @@
 package bookingservice.dto.response;
 
+import lombok.Builder;
+import lombok.Value;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.experimental.FieldDefaults;
-
-
-@Data
+@Value
 @Builder
-@NoArgsConstructor
-@AllArgsConstructor
-@FieldDefaults(level = AccessLevel.PRIVATE)
 public class BookingDetailResponse {
     String bookingId;
-    String accountId;
-    String memberId;
+    String bookingCode;
+    String status;
+    String paymentStatus;
+    String inventoryStatus;
+    Long showtimeId;
+    Long movieId;
     String movieName;
-    LocalDate showDate;       
-    LocalTime startTime;      
+    Long cinemaClusterId;
+    String cinemaClusterName;
+    Long cinemaRoomId;
     String cinemaRoomName;
-    Integer totalSeats;
-    BigDecimal finalAmount;   
-    String bookingType;       
-    String status;            
-    LocalDateTime createdAt;
-    List<BookingItemResponse> items;
+    LocalDate showDate;
+    LocalTime startTime;
+    List<BookingItemResponse> seats;
+    List<ConcessionLineResponse> concessions;
+    BigDecimal ticketSubtotal;
+    BigDecimal concessionSubtotal;
+    BigDecimal subtotal;
+    BigDecimal serviceFee;
+    BigDecimal discount;
+    BigDecimal total;
+    String currency;
+    OffsetDateTime expiresAt;
+    OffsetDateTime paidAt;
+    OffsetDateTime createdAt;
+    String concessionOrderId;
+    String concessionPickupCode;
 }

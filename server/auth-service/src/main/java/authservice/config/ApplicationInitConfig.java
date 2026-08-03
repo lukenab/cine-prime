@@ -37,6 +37,10 @@ public class ApplicationInitConfig {
     @NonFinal @Value("${app.admin.username}") String adminUsername;
     @NonFinal @Value("${app.admin.password}") String adminPassword;
     @NonFinal @Value("${app.admin.email}")    String adminEmail;
+    @NonFinal @Value("${app.branch-manager.username}") String branchManagerUsername;
+    @NonFinal @Value("${app.branch-manager.password}") String branchManagerPassword;
+    @NonFinal @Value("${app.branch-manager.email}")    String branchManagerEmail;
+    @NonFinal @Value("${app.seed.sync-account-passwords:false}") boolean syncAccountPasswords;
 
     // ── Permission definitions ────────────────────────────────────────────────
     // Format: { name, description }
@@ -90,7 +94,12 @@ public class ApplicationInitConfig {
             new String[]{"PROMOTION_DELETE", "Delete promotion"},
 
             // Report
-            new String[]{"REPORT_READ", "View revenue and statistics reports"}
+            new String[]{"REPORT_READ", "View revenue and statistics reports"},
+
+            // Concession catalog workflow
+            new String[]{"CONCESSION_CATALOG_DRAFT", "Create and edit concession product drafts"},
+            new String[]{"CONCESSION_CATALOG_SUBMIT", "Submit concession products for approval"},
+            new String[]{"CONCESSION_CATALOG_APPROVE", "Approve or reject concession products"}
     );
 
     // ── Role → Permission mapping ─────────────────────────────────────────────
@@ -108,6 +117,10 @@ public class ApplicationInitConfig {
                     "TICKET_SELL",
                     "USER_READ"
             ),
+            "BRANCH_MANAGER", Set.of(
+                    "CONCESSION_CATALOG_DRAFT",
+                    "CONCESSION_CATALOG_SUBMIT"
+            ),
             "ADMIN", Set.of(
                     "MOVIE_READ", "MOVIE_CREATE", "MOVIE_UPDATE", "MOVIE_DELETE",
                     "SHOWTIME_READ", "SHOWTIME_CREATE", "SHOWTIME_UPDATE", "SHOWTIME_DELETE",
@@ -118,7 +131,9 @@ public class ApplicationInitConfig {
                     "ROOM_READ", "ROOM_UPDATE",
                     "GENRE_READ", "GENRE_CREATE", "GENRE_UPDATE", "GENRE_DELETE",
                     "PROMOTION_READ", "PROMOTION_CREATE", "PROMOTION_UPDATE", "PROMOTION_DELETE",
-                    "REPORT_READ"
+                    "REPORT_READ",
+                    "CONCESSION_CATALOG_DRAFT", "CONCESSION_CATALOG_SUBMIT",
+                    "CONCESSION_CATALOG_APPROVE"
             )
     );
 
@@ -128,6 +143,7 @@ public class ApplicationInitConfig {
             seedPermissions();
             seedRoles();
             seedAdminAccount();
+            seedBranchManagerAccount();
         };
     }
 
@@ -152,6 +168,7 @@ public class ApplicationInitConfig {
         Map<String, String> roleDescriptions = Map.of(
                 "MEMBER",   "Registered member — can book tickets and manage account",
                 "EMPLOYEE", "Cinema staff — ticket sales and booking management",
+                "BRANCH_MANAGER", "Cinema branch manager — can prepare concession product proposals",
                 "ADMIN",    "System administrator — full access to all modules"
         );
 
@@ -185,13 +202,20 @@ public class ApplicationInitConfig {
 
     // ── Step 3: Seed admin account ────────────────────────────────────────────
     private void seedAdminAccount() {
-        if (accountRepository.findByUsername(adminUsername).isPresent()) {
-            log.debug("[Seed] Admin account already exists, skipping.");
-            return;
-        }
-
         Role adminRole = roleRepository.findById("ADMIN")
                 .orElseThrow(() -> new RuntimeException("[Seed] ADMIN role not found — ensure seedRoles() ran first"));
+        var existing = accountRepository.findByUsername(adminUsername);
+        if (existing.isPresent()) {
+            Account admin = existing.get();
+            admin.setRoles(Set.of(adminRole));
+            admin.setStatus(AccountStatus.ACTIVE);
+            if (syncAccountPasswords) {
+                admin.setPasswordHash(passwordEncoder.encode(adminPassword));
+            }
+            accountRepository.save(admin);
+            log.debug("[Seed] Admin account role synchronized.");
+            return;
+        }
 
         Account admin = Account.builder()
                 .username(adminUsername)
@@ -203,5 +227,34 @@ public class ApplicationInitConfig {
 
         accountRepository.save(admin);
         log.warn("[Seed] Admin account created — username: '{}'. Change the default password before going to production!", adminUsername);
+    }
+
+    private void seedBranchManagerAccount() {
+        Role managerRole = roleRepository.findById("BRANCH_MANAGER")
+                .orElseThrow(() -> new RuntimeException(
+                        "[Seed] BRANCH_MANAGER role not found — ensure seedRoles() ran first"));
+        var existing = accountRepository.findByUsername(branchManagerUsername);
+        if (existing.isPresent()) {
+            Account branchManager = existing.get();
+            branchManager.setRoles(Set.of(managerRole));
+            branchManager.setStatus(AccountStatus.ACTIVE);
+            if (syncAccountPasswords) {
+                branchManager.setPasswordHash(passwordEncoder.encode(branchManagerPassword));
+            }
+            accountRepository.save(branchManager);
+            log.debug("[Seed] Branch Manager account role synchronized.");
+            return;
+        }
+
+        Account branchManager = Account.builder()
+                .username(branchManagerUsername)
+                .email(branchManagerEmail)
+                .passwordHash(passwordEncoder.encode(branchManagerPassword))
+                .roles(Set.of(managerRole))
+                .status(AccountStatus.ACTIVE)
+                .build();
+
+        accountRepository.save(branchManager);
+        log.warn("[Seed] Branch Manager account created — username: '{}'. Change the default password before going to production!", branchManagerUsername);
     }
 }

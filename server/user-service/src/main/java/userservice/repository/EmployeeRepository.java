@@ -1,6 +1,8 @@
 package userservice.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 import userservice.entity.Employee;
 
@@ -14,4 +16,6 @@ public interface EmployeeRepository extends JpaRepository<Employee, String> {
     boolean existsByEmployeeCode(String employeeCode);
 
     Optional<Employee> findByUser_AccountId(String accountId);
+
+    Page<Employee> findAllByCinemaId(String cinemaId, Pageable pageable);
 }

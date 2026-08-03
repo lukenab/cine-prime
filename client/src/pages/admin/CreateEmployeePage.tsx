@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { ArrowLeft, Save, User, Camera, AlertCircle, X, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, AlertCircle, X, CheckCircle2, ShieldCheck, UserRoundPlus } from "lucide-react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { authApi } from "../../api/authApi";
 import { employeeApi, type EmployeeDepartment, type EmployeePosition, type EmploymentType } from "../../api/employeeApi";
+import { userApi } from "../../api/userApi";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface EmployeeFormData {
@@ -10,13 +11,7 @@ export interface EmployeeFormData {
   // The backend auto-generates the username and emails an activation link instead
   // of an admin-set "temporary password".
   email: string;
-  // Profile fields (for user-service via Kafka)
-  // NOTE: these are collected in the UI but NOT currently sent anywhere — the
-  // account-creation event (UserRegisteredEvent) only ever carries accountId +
-  // email (see auth-service AccountService), so user-service creates a "bare"
-  // profile and these fields are discarded client-side. This predates #161/#162.
-  // TODO: wire these up to a profile-completion call (e.g. PUT /api/users/{id})
-  // once the team decides on that flow — tracked separately, not in scope here.
+  // Profile fields (persisted after the verified employee record is provisioned).
   fullName: string;
   phoneNumber: string;
   gender: string;
@@ -97,7 +92,7 @@ export default function CreateEmployeePage() {
     email:          "",
     fullName:       "",
     phoneNumber:    "",
-    gender:         "MALE",
+    gender:         "Male",
     dateOfBirth:    "",
     identityCard:   "",
     address:        "",
@@ -114,6 +109,7 @@ export default function CreateEmployeePage() {
   const [errorStep, setErrorStep] = useState<"account" | "employee" | null>(null);
   const [step, setStep]           = useState<"idle" | "account" | "employee">("idle");
   const [toast, setToast]         = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [provisionedAccountId, setProvisionedAccountId] = useState<string | null>(null);
 
   const accentColor = isDarkMode ? "#3b82f6" : "#2563eb";
 
@@ -152,22 +148,34 @@ export default function CreateEmployeePage() {
     setApiError(null);
     setErrorStep(null);
 
+    let currentStep: "account" | "employee" = provisionedAccountId ? "employee" : "account";
+
     try {
       // Step 1 — Create account (auth-service → Kafka → user-service creates User profile).
       // Issue #161/#162: only fullName/email/role are sent now — no username/password.
       // The account is created PENDING and an activation-link email is sent to the
       // employee so they can set their own password (see /activate-account).
-      setStep("account");
-      const accountRes: any = await authApi.createAccount({
-        fullName: formData.fullName,
-        email:    formData.email,
-        role:     "EMPLOYEE",
-      });
+      let accountId = provisionedAccountId;
+      if (!accountId) {
+        setStep("account");
+        const accountRes: any = await authApi.createAccount({
+          fullName: formData.fullName,
+          email:    formData.email,
+          role:     "EMPLOYEE",
+          phoneNumber: formData.phoneNumber,
+          dateOfBirth: formData.dateOfBirth,
+          gender: formData.gender,
+          identityCard: formData.identityCard,
+          address: formData.address,
+        });
 
-      const accountId: string = accountRes?.data?.result?.accountId ?? accountRes?.result?.accountId;
-      if (!accountId) throw new Error("Account created but accountId not returned.");
+        accountId = accountRes?.data?.result?.accountId ?? accountRes?.result?.accountId;
+        if (!accountId) throw new Error("Account created but accountId not returned.");
+        setProvisionedAccountId(accountId);
+      }
 
       // Step 2 — Create employee record (user profile exists via Kafka by now)
+      currentStep = "employee";
       setStep("employee");
       await employeeApi.create({
         accountId,
@@ -178,6 +186,16 @@ export default function CreateEmployeePage() {
         hireDate:       formData.hireDate,
       });
 
+      await userApi.updateUser(accountId, {
+        fullName: formData.fullName,
+        phoneNumber: formData.phoneNumber,
+        gender: formData.gender,
+        dateOfBirth: formData.dateOfBirth,
+        identityCard: formData.identityCard,
+        address: formData.address,
+      });
+      setProvisionedAccountId(null);
+
       setToast({
         type: "success",
         message: `Employee account created. Activation email sent to ${formData.email}.`,
@@ -186,7 +204,7 @@ export default function CreateEmployeePage() {
       setTimeout(() => navigate("/admin/employees"), 1800);
     } catch (err: any) {
       setApiError(err.response?.data?.message || err.message || "An unexpected error occurred.");
-      setErrorStep(step === "idle" ? null : step as "account" | "employee");
+      setErrorStep(currentStep);
     } finally {
       setLoading(false);
       setStep("idle");
@@ -225,25 +243,21 @@ export default function CreateEmployeePage() {
       <form onSubmit={handleSubmit} noValidate>
         {/* ── Section 1: Account Info ──────────────────────────────────────── */}
         <div className="p-6 rounded-2xl border mb-5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-          <h2 className="text-sm font-bold mb-5 pb-3 border-b" style={{ color: "var(--text-main)", borderColor: "var(--border-color)" }}>
-            Account Information
-          </h2>
-
-          {/* Avatar placeholder */}
-          <div className="mb-6">
-            <div className="relative w-20 h-20 rounded-full bg-slate-500 flex items-center justify-center shadow-inner">
-              <User size={36} color="#cbd5e1" className="mt-1" />
-              <button
-                type="button"
-                className="absolute bottom-0 right-0 w-7 h-7 rounded-full flex items-center justify-center border-2 hover:opacity-90 transition-all"
-                style={{ background: accentColor, borderColor: "var(--bg-card)" }}
-              >
-                <Camera size={12} color="white" />
-              </button>
+          <div className="flex items-start gap-4 mb-5 pb-4 border-b" style={{ borderColor: "var(--border-color)" }}>
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: `${accentColor}18`, color: accentColor }}>
+              <UserRoundPlus size={21} />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold" style={{ color: "var(--text-main)" }}>Account Information</h2>
+              <p className="text-xs mt-1" style={{ color: "var(--text-sub)" }}>
+                Create the employee identity before assigning their workplace.
+              </p>
             </div>
           </div>
 
-          <div className="mb-5 p-3.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-sm" style={{ color: "var(--text-sub)" }}>
+          <div className="mb-5 flex items-start gap-3 p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-sm" style={{ color: "var(--text-sub)" }}>
+            <ShieldCheck size={18} className="mt-0.5 shrink-0 text-blue-500" />
             No password needed here — an activation email will be sent to the employee so
             they can set their own password. Username is generated automatically.
           </div>
@@ -303,9 +317,9 @@ export default function CreateEmployeePage() {
             <FormField label="Gender" required>
               <select name="gender" value={formData.gender} onChange={handleChange}
                 className={inputCls} style={{ ...inputStyle, background: "var(--bg-card)" }}>
-                <option value="MALE"   style={{ background: "var(--bg-card)" }}>Male</option>
-                <option value="FEMALE" style={{ background: "var(--bg-card)" }}>Female</option>
-                <option value="OTHER"  style={{ background: "var(--bg-card)" }}>Other</option>
+                <option value="Male"   style={{ background: "var(--bg-card)" }}>Male</option>
+                <option value="Female" style={{ background: "var(--bg-card)" }}>Female</option>
+                <option value="Other"  style={{ background: "var(--bg-card)" }}>Other</option>
               </select>
             </FormField>
 

@@ -1,7 +1,7 @@
 package bookingservice.dto.response;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 import lombok.Data;
@@ -16,6 +16,6 @@ public class MovieSeatHoldResponse {
     private List<Long> seatIds;
     private List<HeldShowtimeSeatResponse> seats;
     private BigDecimal totalPrice;
-    private LocalDateTime expiresAt;
+    private OffsetDateTime expiresAt;
     private boolean replayed;
 }

@@ -1,6 +1,6 @@
 // File: src/components/UserForm.tsx (Hoặc đường dẫn tương ứng của cậu)
 import { useState, useEffect } from "react";
-import { Camera, User, Save } from "lucide-react";
+import { ShieldCheck, UserPlus } from "lucide-react";
 
 export interface UserFormData {
   role: string;
@@ -61,31 +61,26 @@ export function UserForm({
         borderColor: "var(--border-color)",
       }}
     >
-      <h2 className="text-base font-bold mb-5 transition-colors" style={{ color: "var(--text-main)" }}>
-        Customer Information
-      </h2>
-
-      {/* Avatar Placeholder */}
-      <div className="mb-6">
-        <div className="relative w-20 h-20 rounded-full bg-slate-500 flex items-center justify-center shadow-inner">
-          <User size={36} color="#cbd5e1" className="mt-1" />
-          <button
-            type="button"
-            className="absolute bottom-0 right-0 w-7 h-7 rounded-full flex items-center justify-center border-2 transition-colors hover:opacity-90"
-            style={{
-              background: isDarkMode ? "#3b82f6" : "#2563eb",
-              borderColor: "var(--bg-card)",
-            }}
-          >
-            <Camera size={12} color="white" />
-          </button>
+      <div className="flex items-start gap-4 mb-6 pb-5 border-b" style={{ borderColor: "var(--border-color)" }}>
+        <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: isDarkMode ? "rgba(59,130,246,.14)" : "rgba(37,99,235,.1)", color: isDarkMode ? "#60a5fa" : "#2563eb" }}>
+          <UserPlus size={21} />
+        </div>
+        <div>
+          <h2 className="text-base font-bold transition-colors" style={{ color: "var(--text-main)" }}>
+            Customer account
+          </h2>
+          <p className="text-sm mt-1" style={{ color: "var(--text-sub)" }}>
+            Create a member profile and send a secure activation invitation.
+          </p>
         </div>
       </div>
 
       {error && <div className="mb-5 p-3.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm font-medium">{error}</div>}
 
       {!isEditMode && (
-        <div className="mb-5 p-3.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-sm" style={{ color: "var(--text-sub)" }}>
+        <div className="mb-5 flex items-start gap-3 p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-sm" style={{ color: "var(--text-sub)" }}>
+          <ShieldCheck size={18} className="mt-0.5 shrink-0 text-blue-500" />
           No password needed here — an activation email will be sent so the new user can set
           their own password.
         </div>
@@ -107,7 +102,6 @@ export function UserForm({
               style={{ background: "transparent", color: "var(--text-main)", borderColor: "var(--border-color)" }}
             >
               <option value="MEMBER" style={{ background: "var(--bg-card)" }}>Member</option>
-              <option value="ADMIN"  style={{ background: "var(--bg-card)" }}>Admin</option>
             </select>
           </div>
           <div className="flex flex-col gap-1.5">
@@ -164,27 +158,9 @@ export function UserForm({
           </div>
         </div>
 
-        {/* Row 3: Password (Edit only) & Phone */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {isEditMode && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[13px] font-semibold transition-colors" style={{ color: "var(--text-main)" }}>
-                Password
-              </label>
-              <input
-                type="password"
-                name="password"
-                minLength={6}
-                autoComplete="new-password"
-                placeholder="Leave blank to keep current password"
-                value={formData.password ?? ""}
-                onChange={handleChange}
-                className="px-3.5 py-2.5 text-sm rounded-xl border outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
-                style={{ background: "transparent", color: "var(--text-main)", borderColor: "var(--border-color)" }}
-              />
-            </div>
-          )}
-          <div className={`flex flex-col gap-1.5 ${isEditMode ? "" : "md:col-span-2"}`}>
+        {/* Row 3: Phone */}
+        <div className="grid grid-cols-1 gap-5">
+          <div className="flex flex-col gap-1.5">
             <label className="text-[13px] font-semibold transition-colors" style={{ color: "var(--text-main)" }}>
               Phone <span className="text-red-500">*</span>
             </label>
@@ -217,9 +193,9 @@ export function UserForm({
               className="px-3.5 py-2.5 text-sm rounded-xl border outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
               style={{ background: "transparent", color: "var(--text-main)", borderColor: "var(--border-color)" }}
             >
-              <option value="MALE" style={{ background: "var(--bg-card)" }}>Male</option>
-              <option value="FEMALE" style={{ background: "var(--bg-card)" }}>Female</option>
-              <option value="OTHER" style={{ background: "var(--bg-card)" }}>Other</option>
+              <option value="Male" style={{ background: "var(--bg-card)" }}>Male</option>
+              <option value="Female" style={{ background: "var(--bg-card)" }}>Female</option>
+              <option value="Other" style={{ background: "var(--bg-card)" }}>Other</option>
             </select>
           </div>
           <div className="flex flex-col gap-1.5">

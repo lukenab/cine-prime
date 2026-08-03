@@ -19,6 +19,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -41,7 +43,6 @@ class MovieServiceTest {
     @Mock MovieMapper movieMapper;
     @Mock GenreRepository genreRepository;
     @Mock AgeRatingRepository ageRatingRepository;
-    @Mock ScreeningFormatRepository screeningFormatRepository;
     @Mock ProductionCompanyRepository productionCompanyRepository;
     @Mock PersonRepository personRepository;
     @Mock MovieCastRepository movieCastRepository;
@@ -63,7 +64,7 @@ class MovieServiceTest {
     void setUp() {
         movieService = new MovieService(
                 movieRepository, movieMapper, genreRepository, ageRatingRepository,
-                screeningFormatRepository, productionCompanyRepository, personRepository,
+                productionCompanyRepository, personRepository,
                 movieCastRepository, movieTranslationRepository, cinemaRoomService,
                 showTimeService, auditLogService, imageStorageService, movieReadinessValidator,
                 movieAvailabilityRepository, movieStatusHistoryRepository,
@@ -79,18 +80,44 @@ class MovieServiceTest {
         lenient().when(movieMapper.toMovieResponse(any())).thenReturn(null);
     }
 
+    // -- Issue #149: paged keyword search ------------------------------------
+
+    @Test
+    void keywordSearchTrimsQueryAndKeepsExistingFiltersAndPagination() {
+        LocalDate releaseDate = LocalDate.of(2026, 7, 9);
+        when(movieRepository.findWithFilters(
+                MovieStatus.APPROVED, 7L, releaseDate, "%avenger%", PageRequest.of(1, 25)))
+                .thenReturn(Page.empty());
+
+        movieService.findPageWithFilters(
+                1, 25, "  Avenger  ", MovieStatus.APPROVED, 7L, releaseDate);
+
+        verify(movieRepository).findWithFilters(
+                MovieStatus.APPROVED, 7L, releaseDate, "%avenger%", PageRequest.of(1, 25));
+    }
+
+    @Test
+    void blankKeywordDisablesKeywordFilter() {
+        when(movieRepository.findWithFilters(null, null, null, null, PageRequest.of(0, 10)))
+                .thenReturn(Page.empty());
+
+        movieService.findPageWithFilters(0, 10, "   ", null, null, null);
+
+        verify(movieRepository).findWithFilters(null, null, null, null, PageRequest.of(0, 10));
+    }
+
     // ── Null / missing collections: khong duoc dong toi repository nao ──────
 
     @Test
     void nullCollectionsAndNullFkDoNotTouchAnyRelationshipRepository() {
         UpdateMovieRequest request = UpdateMovieRequest.builder()
                 .originalTitle("Only scalar changed")
-                .build(); // ageRatingId, companyIds, genreIds, formatIds, translations, cast: null
+                .build(); // ageRatingId, companyIds, genreIds, translations, cast: null
 
         movieService.updateMovie(1L, request);
 
         verifyNoInteractions(ageRatingRepository, productionCompanyRepository,
-                genreRepository, screeningFormatRepository,
+                genreRepository,
                 movieCastRepository, movieTranslationRepository, personRepository);
     }
 
@@ -210,6 +237,26 @@ class MovieServiceTest {
         var response = movieService.getPublicMovieDetail(2L, null);
 
         assertEquals(2L, response.getMovieId());
+        assertEquals("COMING_SOON", response.getDisplayStatus(),
+                "OPEN availability alone must not claim that tickets are on sale");
+    }
+
+    @Test
+    void publicDetailIsNowShowingOnlyWhenAnOpenAvailabilityHasAFutureOnSaleShowtime() {
+        Movie approved = Movie.builder()
+                .movieId(7L)
+                .originalTitle("Actually On Sale")
+                .status(MovieStatus.APPROVED)
+                .build();
+        when(movieRepository.findById(7L)).thenReturn(java.util.Optional.of(approved));
+        when(movieAvailabilityRepository.findByMovie_MovieId(7L))
+                .thenReturn(List.of(availabilityFor(approved, AvailabilityStatus.OPEN, null)));
+        when(showTimeService.findNextSaleableShowTime(any(), any(), any(), any()))
+                .thenReturn(java.util.Optional.of(ShowTime.builder().showTimeId(70L).build()));
+
+        var response = movieService.getPublicMovieDetail(7L, null);
+
+        assertEquals("NOW_SHOWING", response.getDisplayStatus());
     }
 
     @Test

@@ -19,8 +19,13 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username: ${MAIL_USERNAME:cineprime.theater.contact@gmail.com}
-    password: ${MAIL_PASSWORD:yczsrtyvtveosbvi}
+    # No real credential default here on purpose - the previous hardcoded Gmail
+    # app password was committed to the repo and is the prime suspect for why
+    # OTP/activation emails silently stopped sending (Gmail auto-revokes leaked
+    # app passwords). Set MAIL_USERNAME/MAIL_PASSWORD in .env (see .env.example)
+    # with a freshly generated Gmail App Password. See Issue #268.
+    username: ${MAIL_USERNAME:CHANGE_ME_SET_IN_ENV}
+    password: ${MAIL_PASSWORD:CHANGE_ME_SET_IN_ENV}
     properties:
       mail:
         smtp:
@@ -37,7 +42,7 @@ spring:
       auto-offset-reset: earliest
       properties:
         "[spring.json.trusted.packages]": "notificationservice.event"
-        "[spring.json.type.mapping]": "otpRequested:notificationservice.event.OtpRequestedEvent,accountActivation:notificationservice.event.AccountActivationRequestedEvent"
+        "[spring.json.type.mapping]": "otpRequested:notificationservice.event.OtpRequestedEvent,accountActivation:notificationservice.event.AccountActivationRequestedEvent,passwordResetRequested:notificationservice.event.PasswordResetRequestedEvent"
 
 eureka:
   client:

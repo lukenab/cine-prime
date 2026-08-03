@@ -8,6 +8,8 @@ import LoginPage from "../pages/auth/LoginPage";
 import RegisterPage from "../pages/auth/RegisterPage";
 import CompleteProfilePage from "../pages/auth/CompleteProfilePage";
 import ActivateAccountPage from "../pages/auth/ActivateAccountPage";
+import ForgotPasswordPage from "../pages/auth/ForgotPasswordPage";
+import ResetPasswordPage from "../pages/auth/ResetPasswordPage";
 
 import HomePage from "../pages/customer/HomePage";
 import MoviesPage from "../pages/customer/MoviesPage";
@@ -18,6 +20,9 @@ import OffersPage from "../pages/customer/OffersPage";
 import ShowtimePage from "../pages/customer/ShowtimePage";
 import SeatBookingPage from "../pages/customer/SeatBookingPage";
 import ProfilePage from "../pages/customer/ProfilePage";
+import BookingCheckoutPage from "../pages/customer/BookingCheckoutPage";
+import MyBookingsPage from "../pages/customer/MyBookingsPage";
+import ConcessionSelectionPage from "../pages/customer/ConcessionSelectionPage";
 
 import AdminDashboard from "../pages/admin/AdminDashboardPage";
 import ManageUserPage from "../pages/admin/ManageUserPage";
@@ -46,6 +51,7 @@ import ManagePersonsPage from "../pages/admin/ManagePersonsPage";
 import ManageAgeRatingsPage from "../pages/admin/ManageAgeRatingsPage";
 import ManageFormatsPage from "../pages/admin/ManageFormatsPage";
 import ManageScreeningVersionsPage from "../pages/admin/ManageScreeningVersionsPage";
+import ManagePriceBooksPage from "../pages/admin/ManagePriceBooksPage";
 import ManageCompaniesPage from "../pages/admin/ManageCompaniesPage";
 import ManagePromotionPage from "../pages/admin/ManagePromotionPage";
 import CreatePromotionPage from "../pages/admin/CreatePromotionPage";
@@ -54,6 +60,8 @@ import PromotionDetailPage from "../pages/admin/PromotionDetailPage";
 import ReportPage from "../pages/admin/ReportPage";
 import SettingsPage from "../pages/admin/SettingsPage";
 import TicketSalePage from "../pages/admin/TicketSalePage";
+import ConcessionFulfillmentPage from "../pages/admin/ConcessionFulfillmentPage";
+import ConcessionCatalogPage from "../pages/admin/ConcessionCatalogPage";
 
 import RootRedirect from "./RootRedirect";
 import ProtectedRoute from "./ProtectedRoute";
@@ -73,6 +81,11 @@ export default function AppRoutes() {
         <Route path="/showtime/:movieId" element={<ShowtimePage />} />
         <Route path="/booking/:showtimeId" element={<SeatBookingPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route element={<ProtectedRoute allowedRoles={["ROLE_MEMBER"]} />}>
+          <Route path="/checkout/:bookingId" element={<BookingCheckoutPage />} />
+          <Route path="/checkout/:bookingId/concessions" element={<ConcessionSelectionPage />} />
+          <Route path="/my-bookings" element={<MyBookingsPage />} />
+        </Route>
       </Route>
 
       {/* Auth pages */}
@@ -80,17 +93,23 @@ export default function AppRoutes() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/activate-account" element={<ActivateAccountPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
       </Route>
 
       {/* Profile setup — standalone page, no layout wrapper */}
-      <Route path="/profile-setup" element={<CompleteProfilePage />} />
+      <Route element={<ProtectedRoute
+        allowedRoles={["ROLE_MEMBER", "ROLE_EMPLOYEE", "ROLE_BRANCH_MANAGER"]}
+        allowIncompleteProfile
+      />}>
+        <Route path="/profile-setup" element={<CompleteProfilePage />} />
+      </Route>
 
       {/* Admin + Employee */}
-      <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_EMPLOYEE"]} />}>
+      <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_BRANCH_MANAGER", "ROLE_EMPLOYEE"]} />}>
         <Route path="/admin" element={<AdminLayout />}>
+          <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_EMPLOYEE"]} />}>
           <Route index element={<AdminDashboard />} />
-
-          {/* ADMIN + EMPLOYEE */}
           <Route path="movies" element={<ManageMoviePage />}>
             <Route path="new" element={<MovieCreationStartPage />} />
           </Route>
@@ -107,9 +126,16 @@ export default function AppRoutes() {
           <Route path="showtimes" element={<ManageShowtimePage />} />
           <Route path="bookings"  element={<ManageBookingPage />} />
           <Route path="sell"      element={<TicketSalePage />} />
+          <Route path="concessions/fulfillment" element={<ConcessionFulfillmentPage />} />
+          </Route>
+
+          <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_BRANCH_MANAGER"]} />}>
+            <Route path="concessions/catalog" element={<ConcessionCatalogPage />} />
+          </Route>
 
           <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN"]} />}>
             <Route path="showtimes/auto"     element={<AutoScheduleWorkspacePage />} />
+            <Route path="price-books"        element={<ManagePriceBooksPage />} />
             <Route path="employees"          element={<ManageEmployeePage />} />
             <Route path="employees/create"   element={<CreateEmployeePage />} />
             <Route path="employees/:id"      element={<EmployeeDetailPage />} />

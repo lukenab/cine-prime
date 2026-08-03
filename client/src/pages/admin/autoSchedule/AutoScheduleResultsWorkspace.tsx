@@ -5,9 +5,12 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CircleAlert,
   Film,
   Filter,
+  MoreHorizontal,
   RefreshCw,
   Send,
   ShieldCheck,
@@ -22,7 +25,7 @@ import type {
   ShadowComparisonResult,
   SolverDiagnostics,
 } from "../../../api/showtimeApi";
-import { OPTIMIZER_META, SCENARIO_META, SOLVER_STATUS_META } from "./optimizerMeta";
+import { OPTIMIZER_META, SOLVER_STATUS_META } from "./optimizerMeta";
 
 function parseJson<T>(raw: string | undefined): T | null {
   if (!raw) return null;
@@ -43,6 +46,7 @@ type Props = {
   busy: boolean;
   error: string | null;
   onNewRun: () => void;
+  onRevalidate: () => Promise<void>;
   onTransition: (action: PlanAction, note?: string) => Promise<void>;
 };
 
@@ -85,11 +89,26 @@ function formatDate(date: string) {
     : value.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
 }
 
-function formatCompactDate(date: string) {
-  const value = new Date(`${date}T00:00:00`);
-  return Number.isNaN(value.getTime())
-    ? date
-    : value.toLocaleDateString([], { weekday: "short", day: "numeric" });
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function addDaysISO(value: string, delta: number) {
+  const date = new Date(`${value}T00:00:00`);
+  date.setDate(date.getDate() + delta);
+  return date.toISOString().slice(0, 10);
+}
+
+function formatWeekday(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("en-US", { weekday: "short" });
+}
+
+function formatMonthDay(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function formatTime(value: string) {
@@ -141,6 +160,16 @@ function countLabel(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
+function formatMoney(value?: number) {
+  return value == null
+    ? "Not configured"
+    : new Intl.NumberFormat("vi-VN", {
+      style: "currency",
+      currency: "VND",
+      maximumFractionDigits: 0,
+    }).format(value);
+}
+
 function slotExplanation(slot: SchedulePlanSlot) {
   const score = slot.scoreBreakdown;
   const lines = [
@@ -184,7 +213,7 @@ function MoviePoster({ src, title, color, background }: { src?: string; title: s
 
   return (
     <span
-      className="flex h-24 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border shadow-sm"
+      className="flex h-[72px] w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border shadow-sm"
       style={{ borderColor: "var(--border-color)", color, background }}
     >
       {src && !imageFailed ? (
@@ -247,6 +276,89 @@ function buildValidationIssues(summary: string | undefined, slots: SchedulePlanS
     .map((item) => item.trim())
     .filter(Boolean)
     .map((raw) => {
+      const minimumCoverage = raw.match(
+        /^MINIMUM_COVERAGE:\s*movie=(\d+)\s+cluster=(\d+)\s+date=(\d{4}-\d{2}-\d{2})\s+required=(\d+)\s+actual=(\d+)$/i,
+      );
+      if (minimumCoverage) {
+        const [, movieId, clusterId, date, required, actual] = minimumCoverage;
+        const matchingSlot = slots.find((slot) => slot.movieId === Number(movieId) && slot.clusterId === Number(clusterId));
+        const movieName = matchingSlot?.movieTitle ?? `Movie #${movieId}`;
+        const cinemaName = matchingSlot?.clusterName ?? `Cinema #${clusterId}`;
+        const missing = Math.max(1, Number(required) - Number(actual));
+        return {
+          code: "MINIMUM_COVERAGE",
+          title: `Not enough sessions for ${movieName}`,
+          description: `${movieName} has ${actual} of ${required} required sessions at ${cinemaName} on ${formatDate(date)}.`,
+          recommendation: `Add at least ${missing} eligible session${missing === 1 ? "" : "s"}, or revise the movie and cinema demand policy before submitting this plan.`,
+          raw,
+        };
+      }
+
+      const staleSlot = raw.match(
+        /^SLOT_NO_LONGER_ELIGIBLE:\s*movie=(\d+)\s+cluster=(\d+)\s+room=(\d+)\s+version=(\d+)\s+start=(.+)$/i,
+      );
+      if (staleSlot) {
+        const [, movieId, clusterId, roomId, , startAt] = staleSlot;
+        const matchingSlot = slots.find(
+          (slot) =>
+            slot.movieId === Number(movieId) &&
+            slot.clusterId === Number(clusterId) &&
+            slot.cinemaRoomId === Number(roomId),
+        );
+        const movieName = matchingSlot?.movieTitle ?? `Movie #${movieId}`;
+        const roomName = matchingSlot?.cinemaRoomName ?? `Room #${roomId}`;
+        const cinemaName = matchingSlot?.clusterName ?? `Cinema #${clusterId}`;
+        const parsedStart = new Date(startAt);
+        const readableStart = Number.isNaN(parsedStart.getTime())
+          ? startAt
+          : parsedStart.toLocaleString();
+        return {
+          code: "SLOT_NO_LONGER_ELIGIBLE",
+          title: `${movieName} is no longer eligible in ${roomName}`,
+          description: `The generated session at ${cinemaName} (${readableStart}) no longer matches the current room, screening version, operating hours, maintenance or existing-showtime constraints.`,
+          recommendation: "Correct the affected operational data or create a replacement plan, then revalidate before submitting.",
+          raw,
+        };
+      }
+
+      const roomOverlap = raw.match(
+        /^ROOM_OVERLAP:\s*room=(\d+)\s+date=(\d{4}-\d{2}-\d{2})$/i,
+      );
+      if (roomOverlap) {
+        const [, roomId, date] = roomOverlap;
+        const matchingSlot = slots.find((slot) => slot.cinemaRoomId === Number(roomId) && slot.businessDate === date);
+        const roomName = matchingSlot?.cinemaRoomName ?? `Room #${roomId}`;
+        const cinemaName = matchingSlot?.clusterName;
+        return {
+          code: "ROOM_OVERLAP",
+          title: `Overlapping sessions in ${roomName}`,
+          description: `${roomName}${cinemaName ? ` at ${cinemaName}` : ""} contains sessions that overlap on ${formatDate(date)}, including the configured cleanup buffer.`,
+          recommendation: "Move or remove one of the affected sessions, then generate a new plan before submitting it for review.",
+          raw,
+        };
+      }
+
+      const operationalEligibility = raw.match(
+        /^OPERATIONAL_ELIGIBILITY:\s*room=(\d+)\s+date=(\d{4}-\d{2}-\d{2})\s+reasons=(.+)$/i,
+      );
+      if (operationalEligibility) {
+        const [, roomId, date, reasons] = operationalEligibility;
+        const matchingSlot = slots.find((slot) => slot.cinemaRoomId === Number(roomId) && slot.businessDate === date);
+        const roomName = matchingSlot?.cinemaRoomName ?? `Room #${roomId}`;
+        const readableReasons = reasons
+          .split(",")
+          .map((reason) => reason.trim().replaceAll("_", " ").toLowerCase())
+          .filter(Boolean)
+          .join(", ");
+        return {
+          code: "OPERATIONAL_ELIGIBILITY",
+          title: `${roomName} is not operationally eligible`,
+          description: `${roomName} cannot run one or more generated sessions on ${formatDate(date)}${readableReasons ? `: ${readableReasons}` : "."}`,
+          recommendation: "Check cinema operating hours, room status, active layout and screening-version compatibility, then generate a replacement plan.",
+          raw,
+        };
+      }
+
       const concurrentRoomShare = raw.match(
         /^MAXIMUM_CONCURRENT_ROOM_SHARE:\s*movie=(\d+)\s+cluster=(\d+)\s+date=(\d{4}-\d{2}-\d{2})\s+max=(\d+)\s+actual=(\d+)$/i,
       );
@@ -265,26 +377,42 @@ function buildValidationIssues(summary: string | undefined, slots: SchedulePlanS
         };
       }
 
+      const sameMovieStagger = raw.match(
+        /^SAME_MOVIE_START_STAGGER:\s*movie=(\d+)\s+cluster=(\d+)\s+date=(\d{4}-\d{2}-\d{2})\s+required=(\d+)$/i,
+      );
+      if (sameMovieStagger) {
+        const [, movieId, clusterId, date, required] = sameMovieStagger;
+        const matchingSlot = slots.find((slot) => slot.movieId === Number(movieId) && slot.clusterId === Number(clusterId));
+        const movieName = matchingSlot?.movieTitle ?? `Movie #${movieId}`;
+        const cinemaName = matchingSlot?.clusterName ?? `Cinema #${clusterId}`;
+        return {
+          code: "SAME_MOVIE_START_STAGGER",
+          title: `${movieName} starts too close together`,
+          description: `Two or more ${movieName} sessions at ${cinemaName} on ${formatDate(date)} start less than ${required} minutes apart.`,
+          recommendation: `Stagger the affected start times by at least ${required} minutes, then generate a new plan.`,
+          raw,
+        };
+      }
+
       const codeMatch = raw.match(/^([A-Z][A-Z0-9_]+):/);
+      const readableCode = (codeMatch?.[1] ?? "SCHEDULE_VALIDATION")
+        .replaceAll("_", " ")
+        .toLowerCase()
+        .replace(/^\w/, (character) => character.toUpperCase());
       return {
         code: codeMatch?.[1] ?? "SCHEDULE_VALIDATION",
-        title: "The generated schedule requires review",
-        description: "A backend scheduling rule was not satisfied. Review the affected scope before publishing this plan.",
-        recommendation: "Open the technical details and adjust the affected sessions, then validate the plan again.",
+        title: readableCode,
+        description: "This generated schedule does not satisfy a backend scheduling rule and cannot be submitted for approval.",
+        recommendation: "Open the technical details, correct the affected scheduling scope and generate a replacement plan.",
         raw,
       };
     });
 }
 
-export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, onNewRun, onTransition }: Props) {
+export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, onNewRun, onRevalidate, onTransition }: Props) {
   const slots = plan?.slots ?? [];
   const scopeDates = useMemo(() => enumerateDates(run.startDate, run.endDate), [run.endDate, run.startDate]);
   const availableDates = useMemo(() => Array.from(new Set([...scopeDates, ...slots.map((slot) => slot.businessDate)])).sort(), [scopeDates, slots]);
-  const sessionCountByDate = useMemo(() => {
-    const counts = new Map<string, number>();
-    slots.forEach((slot) => counts.set(slot.businessDate, (counts.get(slot.businessDate) ?? 0) + 1));
-    return counts;
-  }, [slots]);
   const clusterOptions = useMemo(() => Array.from(new Map(slots.map((slot) => [slot.clusterId, slot.clusterName])).entries()).sort((a, b) => a[1].localeCompare(b[1])), [slots]);
   const movieOptions = useMemo(() => Array.from(new Map(slots.map((slot) => [slot.movieId, slot.movieTitle])).entries()).sort((a, b) => a[1].localeCompare(b[1])), [slots]);
   const formatOptions = useMemo(() => Array.from(new Set(slots.map((slot) => slot.formatCode))).sort(), [slots]);
@@ -297,6 +425,7 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
   const usedOptimizer = run.optimizerMode ?? "LEGACY";
 
   const [selectedDate, setSelectedDate] = useState(availableDates[0] ?? run.startDate);
+  const [weekStart, setWeekStart] = useState(availableDates[0] ?? run.startDate);
   const [clusterId, setClusterId] = useState("all");
   const [movieId, setMovieId] = useState("all");
   const [format, setFormat] = useState("all");
@@ -304,6 +433,7 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
   const [scheduleView, setScheduleView] = useState<ScheduleView>("board");
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [contextDrawer, setContextDrawer] = useState<ContextDrawer | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<SchedulePlanSlot | null>(null);
   const [expandedClusterIds, setExpandedClusterIds] = useState<Set<number>>(new Set());
   const [action, setAction] = useState<PlanAction | null>(null);
   const [note, setNote] = useState("");
@@ -311,6 +441,30 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
   useEffect(() => {
     if (!availableDates.includes(selectedDate)) setSelectedDate(availableDates[0] ?? run.startDate);
   }, [availableDates, run.startDate, selectedDate]);
+
+  const minDate = availableDates[0] ?? run.startDate;
+  const maxDate = availableDates[availableDates.length - 1] ?? run.endDate;
+  const weekDates = useMemo(
+    () => Array.from({ length: 7 }, (_, index) => addDaysISO(weekStart, index))
+      .filter((date) => date >= minDate && date <= maxDate),
+    [maxDate, minDate, weekStart],
+  );
+  const canGoPrevWeek = weekStart > minDate;
+  const canGoNextWeek = weekDates.length > 0 && weekDates[weekDates.length - 1] < maxDate;
+  const dateCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    slots.forEach((slot) => counts.set(slot.businessDate, (counts.get(slot.businessDate) ?? 0) + 1));
+    return counts;
+  }, [slots]);
+  const goToAdjacentWeek = (direction: -1 | 1) => {
+    const next = addDaysISO(weekStart, direction * 7);
+    setWeekStart(next < minDate ? minDate : next > maxDate ? maxDate : next);
+  };
+  const jumpToDate = (value: string) => {
+    if (!value || value < minDate || value > maxDate) return;
+    setSelectedDate(value);
+    setWeekStart(value);
+  };
 
   useEffect(() => {
     if (clusterId !== "all" && !clusterOptions.some(([id]) => id === Number(clusterId))) setClusterId("all");
@@ -320,11 +474,14 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
   }, [clusterId, clusterOptions, conflicts.length, format, formatOptions, movieId, movieOptions, onlyIssues]);
 
   useEffect(() => {
-    if (!contextDrawer) return;
+    if (!contextDrawer && !selectedSlot) return;
 
     const previousOverflow = document.body.style.overflow;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setContextDrawer(null);
+      if (event.key === "Escape") {
+        setContextDrawer(null);
+        setSelectedSlot(null);
+      }
     };
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", closeOnEscape);
@@ -332,7 +489,7 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [contextDrawer]);
+  }, [contextDrawer, selectedSlot]);
 
   const filteredDaySlots = useMemo(() => slots.filter((slot) =>
     slot.businessDate === selectedDate
@@ -407,23 +564,17 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
   const backendBlockers = plan?.blockerCount ?? 0;
   const warningCount = (run.status === "PARTIALLY_COMPLETED" ? 1 : 0) + (run.summary.failedPartitionCount > 0 ? 1 : 0);
   const issueCount = backendBlockers + conflicts.length + warningCount;
-  const planHealth = issueCount > 0
-    ? {
-        label: `${issueCount} ${issueCount === 1 ? "issue requires" : "issues require"} review`,
-        color: "#dc2626",
-        background: "rgba(220,38,38,.09)",
-        border: "rgba(220,38,38,.25)",
-      }
-    : {
-        label: "No scheduling conflicts",
-        color: "#059669",
-        background: "rgba(5,150,105,.09)",
-        border: "rgba(5,150,105,.22)",
-      };
   const status = run.status === "FAILED" && !plan
     ? { label: "Failed", color: "#dc2626", background: "rgba(220,38,38,.12)" }
     : planStatusMeta(plan?.status);
   const isPublished = plan?.status === "PUBLISHED";
+  const operationalStatus = issueCount > 0
+    ? { label: "Needs attention", color: "#dc2626", background: "rgba(220,38,38,.12)" }
+    : plan?.status === "PUBLISHED"
+      ? { label: "Published", color: "#059669", background: "rgba(5,150,105,.12)" }
+      : plan?.status === "IN_REVIEW"
+        ? { label: "In review", color: "#2563eb", background: "rgba(37,99,235,.12)" }
+        : { label: "Ready for review", color: "#059669", background: "rgba(5,150,105,.12)" };
 
   const movieRows = useMemo(() => run.movieResults.map((result) => {
     const movieSlots = slots.filter((slot) => slot.movieId === result.movieId);
@@ -478,40 +629,13 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="truncate" style={{ color: "var(--text-main)", fontSize: "18px", fontWeight: 760 }}>Plan #{plan?.schedulePlanId ?? run.generationRunId}</h2>
-              <span className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide" style={{ color: status.color, background: status.background }}>{status.label}</span>
-              {usedOptimizer !== "LEGACY" && (
-                <span className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide" style={{ color: "#7c3aed", background: "rgba(124,58,237,.12)" }} title={OPTIMIZER_META[usedOptimizer].description}>
-                  {OPTIMIZER_META[usedOptimizer].label}
-                </span>
-              )}
-              {run.solverStatus && (
-                <span className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide" style={{ color: SOLVER_STATUS_META[run.solverStatus].color, background: SOLVER_STATUS_META[run.solverStatus].background }}>
-                  {SOLVER_STATUS_META[run.solverStatus].label}
-                </span>
-              )}
+              <span className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide" style={{ color: operationalStatus.color, background: operationalStatus.background }}>{operationalStatus.label}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--text-sub)" }}>Workflow: {status.label}</span>
             </div>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: "var(--text-sub)" }}>
               <span>{formatDate(run.startDate)} – {formatDate(run.endDate)}</span>
               <span aria-hidden="true">·</span>
               <span>{countLabel(slots.length, "session")}</span>
-              {run.scenario && usedOptimizer !== "LEGACY" && (
-                <>
-                  <span aria-hidden="true">·</span>
-                  <span title={SCENARIO_META[run.scenario].description}>{SCENARIO_META[run.scenario].label} scenario</span>
-                </>
-              )}
-              {typeof run.objectiveScore === "number" && (
-                <>
-                  <span aria-hidden="true">·</span>
-                  <span>Objective {run.objectiveScore.toFixed(2)}</span>
-                </>
-              )}
-              {typeof run.solveDurationMillis === "number" && (
-                <>
-                  <span aria-hidden="true">·</span>
-                  <span>Solved in {(run.solveDurationMillis / 1000).toFixed(2)}s</span>
-                </>
-              )}
               <span aria-hidden="true">·</span>
               <span>{countLabel(clusterOptions.length, "cinema")}</span>
               <span aria-hidden="true">·</span>
@@ -522,24 +646,32 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
                   <span>Published by {plan.publishedBy}</span>
                 </>
               )}
+              {!isPublished && plan?.validatedAt && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span className="inline-flex items-center gap-1" title={`${new Date(plan.validatedAt).toLocaleString()}${plan.validatedBy ? ` · ${plan.validatedBy}` : ""}`}>
+                    <CheckCircle2 size={12} className="text-emerald-600" />
+                    Validated {new Date(plan.validatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                </>
+              )}
+              {!isPublished && plan && !plan.validatedAt && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span>Validation pending</span>
+                </>
+              )}
             </div>
-            <button
-              type="button"
-              onClick={() => issueCount > 0 && setContextDrawer("issues")}
-              disabled={issueCount === 0}
-              className="mt-2 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold disabled:cursor-default"
-              style={{ color: planHealth.color, background: planHealth.background, borderColor: planHealth.border }}
-            >
-              {issueCount > 0 ? <CircleAlert size={12} /> : <ShieldCheck size={12} />}
-              {planHealth.label}
-            </button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={onNewRun} className="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-main)", background: "var(--bg-main)" }}>
-              <RefreshCw size={13} /> New run
-            </button>
             {plan && (plan.status === "DRAFT_GENERATED" || plan.status === "CHANGES_REQUESTED") && (
-              <button type="button" disabled={busy} onClick={() => setAction("submit")} className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-50">
+              <button
+                type="button"
+                disabled={busy || backendBlockers > 0 || conflicts.length > 0}
+                onClick={() => setAction("submit")}
+                title={backendBlockers > 0 || conflicts.length > 0 ? `Resolve ${backendBlockers + conflicts.length} publishing blocker${backendBlockers + conflicts.length === 1 ? "" : "s"} before submitting for review.` : undefined}
+                className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
                 <Send size={13} /> Submit for review
               </button>
             )}
@@ -556,6 +688,72 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
                 <CalendarDays size={13} /> View live schedule
               </a>
             )}
+            <details className="group relative">
+              <summary
+                className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-xl border transition-colors hover:bg-blue-500/[0.06] [&::-webkit-details-marker]:hidden"
+                style={{ borderColor: "var(--border-color)", color: "var(--text-sub)", background: "var(--bg-main)" }}
+                aria-label="Advanced plan actions"
+                title="Advanced actions"
+              >
+                <MoreHorizontal size={16} />
+              </summary>
+              <div
+                className="absolute right-0 top-11 z-50 w-52 overflow-hidden rounded-xl border p-1.5 shadow-2xl"
+                style={{ borderColor: "var(--border-color)", color: "var(--text-main)", background: "var(--bg-card)" }}
+              >
+                {plan && !isPublished && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={(event) => {
+                      event.currentTarget.closest("details")?.removeAttribute("open");
+                      void onRevalidate();
+                    }}
+                    className="flex w-full items-start gap-2 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-blue-500/[0.07] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <RefreshCw size={14} className={`mt-0.5 flex-shrink-0 ${busy ? "animate-spin" : ""}`} />
+                    <span>
+                      <strong className="block">Revalidate plan</strong>
+                      <span className="mt-0.5 block text-[10px]" style={{ color: "var(--text-sub)" }}>Check current operational constraints</span>
+                    </span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.currentTarget.closest("details")?.removeAttribute("open");
+                    onNewRun();
+                  }}
+                  className="flex w-full items-start gap-2 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-blue-500/[0.07]"
+                >
+                  <RefreshCw size={14} className="mt-0.5 flex-shrink-0" />
+                  <span>
+                    <strong className="block">Start new run</strong>
+                    <span className="mt-0.5 block text-[10px]" style={{ color: "var(--text-sub)" }}>Create a new scheduling plan</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.currentTarget.closest("details")?.removeAttribute("open");
+                    setDiagnosticsOpen(true);
+                    window.requestAnimationFrame(() => {
+                      document.getElementById("generation-diagnostics")?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      });
+                    });
+                  }}
+                  className="flex w-full items-start gap-2 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-blue-500/[0.07]"
+                >
+                  <CircleAlert size={14} className="mt-0.5 flex-shrink-0" />
+                  <span>
+                    <strong className="block">Generation diagnostics</strong>
+                    <span className="mt-0.5 block text-[10px]" style={{ color: "var(--text-sub)" }}>Inspect solver and partition metrics</span>
+                  </span>
+                </button>
+              </div>
+            </details>
           </div>
         </div>
       </section>
@@ -574,6 +772,34 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
               <div className="flex rounded-lg border p-0.5" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
                 <button type="button" aria-pressed={scheduleView === "board"} onClick={() => setScheduleView("board")} className="rounded-md px-2.5 py-1.5 text-xs font-semibold" style={{ color: scheduleView === "board" ? "#2563eb" : "var(--text-sub)", background: scheduleView === "board" ? "rgba(37,99,235,.12)" : "transparent" }}>Schedule board</button>
                 <button type="button" aria-pressed={scheduleView === "timeline"} onClick={() => setScheduleView("timeline")} className="rounded-md px-2.5 py-1.5 text-xs font-semibold" style={{ color: scheduleView === "timeline" ? "#2563eb" : "var(--text-sub)", background: scheduleView === "timeline" ? "rgba(37,99,235,.12)" : "transparent" }}>Room utilization</button>
+                <button
+                  type="button"
+                  onClick={() => setContextDrawer("allocation")}
+                  className="rounded-md px-2.5 py-1.5 text-xs font-semibold"
+                  style={{ color: "var(--text-sub)", background: "transparent" }}
+                >
+                  Allocation
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setContextDrawer("issues")}
+                  className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold"
+                  style={{
+                    color: issueCount > 0 ? "#dc2626" : "var(--text-sub)",
+                    background: issueCount > 0 ? "rgba(220,38,38,.08)" : "transparent",
+                  }}
+                >
+                  Issues
+                  <span
+                    className="inline-flex min-w-4 items-center justify-center rounded-full px-1 text-[9px] leading-4"
+                    style={{
+                      color: issueCount > 0 ? "#fff" : "var(--text-sub)",
+                      background: issueCount > 0 ? "#dc2626" : "var(--border-color)",
+                    }}
+                  >
+                    {issueCount}
+                  </span>
+                </button>
               </div>
 
               <span className="mx-1 hidden h-6 w-px sm:block" style={{ background: "var(--border-color)" }} />
@@ -630,29 +856,82 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
                 </button>
               )}
             </div>
+            <div className="flex items-center gap-2 border-t px-2 py-2" style={{ borderColor: "var(--border-color)" }}>
+              <button
+                type="button"
+                onClick={() => goToAdjacentWeek(-1)}
+                disabled={!canGoPrevWeek}
+                aria-label="Previous week"
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border disabled:cursor-not-allowed disabled:opacity-35"
+                style={{ borderColor: "var(--border-color)", color: "var(--text-main)", background: "var(--bg-main)" }}
+              >
+                <ChevronLeft size={16} />
+              </button>
 
-            <div className="flex items-center gap-2 border-t px-3 py-2" style={{ borderColor: "var(--border-color)" }}>
-              <CalendarDays size={14} className="flex-shrink-0" style={{ color: "var(--text-sub)" }} />
-              <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto">
-                {availableDates.map((date) => {
-                  const sessionCount = sessionCountByDate.get(date) ?? 0;
+              <div
+                className="grid min-w-0 flex-1 gap-2"
+                style={{ gridTemplateColumns: `repeat(${Math.max(weekDates.length, 1)}, minmax(0, 1fr))` }}
+              >
+                {weekDates.map((date) => {
+                  const isToday = date === todayISO();
+                  const isSelected = selectedDate === date;
                   return (
-                    <button key={date} type="button" onClick={() => setSelectedDate(date)} className="flex min-w-[76px] flex-shrink-0 flex-col items-start rounded-lg border px-2.5 py-1.5 text-left transition-colors" style={{ borderColor: selectedDate === date ? "#2563eb" : "transparent", background: selectedDate === date ? "rgba(37,99,235,.12)" : "var(--bg-main)", color: selectedDate === date ? "#2563eb" : "var(--text-sub)" }}>
-                      <span className="text-xs font-bold">{formatCompactDate(date)}</span>
-                      <span className="mt-0.5 text-[9px] font-semibold opacity-75">{countLabel(sessionCount, "session")}</span>
+                    <button
+                      key={date}
+                      type="button"
+                      data-selected={isSelected}
+                      onClick={() => setSelectedDate(date)}
+                      className="min-w-0 rounded-lg border px-2 py-2 text-center transition-colors"
+                      style={{
+                        borderColor: isSelected ? "#2563eb" : "var(--border-color)",
+                        color: isSelected ? "#2563eb" : "var(--text-main)",
+                        background: isSelected ? "rgba(37,99,235,.12)" : "var(--bg-main)",
+                      }}
+                    >
+                      <span className="block text-[10px] font-bold uppercase" style={{ color: isSelected ? "#2563eb" : "var(--text-sub)" }}>
+                        {isToday ? "Today" : formatWeekday(date)}
+                      </span>
+                      <span className="mt-0.5 block text-xs font-bold" style={{ color: isSelected ? "#2563eb" : "var(--text-main)" }}>
+                        {formatMonthDay(date)}
+                      </span>
+                      <span className="mt-0.5 block text-[9px] font-medium" style={{ color: isSelected ? "#2563eb" : "var(--text-sub)" }}>
+                        {dateCounts.get(date) ?? 0} sessions
+                      </span>
                     </button>
                   );
                 })}
               </div>
+
+              <button
+                type="button"
+                onClick={() => goToAdjacentWeek(1)}
+                disabled={!canGoNextWeek}
+                aria-label="Next week"
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border disabled:cursor-not-allowed disabled:opacity-35"
+                style={{ borderColor: "var(--border-color)", color: "var(--text-main)", background: "var(--bg-main)" }}
+              >
+                <ChevronRight size={16} />
+              </button>
+
+              <input
+                type="date"
+                value={selectedDate}
+                min={minDate}
+                max={maxDate}
+                onChange={(event) => jumpToDate(event.target.value)}
+                aria-label="Jump to schedule date"
+                className="h-9 flex-shrink-0 rounded-lg border px-2 text-xs outline-none"
+                style={{ background: "var(--bg-main)", borderColor: "var(--border-color)", color: "var(--text-main)", colorScheme: "var(--color-scheme)" as string }}
+              />
             </div>
           </section>
 
           <section className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
             <header className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3" style={{ borderColor: "var(--border-color)" }}>
               <div>
-                <h3 className="text-base font-bold" style={{ color: "var(--text-main)" }}>{scheduleView === "board" ? "Cinema schedule" : "Room utilization"}</h3>
+                <h3 className="text-base font-bold" style={{ color: "var(--text-main)" }}>{scheduleView === "board" ? "Schedule preview" : "Room utilization"}</h3>
                 <p className="mt-1 text-xs" style={{ color: "var(--text-sub)" }}>
-                  {countLabel(boardClusters.length, "cinema")} · {countLabel(roomGroups.length, "room")} · {countLabel(filteredDaySlots.length, "session")}
+                  {formatDate(selectedDate)} · {countLabel(filteredDaySlots.length, "session")}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -661,14 +940,6 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
                     {allClustersExpanded ? "Collapse all" : "Expand all"}
                   </button>
                 )}
-                <button aria-label={`Review ${issueCount}`} type="button" onClick={() => setContextDrawer("issues")} className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold" style={{ borderColor: issueCount ? "rgba(220,38,38,.35)" : "var(--border-color)", color: issueCount ? "#dc2626" : "#059669", background: issueCount ? "rgba(220,38,38,.07)" : "rgba(5,150,105,.07)" }}>
-                  {issueCount ? <CircleAlert size={14} /> : <ShieldCheck size={14} />} Review
-                  <span className="rounded-full px-1.5 py-0.5 text-[10px]" style={{ background: "var(--bg-card)" }}>{issueCount}</span>
-                </button>
-                <button aria-label={`Allocation ${movieRows.length}`} type="button" onClick={() => setContextDrawer("allocation")} className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-main)", background: "var(--bg-main)" }}>
-                  <Film size={14} /> Allocation
-                  <span className="rounded-full px-1.5 py-0.5 text-[10px]" style={{ color: "var(--text-sub)", background: "var(--bg-card)" }}>{movieRows.length}</span>
-                </button>
               </div>
             </header>
 
@@ -701,15 +972,14 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
                           </div>
                         </div>
                         <span className="flex items-center gap-2">
-                          <span
-                            className="rounded-full px-2.5 py-1 text-[10px] font-bold"
-                            style={{
-                              color: clusterConflicts ? "#dc2626" : "#059669",
-                              background: clusterConflicts ? "rgba(220,38,38,.10)" : "rgba(5,150,105,.10)",
-                            }}
-                          >
-                            {clusterConflicts ? countLabel(clusterConflicts, "conflict") : "No conflicts"}
-                          </span>
+                          {clusterConflicts > 0 && (
+                            <span
+                              className="rounded-full px-2.5 py-1 text-[10px] font-bold"
+                              style={{ color: "#dc2626", background: "rgba(220,38,38,.10)" }}
+                            >
+                              {countLabel(clusterConflicts, "conflict")}
+                            </span>
+                          )}
                           <ChevronDown
                             size={16}
                             className={`transition-transform ${expanded ? "rotate-180" : ""}`}
@@ -723,7 +993,7 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
                         {cluster.rooms.map((room) => (
                           <article key={room.key} className="overflow-hidden rounded-xl border" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
                             <header className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3" style={{ borderColor: "var(--border-color)" }}>
-                              <div><h5 className="text-sm font-bold" style={{ color: "var(--text-main)" }}>{room.roomName}</h5><p className="mt-0.5 text-[11px]" style={{ color: "var(--text-sub)" }}>{room.slots.length} scheduled sessions</p></div>
+                              <h5 className="text-sm font-bold" style={{ color: "var(--text-main)" }}>{room.roomName}</h5>
                               <p className="text-xs font-semibold tabular-nums" style={{ color: "var(--text-sub)" }}>{formatTime(room.slots[0].startAt)}{" \u2013 "}{formatTime(room.slots[room.slots.length - 1].endAt)}</p>
                             </header>
 
@@ -734,23 +1004,23 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
                                 const gap = next ? gapMinutes(slot, next) : null;
                                 const conflict = conflictSlotIds.has(slot.schedulePlanSlotId);
                                 const palette = movieColor(slot.movieId);
-                                const attendance = slot.scoreBreakdown?.expectedAttendance;
-                                const capacity = slot.scoreBreakdown?.roomCapacity ?? slot.totalSeats;
                                 return (
                                   <div key={slot.schedulePlanSlotId} className="flex items-stretch gap-2">
-                                    <article
-                                      className="flex w-[340px] flex-col overflow-hidden rounded-xl border shadow-sm"
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedSlot(slot)}
+                                      className="flex w-[268px] flex-col overflow-hidden rounded-xl border text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                                       style={{
                                         borderColor: conflict ? "rgba(220,38,38,.6)" : palette.border,
                                         background: "var(--bg-card)",
                                       }}
                                     >
-                                      <header className="flex items-start justify-between gap-3 px-4 py-3" style={{ background: conflict ? "rgba(220,38,38,.10)" : palette.fill }}>
+                                      <header className="flex w-full items-start justify-between gap-3 px-3 py-2.5" style={{ background: conflict ? "rgba(220,38,38,.10)" : palette.fill }}>
                                         <div>
-                                          <p className="text-base font-extrabold tabular-nums" style={{ color: conflict ? "#dc2626" : "var(--text-main)" }}>
+                                          <p className="text-sm font-extrabold tabular-nums" style={{ color: conflict ? "#dc2626" : "var(--text-main)" }}>
                                             {formatTime(slot.startAt)}{" \u2013 "}{formatTime(slot.endAt)}
                                           </p>
-                                          <p className="mt-0.5 text-[11px] font-medium" style={{ color: "var(--text-sub)" }}>{durationMinutes(slot)} minutes</p>
+                                          <p className="mt-0.5 text-[10px] font-medium" style={{ color: "var(--text-sub)" }}>{durationMinutes(slot)} min</p>
                                         </div>
                                         {conflict ? (
                                           <span className="rounded-full bg-rose-500/15 px-2 py-1 text-[9px] font-bold uppercase text-rose-500">Conflict</span>
@@ -759,7 +1029,7 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
                                         )}
                                       </header>
 
-                                      <div className="flex flex-1 gap-3.5 px-4 py-4">
+                                      <div className="flex w-full flex-1 gap-3 px-3 py-3">
                                         <MoviePoster
                                           src={slot.moviePosterUrl}
                                           title={slot.movieTitle}
@@ -767,8 +1037,7 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
                                           background={palette.fill}
                                         />
                                         <div className="flex min-w-0 flex-1 flex-col">
-                                          <p className="text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: "var(--text-sub)" }}>Movie</p>
-                                          <h6 className="mt-1 line-clamp-3 text-sm font-bold leading-5" style={{ color: "var(--text-main)" }}>{slot.movieTitle}</h6>
+                                          <h6 className="line-clamp-2 text-sm font-bold leading-5" style={{ color: "var(--text-main)" }}>{slot.movieTitle}</h6>
                                           <div className="mt-auto flex flex-wrap gap-1.5 pt-2 text-[10px]" style={{ color: "var(--text-sub)" }}>
                                             {conflict && <span className="rounded-md border px-2 py-1" style={{ borderColor: "var(--border-color)" }}>{slot.formatCode}</span>}
                                             <span className="rounded-md border px-2 py-1" style={{ borderColor: "var(--border-color)" }}>Audio {slot.audioLanguageCode?.toUpperCase() || "\u2014"}</span>
@@ -776,22 +1045,13 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
                                           </div>
                                         </div>
                                       </div>
-
-                                      <footer className="border-t px-4 py-3" style={{ borderColor: "var(--border-color)" }}>
-                                        <details>
-                                          <summary className="flex cursor-pointer list-none items-end justify-between gap-3">
-                                            <span>
-                                              <span className="block text-[9px] font-semibold uppercase tracking-wide" style={{ color: "var(--text-sub)" }}>Forecast occupancy</span>
-                                              <span className="mt-0.5 block text-sm font-bold" style={{ color: "var(--text-main)" }}>{attendance != null && capacity ? `${attendance}/${capacity} seats` : "Not available"}</span>
-                                            </span>
-                                            <span className="text-[11px] font-semibold text-blue-600">Slot details</span>
-                                          </summary>
-                                          <p className="mt-3 whitespace-pre-line rounded-lg border p-2.5 text-left text-[11px] leading-5" style={{ borderColor: "var(--border-color)", color: "var(--text-sub)", background: "var(--bg-main)" }}>{slotExplanation(slot)}</p>
-                                        </details>
-                                      </footer>
-                                    </article>
+                                      <span className="flex w-full items-center justify-between border-t px-3 py-2 text-[10px] font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}>
+                                        Session details
+                                        <ChevronRight size={13} />
+                                      </span>
+                                    </button>
                                     {next && gap != null && (
-                                      <div className="flex w-20 flex-shrink-0 flex-col items-center justify-center gap-2 text-center">
+                                      <div className="flex w-14 flex-shrink-0 flex-col items-center justify-center gap-2 text-center">
                                         <span className="h-px w-full" style={{ background: gap < 0 ? "#dc2626" : "var(--border-color)" }} />
                                         <span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ color: gap < 0 ? "#dc2626" : "var(--text-sub)", background: gap < 0 ? "rgba(220,38,38,.10)" : "var(--bg-main)" }}>
                                           {gap < 0 ? `${Math.abs(gap)}m overlap` : `${gap}m gap`}
@@ -834,9 +1094,9 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
                         const palette = movieColor(slot.movieId);
                         const conflict = conflictSlotIds.has(slot.schedulePlanSlotId);
                         return (
-                          <div key={slot.schedulePlanSlotId} title={slotExplanation(slot)} className="absolute top-1 h-12 overflow-hidden rounded-lg border px-2 py-1 shadow-sm" style={{ left: `${left}%`, width: `${Math.max(width, 3.2)}%`, minWidth: 58, color: conflict ? "#dc2626" : palette.text, borderColor: conflict ? "#dc2626" : palette.border, background: conflict ? "rgba(220,38,38,.13)" : palette.fill }}>
+                          <button type="button" key={slot.schedulePlanSlotId} onClick={() => setSelectedSlot(slot)} title="Open session details" className="absolute top-1 h-12 overflow-hidden rounded-lg border px-2 py-1 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40" style={{ left: `${left}%`, width: `${Math.max(width, 3.2)}%`, minWidth: 58, color: conflict ? "#dc2626" : palette.text, borderColor: conflict ? "#dc2626" : palette.border, background: conflict ? "rgba(220,38,38,.13)" : palette.fill }}>
                             <p className="truncate text-[10px] font-extrabold">{formatTime(slot.startAt)} · {slot.formatCode}</p><p className="truncate text-[9px] font-semibold" style={{ color: "var(--text-main)" }}>{slot.movieTitle}</p>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
@@ -901,15 +1161,23 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
                     <div className="flex items-start gap-3">
                       {issueCount ? <CircleAlert size={20} className="mt-0.5 flex-shrink-0 text-rose-500" /> : <CheckCircle2 size={20} className="mt-0.5 flex-shrink-0 text-emerald-600" />}
                       <div>
-                        <p className="text-sm font-bold">{issueCount ? "Review required before publishing" : "Plan is ready to publish"}</p>
-                        <p className="mt-1 text-xs leading-5" style={{ color: "var(--text-sub)" }}>{issueCount ? `${issueCount} item${issueCount === 1 ? "" : "s"} still require attention.` : "No blocker, warning or room overlap was detected."}</p>
+                        <p className="text-sm font-bold">
+                          {backendBlockers > 0 || conflicts.length > 0
+                            ? "Resolve blockers before submitting for review"
+                            : warningCount > 0
+                              ? "Review warnings before publishing"
+                              : "Plan is ready to publish"}
+                        </p>
+                        <p className="mt-1 text-xs leading-5" style={{ color: "var(--text-sub)" }}>
+                          {issueCount ? `${issueCount} item${issueCount === 1 ? "" : "s"} still require attention.` : "No blocker, warning or room overlap was detected."}
+                        </p>
                       </div>
                     </div>
                   </section>
 
                   <section className="grid overflow-hidden rounded-xl border sm:grid-cols-3" style={{ borderColor: "var(--border-color)" }}>
                     {[
-                      ["Backend blockers", backendBlockers, backendBlockers ? "#dc2626" : "#059669"],
+                      ["Publishing blockers", backendBlockers, backendBlockers ? "#dc2626" : "#059669"],
                       ["Room overlaps", conflicts.length, conflicts.length ? "#dc2626" : "#059669"],
                       ["Warnings", warningCount, warningCount ? "#d97706" : "#059669"],
                     ].map(([label, value, color]) => (
@@ -1022,7 +1290,118 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
         </div>
       )}
 
-      <details open={diagnosticsOpen} onToggle={(event) => setDiagnosticsOpen(event.currentTarget.open)} className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+      {selectedSlot && (
+        <div
+          className="fixed inset-0 z-[90] flex justify-end bg-slate-950/50 backdrop-blur-[2px]"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setSelectedSlot(null);
+          }}
+        >
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="session-details-title"
+            className="flex h-full w-full max-w-md flex-col border-l shadow-2xl"
+            style={{ borderColor: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-main)" }}
+          >
+            <header className="flex items-start justify-between gap-4 border-b px-5 py-4" style={{ borderColor: "var(--border-color)" }}>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-blue-600">Generated session</p>
+                <h2 id="session-details-title" className="mt-1 text-lg font-bold">Session details</h2>
+              </div>
+              <button type="button" onClick={() => setSelectedSlot(null)} className="rounded-lg border p-2" style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }} aria-label="Close session details">
+                <X size={16} />
+              </button>
+            </header>
+
+            <div className="flex-1 space-y-5 overflow-y-auto p-5">
+              <section className="flex gap-3">
+                <MoviePoster
+                  src={selectedSlot.moviePosterUrl}
+                  title={selectedSlot.movieTitle}
+                  color={movieColor(selectedSlot.movieId).text}
+                  background={movieColor(selectedSlot.movieId).fill}
+                />
+                <div className="min-w-0">
+                  <h3 className="line-clamp-2 text-base font-bold leading-6">{selectedSlot.movieTitle}</h3>
+                  <p className="mt-1 text-sm font-extrabold tabular-nums text-blue-600">
+                    {formatTime(selectedSlot.startAt)} – {formatTime(selectedSlot.endAt)}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <span className="rounded-md bg-blue-500/10 px-2 py-1 text-[10px] font-bold text-blue-600">{selectedSlot.formatCode}</span>
+                    <span className="rounded-md border px-2 py-1 text-[10px] font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}>{durationMinutes(selectedSlot)} min</span>
+                    {conflictSlotIds.has(selectedSlot.schedulePlanSlotId) && <span className="rounded-md bg-rose-500/10 px-2 py-1 text-[10px] font-bold text-rose-500">Conflict</span>}
+                  </div>
+                </div>
+              </section>
+
+              <section className="grid grid-cols-2 overflow-hidden rounded-xl border" style={{ borderColor: "var(--border-color)" }}>
+                {[
+                  ["Business date", formatDate(selectedSlot.businessDate)],
+                  ["Cinema", selectedSlot.clusterName],
+                  ["Screening room", selectedSlot.cinemaRoomName],
+                  ["Screening version", `#${selectedSlot.screeningVersionId}`],
+                  ["Audio", selectedSlot.audioLanguageCode?.toUpperCase() || "Not configured"],
+                  ["Subtitles", selectedSlot.subtitleLanguageCode?.toUpperCase() || "None"],
+                  ["Base price", formatMoney(selectedSlot.basePrice)],
+                  ["Capacity", selectedSlot.totalSeats != null ? `${selectedSlot.totalSeats} seats` : "Not available"],
+                ].map(([label, value], index) => (
+                  <div key={label} className={`min-w-0 p-3 ${index % 2 === 0 ? "border-r" : ""} ${index < 6 ? "border-b" : ""}`} style={{ borderColor: "var(--border-color)" }}>
+                    <span className="block text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--text-sub)" }}>{label}</span>
+                    <strong className="mt-1 block break-words text-xs leading-5">{value}</strong>
+                  </div>
+                ))}
+              </section>
+
+              <section className="rounded-xl border p-4" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
+                <div className="flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--text-sub)" }}>Forecast occupancy</p>
+                    <p className="mt-1 text-lg font-bold">
+                      {selectedSlot.scoreBreakdown?.expectedAttendance != null
+                        ? `${selectedSlot.scoreBreakdown.expectedAttendance}/${selectedSlot.scoreBreakdown.roomCapacity ?? selectedSlot.totalSeats ?? "—"} seats`
+                        : "Not available"}
+                    </p>
+                  </div>
+                  {selectedSlot.scoreBreakdown?.daypart && (
+                    <span className="rounded-full bg-blue-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-blue-600">
+                      {selectedSlot.scoreBreakdown.daypart}
+                    </span>
+                  )}
+                </div>
+              </section>
+
+              {selectedSlot.scoreBreakdown && (
+                <section>
+                  <h3 className="text-sm font-bold">Why this session was selected</h3>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {[
+                      ["Allocation", selectedSlot.scoreBreakdown.allocationScore],
+                      ["Movie demand", selectedSlot.scoreBreakdown.movieDemandScore],
+                      ["Time demand", selectedSlot.scoreBreakdown.timeDemandScore],
+                      ["Capacity fit", selectedSlot.scoreBreakdown.capacityFitScore],
+                    ].map(([label, value]) => (
+                      <div key={String(label)} className="rounded-lg border p-3" style={{ borderColor: "var(--border-color)" }}>
+                        <span className="block text-[10px] font-semibold" style={{ color: "var(--text-sub)" }}>{label}</span>
+                        <strong className="mt-1 block text-sm">{formatScore(value as number | undefined)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {selectedSlot.generationReason && (
+                <section className="rounded-xl border p-4" style={{ borderColor: "var(--border-color)" }}>
+                  <h3 className="text-xs font-bold">Generation note</h3>
+                  <p className="mt-2 whitespace-pre-line text-xs leading-5" style={{ color: "var(--text-sub)" }}>{selectedSlot.generationReason}</p>
+                </section>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
+
+      <details id="generation-diagnostics" open={diagnosticsOpen} onToggle={(event) => setDiagnosticsOpen(event.currentTarget.open)} className="scroll-mt-24 overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
         <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3"><div><p className="text-xs font-bold" style={{ color: "var(--text-main)" }}>Generation diagnostics</p><p className="mt-0.5 text-[10px]" style={{ color: "var(--text-sub)" }}>Technical search-space metrics for troubleshooting, not customer-facing showtimes.</p></div><ChevronDown size={15} className={`transition-transform ${diagnosticsOpen ? "rotate-180" : ""}`} style={{ color: "var(--text-sub)" }} /></summary>
         <div className="grid gap-3 border-t px-4 py-4 sm:grid-cols-4" style={{ borderColor: "var(--border-color)" }}>
           {[["Candidate slots evaluated", run.summary.candidateCount], ["Alternatives rejected", run.summary.skippedCount], ["Draft slots accepted", run.summary.createdCount], ["Partitions completed", `${run.summary.successfulPartitionCount}/${run.summary.successfulPartitionCount + run.summary.failedPartitionCount}`]].map(([label, value]) => <div key={String(label)}><p className="text-[9px] font-semibold uppercase" style={{ color: "var(--text-sub)" }}>{label}</p><p className="mt-1 text-base font-bold" style={{ color: "var(--text-main)" }}>{value}</p></div>)}
@@ -1100,7 +1479,7 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
           <section role="dialog" aria-modal="true" aria-labelledby="plan-action-title" className="w-full max-w-md rounded-2xl border p-5 shadow-2xl" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-main)" }}>
             <div className="flex items-start justify-between gap-3"><div><h3 id="plan-action-title" className="text-base font-bold">{action === "publish" ? "Publish this schedule?" : action === "changes" ? "Request schedule changes" : "Submit schedule for review"}</h3><p className="mt-1 text-xs" style={{ color: "var(--text-sub)" }}>{action === "publish" ? `${slots.length} customer-facing showtimes will be materialized.` : action === "changes" ? "Explain what must be corrected before another review." : "The draft will be locked for operational review."}</p></div><button type="button" disabled={busy} onClick={() => setAction(null)} className="rounded-lg p-1.5 hover:bg-black/5" aria-label="Close"><X size={16} /></button></div>
             {action === "publish" ? <div className="mt-4 space-y-2 rounded-xl border p-3 text-xs" style={{ borderColor: "var(--border-color)" }}><p className="flex items-center justify-between"><span>No backend blockers</span><strong className={backendBlockers ? "text-rose-500" : "text-emerald-600"}>{backendBlockers ? "Failed" : "Passed"}</strong></p><p className="flex items-center justify-between"><span>No room overlaps</span><strong className={conflicts.length ? "text-rose-500" : "text-emerald-600"}>{conflicts.length ? "Failed" : "Passed"}</strong></p><p className="flex items-center justify-between"><span>Planned sessions</span><strong>{slots.length}</strong></p></div> : <textarea autoFocus value={note} onChange={(event) => setNote(event.target.value)} rows={4} placeholder={action === "changes" ? "Required: describe the expected corrections…" : "Optional review note…"} className="mt-4 w-full resize-none rounded-xl border bg-transparent px-3 py-2.5 text-xs outline-none" style={{ borderColor: action === "changes" && !note.trim() ? "rgba(220,38,38,.35)" : "var(--border-color)", color: "var(--text-main)" }} />}
-            <div className="mt-5 flex justify-end gap-2"><button type="button" disabled={busy} onClick={() => setAction(null)} className="rounded-xl border px-3.5 py-2 text-xs font-semibold" style={{ borderColor: "var(--border-color)" }}>Cancel</button><button type="button" disabled={busy || (action === "changes" && !note.trim()) || (action === "publish" && (backendBlockers > 0 || conflicts.length > 0))} onClick={() => void confirmAction()} className={`rounded-xl px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-40 ${action === "publish" ? "bg-emerald-600" : action === "changes" ? "bg-amber-600" : "bg-blue-600"}`}>{busy ? "Working…" : action === "publish" ? "Publish schedule" : action === "changes" ? "Request changes" : "Submit for review"}</button></div>
+            <div className="mt-5 flex justify-end gap-2"><button type="button" disabled={busy} onClick={() => setAction(null)} className="rounded-xl border px-3.5 py-2 text-xs font-semibold" style={{ borderColor: "var(--border-color)" }}>Cancel</button><button type="button" disabled={busy || (action === "changes" && !note.trim()) || ((action === "submit" || action === "publish") && (backendBlockers > 0 || conflicts.length > 0))} onClick={() => void confirmAction()} className={`rounded-xl px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-40 ${action === "publish" ? "bg-emerald-600" : action === "changes" ? "bg-amber-600" : "bg-blue-600"}`}>{busy ? "Working…" : action === "publish" ? "Publish schedule" : action === "changes" ? "Request changes" : "Submit for review"}</button></div>
           </section>
         </div>
       )}

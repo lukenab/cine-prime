@@ -286,6 +286,8 @@ export default function AutoScheduleShowtimePage({
   const [allClusters, setAllClusters] = useState(false);
   const [selectedClusterIds, setSelectedClusterIds] = useState<Set<number>>(new Set());
   const [selectedMovieIds, setSelectedMovieIds] = useState<Set<number>>(new Set());
+  const [rooms, setRooms] = useState<RoomResponse[]>([]);
+  const [excludedRoomIds, setExcludedRoomIds] = useState<Set<number>>(new Set());
   const [clusterEligibility, setClusterEligibility] = useState<Map<number, ClusterScheduleEligibility>>(new Map());
   const [availabilities, setAvailabilities] = useState<MovieAvailabilityResponse[]>([]);
   const [clusterSearch, setClusterSearch] = useState("");
@@ -333,9 +335,10 @@ export default function AutoScheduleShowtimePage({
           assessClusterEligibility(roomsByCluster.get(cluster.clusterId) ?? []),
         ])));
         setMovies((movieRes.result ?? []).filter((m) => m.movieStatus === "APPROVED"));
+        setRooms(roomRes.result ?? []);
         setAvailabilities(availabilityRes.result ?? []);
       })
-      .catch(() => { setClusters([]); setMovies([]); setClusterEligibility(new Map()); setAvailabilities([]); })
+      .catch(() => { setClusters([]); setMovies([]); setRooms([]); setClusterEligibility(new Map()); setAvailabilities([]); })
       .finally(() => setLoadingOptions(false));
     showtimeApi.getActiveGenerationPolicy()
       .then((res) => setGenerationPolicy(res.result ?? null))
@@ -400,6 +403,11 @@ export default function AutoScheduleShowtimePage({
     next.has(id) ? next.delete(id) : next.add(id);
     return next;
   });
+  const toggleExcludedRoom = (id: number) => setExcludedRoomIds((prev) => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
 
   const schedulableClusters = useMemo(() => clusters.filter((cluster) => clusterEligibility.get(cluster.clusterId)?.schedulable), [clusterEligibility, clusters]);
   const invalidDateRange = Boolean(startDate && endDate && endDate < startDate);
@@ -430,6 +438,25 @@ export default function AutoScheduleShowtimePage({
     startDate && endDate && !invalidDateRange && !horizonViolation
     && effectiveClusterIds.length > 0 && selectedMovieIds.size > 0
   );
+
+  // Rooms an admin can exclude from this generation run only (e.g. held for a private
+  // booking, or under short-notice maintenance not yet reflected in room status). Scoped to
+  // the currently-selected cinema clusters so the list stays relevant as scope changes.
+  const excludableRooms = useMemo(() => {
+    const clusterIdSet = new Set(effectiveClusterIds);
+    return rooms
+      .filter((room) => clusterIdSet.has(room.clusterId) && room.status !== "INACTIVE")
+      .sort((a, b) => (a.clusterName ?? "").localeCompare(b.clusterName ?? "") || a.cinemaRoomName.localeCompare(b.cinemaRoomName));
+  }, [effectiveClusterIds, rooms]);
+  // Drop exclusions that fall outside the current cluster scope so a stale pick from a
+  // previously-selected cinema doesn't silently keep excluding a room the admin can no longer see.
+  useEffect(() => {
+    const validIds = new Set(excludableRooms.map((room) => room.cinemaRoomId));
+    setExcludedRoomIds((prev) => {
+      const next = new Set(Array.from(prev).filter((id) => validIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [excludableRooms]);
 
   // Mirrors SchedulingEligibilityService's AVAILABILITY_NOT_OPEN gate (movie_availability.status
   // IN (PLANNED, OPEN), showingStartDate <= day <= showingEndDate) so an admin sees which movies
@@ -499,6 +526,7 @@ export default function AutoScheduleShowtimePage({
         movieIds: Array.from(selectedMovieIds),
         optimizer: optimizerMode,
         scenario: optimizerMode === "LEGACY" ? undefined : scenario,
+        excludedRoomIds: excludedRoomIds.size > 0 ? Array.from(excludedRoomIds) : undefined,
       });
       const accepted = res.result;
       saveRecentRun({ generationRunId: accepted.generationRunId, submittedAt: new Date().toISOString(), startDate, endDate });
@@ -547,6 +575,7 @@ export default function AutoScheduleShowtimePage({
     setIneligibleMovies([]);
     setSelectedClusterIds(new Set());
     setSelectedMovieIds(new Set());
+    setExcludedRoomIds(new Set());
     setAllClusters(false);
     setResultsPage(0);
     setWorkspaceSection("create");
@@ -576,6 +605,21 @@ export default function AutoScheduleShowtimePage({
         onShowtimesChanged?.();
         await pollRun(run.generationRunId, resultsPage);
       }
+    } catch (error) {
+      setPlanError(extractErrorMessage(error).message);
+    } finally {
+      setPlanBusy(false);
+    }
+  };
+
+  const revalidatePlan = async () => {
+    if (!plan) return;
+    setPlanBusy(true);
+    setPlanError(null);
+    try {
+      const response = await showtimeApi.revalidateSchedulePlan(plan.schedulePlanId);
+      setPlan(response.result);
+      setPlanLibraryRefresh((value) => value + 1);
     } catch (error) {
       setPlanError(extractErrorMessage(error).message);
     } finally {
@@ -863,6 +907,51 @@ export default function AutoScheduleShowtimePage({
                     </div>
                   </section>
                 </div>
+
+                {excludableRooms.length > 0 && (
+                  <section className="rounded-2xl border p-4" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <XCircle size={15} className="text-rose-500" />
+                          <p style={{ fontSize: "14.5px", fontWeight: 700, color: "var(--text-main)" }}>Exclude rooms (optional)</p>
+                        </div>
+                        <p className="mt-1" style={{ fontSize: "12px", color: "var(--text-sub)" }}>
+                          Hold specific rooms out of this run only — e.g. a room reserved for a private event or short-notice maintenance. Everything else is picked automatically as usual.
+                          {excludedRoomIds.size > 0 && ` · ${excludedRoomIds.size} excluded`}
+                        </p>
+                      </div>
+                      {excludedRoomIds.size > 0 && (
+                        <button type="button" onClick={() => setExcludedRoomIds(new Set())} className="text-xs font-semibold text-blue-600">Clear exclusions</button>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {excludableRooms.map((room) => {
+                        const excluded = excludedRoomIds.has(room.cinemaRoomId);
+                        return (
+                          <button
+                            key={room.cinemaRoomId}
+                            type="button"
+                            onClick={() => toggleExcludedRoom(room.cinemaRoomId)}
+                            className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 transition-colors"
+                            style={{
+                              borderColor: excluded ? "rgba(225,29,72,.5)" : "var(--border-color)",
+                              background: excluded ? "rgba(225,29,72,.08)" : "var(--bg-main)",
+                              color: excluded ? "#e11d48" : "var(--text-main)",
+                              fontSize: "12px",
+                              fontWeight: 650,
+                            }}
+                            title={room.clusterName ? `${room.clusterName} · ${room.cinemaRoomName}` : room.cinemaRoomName}
+                          >
+                            {excluded ? <XCircle size={12} /> : <Check size={12} className="opacity-0" />}
+                            {room.cinemaRoomName}
+                            {room.clusterName && <span style={{ color: "var(--text-sub)", fontWeight: 500 }}>· {room.clusterName}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
               </div>
 
               <div className="sticky bottom-3 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 shadow-lg"
@@ -960,6 +1049,24 @@ export default function AutoScheduleShowtimePage({
                     Active default policy controls demand weights, peak hours and minimum coverage.
                   </p>
                 </div>
+
+                {excludedRoomIds.size > 0 && (
+                  <div className="rounded-xl border p-2.5" style={{ borderColor: "rgba(225,29,72,.28)", background: "rgba(225,29,72,.045)" }}>
+                    <div className="mb-1.5 flex items-center gap-1.5">
+                      <XCircle size={12} className="text-rose-500" />
+                      <p style={{ fontSize: "11px", fontWeight: 700, color: "#e11d48", textTransform: "uppercase", letterSpacing: ".04em" }}>
+                        {excludedRoomIds.size} room{excludedRoomIds.size === 1 ? "" : "s"} excluded from this run
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {excludableRooms.filter((room) => excludedRoomIds.has(room.cinemaRoomId)).map((room) => (
+                        <span key={room.cinemaRoomId} className="rounded-md bg-rose-500/10 px-2 py-1" style={{ fontSize: "10.5px", color: "#e11d48", fontWeight: 650 }}>
+                          {room.cinemaRoomName}{room.clusterName ? ` · ${room.clusterName}` : ""}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="min-w-0">
@@ -1163,6 +1270,7 @@ export default function AutoScheduleShowtimePage({
           busy={planBusy}
           error={planError}
           onNewRun={resetWizard}
+          onRevalidate={revalidatePlan}
           onTransition={transitionPlan}
         />
       )}

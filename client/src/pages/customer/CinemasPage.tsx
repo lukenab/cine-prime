@@ -127,8 +127,8 @@ export default function CinemasPage() {
       <div className="border-b border-white/10 px-6 pb-8 pt-10">
         <div className="mx-auto max-w-7xl">
           <div className="mb-1 flex items-center gap-2.5">
-            <MapPin size={20} style={{ color: "#FFD700" }} />
-            <span style={{ color: "#FFD700", fontSize: "0.7rem", letterSpacing: "0.25em", fontWeight: 700, textTransform: "uppercase" }}>
+            <MapPin size={20} style={{ color: "#60A5FA" }} />
+            <span style={{ color: "#60A5FA", fontSize: "0.7rem", letterSpacing: "0.25em", fontWeight: 700, textTransform: "uppercase" }}>
               Nationwide Network
             </span>
           </div>
@@ -141,9 +141,9 @@ export default function CinemasPage() {
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <div
               className="flex flex-1 items-center gap-3 rounded-2xl px-4"
-              style={{ border: "1px solid rgba(255,215,0,0.2)", backgroundColor: "rgba(255,255,255,0.04)" }}
+              style={{ border: "1px solid rgba(59,130,246,0.25)", backgroundColor: "rgba(255,255,255,0.04)" }}
             >
-              <Search size={16} style={{ color: "rgba(255,215,0,0.6)" }} />
+              <Search size={16} style={{ color: "rgba(96,165,250,0.8)" }} />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -155,7 +155,7 @@ export default function CinemasPage() {
               type="button"
               onClick={findNearbyCinemas}
               disabled={locating}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white/75 transition-colors hover:border-[#FFD700]/35 hover:text-white disabled:opacity-60"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white/75 transition-colors hover:border-blue-400/40 hover:text-white disabled:opacity-60"
             >
               {locating ? <Loader2 size={15} className="animate-spin" /> : <Navigation size={15} />}
               {currentLocation ? "Sorted by distance" : "Find cinemas near me"}
@@ -172,7 +172,7 @@ export default function CinemasPage() {
                 className="whitespace-nowrap rounded-full px-4 py-1.5 text-[13px] transition-all duration-200 hover:scale-105 cursor-pointer"
                 style={
                   activeProvince === p
-                    ? { background: "linear-gradient(135deg, #FFD700, #FFA500)", color: "#050505", fontWeight: 700 }
+                    ? { background: "linear-gradient(135deg, #2563EB, #3B82F6)", color: "#FFFFFF", fontWeight: 700 }
                     : { border: "1px solid rgba(255,255,255,0.12)", backgroundColor: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.55)" }
                 }
               >
@@ -199,8 +199,8 @@ export default function CinemasPage() {
                 style={{ border: "1px solid rgba(255,255,255,0.07)", backgroundColor: "rgba(255,255,255,0.03)" }}
                 onMouseEnter={(e) => {
                   const el = e.currentTarget as HTMLDivElement;
-                  el.style.borderColor = "rgba(255,215,0,0.2)";
-                  el.style.backgroundColor = "rgba(255,215,0,0.04)";
+                  el.style.borderColor = "rgba(96,165,250,0.35)";
+                  el.style.backgroundColor = "rgba(37,99,235,0.08)";
                   el.style.boxShadow = "0 20px 50px rgba(0,0,0,0.5)";
                 }}
                 onMouseLeave={(e) => {
@@ -218,25 +218,25 @@ export default function CinemasPage() {
                     event.stopPropagation();
                     toggleFavorite(cluster.clusterId);
                   }}
-                  className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/45 text-white/55 backdrop-blur transition-colors hover:text-[#FFD700]"
+                  className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/45 text-white/55 backdrop-blur transition-colors hover:text-blue-400"
                 >
                   <Heart
                     size={16}
                     fill={favoriteIds.includes(cluster.clusterId) ? "currentColor" : "none"}
-                    style={{ color: favoriteIds.includes(cluster.clusterId) ? "#FFD700" : undefined }}
+                    style={{ color: favoriteIds.includes(cluster.clusterId) ? "#60A5FA" : undefined }}
                   />
                 </button>
                 <div className="mb-5 flex items-start gap-4">
                   <div
                     className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl"
-                    style={{ background: "rgba(255,215,0,0.1)", border: "1px solid rgba(255,215,0,0.15)" }}
+                    style={{ background: "rgba(37,99,235,0.14)", border: "1px solid rgba(96,165,250,0.24)" }}
                   >
-                    <MapPin size={18} style={{ color: "#FFD700" }} />
+                    <MapPin size={18} style={{ color: "#60A5FA" }} />
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-base font-bold text-white">{cluster.clusterName}</h3>
                     <p className="mt-0.5 text-[13px] text-white/40">{cluster.address}</p>
-                    <p className="mt-0.5 text-[11px] uppercase tracking-wider text-[#FFD700]/70">{cluster.province}</p>
+                    <p className="mt-0.5 text-[11px] uppercase tracking-wider text-blue-400/70">{cluster.province}</p>
                     {currentLocation && cluster.latitude != null && cluster.longitude != null && (
                       <p className="mt-1 flex items-center gap-1 text-[11px] text-emerald-400/80">
                         <Navigation size={10} />
@@ -279,7 +279,7 @@ export default function CinemasPage() {
 
                 <button
                   className="flex items-center gap-2 transition-all duration-200 group-hover:gap-3"
-                  style={{ color: "#FFD700", fontSize: "0.82rem", fontWeight: 600, background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                  style={{ color: "#60A5FA", fontSize: "0.82rem", fontWeight: 600, background: "none", border: "none", cursor: "pointer", padding: 0 }}
                 >
                   View showtimes <ArrowRight size={14} />
                 </button>

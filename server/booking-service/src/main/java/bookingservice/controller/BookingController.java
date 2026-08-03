@@ -1,100 +1,111 @@
 package bookingservice.controller;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
-
-import bookingservice.dto.request.BookingRequest;
-import bookingservice.dto.request.HoldSeatRequest;
-
+import bookingservice.dto.request.CreateBookingRequest;
+import bookingservice.dto.request.CancelBookingRequest;
+import bookingservice.dto.request.AttachConcessionsRequest;
 import bookingservice.dto.response.BookingDetailResponse;
-import bookingservice.dto.response.BookingListResponse;
-import bookingservice.dto.response.CancelBookingResponse;
+import bookingservice.dto.response.CancellationResponse;
 import bookingservice.dto.response.CreateBookingResponse;
-import bookingservice.dto.response.SeatHoldResponse;
-import bookingservice.service.BookingService;
+import bookingservice.dto.response.TicketPassResponse;
+import bookingservice.service.BookingOrchestrationService;
+import bookingservice.service.BookingCancellationService;
+import bookingservice.service.BookingQueryService;
+import bookingservice.service.TicketPassService;
+import bookingservice.service.ConcessionAttachService;
 import jakarta.validation.Valid;
-import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
 import movie.theater.common.dto.ApiResponse;
+import movie.theater.common.exception.AppException;
 import movie.theater.common.security.JwtSecurityUtils;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import static bookingservice.exception.BookingErrorCode.UNAUTHENTICATED;
 
 @RestController
 @RequestMapping("/api/bookings")
 @RequiredArgsConstructor
-@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class BookingController {
-        BookingService bookingService;
+    private final BookingOrchestrationService orchestrationService;
+    private final BookingCancellationService cancellationService;
+    private final BookingQueryService queryService;
+    private final TicketPassService ticketPassService;
+    private final ConcessionAttachService concessionAttachService;
 
-        @PostMapping
-        @ResponseStatus(HttpStatus.CREATED)
-        public ApiResponse<CreateBookingResponse> createBooking(
-                        @RequestHeader("Idempotency-Key") String idempotencyKey,
-                        @RequestBody @Valid BookingRequest request) {
-                String accountId = JwtSecurityUtils.getCurrentAccountId();
-                boolean isMember = JwtSecurityUtils.hasRole("ROLE_MEMBER");
-                CreateBookingResponse response = bookingService.createBookingAndHoldSeats(
-                                request, accountId, isMember, idempotencyKey);
+    @PostMapping
+    public ResponseEntity<ApiResponse<CreateBookingResponse>> create(
+            @RequestHeader("Authorization") String authorization,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @Valid @RequestBody CreateBookingRequest request) {
+        String accountId = requireAccountId();
+        CreateBookingResponse response = orchestrationService.create(
+                accountId,
+                authorization,
+                idempotencyKey,
+                request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.<CreateBookingResponse>builder()
+                        .message("Seats are held and the booking is awaiting payment.")
+                        .result(response)
+                        .build());
+    }
 
-                return ApiResponse.<CreateBookingResponse>builder()
-                                .code(1000)
-                                .message("Booking created successfully")
-                                .result(response)
-                                .build();
+    @GetMapping("/{bookingId}")
+    public ApiResponse<BookingDetailResponse> get(@PathVariable String bookingId) {
+        return ApiResponse.<BookingDetailResponse>builder()
+                .result(queryService.getOwnedBooking(bookingId, requireAccountId()))
+                .build();
+    }
+
+    @GetMapping
+    public ApiResponse<Page<BookingDetailResponse>> history(Pageable pageable) {
+        return ApiResponse.<Page<BookingDetailResponse>>builder()
+                .result(queryService.getOwnedBookings(requireAccountId(), pageable))
+                .build();
+    }
+
+    @GetMapping("/{bookingId}/ticket-pass")
+    public ApiResponse<TicketPassResponse> ticketPass(@PathVariable String bookingId) {
+        return ApiResponse.<TicketPassResponse>builder()
+                .result(ticketPassService.getOwnedPass(bookingId, requireAccountId()))
+                .build();
+    }
+
+    @PostMapping("/{bookingId}/cancellations")
+    public ApiResponse<CancellationResponse> cancel(
+            @PathVariable String bookingId,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @Valid @RequestBody CancelBookingRequest request) {
+        return ApiResponse.<CancellationResponse>builder()
+                .message("Cancellation request accepted.")
+                .result(cancellationService.cancel(
+                        bookingId,
+                        requireAccountId(),
+                        idempotencyKey,
+                        request))
+                .build();
+    }
+
+    @PostMapping("/{bookingId}/concessions")
+    public ApiResponse<BookingDetailResponse> attachConcessions(
+            @PathVariable String bookingId,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @Valid @RequestBody AttachConcessionsRequest request) {
+        return ApiResponse.<BookingDetailResponse>builder()
+                .message("Concession items are reserved and included in checkout.")
+                .result(concessionAttachService.attach(
+                        bookingId, requireAccountId(), idempotencyKey, request))
+                .build();
+    }
+
+    private String requireAccountId() {
+        String accountId = JwtSecurityUtils.getCurrentAccountId();
+        if (accountId == null || accountId.isBlank()) {
+            throw new AppException(UNAUTHENTICATED);
         }
-
-
-        @GetMapping("/{id}")
-        public ApiResponse<BookingDetailResponse> getBookingById(@PathVariable("id") String id) {
-                String accountId = JwtSecurityUtils.getCurrentAccountId();
-                boolean isAdmin = JwtSecurityUtils.hasRole("ROLE_ADMIN");
-                return ApiResponse.<BookingDetailResponse>builder()
-                                .code(1000)
-                                .result(bookingService.getBookingById(id, accountId, isAdmin))
-                                .build();
-        }
-
-        @GetMapping("/me")
-        public ApiResponse<BookingListResponse> getMyBookings(
-                        @RequestParam(defaultValue = "0") int page,
-                        @RequestParam(defaultValue = "10") int size) {
-                String accountId = JwtSecurityUtils.getCurrentAccountId();
-                return ApiResponse.<BookingListResponse>builder()
-                                .code(1000)
-                                .result(bookingService.getMyBookings(accountId, page, size))
-                                .build();
-        }
-
-        @PatchMapping("/{id}/cancel")
-        public ApiResponse<CancelBookingResponse> cancelBooking(@PathVariable("id") String id) {
-                String accountId = JwtSecurityUtils.getCurrentAccountId();
-                boolean isAdmin = JwtSecurityUtils.hasRole("ROLE_ADMIN");
-
-                CancelBookingResponse responseData = bookingService.cancelBooking(id, accountId, isAdmin);
-
-                return new ApiResponse<>(
-                                1000,
-                                "Booking cancelled successfully",
-                                responseData);
-        }
-
-        /** Internal payment confirmation: commits the already-created promotion reservation once. */
-        @PatchMapping("/{id}/confirm")
-        public ApiResponse<CreateBookingResponse> confirmBooking(@PathVariable("id") String id) {
-                boolean canConfirm = JwtSecurityUtils.hasRole("ROLE_ADMIN")
-                                || JwtSecurityUtils.hasRole("ROLE_EMPLOYEE");
-                return ApiResponse.<CreateBookingResponse>builder()
-                                .code(1000)
-                                .result(bookingService.confirmBooking(id, canConfirm))
-                                .build();
-        }
+        return accountId;
+    }
 }

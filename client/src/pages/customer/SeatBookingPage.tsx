@@ -1,55 +1,21 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import {
-  AlertTriangle, CheckCircle2, Clock, Film,
-  Loader2, X, ChevronRight, RotateCcw, Ticket, Armchair,
-} from "lucide-react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { AlertTriangle, Loader2, X } from "lucide-react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
-import { bookingApi, Seat, BookingConfirmation, ShowtimeSeatMap, SeatMapPosition } from "../../api/bookingApi";
+import {
+  bookingApi,
+  Seat,
+  ShowtimeSeatMap,
+  SeatMapPosition,
+  SeatHoldPolicy,
+  seatInventoryWebSocketUrl,
+} from "../../api/bookingApi";
 import { useAuth } from "../../context/AuthContext";
 import CompleteProfilePage from "../auth/CompleteProfilePage";
 import { AudioCoverageFrame, ProjectionBeamOverlay, ProjectionScreenVisualization } from "../admin/cinemaRoomEditor/AuditoriumVisualization";
-import { ProjectorLegendMarker, SpeakerLegendMarker } from "../admin/cinemaRoomEditor/SeatLegend";
 import type { AuditoriumVisualizationConfig } from "../admin/cinemaRoomEditor/cinemaRoomEditor.types";
-
-// Format a number as Vietnamese đồng, e.g. 70000 → "70.000 ₫"
-const formatVND = (v: number) =>
-  new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(v);
-
-// ─── CountdownTimer ─────────────────────────────────────────────────────────
-
-function CountdownTimer({ lockedUntil }: { lockedUntil: string }) {
-  const target = new Date(lockedUntil).getTime();
-  const [remaining, setRemaining] = useState(() => Math.max(0, Math.floor((target - Date.now()) / 1000)));
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      setRemaining(Math.max(0, Math.floor((target - Date.now()) / 1000)));
-    }, 1000);
-    return () => clearInterval(id);
-  }, [target]);
-
-  const m = Math.floor(remaining / 60);
-  const s = remaining % 60;
-  const warn = remaining > 0 && remaining < 120;
-  const done = remaining === 0;
-
-  return (
-    <div
-      className={`inline-flex items-center gap-2 px-3 py-2 rounded-md border text-sm font-medium transition-colors ${
-        done
-          ? "bg-[#3d1515] border-[#e84545] text-[#e84545]"
-          : warn
-          ? "bg-[#3d2a00] border-[#f5a623] text-[#f5a623]"
-          : "bg-black/30 border-white/20 text-white"
-      }`}
-      style={{ fontFamily: "'Inter', sans-serif" }}
-    >
-      <Clock size={13} />
-      {done ? "Hold expired" : `Hold expires in ${m}:${String(s).padStart(2, "0")}`}
-    </div>
-  );
-}
-
+import CheckoutProgress from "../../components/booking/CheckoutProgress";
+import BookingSummaryCard from "../../components/booking/BookingSummaryCard";
+import { formatBookingDate } from "../../components/booking/bookingUi";
 
 // Keep the customer map visually aligned with the room-layout tools used by
 // administrators. Booking state is layered on top of the physical seat type.
@@ -65,39 +31,56 @@ function SeatBtn({
 }: {
   seat: Seat; selected: boolean; conflict: boolean; onToggle: (id: number) => void;
 }) {
-  const available = seat.status === "AVAILABLE";
+  // A LOCKED seat still held by *this* account (e.g. a hold that survived a
+  // failed/slow checkout) must stay pickable so the customer can resume the
+  // same hold instead of it looking permanently stuck until the TTL expires.
+  const isMyHold = seat.status === "LOCKED" && seat.reservedByMe === true;
+  const available = seat.status === "AVAILABLE" || isMyHold;
   const theme = SEAT_TYPE_THEME[seat.type];
-  const isDoubleSeat = seat.type === "COUPLE" || (seat.colSpan ?? 1) > 1;
+  const displayCode = seat.seatCode?.trim() || `${seat.row}${seat.number}`;
 
   // Colour + interaction per state. Shape (seat silhouette) is shared below.
   const cls = (() => {
-    if (seat.status === "BOOKED") return "bg-white/[0.025] border-white/[0.07] text-white/20 cursor-not-allowed";
-    if (seat.status === "LOCKED") return "bg-red-500/[0.12] border-red-400/50 text-red-300 cursor-not-allowed";
+    // The customer only needs to know whether the position can be selected.
+    // BOOKED and another customer's temporary LOCKED state share one neutral
+    // visual state; the internal reason remains available to the backend.
+    if (!available && !conflict) return "bg-white/[0.025] border-white/[0.08] text-white/20 cursor-not-allowed";
     if (conflict)                 return "bg-[#3d1515] border-[#e84545] text-[#ff9a9a] animate-pulse cursor-pointer";
     if (selected)                 return "bg-gradient-to-b from-[#93c5fd] to-[#2563eb] border-[#60a5fa] text-black shadow-[0_4px_14px_rgba(96,165,250,0.45)] -translate-y-0.5 cursor-pointer";
+    if (isMyHold)                  return "bg-[#2a2210] border-[#d4a72c] text-[#f2c94c] cursor-pointer";
     return "hover:-translate-y-0.5 hover:brightness-125 hover:shadow-[0_4px_12px_rgba(37,99,235,0.25)] cursor-pointer";
   })();
+
+  const title = isMyHold && !selected
+    ? `${displayCode} · ${seat.type} · Held by you — click to resume`
+    : `${displayCode} · ${seat.type}${available ? "" : " · Unavailable"}`;
 
   return (
     <button
       type="button"
       disabled={!available && !conflict}
       onClick={() => available && onToggle(seat.seatId)}
-      title={`${seat.row}${seat.number} · ${seat.type} · ${seat.status}`}
-      className={`relative ${isDoubleSeat ? "w-[4.875rem]" : "w-9"} h-8 rounded-md border-[1.5px] text-[10px] font-bold flex items-center justify-center select-none transition-all duration-150 will-change-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#60a5fa]/60 ${cls}`}
+      title={title}
+      className={`relative flex h-8 w-full min-w-0 items-center justify-center overflow-hidden rounded-md border-[1.5px] px-0.5 text-[clamp(7px,0.7vw,10px)] font-bold select-none transition-all duration-150 will-change-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#60a5fa]/60 ${cls}`}
       style={
         seat.status === "AVAILABLE" && !selected && !conflict
           ? { fontFamily: "'Inter', sans-serif", background: theme.bg, borderColor: theme.border, color: theme.text }
           : { fontFamily: "'Inter', sans-serif" }
       }
     >
-      {seat.number}
+      {displayCode}
     </button>
   );
 }
 
 
-type Screen = "map" | "confirming" | "confirmed";
+type Screen = "map" | "confirming";
+
+const DEFAULT_HOLD_POLICY: SeatHoldPolicy = {
+  channel: "WEB",
+  ttlSeconds: 10 * 60,
+  maxSeatsPerBooking: 8,
+};
 
 function seatMapErrorMessage(error: any): string {
   const status = error?.response?.status;
@@ -114,6 +97,49 @@ function seatMapErrorMessage(error: any): string {
     return "We could not connect to the cinema service. Check your connection and try again.";
   }
   return "We could not load this auditorium's seat map. Please try again.";
+}
+
+// A hold's idempotency key previously lived only in a `useRef`, so an F5
+// reload while a slow/failed "Continue" request was in flight lost it. The
+// backend still had an active RESERVED hold under the old key, but the
+// reloaded page would mint a brand-new key and the seat's own owner would
+// then be rejected as SEAT_NOT_AVAILABLE by their own hold — appearing stuck
+// until the TTL expired. Persisting the key + the seats it covers lets a
+// reload resume the exact same hold via the backend's existing replay path.
+function seatHoldStorageKey(showtimeId: string): string {
+  return `seat-hold-draft:${showtimeId}`;
+}
+
+function readPersistedSeatHold(
+  showtimeId: string | undefined
+): { idempotencyKey: string; seatIds: number[] } | null {
+  if (!showtimeId) return null;
+  try {
+    const raw = sessionStorage.getItem(seatHoldStorageKey(showtimeId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.idempotencyKey !== "string" || !Array.isArray(parsed?.seatIds)) {
+      return null;
+    }
+    return {
+      idempotencyKey: parsed.idempotencyKey,
+      seatIds: parsed.seatIds.filter(
+        (id: unknown): id is number => typeof id === "number" && Number.isFinite(id)
+      ),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function clearPersistedSeatHold(showtimeId: string | undefined): void {
+  if (!showtimeId) return;
+  try {
+    sessionStorage.removeItem(seatHoldStorageKey(showtimeId));
+  } catch {
+    // Storage may be unavailable (private mode); the draft simply won't
+    // survive a reload in that case, no worse than before this fix.
+  }
 }
 
 export default function SeatBookingPage() {
@@ -139,11 +165,23 @@ export default function SeatBookingPage() {
 
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [conflicts, setConflicts] = useState<Set<number>>(new Set());
-  const [confirmation, setConfirmation] = useState<(BookingConfirmation & { seats: Seat[], totalPrice: number }) | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [holdPolicy, setHoldPolicy] = useState<SeatHoldPolicy>(DEFAULT_HOLD_POLICY);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const persistedHoldRef = useRef(readPersistedSeatHold(showtimeId));
+  const pendingSeatRestoreRef = useRef<number[]>(
+    Array.isArray(location.state?.resumeSeatIds)
+      ? location.state.resumeSeatIds.filter(
+          (seatId: unknown): seatId is number =>
+            typeof seatId === "number" && Number.isFinite(seatId)
+        )
+      : persistedHoldRef.current?.seatIds ?? []
+  );
   const idempotencyKeyRef = useRef(
-    globalThis.crypto?.randomUUID?.() ?? `seat-hold-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    persistedHoldRef.current?.idempotencyKey
+      ?? globalThis.crypto?.randomUUID?.()
+      ?? `seat-hold-${Date.now()}-${Math.random().toString(36).slice(2)}`
   );
 
   const renewIdempotencyKey = useCallback(() => {
@@ -151,11 +189,13 @@ export default function SeatBookingPage() {
       globalThis.crypto?.randomUUID?.() ?? `seat-hold-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }, []);
 
-  const loadSeats = useCallback(async () => {
+  const loadSeats = useCallback(async (silent = false) => {
     if (!showtimeId) return;
     try {
-      setIsLoadingSeats(true);
-      setSeatFetchError(null);
+      if (!silent) {
+        setIsLoadingSeats(true);
+        setSeatFetchError(null);
+      }
       const data = await bookingApi.getSeatMapByShowtime(showtimeId);
       if (!data?.positions?.length) {
         setSeatMap(null);
@@ -166,48 +206,223 @@ export default function SeatBookingPage() {
         return;
       }
       setSeatMap(data);
-      setSeats(data.seats || []);
+      const freshSeats = data.seats || [];
+      setSeats(freshSeats);
+      const availableIds = new Set(
+        freshSeats
+          .filter((seat) => seat.status === "AVAILABLE" || (seat.status === "LOCKED" && seat.reservedByMe))
+          .map((seat) => seat.seatId)
+      );
+      setSelected((previous) => {
+        const restoredIds = pendingSeatRestoreRef.current;
+        const requestedIds = restoredIds.length > 0 ? restoredIds : Array.from(previous);
+        pendingSeatRestoreRef.current = [];
+
+        const next = new Set(requestedIds.filter((seatId) => availableIds.has(seatId)));
+        const rejectedIds = requestedIds.filter((seatId) => !availableIds.has(seatId));
+        if (rejectedIds.length > 0) {
+          setConflicts(new Set(rejectedIds));
+          setErrorMsg("Seat availability changed. Please review the highlighted positions and select again.");
+          renewIdempotencyKey();
+        }
+        return next;
+      });
     } catch (err: any) {
-      setSeatMap(null);
-      setSeats([]);
-      setSeatFetchError(seatMapErrorMessage(err));
+      if (!silent) {
+        setSeatMap(null);
+        setSeats([]);
+        setSeatFetchError(seatMapErrorMessage(err));
+      }
     } finally {
-      setIsLoadingSeats(false);
+      if (!silent) setIsLoadingSeats(false);
     }
-  }, [showtimeId]);
+  }, [renewIdempotencyKey, showtimeId]);
 
   useEffect(() => {
     loadSeats();
   }, [loadSeats]);
 
+  // Toast-style errors auto-dismiss so they don't linger and block the seat
+  // map; the manual close button still lets the customer dismiss early.
   useEffect(() => {
-    pollRef.current = setInterval(async () => {
-      if (!showtimeId) return;
-      try {
-        const fresh = await bookingApi.getSeatsByShowtime(showtimeId);
-        if (fresh) {
-          setSeats((prev) =>
-            fresh.map((s) => {
-              const p = prev.find((x) => x.seatId === s.seatId);
-              return p && selected.has(s.seatId) && s.status === "AVAILABLE" ? p : s;
-            })
-          );
+    if (!errorMsg) return;
+    const timer = setTimeout(() => setErrorMsg(null), 5000);
+    return () => clearTimeout(timer);
+  }, [errorMsg]);
+
+  // Keep the in-flight hold's idempotency key + seat selection recoverable
+  // across a hard reload (see readPersistedSeatHold above).
+  useEffect(() => {
+    if (!showtimeId) return;
+    if (selected.size === 0) {
+      clearPersistedSeatHold(showtimeId);
+      return;
+    }
+    try {
+      sessionStorage.setItem(
+        seatHoldStorageKey(showtimeId),
+        JSON.stringify({
+          idempotencyKey: idempotencyKeyRef.current,
+          seatIds: Array.from(selected),
+        })
+      );
+    } catch {
+      // Private-mode/storage-quota failures just mean the draft won't
+      // survive a reload; the booking flow itself is unaffected.
+    }
+  }, [selected, showtimeId]);
+
+  useEffect(() => {
+    let active = true;
+    bookingApi.getSeatHoldPolicy()
+      .then((policy) => {
+        if (active && policy?.maxSeatsPerBooking > 0 && policy?.ttlSeconds > 0) {
+          setHoldPolicy(policy);
         }
-      } catch { /* no backend available, silent */ }
-    }, 10000);
+      })
+      .catch(() => {
+        // The server policy is preferred. The conservative fallback only
+        // keeps the page usable while an older gateway is being upgraded.
+      });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!showtimeId) return;
+
+    let disposed = false;
+    let socket: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let reconnectAttempt = 0;
+
+    const connect = () => {
+      if (disposed) return;
+      const nextSocket = new WebSocket(seatInventoryWebSocketUrl(showtimeId));
+      socket = nextSocket;
+
+      nextSocket.onopen = () => {
+        if (disposed || socket !== nextSocket) {
+          nextSocket.close(1000, "Seat inventory connection is no longer needed");
+          return;
+        }
+        reconnectAttempt = 0;
+        setRealtimeConnected(true);
+        // A connection may have been offline while inventory changed.
+        // Reload the complete map through REST; never reconstruct state from
+        // missed WebSocket messages.
+        void loadSeats(true);
+      };
+
+      nextSocket.onmessage = (message) => {
+        try {
+          const event = JSON.parse(String(message.data));
+          if (["seat.held", "seat.released", "seat.sold"].includes(event?.type)) {
+            // Events are invalidation signals only. REST + database remain the
+            // source of truth for every visible seat state.
+            void loadSeats(true);
+          }
+        } catch {
+          // Ignore malformed/non-domain messages and preserve current state.
+        }
+      };
+
+      nextSocket.onerror = () => {
+        // A failed WebSocket handshake is followed by `close` in browsers.
+        // Closing a CONNECTING socket here creates a false console error in
+        // React Strict Mode, where effects are mounted and cleaned up twice.
+        if (!disposed && socket === nextSocket) setRealtimeConnected(false);
+      };
+      nextSocket.onclose = () => {
+        if (socket === nextSocket) socket = null;
+        setRealtimeConnected(false);
+        if (disposed) return;
+        const delay = Math.min(15_000, 1_000 * 2 ** reconnectAttempt);
+        reconnectAttempt += 1;
+        reconnectTimer = setTimeout(connect, delay);
+      };
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void loadSeats(true);
+        if (!socket || socket.readyState === WebSocket.CLOSED) connect();
+      }
+    };
+
+    connect();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      disposed = true;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      const activeSocket = socket;
+      socket = null;
+      if (!activeSocket) return;
+
+      activeSocket.onmessage = null;
+      activeSocket.onerror = null;
+      activeSocket.onclose = null;
+      if (activeSocket.readyState === WebSocket.OPEN) {
+        activeSocket.close(1000, "Seat booking page closed");
+      } else if (activeSocket.readyState === WebSocket.CONNECTING) {
+        // Let the handshake finish before closing. Calling close() while the
+        // socket is CONNECTING is what produced
+        // "WebSocket is closed before the connection is established".
+        activeSocket.onopen = () =>
+          activeSocket.close(1000, "Seat booking page closed");
+      }
+    };
+  }, [loadSeats, showtimeId]);
+
+  useEffect(() => {
+    // Slow REST fallback covers environments where WebSocket upgrade is not
+    // available. It intentionally reloads the complete map.
+    pollRef.current = setInterval(() => { void loadSeats(true); }, 30_000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [showtimeId, selected]);
+  }, [loadSeats]);
+
+  // A COUPLE/sofa seat renders as one clickable button (see seatsByGroup
+  // below) but is backed by 2+ ShowtimeSeat rows sharing a seatGroupId. The
+  // hold API expands each requested id to its full group before counting
+  // against maxSeatsPerBooking (ShowtimeSeatHoldService.validateExpandedSelection),
+  // so the client must count the same way here — otherwise the UI lets a
+  // customer pick a selection under the limit that the server then rejects
+  // as SEAT_HOLD_SELECTION_INVALID at the very last step.
+  const physicalSeatCountById = useMemo(() => {
+    const perGroup = new Map<string, number>();
+    seats.forEach((seat) => {
+      if (!seat.seatGroupId) return;
+      perGroup.set(seat.seatGroupId, (perGroup.get(seat.seatGroupId) ?? 0) + 1);
+    });
+    const perSeatId = new Map<number, number>();
+    seats.forEach((seat) => {
+      perSeatId.set(seat.seatId, seat.seatGroupId ? (perGroup.get(seat.seatGroupId) ?? 1) : 1);
+    });
+    return perSeatId;
+  }, [seats]);
 
   const toggleSeat = useCallback((id: number) => {
-    renewIdempotencyKey();
     setSelected((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        const currentPhysicalCount = Array.from(prev).reduce(
+          (sum, seatId) => sum + (physicalSeatCountById.get(seatId) ?? 1),
+          0
+        );
+        const addedPhysicalCount = physicalSeatCountById.get(id) ?? 1;
+        if (currentPhysicalCount + addedPhysicalCount > holdPolicy.maxSeatsPerBooking) {
+          setErrorMsg(`You can reserve up to ${holdPolicy.maxSeatsPerBooking} seats per booking.`);
+          return prev;
+        }
+        next.add(id);
+      }
+      renewIdempotencyKey();
       return next;
     });
     setConflicts((prev) => { const n = new Set(prev); n.delete(id); return n; });
-    setErrorMsg(null);
-  }, [renewIdempotencyKey]);
+  }, [holdPolicy.maxSeatsPerBooking, physicalSeatCountById, renewIdempotencyKey]);
 
   const clearAll = () => {
     renewIdempotencyKey();
@@ -221,7 +436,20 @@ export default function SeatBookingPage() {
 
     // Gate 1: chưa đăng nhập
     if (!user) {
-      navigate("/login");
+      const currentState =
+        location.state && typeof location.state === "object"
+          ? location.state
+          : {};
+
+      navigate("/login", {
+        state: {
+          returnTo: `${location.pathname}${location.search}${location.hash}`,
+          returnState: {
+            ...currentState,
+            resumeSeatIds: Array.from(selected),
+          },
+        },
+      });
       return;
     }
 
@@ -240,11 +468,16 @@ export default function SeatBookingPage() {
         idempotencyKey: idempotencyKeyRef.current,
       };
       const result = await bookingApi.createBooking(payload);
-      
-      const pickedSeats = seats.filter((s) => selected.has(s.seatId));
-      const total = pickedSeats.reduce((sum, s) => sum + s.price, 0);
-      setConfirmation({ ...result, seats: pickedSeats, totalPrice: total });
-      setScreen("confirmed");
+
+      clearPersistedSeatHold(showtimeId);
+      // The checkout page (BookingCheckoutPage) re-fetches and displays the
+      // same booking summary plus the actual payment step, so landing on an
+      // interstitial "seats reserved" screen first was a redundant extra
+      // click. Its "release without telling booking-service" behavior was
+      // also a real bug: releasing the hold directly against movie-service
+      // left the booking stuck at PENDING_PAYMENT until BookingExpiryScheduler
+      // caught up, instead of going through POST /api/bookings/{id}/cancellations.
+      navigate(`/checkout/${result.bookingId}/concessions`);
     } catch (err: any) {
       setScreen("map");
       const errResponse = err.response?.data;
@@ -294,7 +527,7 @@ export default function SeatBookingPage() {
               Back to showtimes
             </button>
             <button
-              onClick={loadSeats}
+              onClick={() => void loadSeats()}
               className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
             >
               Try again
@@ -324,6 +557,23 @@ export default function SeatBookingPage() {
       positions: positions.sort((left, right) => left.columnIndex - right.columnIndex),
     }));
   const physicalColumnCount = Math.max(1, ...physicalPositions.map((position) => position.columnIndex + 1));
+  // Keep a single seat close to the admin-layout proportions instead of stretching
+  // every column to fill the auditorium. Wide rooms may shrink to fit the panel,
+  // while narrow rooms stay centred at their natural visual width.
+  const seatGridGap = 6;
+  const seatGridLabelSpace = 48;
+  const seatGridMaxWidth = physicalColumnCount * 44
+    + Math.max(0, physicalColumnCount - 1) * seatGridGap
+    + seatGridLabelSpace;
+  const seatGridMinWidth = Math.min(
+    seatGridMaxWidth,
+    Math.max(
+      480,
+      physicalColumnCount * 32
+        + Math.max(0, physicalColumnCount - 1) * seatGridGap
+        + seatGridLabelSpace,
+    ),
+  );
   const seatsByCode = new Map(seats.filter((seat) => seat.seatCode).map((seat) => [seat.seatCode!, seat]));
   const seatsByGroup = new Map(seats.filter((seat) => seat.seatGroupId).map((seat) => [seat.seatGroupId!, seat]));
   const auditoriumConfig: AuditoriumVisualizationConfig = {
@@ -334,60 +584,6 @@ export default function SeatBookingPage() {
   };
   const showProjector = auditoriumConfig.projectionTechnologyCode === "LASER"
     || auditoriumConfig.projectionTechnologyCode === "XENON";
-  const showSpeakers = Boolean(auditoriumConfig.audioFormatCode);
-  const formattedDate = new Date(showtimeDetails.dateTime).toLocaleDateString("en-US", {
-    weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-  });
-
-  if (screen === "confirmed" && confirmation) {
-    return (
-      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-4">
-        <div className="w-full max-w-md bg-[#0a0a0a] border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
-          <div className="bg-gradient-to-b from-[#152515] to-[#0a0a0a] px-8 pt-8 pb-6 text-center border-b border-white/5">
-            <div className="w-14 h-14 rounded-full bg-[#1a5535] border border-[#2a7a4a] flex items-center justify-center mx-auto mb-4">
-              <CheckCircle2 size={28} className="text-[#34d399]" />
-            </div>
-            <h2 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: "'Inter', sans-serif" }}>
-              Booking Confirmed
-            </h2>
-            <p className="text-white/60 text-sm">Complete payment before the hold expires</p>
-          </div>
-
-          <div className="px-6 py-5 space-y-3 border-b border-white/5">
-            {[
-              { label: "Booking ID", value: confirmation.bookingId, accent: true },
-              { label: "Film", value: showtimeDetails.movieTitle, accent: false },
-              { label: "Hall", value: `${showtimeDetails.cinemaName} · ${showtimeDetails.hall}`, accent: false },
-              { label: "Seats", value: confirmation.seats.map((s) => `${s.row}${s.number}`).join(", "), accent: false },
-              { label: "Total", value: formatVND(confirmation.totalPrice), accent: true },
-            ].map(({ label, value, accent }) => (
-              <div key={label} className="flex items-start justify-between gap-4">
-                <span className="text-[10px] text-white/50 uppercase tracking-[0.15em] pt-0.5 shrink-0"
-                  style={{ fontFamily: "'Inter', sans-serif" }}>{label}</span>
-                <span className={`text-sm text-right ${accent ? "text-[#60a5fa] font-semibold" : "text-white/90"}`}
-                  style={{ fontFamily: "'Inter', sans-serif" }}>
-                  {value}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div className="px-6 py-5 flex flex-col gap-4">
-            <div className="flex justify-center">
-              <CountdownTimer lockedUntil={confirmation.lockedUntil} />
-            </div>
-            <button
-              onClick={() => navigate("/")}
-              className="w-full py-3 bg-[#60a5fa] text-black rounded-lg font-semibold text-lg tracking-wide hover:brightness-110 transition-colors flex items-center justify-center gap-1"
-              style={{ fontFamily: "'Inter', sans-serif" }}
-            >
-              Proceed to Home <ChevronRight size={16} />
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div
@@ -398,6 +594,33 @@ export default function SeatBookingPage() {
           "radial-gradient(90% 60% at 50% -5%, rgba(96,165,250,0.07), transparent 60%), radial-gradient(60% 50% at 50% 120%, rgba(96,165,250,0.04), transparent 70%)",
       }}
     >
+
+      {/* Error toast */}
+      {errorMsg && (
+        <div className="pointer-events-none fixed right-4 top-20 z-[60] w-[min(360px,calc(100vw-2rem))] sm:right-6">
+          <style>{`
+            @keyframes seatToastIn {
+              from { opacity: 0; transform: translateY(-10px) scale(0.98); }
+              to { opacity: 1; transform: translateY(0) scale(1); }
+            }
+          `}</style>
+          <div
+            className="pointer-events-auto flex items-start gap-3 rounded-xl border border-[#e84545]/40 bg-[#2a1515]/95 p-4 text-sm text-[#f87171] shadow-[0_12px_32px_rgba(0,0,0,0.45)] backdrop-blur"
+            style={{ animation: "seatToastIn 0.25s ease-out" }}
+            role="alert"
+          >
+            <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+            <span className="flex-1">{errorMsg}</span>
+            <button
+              onClick={() => setErrorMsg(null)}
+              className="text-[#f87171]/50 transition-colors hover:text-[#f87171] cursor-pointer"
+              aria-label="Dismiss"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <header
@@ -411,55 +634,39 @@ export default function SeatBookingPage() {
           >
             <X size={18} />
           </button>
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg shrink-0"
-            style={{ background: "rgba(96,165,250,0.1)", border: "1px solid rgba(96,165,250,0.2)" }}>
-            <Film size={16} className="text-[#60a5fa]" />
-          </div>
           <div className="flex-1 min-w-0">
             <h1 className="text-base sm:text-lg font-bold text-white leading-tight truncate"
               style={{ fontFamily: "'Inter', sans-serif" }}>
               {showtimeDetails.movieTitle}
             </h1>
-            <p className="text-[11px] text-white/55 truncate">
-              {showtimeDetails.cinemaName} · {showtimeDetails.hall} · {formattedDate} · {showtimeDetails.duration} min
-            </p>
           </div>
-
-          {/* Step indicator */}
-          <div className="hidden sm:flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider">
-            <span className="flex items-center gap-1.5" style={{ color: "#60a5fa" }}>
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#60a5fa] text-[10px] text-black">1</span>
-              Seats
+          {/* Only surface this as an alert when live inventory sync drops —
+              a permanent "Live" badge carries no information the customer
+              acts on, so we stay silent while the connection is healthy. */}
+          {!realtimeConnected && (
+            <span
+              className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[10px] font-semibold text-amber-300"
+              title="Live inventory updates unavailable — falling back to periodic refresh"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+              Reconnecting
             </span>
-            <span className="text-white/20">→</span>
-            <span className="flex items-center gap-1.5 text-white/35">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full border border-white/20 text-[10px]">2</span>
-              Payment
-            </span>
-          </div>
+          )}
         </div>
       </header>
 
       {/* Body */}
-      <div className="mx-auto grid w-full max-w-[1540px] grid-cols-1 gap-6 px-4 py-8 pb-20 sm:px-6 lg:px-8 xl:grid-cols-[minmax(0,1fr)_340px] xl:gap-8">
+      <div className="mx-auto w-full max-w-[1540px] px-4 pt-8 sm:px-6 lg:px-8">
+        <CheckoutProgress currentStep={1} />
+      </div>
+      <div className="mx-auto grid w-full max-w-[1540px] grid-cols-1 gap-6 px-4 pb-20 sm:px-6 lg:px-8 xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-8">
 
         {/* Left: map */}
-        <div className="flex flex-col gap-5">
-
-          {/* Error banner */}
-          {errorMsg && (
-            <div className="flex items-start gap-3 bg-[#2a1515] border border-[#e84545]/40 rounded-lg p-4 text-sm text-[#f87171]">
-              <AlertTriangle size={15} className="shrink-0 mt-0.5" />
-              <span className="flex-1">{errorMsg}</span>
-              <button onClick={() => setErrorMsg(null)} className="text-[#f87171]/50 hover:text-[#f87171] transition-colors">
-                <X size={13} />
-              </button>
-            </div>
-          )}
+        <div className="flex min-w-0 flex-col gap-5">
 
           {/* Seat map panel */}
           <div
-            className="relative rounded-2xl border border-white/10 px-3 py-6 sm:px-6"
+            className="relative min-w-0 overflow-hidden rounded-2xl border border-white/10 px-3 py-6 sm:px-6"
             style={{ background: "radial-gradient(120% 80% at 50% 0%, rgba(96,165,250,0.05), rgba(255,255,255,0.015) 45%, transparent 75%)" }}
           >
             <div className={`relative ${showProjector ? "pb-7" : ""}`}>
@@ -468,8 +675,14 @@ export default function SeatBookingPage() {
               <AudioCoverageFrame config={auditoriumConfig}>
 
           {/* Seat rows */}
-          <div className="flex flex-col items-center overflow-x-auto pb-2">
-              <div className="flex w-max flex-col gap-2 px-5">
+          <div className="flex min-w-0 flex-col items-center overflow-x-auto pb-2">
+              <div
+                className="flex w-full flex-col gap-2 px-1"
+                style={{
+                  minWidth: `${seatGridMinWidth}px`,
+                  maxWidth: `${seatGridMaxWidth}px`,
+                }}
+              >
                 {physicalRows.map(({ rowIndex, rowLabel, positions }) => {
                   const renderedGroups = new Set<string>();
                   const rowSeat = positions
@@ -478,9 +691,12 @@ export default function SeatBookingPage() {
                   const rowTheme = SEAT_TYPE_THEME[rowSeat?.type ?? "STANDARD"];
 
                   return (
-                    <div key={rowIndex} className="flex items-center gap-2">
-                      <span className="w-5 shrink-0 text-center text-[11px] font-bold" style={{ color: rowTheme.text }}>{rowLabel}</span>
-                      <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${physicalColumnCount}, 2.25rem)` }}>
+                    <div key={rowIndex} className="flex w-full min-w-0 items-center gap-1 sm:gap-2">
+                      <span className="w-4 shrink-0 text-center text-[10px] font-bold sm:w-5 sm:text-[11px]" style={{ color: rowTheme.text }}>{rowLabel}</span>
+                      <div
+                        className="grid min-w-0 flex-1 gap-1 sm:gap-1.5"
+                        style={{ gridTemplateColumns: `repeat(${physicalColumnCount}, minmax(0, 1fr))` }}
+                      >
                         {positions.map((position) => {
                           const positionKey = position.positionId ?? `${rowIndex}-${position.columnIndex}`;
                           if (position.positionType === "AISLE") return <span key={positionKey} className="h-8" aria-label="Aisle" />;
@@ -494,13 +710,13 @@ export default function SeatBookingPage() {
                           if (!seat) return <span key={positionKey} className="h-8 rounded-md border border-white/[0.08] bg-white/[0.025]" title="Unavailable" />;
                           const colSpan = Math.max(1, seat.colSpan ?? (seat.type === "COUPLE" ? 2 : 1));
                           return (
-                            <div key={positionKey} style={{ gridColumn: `span ${colSpan}` }}>
+                            <div key={positionKey} className="min-w-0" style={{ gridColumn: `span ${colSpan}` }}>
                               <SeatBtn seat={seat} selected={selected.has(seat.seatId)} conflict={conflicts.has(seat.seatId)} onToggle={toggleSeat} />
                             </div>
                           );
                         })}
                       </div>
-                      <span className="w-5 shrink-0 text-center text-[11px] font-bold" style={{ color: rowTheme.text }}>{rowLabel}</span>
+                      <span className="w-4 shrink-0 text-center text-[10px] font-bold sm:w-5 sm:text-[11px]" style={{ color: rowTheme.text }}>{rowLabel}</span>
                     </div>
                   );
                 })}
@@ -513,24 +729,39 @@ export default function SeatBookingPage() {
 
           {/* Legend */}
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2 pt-4 border-t border-white/[0.06]">
-            {(showProjector || showSpeakers) && (
-              <div className="flex items-center gap-3 rounded-full border border-white/[0.08] bg-white/[0.025] px-3 py-1.5">
-                {showProjector && <span className="flex items-center gap-1.5 text-[10px] text-white/65"><ProjectorLegendMarker /> Projector</span>}
-                {showSpeakers && <span className="flex items-center gap-1.5 text-[10px] text-white/65"><SpeakerLegendMarker /> Speaker</span>}
-              </div>
-            )}
             {[
-              { label: "Standard", style: SEAT_TYPE_THEME.STANDARD },
-              { label: "VIP", style: SEAT_TYPE_THEME.VIP },
-              { label: "Couple", style: SEAT_TYPE_THEME.COUPLE },
-              { label: "Accessible", style: SEAT_TYPE_THEME.ACCESSIBLE },
-              { label: "Selected", style: { background: "linear-gradient(to bottom, #93c5fd, #2563eb)", borderColor: "#60a5fa" } },
-              { label: "Locked", style: { background: "rgba(239,68,68,0.12)", borderColor: "rgba(248,113,113,0.5)" } },
-              { label: "Booked", style: { background: "rgba(255,255,255,0.025)", borderColor: "rgba(255,255,255,0.08)" } },
-            ].map(({ style, label }) => (
-              <div key={label} className="flex items-center gap-1.5 rounded-full bg-white/[0.03] border border-white/[0.06] px-2.5 py-1">
-                <div className="h-3 w-3 rounded-[3px] border" style={style} />
-                <span className="text-[10px] text-white/60">
+              {
+                label: "Standard",
+                swatch: { background: SEAT_TYPE_THEME.STANDARD.bg, borderColor: SEAT_TYPE_THEME.STANDARD.border },
+                color: SEAT_TYPE_THEME.STANDARD.text,
+              },
+              {
+                label: "VIP",
+                swatch: { background: SEAT_TYPE_THEME.VIP.bg, borderColor: SEAT_TYPE_THEME.VIP.border },
+                color: SEAT_TYPE_THEME.VIP.text,
+              },
+              {
+                label: "Couple",
+                swatch: { background: SEAT_TYPE_THEME.COUPLE.bg, borderColor: SEAT_TYPE_THEME.COUPLE.border },
+                color: SEAT_TYPE_THEME.COUPLE.text,
+              },
+              {
+                label: "Selected",
+                swatch: { background: "linear-gradient(to bottom, #93c5fd, #2563eb)", borderColor: "#60a5fa" },
+                color: "#93c5fd",
+              },
+              {
+                label: "Unavailable",
+                swatch: { background: "rgba(255,255,255,0.025)", borderColor: "rgba(255,255,255,0.16)" },
+                color: "rgba(255,255,255,0.5)",
+              },
+            ].map(({ swatch, color, label }) => (
+              <div
+                key={label}
+                className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.025] px-3 py-1.5"
+              >
+                <div className="h-3.5 w-3.5 rounded-[4px] border-[1.5px]" style={swatch} />
+                <span className="text-[10px] font-semibold" style={{ color }}>
                   {label}
                 </span>
               </div>
@@ -540,125 +771,35 @@ export default function SeatBookingPage() {
         </div>
 
         {/* Right: summary */}
-        <aside className="self-start flex flex-col gap-3 xl:sticky xl:top-40">
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0a] shadow-2xl">
-            {/* Header */}
-            <div
-              className="flex items-center justify-between px-5 py-4"
-              style={{ background: "linear-gradient(135deg, rgba(96,165,250,0.12), rgba(37,99,235,0.04))", borderBottom: "1px solid rgba(255,255,255,0.08)" }}
-            >
-              <h2 className="flex items-center gap-2 text-[1.05rem] font-semibold text-white">
-                <Ticket size={16} className="text-[#60a5fa]" /> Order Summary
-              </h2>
-              {pickedSeats.length > 0 && (
-                <button onClick={clearAll}
-                  className="flex items-center gap-1 text-[10px] text-white/50 hover:text-white transition-colors cursor-pointer"
-                >
-                  <RotateCcw size={10} /> Clear
-                </button>
-              )}
-            </div>
-
-            {/* Selected seats */}
-            <div className="px-5 py-4 min-h-[130px]">
-              {pickedSeats.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-2 py-5 text-center">
-                  <Armchair size={26} className="text-white/20" />
-                  <p className="text-white/40 text-[13px]">Tap a seat on the map to start</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {pickedSeats.map((seat) => (
-                    <div key={seat.seatId} className="flex items-center justify-between rounded-lg bg-white/[0.03] px-2.5 py-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => toggleSeat(seat.seatId)}
-                          className="flex h-5 w-5 items-center justify-center rounded-full text-white/40 hover:bg-[#e84545]/15 hover:text-[#e84545] transition-colors cursor-pointer">
-                          <X size={11} />
-                        </button>
-                        <span className="font-semibold text-white/90">
-                          {seat.row}{seat.number}
-                        </span>
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wide ${
-                          seat.type === "VIP"
-                            ? "bg-[#60a5fa]/15 text-[#60a5fa]"
-                            : seat.type === "COUPLE"
-                            ? "bg-[#c084fc]/15 text-[#c084fc]"
-                            : seat.type === "ACCESSIBLE"
-                            ? "bg-[#2dd4bf]/15 text-[#2dd4bf]"
-                            : "bg-white/10 text-white/70"
-                        }`}>
-                          {seat.type}
-                        </span>
-                      </div>
-                      <span className="text-white/85 text-xs">
-                        {formatVND(seat.price)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {pickedSeats.length > 0 && (
-              <div className="border-t border-white/10 px-5 py-4 space-y-3.5">
-                {/* Seat count chips */}
-                <div className="flex flex-wrap gap-1.5">
-                  {(() => {
-                    const vip = pickedSeats.filter((s) => s.type === "VIP").length;
-                    const couple = pickedSeats.filter((s) => s.type === "COUPLE").length;
-                    const accessible = pickedSeats.filter((s) => s.type === "ACCESSIBLE").length;
-                    const std = pickedSeats.length - vip - couple - accessible;
-                    return (
-                      <>
-                        {std > 0 && (
-                          <span className="rounded-full bg-white/[0.06] px-2.5 py-0.5 text-[11px] text-white/70">
-                            {std} Standard
-                          </span>
-                        )}
-                        {vip > 0 && (
-                          <span className="rounded-full bg-[#60a5fa]/12 px-2.5 py-0.5 text-[11px] text-[#60a5fa]">
-                            {vip} VIP
-                          </span>
-                        )}
-                        {couple > 0 && (
-                          <span className="rounded-full bg-[#c084fc]/12 px-2.5 py-0.5 text-[11px] text-[#c084fc]">
-                            {couple} Couple
-                          </span>
-                        )}
-                        {accessible > 0 && (
-                          <span className="rounded-full bg-[#2dd4bf]/12 px-2.5 py-0.5 text-[11px] text-[#2dd4bf]">
-                            {accessible} Accessible
-                          </span>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-
-                <div className="flex items-end justify-between">
-                  <span className="text-[10px] text-white/50 uppercase tracking-[0.15em]">
-                    Total · {pickedSeats.length} seat{pickedSeats.length !== 1 ? "s" : ""}
-                  </span>
-                  <span className="text-2xl font-bold text-[#60a5fa] drop-shadow-[0_0_14px_rgba(96,165,250,0.35)]">
-                    {formatVND(total)}
-                  </span>
-                </div>
-
-                <button
-                  onClick={handleConfirm}
-                  disabled={screen === "confirming"}
-                  className="group flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#60a5fa] to-[#2563eb] py-3 text-base font-bold tracking-wide text-black shadow-[0_8px_26px_rgba(37,99,235,0.4)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_32px_rgba(37,99,235,0.55)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 cursor-pointer"
-                >
-                  {screen === "confirming" ? (
-                    <><Loader2 size={16} className="animate-spin" /> Confirming…</>
-                  ) : (
-                    <>Confirm Booking <ChevronRight size={16} className="transition-transform group-hover:translate-x-0.5" /></>
-                  )}
-                </button>
-              </div>
-            )}
-          </div>
-        </aside>
+        <BookingSummaryCard
+          movieName={showtimeDetails.movieTitle}
+          posterUrl={showtimeDetails.posterUrl}
+          ageRatingCode={showtimeDetails.ageRatingCode}
+          durationMinutes={showtimeDetails.duration || undefined}
+          cinemaName={showtimeDetails.cinemaName}
+          roomName={showtimeDetails.hall}
+          showDateLabel={formatBookingDate(new Date(showtimeDetails.dateTime))}
+          showTimeLabel={new Date(showtimeDetails.dateTime).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+          seats={pickedSeats.map((seat) => ({
+            id: seat.seatId,
+            code: seat.seatCode?.trim() || `${seat.row}${seat.number}`,
+            type: seat.type,
+            price: seat.price,
+          }))}
+          onRemoveSeat={(seat) => toggleSeat(seat.id!)}
+          maxSeats={holdPolicy.maxSeatsPerBooking}
+          holdMinutes={Math.round(holdPolicy.ttlSeconds / 60)}
+          emptyHint="Select seats from the map"
+          total={total}
+          headerAction={pickedSeats.length > 0 ? { label: "Clear all", onClick: clearAll } : undefined}
+          backAction={{ label: "Back", onClick: () => navigate(-1) }}
+          primaryAction={pickedSeats.length > 0 ? {
+            label: screen === "confirming" ? "Reserving seats..." : "Continue",
+            onClick: handleConfirm,
+            disabled: screen === "confirming",
+            loading: screen === "confirming",
+          } : undefined}
+        />
       </div>
 
       {/* Profile completion modal — overlays the booking page */}

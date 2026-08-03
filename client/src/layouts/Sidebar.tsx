@@ -1,19 +1,8 @@
 import { useAuth } from "../context/AuthContext";
 import { useState, useEffect } from "react";
-import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, Users, UserCog, BarChart2, Settings, Clapperboard, LogOut, Gift, ShoppingCart, MapPin, UserSquare2, ChevronDown, List, ShieldCheck, Monitor, Factory, Armchair, Languages } from "lucide-react";
+import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, Users, UserCog, BarChart2, Settings, Clapperboard, Gift, ShoppingCart, MapPin, UserSquare2, ChevronDown, List, ShieldCheck, Monitor, Factory, Armchair, Languages, CircleDollarSign, Popcorn } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { movieApi } from "../api/movieApi";
-
-const roleLabels: Record<string, string> = {
-  ROLE_SUPER_ADMIN: "Super Admin",
-  ROLE_ADMIN: "Admin",
-  ROLE_EMPLOYEE: "Employee",
-  ROLE_MEMBER: "Member",
-};
-
-function getInitials(username: string): string {
-  return username.slice(0, 2).toUpperCase();
-}
 
 type NavChild = { icon: React.ElementType; label: string; path: string; roles?: string[] };
 type NavItem = {
@@ -23,9 +12,10 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { icon: LayoutDashboard, label: "Dashboard", id: "dashboard", path: "/admin", group: "main" },
+  { icon: LayoutDashboard, label: "Dashboard", id: "dashboard", path: "/admin", group: "main", roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"] },
   {
     icon: Film, label: "Movies", id: "movies", path: "/admin/movies", group: "catalog",
+    roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"],
     children: [
       { icon: List,        label: "Movie List",  path: "/admin/movies" },
       { icon: Tags,        label: "Genres",      path: "/admin/genres",      roles: ["ROLE_ADMIN"] },
@@ -44,9 +34,24 @@ const navItems: NavItem[] = [
       { icon: Armchair,  label: "All Rooms", path: "/admin/rooms" },
     ],
   },
-  { icon: Calendar, label: "Showtimes", id: "showtimes", path: "/admin/showtimes", group: "ops" },
-  { icon: Ticket,      label: "Bookings",     id: "bookings",   path: "/admin/bookings",   group: "ops" },
+  {
+    icon: Calendar, label: "Showtimes", id: "showtimes", path: "/admin/showtimes", group: "ops",
+    roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"],
+    children: [
+      { icon: Calendar, label: "Showtime Workspace", path: "/admin/showtimes" },
+      { icon: CircleDollarSign, label: "Price Books", path: "/admin/price-books", roles: ["ROLE_ADMIN"] },
+    ],
+  },
+  { icon: Ticket,      label: "Bookings",     id: "bookings",   path: "/admin/bookings",   group: "ops", roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"] },
   { icon: ShoppingCart,label: "Sell Tickets", id: "sell",       path: "/admin/sell",       group: "ops", roles: ["ROLE_EMPLOYEE"] },
+  {
+    icon: Popcorn, label: "Concessions", id: "concessions", path: "/admin/concessions/fulfillment", group: "ops",
+    roles: ["ROLE_ADMIN", "ROLE_BRANCH_MANAGER", "ROLE_EMPLOYEE"],
+    children: [
+      { icon: ShoppingCart, label: "Fulfillment", path: "/admin/concessions/fulfillment", roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"] },
+      { icon: Tags, label: "Catalog & Stock", path: "/admin/concessions/catalog", roles: ["ROLE_ADMIN", "ROLE_BRANCH_MANAGER"] },
+    ],
+  },
   { icon: UserCog,     label: "Employees",    id: "employees",  path: "/admin/employees",  group: "ops",    roles: ["ROLE_ADMIN"] },
   { icon: Users,       label: "Users",        id: "users",      path: "/admin/users",      group: "ops",    roles: ["ROLE_ADMIN"] },
   { icon: Gift,        label: "Promotions",   id: "promotions", path: "/admin/promotions", group: "ops",    roles: ["ROLE_ADMIN"] },
@@ -61,7 +66,7 @@ interface SidebarProps {
 export function Sidebar({ isDarkMode = true }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   // Auto-expand items whose children match the current path
   const autoExpanded = navItems
@@ -83,11 +88,6 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
       })
       .catch(() => {});
   }, [user?.role]);
-
-  const handleLogout = () => {
-    logout();
-    navigate("/login", { replace: true });
-  };
 
   return (
     <aside
@@ -286,94 +286,6 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
         })}
       </nav>
 
-      {/* Divider */}
-      <div
-        style={{
-          height: "1px",
-          background: "var(--border-color)",
-          margin: "0 20px 16px",
-          transition: "background 0.25s ease",
-        }}
-      />
-
-      {/* User profile */}
-      <div style={{ padding: "0 16px 24px" }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            padding: "10px 12px",
-            borderRadius: "8px",
-            background: isDarkMode ? "rgba(255,255,255,0.025)" : "rgba(0,0,0,0.02)",
-            border: "1px solid var(--border-color)",
-            transition: "all 0.25s ease",
-          }}
-        >
-          <div
-            style={{
-              width: "32px",
-              height: "32px",
-              borderRadius: "50%",
-              background: "linear-gradient(135deg, #60a5fa 0%, #2563eb 100%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "12px",
-              fontWeight: 700,
-              color: "#ffffff",
-              flexShrink: 0,
-              boxShadow: isDarkMode ? "0 0 10px rgba(59, 130, 246, 0.4)" : "0 2px 6px rgba(37, 99, 235, 0.3)",
-            }}
-          >
-            {getInitials(user?.username ?? "?")}
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-              style={{
-                color: "var(--text-main)",
-                fontSize: "12.5px",
-                fontWeight: 600,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                transition: "color 0.25s ease",
-              }}
-            >
-              {user?.username ?? "—"}
-            </div>
-            <div style={{ color: "var(--text-sub)", fontSize: "10.5px", transition: "color 0.25s ease" }}>
-              {roleLabels[user?.role ?? ""] ?? user?.role ?? ""}
-            </div>
-          </div>
-          <button
-            onClick={handleLogout}
-            style={{
-              border: "none",
-              background: "transparent",
-              padding: 0,
-              margin: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-            }}
-            title="Logout"
-          >
-            <LogOut
-              size={14}
-              style={{
-                color: "var(--text-muted)",
-                cursor: "pointer",
-                flexShrink: 0,
-                transition: "color 0.2s ease",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = isDarkMode ? "#3b82f6" : "#2563eb")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-            />
-          </button>
-        </div>
-      </div>
     </aside>
   );
 }

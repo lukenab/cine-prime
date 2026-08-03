@@ -11,6 +11,11 @@ export interface CreateAccountPayload {
     fullName: string;
     email: string;
     role: string;
+    phoneNumber?: string;
+    dateOfBirth?: string;
+    gender?: string;
+    identityCard?: string;
+    address?: string;
 }
 
 export interface ActivateAccountPayload {
@@ -86,6 +91,14 @@ export const authApi = {
         return axiosClient.post('/api/auth/resend-otp', payload);
     },
 
+    forgotPassword: (email: string) => {
+        return axiosClient.post('/api/auth/password/forgot', { email });
+    },
+
+    resetPassword: (payload: { token: string; newPassword: string }) => {
+        return axiosClient.post('/api/auth/password/reset', payload);
+    },
+
     /** Admin-only. Issue #161/#162: payload is now { fullName, email, role } — no
      *  username/password. Account is created PENDING; an activation email is sent. */
     createAccount: (payload: CreateAccountPayload) => {
@@ -106,6 +119,14 @@ export const authApi = {
 
     getAllAccounts: () => {
         return axiosClient.get('/api/accounts');
+    },
+
+    searchAccounts: (params: { query?: string; status?: string; role?: string; page?: number; size?: number }) => {
+        return axiosClient.get('/api/accounts/search', { params });
+    },
+
+    getAccountStats: () => {
+        return axiosClient.get('/api/accounts/stats');
     },
 
     getAccountById: (accountId: string) => {

@@ -46,12 +46,6 @@ public class CreateMovieRequest {
     @NotEmpty
     List<Long> genreIds;
 
-    /**
-     * Legacy presentation-format projection.
-     * New clients configure complete MovieScreeningVersion records after saving the draft.
-     */
-    List<Integer> formatIds;
-
     // ── Media ─────────────────────────────────────────────────
     @Size(max = 500)
     String posterUrl;

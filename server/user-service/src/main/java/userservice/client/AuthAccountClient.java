@@ -1,0 +1,26 @@
+package userservice.client;
+
+import movie.theater.common.dto.ApiResponse;
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestBody;
+import userservice.dto.AuthAccountSummary;
+import userservice.dto.AuthAccountStatusRequest;
+
+@FeignClient(name = "auth-service", path = "/api/internal/accounts")
+public interface AuthAccountClient {
+
+    @GetMapping("/{accountId}")
+    ApiResponse<AuthAccountSummary> getAccount(
+            @PathVariable String accountId,
+            @RequestHeader("X-Internal-Service-Key") String internalKey);
+
+    @PatchMapping("/{accountId}/status")
+    ApiResponse<Void> updateStatus(
+            @PathVariable String accountId,
+            @RequestHeader("X-Internal-Service-Key") String internalKey,
+            @RequestBody AuthAccountStatusRequest request);
+}

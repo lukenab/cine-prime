@@ -3,7 +3,14 @@ server:
 
 spring:
   application:
-    name: booking-service 
+    name: booking-service
+  config:
+    # Support repository-level .env files for local IDE/Maven runs.
+    # Real environment variables still take precedence in deployed environments.
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:../.env[.properties]
+      - optional:file:../../.env[.properties]
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/booking_db}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
@@ -19,26 +26,66 @@ spring:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false   
     properties:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+  flyway:
+    enabled: true
+    locations: ${BOOKING_FLYWAY_LOCATIONS:classpath:db/migration,classpath:db/seed}
 
 eureka:
   instance:
-    hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
-    prefer-ip-address: false
+    # API Gateway runs in Docker. Advertising "localhost" would make the
+    # gateway call its own container instead of this host process.
+    prefer-ip-address: true
   client:
     service-url:
       defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
 jwt:
-  signerKey: 873bcf3b6023c6cfac735831cc01cbd59c6f64c2341050f12e5f0224d7edea62
+  signerKey: ${JWT_SIGNER_KEY}
 booking:
   quote:
     ttl-seconds: 300
   internal-auth:
     token-ttl-seconds: 60
+  abuse:
+    max-active-pending: ${BOOKING_MAX_ACTIVE_PENDING:3}
+    max-attempts-per-minute: ${BOOKING_MAX_ATTEMPTS_PER_MINUTE:10}
   cancel:
-    mins-before-showtime: 15
+    mins-before-showtime: ${BOOKING_CANCEL_MINS_BEFORE_SHOWTIME:60}
+  expiry:
+    fixed-delay-ms: ${BOOKING_EXPIRY_FIXED_DELAY_MS:30000}
+  compensation:
+    fixed-delay-ms: ${BOOKING_COMPENSATION_FIXED_DELAY_MS:5000}
+  outbox:
+    fixed-delay-ms: ${BOOKING_OUTBOX_FIXED_DELAY_MS:1000}
+    topic: ${BOOKING_OUTBOX_TOPIC:booking.events.v1}
+  payment:
+    webhook-secret: ${BOOKING_PAYMENT_WEBHOOK_SECRET:local-demo-payment-secret}
+  ticket-pass:
+    secret: ${BOOKING_TICKET_PASS_SECRET:local-demo-ticket-pass-secret-change-me}
+    key-version: ${BOOKING_TICKET_PASS_KEY_VERSION:v1}
+
+movie-service:
+  url: ${MOVIE_SERVICE_URL:http://localhost:8081}
+  internal-key: ${INTERNAL_SERVICE_KEY}
+
+payment-service:
+  url: ${PAYMENT_SERVICE_URL:http://localhost:8083}
+  internal-key: ${INTERNAL_SERVICE_KEY}
+
+concession-service:
+  url: ${CONCESSION_SERVICE_URL:http://localhost:8085}
+  internal-key: ${INTERNAL_SERVICE_KEY}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized

@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -98,7 +99,7 @@ class AutoShowtimeGenerationImmediateDispatchTest {
         });
 
         var response = service.submitRun(
-                new AutoShowtimeGenerationRequest(start, start, List.of(2L), List.of(1L), null, null, null),
+                new AutoShowtimeGenerationRequest(start, start, List.of(2L), List.of(1L), null, null, null, null),
                 "admin"
         );
 
@@ -106,5 +107,64 @@ class AutoShowtimeGenerationImmediateDispatchTest {
         ArgumentCaptor<AutoShowtimeRunAcceptedEvent> event = ArgumentCaptor.forClass(AutoShowtimeRunAcceptedEvent.class);
         verify(eventPublisher).publishEvent(event.capture());
         assertEquals(41L, event.getValue().generationRunId());
+    }
+
+    @Test
+    void excludedRoomIdOutsideRequestedClustersIsSilentlyIgnored() {
+        LocalDate start = LocalDate.now().plusDays(3);
+        ShowtimeAllocationPolicy policy = ShowtimeAllocationPolicy.builder()
+                .policyCode("DEFAULT")
+                .planningHorizonStartDays(0)
+                .planningHorizonEndDays(10)
+                .businessTimezone("UTC")
+                .build();
+        Movie movie = Movie.builder().movieId(1L).originalTitle("Test Movie").status(MovieStatus.APPROVED).build();
+        CinemaCluster requestedCluster = CinemaCluster.builder().clusterId(2L).status(ClusterStatus.ACTIVE).build();
+        CinemaCluster otherCluster = CinemaCluster.builder().clusterId(99L).status(ClusterStatus.ACTIVE).build();
+        CinemaRoom roomInRequestedCluster = CinemaRoom.builder()
+                .cinemaRoomId(3L)
+                .cluster(requestedCluster)
+                .status(CinemaRoomStatus.ACTIVE)
+                .totalSeatCapacity(100)
+                .build();
+        /// Room hợp lệ nhưng thuộc cluster KHÔNG nằm trong request.cinemaClusterIds - phải bị
+        /// âm thầm bỏ qua, không throw exception, run vẫn ACCEPTED bình thường.
+        CinemaRoom roomOutsideRequestedClusters = CinemaRoom.builder()
+                .cinemaRoomId(50L)
+                .cluster(otherCluster)
+                .status(CinemaRoomStatus.ACTIVE)
+                .totalSeatCapacity(100)
+                .build();
+        RoomLayout layout = RoomLayout.builder()
+                .status(LayoutStatus.ACTIVE)
+                .personCapacity(100)
+                .sellableUnitCount(100)
+                .build();
+        ShowtimeCandidate candidate = org.mockito.Mockito.mock(ShowtimeCandidate.class);
+
+        when(policyRepository.findByPolicyCodeAndActiveTrue("DEFAULT")).thenReturn(Optional.of(policy));
+        when(movieRepository.findById(1L)).thenReturn(Optional.of(movie));
+        when(cinemaClusterRepository.findById(2L)).thenReturn(Optional.of(requestedCluster));
+        when(cinemaRoomRepository.findByCluster_ClusterId(2L)).thenReturn(List.of(roomInRequestedCluster));
+        when(roomLayoutRepository.findByCinemaRoomCinemaRoomIdAndStatus(3L, LayoutStatus.ACTIVE))
+                .thenReturn(Optional.of(layout));
+        when(cinemaRoomRepository.findAllById(List.of(50L))).thenReturn(List.of(roomOutsideRequestedClusters));
+        when(candidate.getMovieId()).thenReturn(1L);
+        when(candidateFactory.buildRawCandidates(any(ShowtimeGenerationRun.class))).thenReturn(List.of(candidate));
+        when(generationRunRepository.findByIdempotencyKey(any())).thenReturn(Optional.empty());
+        ArgumentCaptor<ShowtimeGenerationRun> runCaptor = ArgumentCaptor.forClass(ShowtimeGenerationRun.class);
+        when(generationRunRepository.saveAndFlush(runCaptor.capture())).thenAnswer(invocation -> {
+            ShowtimeGenerationRun saved = invocation.getArgument(0);
+            saved.setGenerationRunId(41L);
+            return saved;
+        });
+
+        var response = service.submitRun(
+                new AutoShowtimeGenerationRequest(start, start, List.of(2L), List.of(1L), null, null, null, List.of(50L)),
+                "admin"
+        );
+
+        assertEquals(41L, response.generationRunId());
+        assertTrue(runCaptor.getValue().getExcludedRooms().isEmpty());
     }
 }

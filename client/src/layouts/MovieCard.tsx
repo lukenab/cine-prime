@@ -1,11 +1,11 @@
-import { Star, Clock, Ticket, Calendar } from "lucide-react";
+import { Clock, Ticket, Calendar, Play } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 interface Movie {
   id: number;
   title: string;
   genre: string;
-  rating: number;
+  rating?: number;
   duration: string;
   image: string;
   badge?: string;
@@ -13,30 +13,29 @@ interface Movie {
   /** When set, the top-right badge shows this release-date label with a calendar icon
    *  instead of the star rating — a numeric rating doesn't make sense for an unreleased film. */
   releaseLabel?: string;
+  trailerUrl?: string;
 }
 
 interface MovieCardProps {
   movie: Movie;
-  /** When provided, clicking the card / Book button opens the detail carousel
-   *  instead of navigating straight to the showtime page. */
-  onBook?: () => void;
+  onTrailer?: () => void;
 }
 
-export function MovieCard({ movie, onBook }: MovieCardProps) {
+export function MovieCard({ movie, onTrailer }: MovieCardProps) {
   const navigate = useNavigate();
-  const handleBook = () => (onBook ? onBook() : navigate(`/showtime/${movie.id}`));
+  const handleBook = () => navigate(`/showtime/${movie.id}`);
 
   return (
     <div
       onClick={handleBook}
       className="relative flex-shrink-0 rounded-2xl overflow-hidden cursor-pointer group"
       style={{
-        width: "220px",
+        width: "240px",
         transition: "transform 0.35s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.35s ease",
       }}
       onMouseEnter={(e) => {
-        (e.currentTarget as HTMLDivElement).style.transform = "scale(1.07)";
-        (e.currentTarget as HTMLDivElement).style.boxShadow = "0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,215,0,0.25)";
+        (e.currentTarget as HTMLDivElement).style.transform = "scale(1.05)";
+        (e.currentTarget as HTMLDivElement).style.boxShadow = "0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(59,130,246,0.35)";
         (e.currentTarget as HTMLDivElement).style.zIndex = "10";
       }}
       onMouseLeave={(e) => {
@@ -46,7 +45,7 @@ export function MovieCard({ movie, onBook }: MovieCardProps) {
       }}
     >
       {/* Poster */}
-      <div className="relative" style={{ height: "330px" }}>
+      <div className="relative" style={{ height: "360px" }}>
         <img
           src={movie.image}
           alt={movie.title}
@@ -79,7 +78,7 @@ export function MovieCard({ movie, onBook }: MovieCardProps) {
         )}
 
         {/* Rating / release date */}
-        <div
+        {(movie.releaseLabel || movie.rating != null) && <div
           className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 rounded-lg"
           style={{ backgroundColor: "rgba(5,5,5,0.75)", backdropFilter: "blur(8px)" }}
         >
@@ -89,12 +88,9 @@ export function MovieCard({ movie, onBook }: MovieCardProps) {
               <span style={{ color: "#FFD700", fontSize: "0.65rem", fontWeight: 700 }}>{movie.releaseLabel}</span>
             </>
           ) : (
-            <>
-              <Star size={10} fill="#FFD700" style={{ color: "#FFD700" }} />
-              <span style={{ color: "#FFD700", fontSize: "0.7rem", fontWeight: 700 }}>{movie.rating}</span>
-            </>
+            <span style={{ color: "#FFD700", fontSize: "0.7rem", fontWeight: 700 }}>{movie.rating}</span>
           )}
-        </div>
+        </div>}
 
         {/* Bottom info */}
         <div className="absolute bottom-0 left-0 right-0 p-4" style={{ gap: "6px", display: "flex", flexDirection: "column" }}>
@@ -120,7 +116,7 @@ export function MovieCard({ movie, onBook }: MovieCardProps) {
 
       {/* Hover overlay CTA */}
       <div
-        className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+        className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
         style={{ backdropFilter: "blur(0px)" }}
       >
         <button
@@ -128,19 +124,25 @@ export function MovieCard({ movie, onBook }: MovieCardProps) {
             e.stopPropagation();
             handleBook();
           }}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-full"
+          className="flex w-full max-w-[9rem] items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 px-4 py-2.5 text-white shadow-[0_8px_22px_rgba(37,99,235,0.3)] transition-all duration-200 hover:-translate-y-0.5 hover:from-blue-500 hover:to-blue-400 hover:shadow-[0_10px_26px_rgba(37,99,235,0.4)]"
           style={{
-            background: "linear-gradient(135deg, #FFD700, #FFA500)",
-            color: "#050505",
             fontWeight: 800,
-            fontSize: "0.8rem",
-            transform: "translateY(4px)",
-            transition: "transform 0.3s ease",
-            boxShadow: "0 8px 24px rgba(255,215,0,0.4)",
+            fontSize: "0.75rem",
           }}
         >
-          <Ticket size={13} />
-          {onBook ? "View Details" : "Book Ticket"}
+          <Ticket size={12} />
+          Buy tickets
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onTrailer?.();
+          }}
+          className="flex w-full max-w-[9rem] items-center justify-center gap-1.5 rounded-lg border border-blue-400/45 bg-slate-950/80 px-4 py-2.5 text-xs font-bold text-blue-100 backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-300/80 hover:bg-blue-950/80 hover:text-white"
+        >
+          <Play size={12} fill="currentColor" />
+          Watch trailer
         </button>
       </div>
     </div>

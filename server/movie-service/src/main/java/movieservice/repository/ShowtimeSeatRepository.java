@@ -2,13 +2,13 @@ package movieservice.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import jakarta.persistence.LockModeType;
 import movieservice.entity.ShowtimeSeat;
+import movieservice.enums.ShowtimeSeatStatus;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -19,16 +19,41 @@ public interface ShowtimeSeatRepository extends JpaRepository<ShowtimeSeat, Long
 
     Optional<ShowtimeSeat> findByShowTime_ShowTimeIdAndSeat_SeatId(Long showtimeId, Long seatId);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             SELECT s FROM ShowtimeSeat s
             WHERE s.showTime.showTimeId = :showtimeId
               AND s.showtimeSeatId IN :seatIds
             ORDER BY s.showtimeSeatId
             """)
-    List<ShowtimeSeat> findAllByShowtimeAndIdsForUpdate(
+    List<ShowtimeSeat> findAllByShowtimeAndIds(
             @Param("showtimeId") Long showtimeId,
             @Param("seatIds") List<Long> seatIds);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT s FROM ShowtimeSeat s
+            WHERE s.showTime.showTimeId = :showtimeId
+              AND (
+                    s.showtimeSeatId IN :seatIds
+                    OR (s.seatGroupId IS NOT NULL AND s.seatGroupId IN :seatGroupIds)
+              )
+            ORDER BY s.showtimeSeatId
+            """)
+    List<ShowtimeSeat> findSelectionForUpdate(
+            @Param("showtimeId") Long showtimeId,
+            @Param("seatIds") List<Long> seatIds,
+            @Param("seatGroupIds") List<String> seatGroupIds);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT s FROM ShowtimeSeat s
+            WHERE s.showTime.showTimeId = :showtimeId
+              AND s.holdId = :holdId
+            ORDER BY s.showtimeSeatId
+            """)
+    List<ShowtimeSeat> findByShowtimeAndHoldIdForUpdate(
+            @Param("showtimeId") Long showtimeId,
+            @Param("holdId") String holdId);
 
     @Query("""
             SELECT s FROM ShowtimeSeat s
@@ -42,18 +67,35 @@ public interface ShowtimeSeatRepository extends JpaRepository<ShowtimeSeat, Long
             @Param("ownerId") String ownerId,
             @Param("idempotencyKey") String idempotencyKey);
 
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
-            UPDATE ShowtimeSeat s
-               SET s.status = movieservice.enums.ShowtimeSeatStatus.AVAILABLE,
-                   s.reservedAt = NULL,
-                   s.reservedExpiresAt = NULL,
-                   s.holdId = NULL,
-                   s.reservedBy = NULL,
-                   s.holdIdempotencyKey = NULL,
-                   s.version = s.version + 1
-             WHERE s.status = movieservice.enums.ShowtimeSeatStatus.RESERVED
-               AND s.reservedExpiresAt <= :now
+            SELECT s FROM ShowtimeSeat s
+            JOIN FETCH s.showTime st
+            WHERE s.status = movieservice.enums.ShowtimeSeatStatus.RESERVED
+              AND s.reservedExpiresAt <= :now
+            ORDER BY st.showTimeId, s.holdId, s.showtimeSeatId
             """)
-    int releaseExpiredReservations(@Param("now") LocalDateTime now);
+    List<ShowtimeSeat> findExpiredReservationsForUpdate(@Param("now") LocalDateTime now);
+
+    @Query("""
+            SELECT COUNT(DISTINCT s.holdId) FROM ShowtimeSeat s
+            WHERE s.status = movieservice.enums.ShowtimeSeatStatus.RESERVED
+              AND s.holdId IS NOT NULL
+              AND s.reservedExpiresAt > CURRENT_TIMESTAMP
+            """)
+    long countActiveHolds();
+
+    long countByShowTime_ShowTimeIdAndStatus(Long showtimeId, ShowtimeSeatStatus status);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT s FROM ShowtimeSeat s
+            JOIN FETCH s.showTime st
+            WHERE (s.status = movieservice.enums.ShowtimeSeatStatus.RESERVED
+                    AND (s.holdId IS NULL OR s.reservedBy IS NULL OR s.reservedExpiresAt IS NULL))
+               OR (s.status = movieservice.enums.ShowtimeSeatStatus.SOLD
+                    AND s.bookingId IS NULL)
+            ORDER BY st.showTimeId, s.showtimeSeatId
+            """)
+    List<ShowtimeSeat> findInventoryAnomalies();
 }

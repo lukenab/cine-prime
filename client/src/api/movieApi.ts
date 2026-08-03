@@ -44,6 +44,8 @@ export type MovieApiResponse = {
   releaseDate?: string;
   country?: string;
   ageRatingCode?: string;
+  originalLanguage?: string;
+  tagline?: string;
 };
 
 export type RoomResponse = {
@@ -100,6 +102,7 @@ export type MasterDataItem = {
   code: string;
   name: string;
   description?: string;
+  active?: boolean;
 };
 
 export type RoomConfigurationTemplate = {
@@ -619,6 +622,7 @@ export type PublicMovieResponse = {
   posterUrl?: string;
   thumbnailUrl?: string;
   trailerUrl?: string;
+  releaseDate?: string;
   synopsis?: string;
   durationMinutes?: number;
   genres: GenreResponse[];
@@ -826,7 +830,6 @@ export type CreateMovieRequest = {
   /** Issue #151: all valid IDs are linked, not just one. */
   companyIds?: number[];
   genreIds: number[];
-  formatIds: number[];
   posterUrl?: string;
   thumbnailUrl?: string;
   trailerUrl?: string;
@@ -964,17 +967,27 @@ const toLegacyMovie = (movie: MovieResponse): MovieApiResponse => {
  *  aren't part of the public read-model and are left blank. */
 const toLegacyPublicMovie = (movie: PublicMovieResponse): MovieApiResponse => ({
   movieId: movie.movieId,
-  movieNameVn: movie.originalTitle,
-  movieNameEnglish: movie.originalTitle,
-  director: '',
-  actor: '',
-  content: movie.synopsis ?? '',
+  movieNameVn: movie.translations?.find((item) => item.languageCode === 'vi')?.title ?? movie.originalTitle,
+  movieNameEnglish: movie.translations?.find((item) => item.languageCode === 'en')?.title ?? movie.originalTitle,
+  director: movie.cast
+    ?.filter((item) => item.roleType === 'DIRECTOR')
+    .map((item) => item.fullName)
+    .join(', ') ?? '',
+  actor: movie.cast
+    ?.filter((item) => item.roleType === 'ACTOR')
+    .sort((left, right) => left.billingOrder - right.billingOrder)
+    .map((item) => item.fullName)
+    .join(', ') ?? '',
+  content: movie.translations?.find((item) => item.languageCode === 'vi')?.synopsis
+    ?? movie.translations?.find((item) => item.languageCode === 'en')?.synopsis
+    ?? movie.synopsis
+    ?? '',
   duration: movie.durationMinutes ?? 0,
-  version: '',
+  version: movie.formats?.map((item) => item.formatName).join(', ') ?? '',
   status: movie.displayStatus === 'NOW_SHOWING',
   movieStatus: undefined,
   displayStatus: movie.displayStatus,
-  movieProductionCompany: '',
+  movieProductionCompany: movie.companies?.map((item) => item.name).join(', ') ?? '',
   largeImage: movie.posterUrl ?? '',
   smallImage: movie.thumbnailUrl ?? movie.posterUrl ?? '',
   movieType: movie.genres?.map((item) => item.genreName) ?? [],
@@ -988,7 +1001,18 @@ const toLegacyPublicMovie = (movie: PublicMovieResponse): MovieApiResponse => ({
     updateAt: '',
   }] : [],
   createAt: '',
+  trailerUrl: movie.trailerUrl,
+  releaseDate: movie.releaseDate,
+  country: movie.country,
   ageRatingCode: movie.ageRating?.ratingCode,
+  originalLanguage: movie.originalLanguage,
+  tagline: movie.tagline,
+  gallery: movie.images
+    ?.filter((item) => item.imageType === 'STILL' || item.imageType === 'PROMOTIONAL')
+    .map((item) => item.imageUrl),
+  backdrops: movie.images
+    ?.filter((item) => item.imageType === 'BACKDROP')
+    .map((item) => item.imageUrl),
 });
 
 /** Backend uses `totalSeatCapacity`; UI has used `seatQuantity` throughout —
@@ -1098,6 +1122,9 @@ export const movieApi = {
 
   createMovieScreeningVersion: (movieId: number, payload: MovieScreeningVersionPayload) =>
     axiosClient.post(`/api/movies/${movieId}/screening-versions`, payload) as Promise<ApiWrapper<MovieScreeningVersionResponse>>,
+
+  createMovieScreeningVersions: (movieId: number, payload: MovieScreeningVersionPayload[]) =>
+    axiosClient.post(`/api/movies/${movieId}/screening-versions/batch`, payload) as Promise<ApiWrapper<MovieScreeningVersionResponse[]>>,
 
   updateMovieScreeningVersion: (
     movieId: number,

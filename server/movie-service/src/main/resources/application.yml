@@ -4,6 +4,13 @@ server:
 spring:
   application:
     name: movie-service
+  config:
+    # Spring does not load a repository-level .env file automatically when the
+    # service is started from an IDE. Environment variables still take precedence.
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:../.env[.properties]
+      - optional:file:../../.env[.properties]
   servlet:
     multipart:
       max-file-size: 5MB
@@ -12,7 +19,7 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/movie_db}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
-    password: ${SPRING_DATASOURCE_PASSWORD:123456}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -57,7 +64,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,flyway
+        include: health,info,flyway,metrics,prometheus
   endpoint:
     health:
       show-details: always
@@ -74,10 +81,19 @@ eureka:
       defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
 
 jwt:
-  signerKey: 873bcf3b6023c6cfac735831cc01cbd59c6f64c2341050f12e5f0224d7edea62
+  signerKey: ${JWT_SIGNER_KEY}
 
 tmdb:
-  api-key: 4cf6e7ff7b2095ae0d09da1cae2f1606
+  api-key: ${TMDB_API_KEY}
+  client:
+    connect-timeout: ${TMDB_CONNECT_TIMEOUT:2s}
+    read-timeout: ${TMDB_READ_TIMEOUT:6s}
+    max-attempts: ${TMDB_MAX_ATTEMPTS:3}
+    initial-backoff: ${TMDB_INITIAL_BACKOFF:250ms}
+    max-backoff: ${TMDB_MAX_BACKOFF:2s}
+    requests-per-second: ${TMDB_REQUESTS_PER_SECOND:4}
+    cache-ttl: ${TMDB_CACHE_TTL:10m}
+    cache-max-entries: ${TMDB_CACHE_MAX_ENTRIES:500}
   image:
     # Max "still" candidates surfaced/importable per movie beyond the single recommended
     # backdrop (TMDB has no dedicated "stills" endpoint for movies - these are additional
@@ -88,11 +104,32 @@ movie:
   readiness:
     # MOV-03 release gate: require >=1 future non-cancelled showtime before COMING_SOON -> NOW_SHOWING.
     require-showtime-for-release: ${MOVIE_REQUIRE_SHOWTIME_FOR_RELEASE:false}
+  lifecycle:
+    # Scheduler dates are business dates, never JVM/system-default dates.
+    time-zone: ${MOVIE_LIFECYCLE_TIME_ZONE:Asia/Ho_Chi_Minh}
+    close-cron: ${MOVIE_LIFECYCLE_CLOSE_CRON:0 5 0 * * *}
+    open-cron: ${MOVIE_LIFECYCLE_OPEN_CRON:0 10 0 * * *}
+
+internal-service:
+  key: ${INTERNAL_SERVICE_KEY}
 
 showtime:
   seat-hold:
-    ttl-seconds: ${SHOWTIME_SEAT_HOLD_TTL_SECONDS:600}
+    max-seats-per-booking: ${SHOWTIME_SEAT_HOLD_MAX_SEATS:8}
+    ttl-by-channel:
+      WEB: ${SHOWTIME_SEAT_HOLD_TTL_WEB:10m}
+      MOBILE: ${SHOWTIME_SEAT_HOLD_TTL_MOBILE:8m}
+      COUNTER: ${SHOWTIME_SEAT_HOLD_TTL_COUNTER:3m}
+    rate-limit:
+      window: ${SHOWTIME_SEAT_HOLD_RATE_WINDOW:1m}
+      account: ${SHOWTIME_SEAT_HOLD_RATE_ACCOUNT:12}
+      ip: ${SHOWTIME_SEAT_HOLD_RATE_IP:30}
+      showtime: ${SHOWTIME_SEAT_HOLD_RATE_SHOWTIME:120}
     cleanup-delay-ms: ${SHOWTIME_SEAT_HOLD_CLEANUP_DELAY_MS:30000}
+    reconciliation-delay-ms: ${SHOWTIME_SEAT_HOLD_RECONCILIATION_DELAY_MS:60000}
+    outbox-delay-ms: ${SHOWTIME_SEAT_HOLD_OUTBOX_DELAY_MS:1000}
+    event-topic: ${SHOWTIME_SEAT_HOLD_EVENT_TOPIC:seat.inventory.events.v1}
+    websocket-group: ${SHOWTIME_SEAT_HOLD_WEBSOCKET_GROUP:${spring.application.name}-seat-ws-${random.uuid}}
 
 auto-showtime:
   # Immediate dispatch is the normal path; this poller recovers ACCEPTED runs
@@ -107,7 +144,7 @@ auto-showtime:
   manual-execution:
     enabled: ${AUTO_SHOWTIME_MANUAL_EXECUTION_ENABLED:false}
 
-CLOUDINARY:
-  CLOUD_NAME: dzlfgmtbc
-  API_KEY: 144287537763843
-  API_SECRET: 7kJ1TfEb7kEAVArwaY5jq0ctvlA
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME}
+  api-key: ${CLOUDINARY_API_KEY}
+  api-secret: ${CLOUDINARY_API_SECRET}

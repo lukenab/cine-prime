@@ -16,10 +16,12 @@ import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.exception.AppException;
 import movie.theater.common.exception.GlobalErrorCode;
@@ -44,15 +46,28 @@ public class AuthenticationService {
     JwtService jwtService;
     AuthTokenRepository authTokenRepository;
     AuditLogService auditLogService;
+    AbuseProtectionService abuseProtectionService;
+
+    @NonFinal
+    String dummyPasswordHash;
 
     private static final String TOKEN_TYPE = "BEARER";
     private static final int MAX_FAILED_ATTEMPTS = 5;
     private static final int LOCK_DURATION_MINUTES = 15;
 
+    @PostConstruct
+    void initializeDummyPasswordHash() {
+        dummyPasswordHash = passwordEncoder.encode("cineprime-nonexistent-account");
+    }
+
     @Transactional(dontRollbackOn = AppException.class)
     public LoginResponse authenticate(LoginRequest request) {
+        abuseProtectionService.guardLogin(request.getUsername());
         Account account = accountRepository.findByUsername(request.getUsername())
                 .orElseThrow(() -> {
+                    // Perform the same expensive password operation for missing accounts to
+                    // reduce username enumeration through response-time differences.
+                    passwordEncoder.matches(request.getPassword(), dummyPasswordHash);
                     auditLogService.failed("LOGIN_FAILED", null, "Account not found",
                             auditLogService.metadata("username", request.getUsername()));
                     return new AppException(GlobalErrorCode.UNAUTHENTICATED);
@@ -101,6 +116,7 @@ public class AuthenticationService {
         account.setLockedUntil(null);
         account.setLastLoginAt(LocalDateTime.now());
         accountRepository.save(account);
+        abuseProtectionService.loginSucceeded(account.getUsername());
 
         String token = jwtService.generateToken(account);
         saveAuthToken(account, token);

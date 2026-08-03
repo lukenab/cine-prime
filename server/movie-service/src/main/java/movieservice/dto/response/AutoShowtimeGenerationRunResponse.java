@@ -30,7 +30,9 @@ public record AutoShowtimeGenerationRunResponse(
         /** Raw JSON of {@link movieservice.service.autoshowtime.optimizer.SolverDiagnostics}. */
         String solverDiagnostics,
         /** Only present for SHADOW_COMPARE runs - raw JSON of the non-primary optimizer's result. */
-        String shadowComparison
+        String shadowComparison,
+        /** Rooms excluded from candidate generation for this run only. Empty if none were excluded. */
+        List<Long> excludedRoomIds
 ) {
 
     /// Tóm tắt toàn bộ candidate của run để UI/QA nhìn nhanh kết quả allocation.

@@ -54,7 +54,9 @@ import {
 import { persistMovieDraft, saveDraftThenSubmit } from "./movieEditor/movieDraftActions";
 import { buildMoviePayload } from "./movieEditor/buildMoviePayload";
 import { MediaThumbnail } from "./movieEditor/MediaThumbnail";
-import ScreeningVersionsSection from "./movieEditor/ScreeningVersionsSection";
+import ScreeningVersionsSection, {
+  type ScreeningVersionSummary,
+} from "./movieEditor/ScreeningVersionsSection";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Local types (same shape as the previous MovieModal)
@@ -86,7 +88,6 @@ type FormState = {
   priorityOverride: string;
   selectedCompanies: SelectedCompany[];
   genreIds: number[];
-  formatIds: number[];
   posterUrl: string;
   thumbnailUrl: string;
   trailerUrl: string;
@@ -112,7 +113,6 @@ const emptyForm: FormState = {
   priorityOverride: "",
   selectedCompanies: [],
   genreIds: [],
-  formatIds: [],
   posterUrl: "",
   thumbnailUrl: "",
   trailerUrl: "",
@@ -147,7 +147,6 @@ function movieToForm(mv: MovieResponse): FormState {
       companyId: c.companyId, name: c.name, country: c.country, logoUrl: c.logoUrl,
     })) ?? [],
     genreIds: mv.genres?.map((g) => g.genreId) ?? [],
-    formatIds: mv.formats?.map((f) => f.formatId) ?? [],
     posterUrl: mv.posterUrl ?? "",
     thumbnailUrl: mv.thumbnailUrl ?? "",
     trailerUrl: mv.trailerUrl ?? "",
@@ -303,6 +302,12 @@ export default function MovieEditorPage() {
 
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [backendViolations, setBackendViolations] = useState<ReadinessViolation[]>([]);
+  const [screeningVersionSummary, setScreeningVersionSummary] = useState<ScreeningVersionSummary>({
+    movieId: null,
+    loaded: false,
+    totalCount: 0,
+    reviewReadyCount: 0,
+  });
 
   const [genres, setGenres] = useState<GenreResponse[]>([]);
   const [formats, setFormats] = useState<ScreeningFormatResponse[]>([]);
@@ -373,6 +378,12 @@ export default function MovieEditorPage() {
 
   const [localEditId, setLocalEditId] = useState<number | null>(null);
   const activeMovieId = localEditId ?? editMovieId;
+  const screeningVersionsLoadedForActiveMovie =
+    screeningVersionSummary.loaded
+    && screeningVersionSummary.movieId === activeMovieId;
+  const hasReviewReadyScreeningVersion =
+    screeningVersionsLoadedForActiveMovie
+    && screeningVersionSummary.reviewReadyCount > 0;
   const [savedFingerprint, setSavedFingerprint] = useState(() => editorFingerprint(emptyForm, []));
   const [actionStatus, setActionStatus] = useState<MovieEditorActionStatus>("pristine");
   const [operation, setOperation] = useState<MovieEditorOperation>("idle");
@@ -1041,19 +1052,32 @@ export default function MovieEditorPage() {
           : id === "media-credits"
             ? Boolean(form.posterUrl)
             : id === "screening-versions"
-              ? Boolean(activeMovieId)
+              ? hasReviewReadyScreeningVersion
               : !hasBlockingTmdbIssues && Object.keys(validationErrors).length === 0 && backendViolations.length === 0,
       hasError:
         id === "details"
           ? Boolean(submitted && (!form.originalTitle.trim() || !form.originalLanguage || form.durationMinutes <= 0 || form.genreIds.length === 0))
           : id === "media-credits"
             ? Boolean(submitted && !form.posterUrl)
+            : id === "screening-versions"
+              ? Boolean(submitted && screeningVersionsLoadedForActiveMovie && !hasReviewReadyScreeningVersion)
             : id === "review"
               ? hasBlockingTmdbIssues || backendViolations.length > 0
               : false,
+      blockNext:
+        id === "screening-versions"
+          ? !hasReviewReadyScreeningVersion
+          : false,
+      blockNextMessage:
+        id === "screening-versions" && screeningVersionsLoadedForActiveMovie
+          ? "Create and save at least one active screening version before review."
+          : id === "screening-versions"
+            ? "Checking saved screening versions..."
+            : undefined,
     })),
   [form.originalTitle, form.originalLanguage, form.durationMinutes, form.genreIds.length,
-    form.posterUrl, hasBlockingTmdbIssues, activeMovieId, submitted, validationErrors, backendViolations]);
+    form.posterUrl, hasBlockingTmdbIssues, submitted, validationErrors, backendViolations,
+    hasReviewReadyScreeningVersion, screeningVersionsLoadedForActiveMovie]);
 
   const editableDraft = currentContentStatus == null || currentContentStatus === "DRAFT";
   const canSaveDraft = can.edit && editableDraft;
@@ -1396,6 +1420,7 @@ export default function MovieEditorPage() {
               movieEditable={editableDraft}
               hasUnsavedMovieChanges={isDirty}
               onPrepareMovieDraft={prepareDraftForScreeningVersions}
+              onVersionSummaryChange={setScreeningVersionSummary}
             />
           </section>
 

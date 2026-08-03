@@ -3,6 +3,8 @@ package authservice.messaging;
 import authservice.event.AccountActivationRequestedEvent;
 import authservice.event.OtpRequestedEvent;
 import authservice.event.UserRegisteredEvent;
+import authservice.event.AccountStatusChangedEvent;
+import authservice.event.PasswordResetRequestedEvent;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -27,6 +29,10 @@ public class AuthEventPublisher {
         sendAndWait("user-register-topic", event);
     }
 
+    public void sendAccountStatusChangedEvent(AccountStatusChangedEvent event) {
+        sendAndWait("account-status-topic", event);
+    }
+
     public void sendOtpRequestedEvent(OtpRequestedEvent event) {
         kafkaTemplate.send("send-otp-email-topic", event).whenComplete((result, ex) -> {
             if (ex != null) {
@@ -43,6 +49,16 @@ public class AuthEventPublisher {
                 log.error("Failed to publish AccountActivationRequestedEvent for email {}: {}", event.getEmail(), ex.getMessage());
             } else {
                 log.info("Published AccountActivationRequestedEvent to send-activation-email-topic for email: {}", event.getEmail());
+            }
+        });
+    }
+
+    public void sendPasswordResetEvent(PasswordResetRequestedEvent event) {
+        kafkaTemplate.send("send-password-reset-email-topic", event).whenComplete((result, ex) -> {
+            if (ex != null) {
+                log.error("Failed to publish password reset email request for {}", event.getEmail(), ex);
+            } else {
+                log.info("Published password reset email request for {}", event.getEmail());
             }
         });
     }

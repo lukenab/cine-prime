@@ -29,6 +29,9 @@ export interface ShowtimeResponse {
   cancellationReason?: string;
   price?: number;        // lowest active seat price in the room — "from X" display
   basePrice?: number;
+  priceSource?: 'SHOWTIME_OVERRIDE' | 'PRICE_BOOK' | 'ROOM_DEFAULT';
+  priceBookId?: number;
+  priceRateId?: number;
   updatedAt?: string;
 }
 
@@ -116,6 +119,11 @@ export interface AutoShowtimeGenerationRequestPayload {
   optimizer?: OptimizerMode;
   /** Ignored when optimizer is LEGACY. Defaults to BALANCED server-side. */
   scenario?: OptimizationScenario;
+  /** Rooms to exclude from candidate generation for this run only (e.g. rooms held for a
+   *  private/corporate booking, or under short-notice maintenance). Optional — omit or send
+   *  an empty array to let the optimizer consider every eligible room as usual. Rooms outside
+   *  the selected cinemaClusterIds are ignored server-side. */
+  excludedRoomIds?: number[];
 }
 
 export interface AutoShowtimeGenerationAcceptedResponse {
@@ -218,6 +226,8 @@ export interface SchedulePlanResponse {
   status: SchedulePlanStatus;
   blockerCount: number;
   validationSummary?: string;
+  validatedAt?: string;
+  validatedBy?: string;
   slots: SchedulePlanSlot[];
   submittedAt?: string;
   submittedBy?: string;
@@ -416,6 +426,9 @@ export const showtimeApi = {
 
   submitSchedulePlanReview: (id: number, note?: string) =>
     axiosClient.post(`/api/schedule-plans/${id}/submit-review`, { note }) as Promise<ApiWrapper<SchedulePlanResponse>>,
+
+  revalidateSchedulePlan: (id: number) =>
+    axiosClient.post(`/api/schedule-plans/${id}/revalidate`) as Promise<ApiWrapper<SchedulePlanResponse>>,
 
   requestSchedulePlanChanges: (id: number, note?: string) =>
     axiosClient.post(`/api/schedule-plans/${id}/request-changes`, { note }) as Promise<ApiWrapper<SchedulePlanResponse>>,

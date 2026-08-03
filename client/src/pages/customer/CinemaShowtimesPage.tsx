@@ -160,6 +160,11 @@ export default function CinemaShowtimesPage() {
 
   function selectShowtime(showtime: ShowtimeResponse) {
     if ((showtime.availableSeats ?? 1) <= 0) return;
+    const start = new Date(`${showtime.showDate}T${showtime.startTime}`);
+    const end = new Date(`${showtime.showDate}T${showtime.endTime}`);
+    const durationMinutes = !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())
+      ? Math.round((end.getTime() - start.getTime()) / 60_000)
+      : 0;
     navigate(`/booking/${showtime.showTimeId}`, {
       state: {
         showtime: {
@@ -167,6 +172,8 @@ export default function CinemaShowtimesPage() {
           cinemaName: cluster?.clusterName,
           hall: showtime.cinemaRoomName,
           dateTime: `${showtime.showDate}T${showtime.startTime}`,
+          duration: durationMinutes,
+          posterUrl: showtime.moviePosterUrl,
         },
       },
     });
@@ -175,7 +182,7 @@ export default function CinemaShowtimesPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#050505] pt-16 text-white/60">
-        <Loader2 className="mr-3 animate-spin text-[#FFD700]" size={22} />
+        <Loader2 className="mr-3 animate-spin text-blue-400" size={22} />
         Loading cinema showtimes…
       </div>
     );
@@ -184,13 +191,13 @@ export default function CinemaShowtimesPage() {
   if (error || !cluster) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-[#050505] px-6 pt-16 text-center">
-        <AlertCircle className="mb-4 text-[#FFD700]" size={34} />
+        <AlertCircle className="mb-4 text-blue-400" size={34} />
         <h1 className="text-xl font-bold text-white">Cinema schedule unavailable</h1>
         <p className="mt-2 max-w-md text-sm text-white/50">{error}</p>
         <button
           type="button"
           onClick={() => navigate("/cinemas")}
-          className="mt-6 rounded-xl bg-[#FFD700] px-5 py-2.5 text-sm font-bold text-black"
+          className="mt-6 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500"
         >
           Browse cinemas
         </button>
@@ -220,13 +227,13 @@ export default function CinemaShowtimesPage() {
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <div className="flex h-full items-center justify-center text-[#FFD700]">
+                  <div className="flex h-full items-center justify-center text-blue-400">
                     <Film size={26} />
                   </div>
                 )}
               </div>
               <div className="min-w-0">
-                <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.2em] text-[#FFD700]">
+                <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-400">
                   Cinema-first booking
                 </p>
                 <h1 className="truncate text-2xl font-extrabold sm:text-3xl">{cluster.clusterName}</h1>
@@ -243,9 +250,9 @@ export default function CinemaShowtimesPage() {
               aria-pressed={isFavorite}
               className="inline-flex items-center justify-center gap-2 self-start rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors md:self-auto"
               style={{
-                color: isFavorite ? "#FFD700" : "rgba(255,255,255,0.7)",
-                borderColor: isFavorite ? "rgba(255,215,0,0.45)" : "rgba(255,255,255,0.12)",
-                background: isFavorite ? "rgba(255,215,0,0.08)" : "rgba(255,255,255,0.03)",
+                color: isFavorite ? "#60A5FA" : "rgba(255,255,255,0.7)",
+                borderColor: isFavorite ? "rgba(59,130,246,0.55)" : "rgba(255,255,255,0.12)",
+                background: isFavorite ? "rgba(37,99,235,0.12)" : "rgba(255,255,255,0.03)",
               }}
             >
               <Heart size={16} fill={isFavorite ? "currentColor" : "none"} />
@@ -258,7 +265,7 @@ export default function CinemaShowtimesPage() {
       <div className="mx-auto max-w-7xl px-6 py-8">
         <section className="mb-7 rounded-2xl border border-white/10 bg-white/[0.025] p-4">
           <div className="mb-3 flex items-center gap-2">
-            <CalendarDays size={16} className="text-[#FFD700]" />
+            <CalendarDays size={16} className="text-blue-400" />
             <h2 className="text-sm font-bold">Choose a date</h2>
             <span className="ml-auto text-xs text-white/35">Only showtimes open for sale</span>
           </div>
@@ -274,11 +281,11 @@ export default function CinemaShowtimesPage() {
                   onClick={() => setSelectedDate(dateKey)}
                   className="min-w-[96px] flex-shrink-0 rounded-xl border px-3 py-2.5 text-left transition-colors"
                   style={{
-                    borderColor: selected ? "#FFD700" : "rgba(255,255,255,0.1)",
-                    background: selected ? "rgba(255,215,0,0.1)" : "rgba(255,255,255,0.025)",
+                    borderColor: selected ? "#3B82F6" : "rgba(255,255,255,0.1)",
+                    background: selected ? "rgba(37,99,235,0.16)" : "rgba(255,255,255,0.025)",
                   }}
                 >
-                  <span className="block text-xs font-semibold" style={{ color: selected ? "#FFD700" : "#fff" }}>
+                  <span className="block text-xs font-semibold" style={{ color: selected ? "#60A5FA" : "#fff" }}>
                     {isSameDay(date, new Date()) ? "Today" : format(date, "EEE, d MMM")}
                   </span>
                   <span className="mt-1 block text-[11px] text-white/40">
@@ -333,7 +340,7 @@ export default function CinemaShowtimesPage() {
                       <button
                         type="button"
                         onClick={() => navigate(`/showtime/${movie.movieId}?clusterId=${cluster.clusterId}`)}
-                        className="text-left text-lg font-bold transition-colors hover:text-[#FFD700]"
+                        className="text-left text-lg font-bold transition-colors hover:text-blue-400"
                       >
                         {movie.title}
                       </button>
@@ -344,7 +351,7 @@ export default function CinemaShowtimesPage() {
                     <button
                       type="button"
                       onClick={() => navigate(`/showtime/${movie.movieId}?clusterId=${cluster.clusterId}`)}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-[#FFD700]"
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-blue-400"
                     >
                       Movie details <ChevronRight size={14} />
                     </button>
@@ -361,13 +368,13 @@ export default function CinemaShowtimesPage() {
                           onClick={() => selectShowtime(showtime)}
                           className="min-w-[168px] rounded-xl border px-3.5 py-3 text-left transition-all disabled:cursor-not-allowed disabled:opacity-45"
                           style={{
-                            borderColor: "rgba(255,215,0,0.25)",
-                            background: "rgba(255,215,0,0.045)",
+                            borderColor: "rgba(59,130,246,0.3)",
+                            background: "rgba(37,99,235,0.08)",
                           }}
                         >
                           <span className="flex items-center justify-between gap-3">
                             <strong className="text-sm text-white">{formatTime(showtime.startTime)}</strong>
-                            <span className="rounded bg-white/5 px-1.5 py-0.5 text-[10px] font-bold text-[#FFD700]">
+                            <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-bold text-blue-400">
                               {showtime.formatCode ?? "2D"}
                             </span>
                           </span>

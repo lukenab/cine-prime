@@ -66,12 +66,13 @@ public class MovieController {
     public ApiResponse<Page<MovieResponse>> getPage(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String q,
             @RequestParam(required = false) MovieStatus status,
             @RequestParam(required = false) Long genreId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return ApiResponse.<Page<MovieResponse>>builder()
                 .code(200)
-                .result(movieService.findPageWithFilters(page - 1, size, status, genreId, date))
+                .result(movieService.findPageWithFilters(page - 1, size, q, status, genreId, date))
                 .build();
     }
 

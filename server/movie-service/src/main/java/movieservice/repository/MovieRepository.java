@@ -22,17 +22,32 @@ public interface MovieRepository extends JpaRepository<Movie, Long> {
     List<Movie> findByStatus(MovieStatus status);
 
     // ── Filtered paged query (admin / public) ─────────────────
-    @Query("""
+    @Query(value = """
             SELECT DISTINCT m FROM Movie m
             LEFT JOIN m.genres g
+            LEFT JOIN m.translations t
             WHERE (:status IS NULL OR m.status = :status)
               AND (:genreId IS NULL OR g.genreId = :genreId)
-              AND (:releaseDate IS NULL OR m.releaseDate = :releaseDate)
+              AND (CAST(:releaseDate AS date) IS NULL OR m.releaseDate = :releaseDate)
+              AND (CAST(:qPattern AS string) IS NULL
+                   OR LOWER(m.originalTitle) LIKE :qPattern
+                   OR LOWER(t.title) LIKE :qPattern)
+            """, countQuery = """
+            SELECT COUNT(DISTINCT m.movieId) FROM Movie m
+            LEFT JOIN m.genres g
+            LEFT JOIN m.translations t
+            WHERE (:status IS NULL OR m.status = :status)
+              AND (:genreId IS NULL OR g.genreId = :genreId)
+              AND (CAST(:releaseDate AS date) IS NULL OR m.releaseDate = :releaseDate)
+              AND (CAST(:qPattern AS string) IS NULL
+                   OR LOWER(m.originalTitle) LIKE :qPattern
+                   OR LOWER(t.title) LIKE :qPattern)
             """)
     Page<Movie> findWithFilters(
             @Param("status") MovieStatus status,
             @Param("genreId") Long genreId,
             @Param("releaseDate") LocalDate releaseDate,
+            @Param("qPattern") String qPattern,
             Pageable pageable);
 
     // ── Admin / duplicate guard ───────────────────────────────

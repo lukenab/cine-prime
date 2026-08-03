@@ -34,7 +34,11 @@ public enum AuthErrorCode implements BaseErrorCode {
     ACTIVATION_TOKEN_EXPIRED(1027, "Activation link has expired. Please ask your admin to resend it.", HttpStatus.BAD_REQUEST),
     ACTIVATION_TOKEN_ALREADY_USED(1028, "This activation link has already been used.", HttpStatus.BAD_REQUEST),
     ACCOUNT_PENDING_ACTIVATION(1029, "Your account has not been activated yet. Please check your email for the activation link.", HttpStatus.FORBIDDEN),
-    ACCOUNT_ALREADY_ACTIVE(1030, "This account has already been activated.", HttpStatus.BAD_REQUEST);
+    ACCOUNT_ALREADY_ACTIVE(1030, "This account has already been activated.", HttpStatus.BAD_REQUEST),
+    RATE_LIMIT_EXCEEDED(1031, "Too many requests. Please wait and try again.", HttpStatus.TOO_MANY_REQUESTS),
+    INVALID_PAGE_REQUEST(1032, "Page must be at least 1 and size must be between 1 and 100.", HttpStatus.BAD_REQUEST),
+    PASSWORD_RESET_TOKEN_INVALID(1033, "Password reset link is invalid or has already been used.", HttpStatus.BAD_REQUEST),
+    PASSWORD_RESET_TOKEN_EXPIRED(1034, "Password reset link has expired.", HttpStatus.BAD_REQUEST);
 
     int code;
     String message;

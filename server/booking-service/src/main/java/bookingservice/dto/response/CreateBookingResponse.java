@@ -1,33 +1,29 @@
 package bookingservice.dto.response;
 
+import lombok.Builder;
+import lombok.Value;
+
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import lombok.experimental.FieldDefaults;
-
-
-@Data
-@Getter @Setter
-@NoArgsConstructor @AllArgsConstructor
-@FieldDefaults(level = AccessLevel.PRIVATE)
+@Value
 @Builder
 public class CreateBookingResponse {
     String bookingId;
-    String holdId;
-    Long showtimeId;
+    String bookingCode;
     String status;
-    BigDecimal totalPrice;
-    BigDecimal discountAmount;
-    BigDecimal finalAmount;
-    String promotionCode;
-    List<BookingItemResponse> items; 
+    String holdId;
+    String holdToken;
     OffsetDateTime lockedUntil;
+    BigDecimal subtotal;
+    BigDecimal serviceFee;
+    BigDecimal discount;
+    BigDecimal total;
+    String currency;
+    List<BookingItemResponse> seats;
+    
+    // Promotion fields from HEAD
+    String promotionCode;
+    BigDecimal promotionDiscountAmount;
 }

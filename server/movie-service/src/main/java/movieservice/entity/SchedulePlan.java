@@ -45,6 +45,8 @@ public class SchedulePlan {
     @Builder.Default
     @Column(name = "blocker_count", nullable = false) Integer blockerCount = 0;
     @Column(name = "validation_summary", columnDefinition = "TEXT") String validationSummary;
+    @Column(name = "validated_at") LocalDateTime validatedAt;
+    @Column(name = "validated_by", length = 100) String validatedBy;
 
     @Version
     @Column(name = "version", nullable = false)

@@ -3,7 +3,7 @@ import { userApi } from "../api/userApi";
 import { jwtDecode } from "jwt-decode";
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
-const ROLE_PRIORITY = ["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_EMPLOYEE", "ROLE_MEMBER"];
+const ROLE_PRIORITY = ["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_BRANCH_MANAGER", "ROLE_EMPLOYEE", "ROLE_MEMBER"];
 
 function extractPrimaryRole(rolesClaim: string): string {
     const roles = (rolesClaim || "").split(" ").filter(r => r.startsWith("ROLE_"));
@@ -20,6 +20,10 @@ function isTokenExpired(token: string): boolean {
     } catch {
         return true;
     }
+}
+
+function requiresProfile(role: string): boolean {
+    return ["ROLE_MEMBER", "ROLE_EMPLOYEE", "ROLE_BRANCH_MANAGER"].includes(role);
 }
 
 async function checkProfileComplete(accountId: string): Promise<boolean> {
@@ -43,6 +47,7 @@ interface User {
 interface AuthContextType {
     user: User | null;
     needsProfileSetup: boolean;
+    profileCheckPending: boolean;
     setNeedsProfileSetup: (v: boolean) => void;
     login: (credentials: any) => Promise<{ role: string; needsSetup: boolean }>;
     logout: () => void;
@@ -53,6 +58,7 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
     const [needsProfileSetup, setNeedsProfileSetup] = useState(false);
+    const [profileCheckPending, setProfileCheckPending] = useState(false);
 
     useEffect(() => {
         const token = localStorage.getItem("accessToken");
@@ -71,11 +77,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             setUser({ username: decoded.sub, role: primaryRole, accountId });
 
-            if (primaryRole === "ROLE_MEMBER" && accountId) {
+            if (requiresProfile(primaryRole) && accountId) {
+                setProfileCheckPending(true);
                 if (localStorage.getItem("__dev_forceProfileSetup") === "1") {
                     setNeedsProfileSetup(true);
+                    setProfileCheckPending(false);
                 } else checkProfileComplete(accountId).then((complete) => {
                     setNeedsProfileSetup(!complete);
+                    setProfileCheckPending(false);
                 });
             }
         } catch {
@@ -85,7 +94,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     const login = async (credentials: any): Promise<{ role: string; needsSetup: boolean }> => {
-        const response = await authApi.login(credentials);
+        const response: any = await authApi.login(credentials);
         const resBody = response?.data ?? response;
         const token = resBody?.result?.token || resBody?.token || response?.result?.token;
 
@@ -101,7 +110,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser({ username: decoded.sub, role: primaryRole, accountId });
 
         let needsSetup = false;
-        if (primaryRole === "ROLE_MEMBER" && accountId) {
+        if (requiresProfile(primaryRole) && accountId) {
+            setProfileCheckPending(true);
             if (localStorage.getItem("__dev_forceProfileSetup") === "1") {
                 needsSetup = true;
             } else {
@@ -109,8 +119,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 needsSetup = !complete;
             }
             setNeedsProfileSetup(needsSetup);
+            setProfileCheckPending(false);
         } else {
             setNeedsProfileSetup(false);
+            setProfileCheckPending(false);
         }
 
         return { role: primaryRole, needsSetup };
@@ -125,10 +137,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         localStorage.removeItem("jwt_token");
         setUser(null);
         setNeedsProfileSetup(false);
+        setProfileCheckPending(false);
     };
 
     return (
-        <AuthContext.Provider value={{ user, needsProfileSetup, setNeedsProfileSetup, login, logout }}>
+        <AuthContext.Provider value={{ user, needsProfileSetup, profileCheckPending, setNeedsProfileSetup, login, logout }}>
             {children}
         </AuthContext.Provider>
     );

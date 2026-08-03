@@ -1,20 +1,16 @@
 package bookingservice.dto.response;
 
+import lombok.Builder;
+import lombok.Value;
+
 import java.math.BigDecimal;
 
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.experimental.FieldDefaults;
-@Data
+@Value
 @Builder
-@NoArgsConstructor
-@AllArgsConstructor
-@FieldDefaults(level = AccessLevel.PRIVATE)
 public class BookingItemResponse {
-    Long seatId;        
-    String seatLabel;   
-    BigDecimal price;   
+    Long showtimeSeatId;
+    String seatCode;
+    String seatType;
+    BigDecimal unitPrice;
+    BigDecimal finalPrice;
 }

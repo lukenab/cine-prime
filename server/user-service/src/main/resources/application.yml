@@ -4,6 +4,13 @@ server:
 spring:
   application:
     name: user-service
+  config:
+    # Support repository-level .env files for local IDE/Maven runs.
+    # Real environment variables still take precedence in deployed environments.
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:../.env[.properties]
+      - optional:file:../../.env[.properties]
 
   servlet:
     multipart:
@@ -36,19 +43,22 @@ spring:
         "[spring.deserializer.value.delegate.class]": org.springframework.kafka.support.serializer.JsonDeserializer
         "[spring.json.trusted.packages]": "*"
         "[spring.json.use.type.headers]": true
-        "[spring.json.type.mapping]": "userRegistered:userservice.event.UserRegisteredEvent,userUpdated:userservice.event.UserUpdatedEvent"
+        "[spring.json.type.mapping]": "userRegistered:userservice.event.UserRegisteredEvent,userUpdated:userservice.event.UserUpdatedEvent,accountStatusChanged:userservice.event.AccountStatusChangedEvent"
     # Producer cần thiết để DefaultErrorHandler publish message thất bại sang DLT
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
 cloudinary:
-  cloud-name: ${CLOUDINARY_CLOUD_NAME:dzlfgmtbc}
-  api-key: ${CLOUDINARY_API_KEY:144287537763843}
-  api-secret: ${CLOUDINARY_API_SECRET:7kJ1TfEb7kEAVArwaY5jq0ctvlA}
+  cloud-name: ${CLOUDINARY_CLOUD_NAME}
+  api-key: ${CLOUDINARY_API_KEY}
+  api-secret: ${CLOUDINARY_API_SECRET}
 
 jwt:
-  signerKey: 873bcf3b6023c6cfac735831cc01cbd59c6f64c2341050f12e5f0224d7edea62
+  signerKey: ${JWT_SIGNER_KEY}
+
+app:
+  internal-service-key: ${INTERNAL_SERVICE_KEY:local-dev-internal-key-change-before-deploy}
 
 eureka:
   instance:
