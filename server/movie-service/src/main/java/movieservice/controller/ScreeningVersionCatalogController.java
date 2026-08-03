@@ -27,16 +27,17 @@ public class ScreeningVersionCatalogController {
     private final MovieScreeningVersionService screeningVersionService;
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     public ApiResponse<List<MovieScreeningVersionCatalogResponse>> search(
             @RequestParam(required = false) String q,
             @RequestParam(required = false) ScreeningVersionStatus status,
             @RequestParam(required = false) Integer formatId,
+            @RequestParam(required = false) List<Long> clusterIds,
             @RequestParam(defaultValue = "false") boolean attentionOnly
     ) {
         return ApiResponse.<List<MovieScreeningVersionCatalogResponse>>builder()
                 .code(HttpStatus.OK.value())
-                .result(screeningVersionService.searchCatalog(q, status, formatId, attentionOnly))
+                .result(screeningVersionService.searchCatalog(q, status, formatId, clusterIds, attentionOnly))
                 .build();
     }
 }

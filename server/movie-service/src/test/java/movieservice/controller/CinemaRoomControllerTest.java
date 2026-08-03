@@ -4,6 +4,7 @@ import movieservice.dto.request.MaintenanceRequest;
 import movieservice.enums.CinemaRoomStatus;
 import movieservice.service.CinemaRoomService;
 import movieservice.service.SeatService;
+import movieservice.security.CinemaRoomAccessPolicy;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -26,6 +27,7 @@ class CinemaRoomControllerTest {
 
     @Mock CinemaRoomService cinemaRoomService;
     @Mock SeatService seatService;
+    @Mock CinemaRoomAccessPolicy cinemaRoomAccessPolicy;
     @InjectMocks CinemaRoomController controller;
 
     private Authentication admin(String username) {

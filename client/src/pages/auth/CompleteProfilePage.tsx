@@ -263,6 +263,7 @@ export default function CompleteProfilePage({ onClose, onDone }: CompleteProfile
       else {
         const requested = (location.state as { returnTo?: string } | null)?.returnTo;
         const fallback = user.role === "ROLE_MEMBER" ? "/home"
+          : user.role === "ROLE_EMPLOYEE" ? "/employee"
           : user.role === "ROLE_BRANCH_MANAGER" ? "/admin/concessions/catalog" : "/admin/movies";
         navigate(requested?.startsWith("/") && !requested.startsWith("//") ? requested : fallback, { replace: true });
       }

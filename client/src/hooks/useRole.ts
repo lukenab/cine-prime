@@ -13,6 +13,7 @@ export function useRole() {
   const isAdmin    = role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN";
   const isBranchManager = role === "ROLE_BRANCH_MANAGER";
   const isEmployee = role === "ROLE_EMPLOYEE";
+  const isProgrammingOperator = role === "ROLE_PROGRAMMING_OPERATOR";
   const isMember   = role === "ROLE_MEMBER";
 
   return {
@@ -21,6 +22,7 @@ export function useRole() {
     isAdmin,
     isBranchManager,
     isEmployee,
+    isProgrammingOperator,
     isMember,
     /**
      * Fine-grained permission flags — each matches the backend
@@ -28,10 +30,10 @@ export function useRole() {
      */
     can: {
       // ADMIN or EMPLOYEE
-      submit  : isAdmin || isEmployee || isBranchManager,
-      startRevision: isAdmin || isEmployee, // CHANGES_REQUESTED → DRAFT
-      edit    : isAdmin || isEmployee || isBranchManager,
-      view    : isAdmin || isEmployee || isBranchManager,
+      submit  : isAdmin || isProgrammingOperator,
+      startRevision: isAdmin || isProgrammingOperator,
+      edit    : isAdmin || isProgrammingOperator,
+      view    : isAdmin || isProgrammingOperator,
       archive : isAdmin,
 
       // ADMIN only

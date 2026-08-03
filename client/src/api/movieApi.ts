@@ -256,7 +256,6 @@ export type CinemaRoomFormatCapability = {
   formatId: number;
   formatCode: string;
   formatName: string;
-  surcharge: number;
   enabled: boolean;
   /** True for 2D/3D/IMAX/SCREENX/ATMOS/4DX — derived from supports2d/supports3d/
    *  presentationSystem on room save; edit those instead, this endpoint rejects toggling
@@ -446,7 +445,14 @@ export type ReadinessViolation = {
   rule: string;
 };
 
-export type AvailabilityStatus = 'PLANNED' | 'OPEN' | 'SUSPENDED' | 'CLOSED';
+export type AvailabilityStatus =
+  | 'PLANNED'
+  | 'IN_REVIEW'
+  | 'CHANGES_REQUESTED'
+  | 'APPROVED'
+  | 'OPEN'
+  | 'SUSPENDED'
+  | 'CLOSED';
 
 export type DisplayStatus = 'NOW_SHOWING' | 'COMING_SOON';
 
@@ -472,7 +478,7 @@ export type ScreeningFormatResponse = {
   formatCode: string;
   formatName: string;
   description: string;
-  surcharge: number;
+  status?: string;
 };
 
 export type ScreeningVersionStatus = 'ACTIVE' | 'INACTIVE' | 'SUPERSEDED';
@@ -534,7 +540,6 @@ export type ScreeningFormatRequest = {
   formatCode: string;
   formatName: string;
   description?: string;
-  surcharge: number;
 };
 
 export type ProductionCompanyRequest = {
@@ -656,6 +661,11 @@ export type MovieAvailabilityResponse = {
   showingStartDate: string;
   showingEndDate?: string;
   suspensionReason?: string;
+  reviewNote?: string;
+  submittedAt?: string;
+  submittedBy?: string;
+  approvedAt?: string;
+  approvedBy?: string;
   version?: number;
   createdAt?: string;
   updatedAt?: string;
@@ -1144,12 +1154,14 @@ export const movieApi = {
     status?: ScreeningVersionStatus;
     formatId?: number;
     attentionOnly?: boolean;
+    clusterIds?: number[];
   }) => {
     const query = new URLSearchParams();
     if (params?.q?.trim()) query.set('q', params.q.trim());
     if (params?.status) query.set('status', params.status);
     if (params?.formatId) query.set('formatId', String(params.formatId));
     if (params?.attentionOnly) query.set('attentionOnly', 'true');
+    params?.clusterIds?.forEach((clusterId) => query.append('clusterIds', String(clusterId)));
     const suffix = query.toString();
     return axiosClient.get(`/api/screening-versions${suffix ? `?${suffix}` : ''}`) as Promise<ApiWrapper<MovieScreeningVersionCatalogResponse[]>>;
   },
@@ -1243,7 +1255,7 @@ export const movieApi = {
   startMovieRevision: (id: number) =>
     axiosClient.post(`/api/movies/${id}/start-revision`) as Promise<ApiWrapper<MovieResponse>>,
 
-  /** APPROVED → ARCHIVED. Blocked while any availability window is PLANNED/OPEN. */
+  /** APPROVED → ARCHIVED. Blocked while any release plan is non-terminal. */
   archiveMovie: (id: number) =>
     axiosClient.post(`/api/movies/${id}/archive`) as Promise<ApiWrapper<MovieResponse>>,
 
@@ -1278,11 +1290,20 @@ export const movieApi = {
   updateAvailability: (id: number, payload: UpdateMovieAvailabilityPayload) =>
     axiosClient.put(`/api/movie-availabilities/${id}`, payload) as Promise<ApiWrapper<MovieAvailabilityResponse>>,
 
-  /** PLANNED → OPEN */
+  submitAvailabilityReview: (id: number, note?: string) =>
+    axiosClient.post(`/api/movie-availabilities/${id}/submit-review`, note ? { note } : undefined) as Promise<ApiWrapper<MovieAvailabilityResponse>>,
+
+  requestAvailabilityChanges: (id: number, note: string) =>
+    axiosClient.post(`/api/movie-availabilities/${id}/request-changes`, { note }) as Promise<ApiWrapper<MovieAvailabilityResponse>>,
+
+  approveAvailability: (id: number, note?: string) =>
+    axiosClient.post(`/api/movie-availabilities/${id}/approve`, note ? { note } : undefined) as Promise<ApiWrapper<MovieAvailabilityResponse>>,
+
+  /** APPROVED → OPEN */
   openAvailability: (id: number) =>
     axiosClient.post(`/api/movie-availabilities/${id}/open`) as Promise<ApiWrapper<MovieAvailabilityResponse>>,
 
-  /** PLANNED/OPEN → SUSPENDED, reason required */
+  /** OPEN → SUSPENDED, reason required */
   suspendAvailability: (id: number, reason: string) =>
     axiosClient.post(`/api/movie-availabilities/${id}/suspend`, { reason }) as Promise<ApiWrapper<MovieAvailabilityResponse>>,
 
@@ -1290,7 +1311,7 @@ export const movieApi = {
   resumeAvailability: (id: number) =>
     axiosClient.post(`/api/movie-availabilities/${id}/resume`) as Promise<ApiWrapper<MovieAvailabilityResponse>>,
 
-  /** PLANNED/OPEN/SUSPENDED → CLOSED. Reason is optional - e.g. "cancelled before playing" vs
+  /** Any non-closed state → CLOSED. Reason is optional - e.g. "cancelled before playing" vs
    *  "run completed" - captured for reporting, unlike suspend it's never required. */
   closeAvailability: (id: number, reason?: string) =>
     axiosClient.post(`/api/movie-availabilities/${id}/close`, reason ? { reason } : undefined) as Promise<ApiWrapper<MovieAvailabilityResponse>>,

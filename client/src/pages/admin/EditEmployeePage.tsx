@@ -7,26 +7,36 @@ import { userApi } from "../../api/userApi";
 import type { EmployeeFormData } from "./CreateEmployeePage";
 
 const POSITIONS: { value: EmployeePosition; label: string }[] = [
-  { value: "STAFF", label: "Staff" },
+  { value: "TEAM_MEMBER", label: "Team member" },
   { value: "SUPERVISOR", label: "Supervisor" },
-  { value: "MANAGER", label: "Manager" },
+  { value: "ASSISTANT_MANAGER", label: "Assistant manager" },
+  { value: "CINEMA_MANAGER", label: "Cinema manager" },
+  { value: "STAFF", label: "Staff (legacy)" },
+  { value: "MANAGER", label: "Manager (legacy)" },
 ];
 
 const DEPARTMENTS: { value: EmployeeDepartment; label: string }[] = [
-  { value: "BOX_OFFICE", label: "Box Office" },
-  { value: "CONCESSION", label: "Concession" },
-  { value: "FLOOR", label: "Floor" },
-  { value: "PROJECTION", label: "Projection" },
-  { value: "MANAGEMENT", label: "Management" },
-  { value: "CUSTOMER_SERVICE", label: "Customer Service" },
+  { value: "GENERAL_OPERATIONS", label: "General operations" },
+  { value: "BOX_OFFICE", label: "Box office" },
+  { value: "FOOD_BEVERAGE", label: "Food & beverage" },
+  { value: "FLOOR_GUEST_SERVICES", label: "Floor & guest services" },
+  { value: "PROJECTION_TECHNICAL", label: "Projection & technical" },
+  { value: "FACILITIES_MAINTENANCE", label: "Facilities & maintenance" },
+  { value: "CONCESSION", label: "Concession (legacy)" },
+  { value: "FLOOR", label: "Floor (legacy)" },
+  { value: "PROJECTION", label: "Projection (legacy)" },
+  { value: "MANAGEMENT", label: "Management (legacy)" },
+  { value: "CUSTOMER_SERVICE", label: "Customer service (legacy)" },
 ];
 
 const EMPLOYMENT_TYPES: { value: EmploymentType; label: string }[] = [
   { value: "FULL_TIME", label: "Full-time" },
   { value: "PART_TIME", label: "Part-time" },
-  { value: "PROBATION", label: "Probation" },
-  { value: "INTERN", label: "Intern" },
-  { value: "CONTRACT", label: "Contract" },
+  { value: "FIXED_TERM", label: "Fixed-term" },
+  { value: "SEASONAL", label: "Seasonal" },
+  { value: "PROBATION", label: "Probation (legacy)" },
+  { value: "INTERN", label: "Intern (legacy)" },
+  { value: "CONTRACT", label: "Contract (legacy)" },
 ];
 
 // ── Field helpers ─────────────────────────────────────────────────────────────
@@ -143,7 +153,7 @@ export default function EditEmployeePage() {
     if (!formData.address.trim())                              e.address      = "Address is required";
     if (formData.cinemaId.length > 36)                          e.cinemaId     = "Cinema ID must be at most 36 characters";
     if (!formData.position)                                    e.position     = "Position is required";
-    if (!formData.department)                                   e.department   = "Department is required";
+    if (!formData.department)                                   e.department   = "Primary work area is required";
     if (!formData.employmentType)                               e.employmentType = "Employment type is required";
     if (!formData.hireDate)                                    e.hireDate     = "Hire date is required";
     else if (formData.hireDate > today)                        e.hireDate     = "Hire date cannot be in the future";
@@ -288,7 +298,7 @@ export default function EditEmployeePage() {
               </select>
             </FormField>
 
-            <FormField label="Department" required error={errors.department}>
+            <FormField label="Primary work area" required error={errors.department}>
               <select name="department" value={formData.department} onChange={handleChange}
                 className={`${inputCls} ${errors.department ? "border-red-400" : ""}`}
                 style={{ ...inputStyle, background: "var(--bg-card)" }}>

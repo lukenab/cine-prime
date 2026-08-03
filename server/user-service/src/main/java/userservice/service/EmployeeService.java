@@ -1,6 +1,7 @@
 package userservice.service;
 
 import jakarta.transaction.Transactional;
+import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.exception.AppException;
@@ -51,7 +52,9 @@ public class EmployeeService {
                 .getAccount(request.getAccountId(), internalServiceKey)
                 .getResult();
         boolean employmentRole = account != null && account.getRoles() != null
-                && (account.getRoles().contains("EMPLOYEE") || account.getRoles().contains("BRANCH_MANAGER"));
+                && (account.getRoles().contains("EMPLOYEE")
+                || account.getRoles().contains("BRANCH_MANAGER")
+                || account.getRoles().contains("PROGRAMMING_OPERATOR"));
         if (!employmentRole
                 || "INACTIVE".equals(account.getStatus())) {
             throw new AppException(ErrorCode.INVALID_EMPLOYEE_ACCOUNT);
@@ -105,15 +108,25 @@ public class EmployeeService {
      */
     @Transactional
     public EmployeeResponse inviteEmployee(EmployeeInvitationRequest request) {
-        AuthAccountSummary account = authAccountClient.inviteStaff(
-                internalServiceKey,
-                AuthAccountInvitationRequest.builder()
-                        .fullName(request.getFullName().trim())
-                        .email(request.getEmail().trim().toLowerCase())
-                        .phoneNumber(request.getPhoneNumber())
-                        .role(request.getAccessRole().name())
-                        .build())
-                .getResult();
+        AuthAccountSummary account;
+        try {
+            account = authAccountClient.inviteStaff(
+                    internalServiceKey,
+                    AuthAccountInvitationRequest.builder()
+                            .fullName(request.getFullName().trim())
+                            .email(request.getEmail().trim().toLowerCase())
+                            .phoneNumber(request.getPhoneNumber())
+                            .role(request.getAccessRole().name())
+                            .build())
+                    .getResult();
+        } catch (FeignException.BadRequest exception) {
+            // Preserve the auth-service business error at the public boundary. Without
+            // this mapping Feign's RuntimeException is converted to a misleading 500.
+            if (exception.contentUTF8().contains("\"code\":1011")) {
+                throw new AppException(ErrorCode.EMAIL_EXISTED);
+            }
+            throw exception;
+        }
 
         if (account == null || account.getAccountId() == null) {
             throw new AppException(ErrorCode.INVALID_EMPLOYEE_ACCOUNT);
@@ -150,6 +163,13 @@ public class EmployeeService {
     @Transactional
     public EmployeeResponse getEmployeeById(String id) {
         return employeeMapper.toEmployeeResponse(findEmployee(id));
+    }
+
+    @Transactional
+    public EmployeeResponse getCurrentEmployee() {
+        Employee employee = employeeRepository.findByUser_AccountId(getCurrentAccountId())
+                .orElseThrow(() -> new AppException(ErrorCode.INVALID_EMPLOYEE_ACCOUNT));
+        return employeeMapper.toEmployeeResponse(employee);
     }
 
     @Transactional

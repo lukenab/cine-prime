@@ -3,6 +3,7 @@ import { Search, Plus, SlidersHorizontal, RefreshCw, AlertCircle } from "lucide-
 import { useRole } from "../../hooks/useRole";
 import { Outlet, useOutletContext, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { subscribeLifecycleEvents } from "../../api/lifecycleSocket";
 
 import { MovieStatsCards } from "../../layouts/MovieStatsCards";
 import { MovieTable } from "../../layouts/MovieTable";
@@ -66,6 +67,10 @@ export default function ManageMoviePage() {
     loadMovies();
     movieApi.getGenres().then((r) => setGenres(r.result ?? [])).catch(() => {});
   }, [loadMovies]);
+
+  useEffect(() => subscribeLifecycleEvents((event) => {
+    if (event.aggregateType === "MOVIE") void loadMovies();
+  }), [loadMovies]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleAddMovie = () => navigate("/admin/movies/new");

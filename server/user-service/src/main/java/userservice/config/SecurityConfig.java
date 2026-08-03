@@ -34,6 +34,8 @@ public class SecurityConfig {
                             .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/users/**")
                             .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/employees/me")
+                            .hasAnyAuthority("ROLE_EMPLOYEE", "ROLE_BRANCH_MANAGER", "ROLE_PROGRAMMING_OPERATOR")
                         .requestMatchers("/api/employees/**")
                             .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_BRANCH_MANAGER")
                         .anyRequest().authenticated()

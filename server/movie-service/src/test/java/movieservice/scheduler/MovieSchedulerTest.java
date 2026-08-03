@@ -5,6 +5,7 @@ import movieservice.entity.Movie;
 import movieservice.entity.MovieAvailability;
 import movieservice.enums.AvailabilityStatus;
 import movieservice.repository.MovieAvailabilityRepository;
+import movieservice.lifecycle.LifecycleEventNotifier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 
@@ -30,6 +32,8 @@ class MovieSchedulerTest {
 
     @Mock
     private MovieAvailabilityRepository movieAvailabilityRepository;
+    @Mock
+    private LifecycleEventNotifier lifecycleEventNotifier;
 
     private MovieScheduler scheduler;
 
@@ -37,7 +41,7 @@ class MovieSchedulerTest {
     void setUp() {
         // 2026-08-01 17:05 UTC is already 2026-08-02 in Vietnam.
         Clock clock = Clock.fixed(Instant.parse("2026-08-01T17:05:00Z"), BUSINESS_ZONE);
-        scheduler = new MovieScheduler(movieAvailabilityRepository, clock);
+        scheduler = new MovieScheduler(movieAvailabilityRepository, clock, lifecycleEventNotifier);
     }
 
     @Test
@@ -46,6 +50,9 @@ class MovieSchedulerTest {
         MovieAvailability suspended = availability(12L, AvailabilityStatus.SUSPENDED);
         List<AvailabilityStatus> closeable = List.of(
                 AvailabilityStatus.PLANNED,
+                AvailabilityStatus.IN_REVIEW,
+                AvailabilityStatus.CHANGES_REQUESTED,
+                AvailabilityStatus.APPROVED,
                 AvailabilityStatus.OPEN,
                 AvailabilityStatus.SUSPENDED);
         when(movieAvailabilityRepository.findByStatusInAndShowingEndDateBefore(
@@ -62,27 +69,33 @@ class MovieSchedulerTest {
 
     @Test
     void opensDueReleasePlanWindowsUsingConfiguredBusinessDate() {
-        MovieAvailability planned = availability(21L, AvailabilityStatus.PLANNED);
-        planned.setShowingEndDate(BUSINESS_DATE.plusDays(7));
-        when(movieAvailabilityRepository.findDueToOpen(BUSINESS_DATE))
-                .thenReturn(List.of(planned));
+        MovieAvailability approved = availability(21L, AvailabilityStatus.APPROVED);
+        approved.setShowingStartDate(BUSINESS_DATE.plusDays(2));
+        approved.setShowingEndDate(BUSINESS_DATE.plusDays(7));
+        when(movieAvailabilityRepository.findDueToOpen(
+                LocalDateTime.of(2026, 8, 2, 0, 5), BUSINESS_DATE))
+                .thenReturn(List.of(approved));
 
         scheduler.autoOpenDueAvailability();
 
-        assertEquals(AvailabilityStatus.OPEN, planned.getStatus());
-        assertEquals("SYSTEM", planned.getUpdatedBy());
-        verify(movieAvailabilityRepository).saveAll(List.of(planned));
+        assertEquals(AvailabilityStatus.OPEN, approved.getStatus());
+        assertEquals("SYSTEM", approved.getUpdatedBy());
+        verify(movieAvailabilityRepository).saveAll(List.of(approved));
     }
 
     @Test
     void emptySchedulerRunsDoNotWriteAnything() {
         List<AvailabilityStatus> closeable = List.of(
                 AvailabilityStatus.PLANNED,
+                AvailabilityStatus.IN_REVIEW,
+                AvailabilityStatus.CHANGES_REQUESTED,
+                AvailabilityStatus.APPROVED,
                 AvailabilityStatus.OPEN,
                 AvailabilityStatus.SUSPENDED);
         when(movieAvailabilityRepository.findByStatusInAndShowingEndDateBefore(
                 closeable, BUSINESS_DATE)).thenReturn(List.of());
-        when(movieAvailabilityRepository.findDueToOpen(BUSINESS_DATE)).thenReturn(List.of());
+        when(movieAvailabilityRepository.findDueToOpen(
+                LocalDateTime.of(2026, 8, 2, 0, 5), BUSINESS_DATE)).thenReturn(List.of());
 
         scheduler.autoCloseExpiredAvailability();
         scheduler.autoOpenDueAvailability();

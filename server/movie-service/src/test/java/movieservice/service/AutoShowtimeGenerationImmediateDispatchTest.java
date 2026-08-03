@@ -99,7 +99,7 @@ class AutoShowtimeGenerationImmediateDispatchTest {
         });
 
         var response = service.submitRun(
-                new AutoShowtimeGenerationRequest(start, start, List.of(2L), List.of(1L), null, null, null, null),
+                new AutoShowtimeGenerationRequest(start, start, List.of(2L), List.of(1L), null, null, null, null, null),
                 "admin"
         );
 
@@ -160,7 +160,7 @@ class AutoShowtimeGenerationImmediateDispatchTest {
         });
 
         var response = service.submitRun(
-                new AutoShowtimeGenerationRequest(start, start, List.of(2L), List.of(1L), null, null, null, List.of(50L)),
+                new AutoShowtimeGenerationRequest(start, start, List.of(2L), List.of(1L), null, null, null, List.of(50L), null),
                 "admin"
         );
 

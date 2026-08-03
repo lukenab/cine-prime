@@ -16,10 +16,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class SeatControllerAuthorizationTest {
 
     @Test
-    void updateSeatRequiresAdminOrEmployee() throws NoSuchMethodException {
+    void updateSeatRequiresAdmin() throws NoSuchMethodException {
         Method updateSeat = SeatController.class.getDeclaredMethod("updateSeat", long.class, SeatRequest.class);
 
-        assertEquals("hasAnyRole('ADMIN', 'EMPLOYEE')", updateSeat.getAnnotation(PreAuthorize.class).value());
+        assertEquals("hasRole('ADMIN')", updateSeat.getAnnotation(PreAuthorize.class).value());
     }
 
     @Test

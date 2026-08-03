@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { movieApi, type MovieApiResponse } from "../../api/movieApi";
+import { subscribeLifecycleEvents } from "../../api/lifecycleSocket";
 import { HeroSection } from "../../components/shared/HeroSection";
 import { QuickBooking } from "../../components/shared/QuickBooking";
 import { MovieShowcase } from "../../components/shared/MovieShowcase";
@@ -14,28 +15,27 @@ export default function HomePage() {
   const [loadingMovies, setLoadingMovies] = useState(false);
   const [movieError, setMovieError] = useState("");
 
-  useEffect(() => {
-    let active = true;
-
-    const loadMovies = async () => {
-      setLoadingMovies(true);
-      setMovieError("");
-      try {
-        const res = await movieApi.getPublicMovies();
-        if (active) setMovies(res.result ?? []);
-      } catch {
-        if (active) setMovieError("Movies are temporarily unavailable.");
-      } finally {
-        if (active) setLoadingMovies(false);
-      }
-    };
-
-    loadMovies();
-
-    return () => {
-      active = false;
-    };
+  const loadMovies = useCallback(async () => {
+    setLoadingMovies(true);
+    setMovieError("");
+    try {
+      const res = await movieApi.getPublicMovies();
+      setMovies(res.result ?? []);
+    } catch {
+      setMovieError("Movies are temporarily unavailable.");
+    } finally {
+      setLoadingMovies(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadMovies();
+    return subscribeLifecycleEvents((event) => {
+      if (["MOVIE", "RELEASE_PLAN", "SCHEDULE_PLAN"].includes(event.aggregateType)) {
+        void loadMovies();
+      }
+    });
+  }, [loadMovies]);
 
   return (
     <>

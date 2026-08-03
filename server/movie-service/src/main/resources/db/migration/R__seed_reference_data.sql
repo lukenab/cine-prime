@@ -20,12 +20,12 @@ INSERT INTO age_rating (rating_code, min_age, description) VALUES
 ON CONFLICT (rating_code) DO NOTHING;
 
 -- ── screening_format ─────────────────────────────────────────────────────────
-INSERT INTO screening_format (format_code, format_name, surcharge) VALUES
-    ('2D',      '2D Standard',         0),
-    ('3D',      '3D',                  30000),
-    ('IMAX',    'IMAX',                50000),
-    ('4DX',     '4DX',                 60000),
-    ('SCREENX', 'ScreenX 270°',        40000)
+INSERT INTO screening_format (format_code, format_name) VALUES
+    ('2D',      '2D Standard'),
+    ('3D',      '3D'),
+    ('IMAX',    'IMAX'),
+    ('4DX',     '4DX'),
+    ('SCREENX', 'ScreenX 270°')
 ON CONFLICT (format_code) DO NOTHING;
 
 -- Auto Showtime simulated demand data. These are configuration rows for the

@@ -167,7 +167,7 @@ public enum MovieErrorCode implements BaseErrorCode {
                         "Only a DRAFT movie can be edited directly. Start a revision first if changes were requested.",
                         HttpStatus.CONFLICT),
         MOVIE_HAS_ACTIVE_AVAILABILITY(2071,
-                        "Cannot archive a movie that still has a PLANNED or OPEN availability window. Close them first.",
+                        "Cannot archive a movie that still has a non-closed release plan. Close it first.",
                         HttpStatus.CONFLICT),
 
         AVAILABILITY_NOT_FOUND(2072, "Movie availability not found.", HttpStatus.NOT_FOUND),
@@ -186,7 +186,7 @@ public enum MovieErrorCode implements BaseErrorCode {
                         "An availability window for this movie, cluster and showingStartDate already exists.",
                         HttpStatus.CONFLICT),
         AVAILABILITY_NOT_EDITABLE(2079,
-                        "Only a PLANNED availability window can be edited directly.", HttpStatus.CONFLICT),
+                        "Only a PLANNED or CHANGES_REQUESTED release plan can be edited directly.", HttpStatus.CONFLICT),
 
         CLUSTER_SELF_APPROVAL_FORBIDDEN(2080,
                         "You cannot approve or reject a cluster you created yourself. Another admin must review it.",
@@ -241,7 +241,7 @@ public enum MovieErrorCode implements BaseErrorCode {
         AUTO_SHOWTIME_MOVIE_NOT_APPROVED(2097,
                         "Auto showtime generation requires every selected movie to be APPROVED.", HttpStatus.CONFLICT),
         AUTO_SHOWTIME_NO_SCHEDULABLE_AVAILABILITY(2098,
-                        "No selected movie has an OPEN or PLANNED availability window for the selected cluster and date range.",
+                        "No selected movie has an APPROVED or OPEN release plan for the selected cluster and date range.",
                         HttpStatus.BAD_REQUEST),
         AUTO_SHOWTIME_NO_ELIGIBLE_CANDIDATE(2099,
                         "No eligible showtime candidate exists. Check cluster operating hours, active rooms, and room format capabilities.",
@@ -272,6 +272,9 @@ public enum MovieErrorCode implements BaseErrorCode {
                         HttpStatus.CONFLICT),
         AUTO_SHOWTIME_REPLAN_NOT_SUPPORTED(2109,
                         "Rolling replanning is not implemented yet. Submit a fresh generation run instead.",
+                        HttpStatus.BAD_REQUEST),
+        AUTO_SHOWTIME_INVALID_SCREENING_VERSION_SELECTION(2151,
+                        "A screening-version override is invalid, inactive, expired, or does not belong to the selected movie.",
                         HttpStatus.BAD_REQUEST),
 
         // ── Showtime allocation policy admin CRUD ──────────────────────────────
@@ -384,7 +387,19 @@ public enum MovieErrorCode implements BaseErrorCode {
                         HttpStatus.TOO_MANY_REQUESTS),
         SEAT_HOLD_RETRYABLE_CONFLICT(2144,
                         "Seat inventory is temporarily busy. Refresh availability and retry the same request.",
-                        HttpStatus.SERVICE_UNAVAILABLE);
+                        HttpStatus.SERVICE_UNAVAILABLE),
+        MAINTENANCE_NOT_FOUND(2145,
+                        "Cinema room maintenance record was not found.", HttpStatus.NOT_FOUND),
+        MOVIE_SELF_APPROVAL_FORBIDDEN(2146,
+                        "The author who prepared this movie draft cannot approve it.", HttpStatus.FORBIDDEN),
+        AVAILABILITY_SELF_APPROVAL_FORBIDDEN(2147,
+                        "The author who prepared this release plan cannot open it.", HttpStatus.FORBIDDEN),
+        SCHEDULE_PLAN_SELF_PUBLISH_FORBIDDEN(2148,
+                        "The author who submitted this schedule plan cannot publish it.", HttpStatus.FORBIDDEN),
+        AVAILABILITY_REVIEW_NOTE_REQUIRED(2149,
+                        "A review note is required when requesting release-plan changes.", HttpStatus.BAD_REQUEST),
+        AVAILABILITY_SALES_START_INVALID(2150,
+                        "salesStartAt must be on or before showingStartDate.", HttpStatus.BAD_REQUEST);
 
         int code;
         String message;

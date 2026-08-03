@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Building2, CheckCircle2, Clock3, Eye, Filter, KeyRound, MailPlus,
+  Building2, CheckCircle2, Clock3, Eye, KeyRound, MailPlus,
   MoreHorizontal, RefreshCw, RotateCcw, Search, ShieldCheck, UserCheck,
-  UserRoundCheck, UserRoundX, UsersRound, X,
+  SlidersHorizontal, UserRoundCheck, UserRoundX, UsersRound, X,
 } from "lucide-react";
 
 import { authApi } from "../../api/authApi";
 import { employeeApi, type EmployeeResponse } from "../../api/employeeApi";
 import { movieApi, type ClusterResponse } from "../../api/movieApi";
 import { userApi } from "../../api/userApi";
+import { useAuth } from "../../context/AuthContext";
 import { Toast } from "../../components/shared/Toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../../components/ui/alert-dialog";
 import { Badge } from "../../components/ui/badge";
@@ -70,9 +71,11 @@ const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(-2).m
 
 export default function PeopleAccessPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = validTab(searchParams.get("tab"));
   const inviteOpen = searchParams.get("invite") === "1";
+  const canInviteEmployee = user?.role === "ROLE_ADMIN" || user?.role === "ROLE_SUPER_ADMIN";
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -135,7 +138,7 @@ export default function PeopleAccessPage() {
     .map((account) => ({ account, profile: profileById.get(account.accountId) })), [accounts, profileById]);
 
   const staffRows = useMemo<StaffRow[]>(() => accounts
-    .filter((account) => roleNames(account).some((role) => role === "EMPLOYEE" || role === "BRANCH_MANAGER"))
+    .filter((account) => roleNames(account).some((role) => role === "EMPLOYEE" || role === "BRANCH_MANAGER" || role === "PROGRAMMING_OPERATOR"))
     .map((account) => {
       const employee = employeeByAccount.get(account.accountId);
       return { account, employee, profile: profileById.get(account.accountId), cluster: employee?.cinemaId ? clusterById.get(employee.cinemaId) : undefined };
@@ -244,7 +247,7 @@ export default function PeopleAccessPage() {
   return (
     <div className="w-full pb-10 text-left">
       {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
-      <InviteEmployeeModal open={inviteOpen} clusters={clusters} onOpenChange={setInviteOpen} onInvited={() => { setToast({ type: "success", message: "Employee invitation sent." }); load(); }} />
+      {canInviteEmployee && <InviteEmployeeModal open={inviteOpen} clusters={clusters} onOpenChange={setInviteOpen} onInvited={() => { setToast({ type: "success", message: "Employee invitation sent." }); load(); }} />}
 
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -252,7 +255,6 @@ export default function PeopleAccessPage() {
           <h1 className="text-2xl font-bold tracking-tight text-[var(--text-main)]">{tabCopy[tab].title}</h1>
           <p className="mt-1 text-sm text-[var(--text-sub)]">{tabCopy[tab].description}</p>
         </div>
-        {tab !== "customers" && <Button onClick={() => setInviteOpen(true)} className="h-10 bg-blue-600 text-white hover:bg-blue-500"><MailPlus size={16} /> Invite employee</Button>}
       </div>
 
       <div className="mb-6 flex gap-1 border-b border-[var(--border-color)]">
@@ -270,16 +272,24 @@ export default function PeopleAccessPage() {
 
       {error && <div className="mb-4 flex items-center justify-between rounded-xl border border-red-500/25 bg-red-500/5 px-4 py-3 text-sm text-red-500"><span>{error}</span><button onClick={() => setError(null)}><X size={15} /></button></div>}
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[260px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-sub)]" size={15} />
-          <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={tab === "customers" ? "Search customer name or email…" : "Search staff name, email or employee code…"} className="h-10 border-[var(--border-color)] bg-[var(--bg-card)] pl-9 pr-9" />
-          {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-sub)]"><X size={14} /></button>}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="relative min-w-64 flex-1">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-sub)]" size={15} />
+          <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={tab === "customers" ? "Search customer name or email…" : "Search staff name, email or employee code…"} className="h-auto w-full rounded-xl border-[var(--border-color)] bg-[var(--bg-card)] py-2.5 pl-9 pr-9 text-sm outline-none transition-all focus-visible:ring-2 focus-visible:ring-blue-500/20" />
+          {search && <button type="button" aria-label="Clear search" onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-[var(--text-sub)] transition-colors hover:text-rose-500"><X size={14} /></button>}
         </div>
-        <Button variant="outline" onClick={() => setShowFilters((visible) => !visible)} className={`h-10 border-[var(--border-color)] ${showFilters ? "border-blue-500 text-blue-500" : "bg-[var(--bg-card)] text-[var(--text-main)]"}`}>
-          <Filter size={15} /> Filter{activeFilterCount > 0 && <span className="rounded-full bg-blue-500 px-1.5 text-[10px] text-white">{activeFilterCount}</span>}
+        <Button variant="outline" onClick={() => setShowFilters((visible) => !visible)} className={`h-10 rounded-xl border-[var(--border-color)] px-4 py-2.5 text-sm transition-all hover:opacity-80 ${showFilters || activeFilterCount > 0 ? "border-blue-500 text-blue-500" : "bg-[var(--bg-card)] text-[var(--text-main)]"}`}>
+          <SlidersHorizontal size={15} /> Filter{activeFilterCount > 0 && <span className="rounded-full bg-blue-500 px-1.5 text-[10px] text-white">{activeFilterCount}</span>}
         </Button>
-        <Button variant="outline" onClick={load} disabled={loading} className="h-10 border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-main)]"><RefreshCw size={15} className={loading ? "animate-spin" : ""} /> Refresh</Button>
+        <Button variant="outline" onClick={load} disabled={loading} className="h-10 rounded-xl border-[var(--border-color)] bg-[var(--bg-card)] px-4 py-2.5 text-sm text-[var(--text-main)] transition-all hover:opacity-80"><RefreshCw size={15} className={loading ? "animate-spin" : ""} /> {loading ? "Loading..." : "Refresh"}</Button>
+        {tab !== "customers" && canInviteEmployee && (
+          <Button
+            onClick={() => setInviteOpen(true)}
+            className="h-10 rounded-xl bg-blue-600 px-5 py-2.5 text-sm text-white shadow-sm hover:bg-blue-500"
+          >
+            <MailPlus size={16} /> Invite employee
+          </Button>
+        )}
       </div>
 
       {showFilters && <FilterPanel tab={tab} clusters={clusters} values={{ statusFilter, profileFilter, branchFilter, departmentFilter, positionFilter, employmentFilter }} setters={{ setStatusFilter, setProfileFilter, setBranchFilter, setDepartmentFilter, setPositionFilter, setEmploymentFilter }} />}
@@ -314,16 +324,36 @@ function FilterPanel({ tab, clusters, values, setters }: any) {
     {tab === "customers" ? <FilterSelect value={values.profileFilter} setValue={setters.setProfileFilter} placeholder="Profile status" items={[{ value: "ALL", label: "All profiles" }, { value: "COMPLETE", label: "Complete" }, { value: "INCOMPLETE", label: "Incomplete" }]} /> : <>
       <FilterSelect value={values.branchFilter} setValue={setters.setBranchFilter} placeholder="Branch" items={[{ value: "ALL", label: "All branches" }, ...clusters.map((cluster: ClusterResponse) => ({ value: String(cluster.clusterId), label: cluster.clusterName }))]} />
       {tab === "staff" && <>
-        <FilterSelect value={values.departmentFilter} setValue={setters.setDepartmentFilter} placeholder="Department" items={["ALL", "BOX_OFFICE", "CONCESSION", "FLOOR", "PROJECTION", "MANAGEMENT", "CUSTOMER_SERVICE"].map((value) => ({ value, label: value === "ALL" ? "All departments" : formatEnum(value) }))} />
-        <FilterSelect value={values.positionFilter} setValue={setters.setPositionFilter} placeholder="Position" items={["ALL", "STAFF", "SUPERVISOR", "MANAGER"].map((value) => ({ value, label: value === "ALL" ? "All positions" : formatEnum(value) }))} />
-        <FilterSelect value={values.employmentFilter} setValue={setters.setEmploymentFilter} placeholder="Employment" items={["ALL", "FULL_TIME", "PART_TIME", "PROBATION", "INTERN", "CONTRACT"].map((value) => ({ value, label: value === "ALL" ? "All employment types" : formatEnum(value) }))} />
+        <FilterSelect value={values.departmentFilter} setValue={setters.setDepartmentFilter} placeholder="Primary work area" items={["ALL", "GENERAL_OPERATIONS", "BOX_OFFICE", "FOOD_BEVERAGE", "FLOOR_GUEST_SERVICES", "PROJECTION_TECHNICAL", "FACILITIES_MAINTENANCE"].map((value) => ({ value, label: value === "ALL" ? "All work areas" : formatEnum(value) }))} />
+        <FilterSelect value={values.positionFilter} setValue={setters.setPositionFilter} placeholder="Position" items={["ALL", "TEAM_MEMBER", "SUPERVISOR", "ASSISTANT_MANAGER", "CINEMA_MANAGER"].map((value) => ({ value, label: value === "ALL" ? "All positions" : formatEnum(value) }))} />
+        <FilterSelect value={values.employmentFilter} setValue={setters.setEmploymentFilter} placeholder="Employment" items={["ALL", "FULL_TIME", "PART_TIME", "FIXED_TERM", "SEASONAL"].map((value) => ({ value, label: value === "ALL" ? "All employment types" : formatEnum(value) }))} />
       </>}
     </>}
   </div>;
 }
 
 function FilterSelect({ value, setValue, items }: { value: string; setValue: (value: string) => void; placeholder: string; items: Array<{ value: string; label: string }> }) {
-  return <Select value={value} onValueChange={setValue}><SelectTrigger className="h-10 border-[var(--border-color)] bg-[var(--bg-main)]"><SelectValue /></SelectTrigger><SelectContent>{items.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent></Select>;
+  return (
+    <Select value={value} onValueChange={setValue}>
+      <SelectTrigger
+        className="h-10 rounded-xl border-[var(--border-color)] text-[var(--text-main)] shadow-none hover:border-blue-500/40 focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/15 [&_[data-slot=select-value]]:text-[var(--text-main)] [&_svg]:text-[var(--text-sub)]"
+        style={{ backgroundColor: "var(--bg-main)", color: "var(--text-main)" }}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="bg-[var(--bg-card)] text-[var(--text-main)]">
+        {items.map((item) => (
+          <SelectItem
+            key={item.value}
+            value={item.value}
+            className="text-[var(--text-main)] focus:bg-blue-500/10 focus:text-blue-500"
+          >
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 }
 
 function Person({ name, email, avatar }: { name: string; email?: string; avatar?: string }) {
@@ -335,25 +365,141 @@ function StatusBadge({ status }: { status: string }) {
   return <Badge variant="outline" className={styles[status] ?? "border-[var(--border-color)] text-[var(--text-sub)]"}>{formatEnum(status)}</Badge>;
 }
 
+const peopleTableHeadClass = "h-auto px-5 py-3.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--text-sub)]";
+const peopleTableCellClass = "px-5 py-3.5";
+const peopleTableRowClass = "border-[var(--border-color)] transition-colors hover:bg-[rgba(128,128,128,0.04)]";
+
 function CustomerTable({ rows, loading, navigate, onStatus, onResend, onRevoke }: any) {
-  return <Table><TableHeader><TableRow className="border-[var(--border-color)]"><TableHead className="px-5 text-[var(--text-sub)]">Customer</TableHead><TableHead className="text-[var(--text-sub)]">Membership</TableHead><TableHead className="text-[var(--text-sub)]">Profile</TableHead><TableHead className="text-[var(--text-sub)]">Joined</TableHead><TableHead className="text-[var(--text-sub)]">Last active</TableHead><TableHead className="w-14" /></TableRow></TableHeader><TableBody>{loading ? <LoadingRows columns={6} /> : rows.length === 0 ? <EmptyRow columns={6} message="No customers match these filters." /> : rows.map((row: CustomerRow) => <TableRow key={row.account.accountId} className="border-[var(--border-color)]"><TableCell className="px-5 py-3"><Person name={row.profile?.fullName || row.account.username || "Unnamed member"} email={row.account.email} avatar={row.profile?.avatarUrl} /></TableCell><TableCell><StatusBadge status={row.account.status} /></TableCell><TableCell>{row.profile?.profileCompleted ? <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-500"><CheckCircle2 size={14} /> Complete</span> : <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-500"><Clock3 size={14} /> Incomplete</span>}</TableCell><TableCell className="text-sm text-[var(--text-sub)]">{formatDate(row.account.createdAt || row.profile?.createdAt)}</TableCell><TableCell className="text-sm text-[var(--text-sub)]">{formatDateTime(row.account.lastLoginAt)}</TableCell><TableCell><CustomerActions row={row} navigate={navigate} onStatus={onStatus} onResend={onResend} onRevoke={onRevoke} /></TableCell></TableRow>)}</TableBody></Table>;
+  return (
+    <Table>
+      <TableHeader className="bg-[rgba(128,128,128,0.04)]">
+        <TableRow className="border-[var(--border-color)] hover:bg-transparent">
+          <TableHead className={peopleTableHeadClass}>Customer</TableHead>
+          <TableHead className={peopleTableHeadClass}>Membership</TableHead>
+          <TableHead className={peopleTableHeadClass}>Profile</TableHead>
+          <TableHead className={peopleTableHeadClass}>Joined</TableHead>
+          <TableHead className={peopleTableHeadClass}>Last active</TableHead>
+          <TableHead className={`${peopleTableHeadClass} text-right`}>Actions</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {loading ? <LoadingRows columns={6} /> : rows.length === 0 ? <EmptyRow columns={6} message="No customers match these filters." /> : rows.map((row: CustomerRow) => (
+          <TableRow key={row.account.accountId} className={peopleTableRowClass}>
+            <TableCell className={peopleTableCellClass}><Person name={row.profile?.fullName || row.account.username || "Unnamed member"} email={row.account.email} avatar={row.profile?.avatarUrl} /></TableCell>
+            <TableCell className={peopleTableCellClass}><StatusBadge status={row.account.status} /></TableCell>
+            <TableCell className={peopleTableCellClass}>{row.profile?.profileCompleted ? <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-500"><CheckCircle2 size={14} /> Complete</span> : <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-500"><Clock3 size={14} /> Incomplete</span>}</TableCell>
+            <TableCell className={`${peopleTableCellClass} text-sm text-[var(--text-sub)]`}>{formatDate(row.account.createdAt || row.profile?.createdAt)}</TableCell>
+            <TableCell className={`${peopleTableCellClass} text-sm text-[var(--text-sub)]`}>{formatDateTime(row.account.lastLoginAt)}</TableCell>
+            <TableCell className={`${peopleTableCellClass} text-right`}>
+              <div className="flex items-center justify-end gap-1.5">
+                <CustomerPrimaryAction row={row} navigate={navigate} onStatus={onStatus} onResend={onResend} />
+                <CustomerActions row={row} onStatus={onStatus} onRevoke={onRevoke} />
+              </div>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
 }
 
 function StaffTable({ rows, loading, navigate, onStatus, onResend, onRevoke }: any) {
-  return <Table><TableHeader><TableRow className="border-[var(--border-color)]"><TableHead className="px-5 text-[var(--text-sub)]">Employee</TableHead><TableHead className="text-[var(--text-sub)]">Branch</TableHead><TableHead className="text-[var(--text-sub)]">Position / department</TableHead><TableHead className="text-[var(--text-sub)]">Account</TableHead><TableHead className="text-[var(--text-sub)]">Last login</TableHead><TableHead className="w-14" /></TableRow></TableHeader><TableBody>{loading ? <LoadingRows columns={6} /> : rows.length === 0 ? <EmptyRow columns={6} message="No staff match these filters." /> : rows.map((row: StaffRow) => <TableRow key={row.account.accountId} className="border-[var(--border-color)]"><TableCell className="px-5 py-3"><Person name={row.profile?.fullName || row.account.username || "Unnamed employee"} email={row.employee?.employeeCode || row.account.email} avatar={row.profile?.avatarUrl} /></TableCell><TableCell><p className="max-w-48 truncate text-sm font-medium text-[var(--text-main)]">{row.cluster?.clusterName || "Unassigned"}</p></TableCell><TableCell><p className="text-sm font-medium text-[var(--text-main)]">{formatEnum(row.employee?.position)}</p><p className="text-xs text-[var(--text-sub)]">{formatEnum(row.employee?.department)}</p></TableCell><TableCell><StatusBadge status={row.account.status === "ACTIVE" ? row.employee?.status || row.account.status : row.account.status} /></TableCell><TableCell className="text-sm text-[var(--text-sub)]">{formatDateTime(row.account.lastLoginAt)}</TableCell><TableCell><StaffActions row={row} navigate={navigate} onStatus={onStatus} onResend={onResend} onRevoke={onRevoke} /></TableCell></TableRow>)}</TableBody></Table>;
+  return (
+    <Table>
+      <TableHeader className="bg-[rgba(128,128,128,0.04)]">
+        <TableRow className="border-[var(--border-color)] hover:bg-transparent">
+          <TableHead className={peopleTableHeadClass}>Employee</TableHead>
+          <TableHead className={peopleTableHeadClass}>Branch</TableHead>
+          <TableHead className={peopleTableHeadClass}>Position / work area</TableHead>
+          <TableHead className={peopleTableHeadClass}>Account</TableHead>
+          <TableHead className={peopleTableHeadClass}>Last login</TableHead>
+          <TableHead className={`${peopleTableHeadClass} text-right`}>Actions</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {loading ? <LoadingRows columns={6} /> : rows.length === 0 ? <EmptyRow columns={6} message="No staff match these filters." /> : rows.map((row: StaffRow) => (
+          <TableRow key={row.account.accountId} className={peopleTableRowClass}>
+            <TableCell className={peopleTableCellClass}><Person name={row.profile?.fullName || row.account.username || "Unnamed employee"} email={row.employee?.employeeCode || row.account.email} avatar={row.profile?.avatarUrl} /></TableCell>
+            <TableCell className={peopleTableCellClass}><p className="max-w-48 truncate text-sm font-medium text-[var(--text-main)]">{row.cluster?.clusterName || "Unassigned"}</p></TableCell>
+            <TableCell className={peopleTableCellClass}><p className="text-sm font-medium text-[var(--text-main)]">{formatEnum(row.employee?.position)}</p><p className="text-xs text-[var(--text-sub)]">{formatEnum(row.employee?.department)}</p></TableCell>
+            <TableCell className={peopleTableCellClass}><StatusBadge status={row.account.status === "ACTIVE" ? row.employee?.status || row.account.status : row.account.status} /></TableCell>
+            <TableCell className={`${peopleTableCellClass} text-sm text-[var(--text-sub)]`}>{formatDateTime(row.account.lastLoginAt)}</TableCell>
+            <TableCell className={`${peopleTableCellClass} text-right`}>
+              <div className="flex items-center justify-end gap-1.5">
+                <StaffPrimaryAction row={row} navigate={navigate} onStatus={onStatus} onResend={onResend} />
+                <StaffActions row={row} onStatus={onStatus} onRevoke={onRevoke} />
+              </div>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
 }
 
 function InvitationTable({ rows, loading, onResend, onCancel }: any) {
-  return <Table><TableHeader><TableRow className="border-[var(--border-color)]"><TableHead className="px-5 text-[var(--text-sub)]">Invitee</TableHead><TableHead className="text-[var(--text-sub)]">Access role</TableHead><TableHead className="text-[var(--text-sub)]">Branch</TableHead><TableHead className="text-[var(--text-sub)]">Sent</TableHead><TableHead className="text-[var(--text-sub)]">Status</TableHead><TableHead className="w-14" /></TableRow></TableHeader><TableBody>{loading ? <LoadingRows columns={6} /> : rows.length === 0 ? <EmptyRow columns={6} message="No pending staff invitations." /> : rows.map((row: StaffRow) => <TableRow key={row.account.accountId} className="border-[var(--border-color)]"><TableCell className="px-5 py-3"><Person name={row.profile?.fullName || row.account.username || "Invited employee"} email={row.account.email} /></TableCell><TableCell className="text-sm text-[var(--text-main)]">{roleNames(row.account).includes("BRANCH_MANAGER") ? "Branch Manager" : "Employee"}</TableCell><TableCell className="text-sm text-[var(--text-main)]">{row.cluster?.clusterName || "Unassigned"}</TableCell><TableCell className="text-sm text-[var(--text-sub)]">{formatDate(row.account.createdAt)}</TableCell><TableCell><StatusBadge status="PENDING" /></TableCell><TableCell><DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" variant="ghost" aria-label="Invitation actions"><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => onResend(row.account.accountId)}><MailPlus /> Resend invitation</DropdownMenuItem><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onClick={() => onCancel(row)}><X /> Cancel invitation</DropdownMenuItem></DropdownMenuContent></DropdownMenu></TableCell></TableRow>)}</TableBody></Table>;
+  return (
+    <Table>
+      <TableHeader className="bg-[rgba(128,128,128,0.04)]">
+        <TableRow className="border-[var(--border-color)] hover:bg-transparent">
+          <TableHead className={peopleTableHeadClass}>Invitee</TableHead>
+          <TableHead className={peopleTableHeadClass}>Access role</TableHead>
+          <TableHead className={peopleTableHeadClass}>Branch</TableHead>
+          <TableHead className={peopleTableHeadClass}>Sent</TableHead>
+          <TableHead className={peopleTableHeadClass}>Status</TableHead>
+          <TableHead className={`${peopleTableHeadClass} text-right`}>Actions</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {loading ? <LoadingRows columns={6} /> : rows.length === 0 ? <EmptyRow columns={6} message="No pending staff invitations." /> : rows.map((row: StaffRow) => (
+          <TableRow key={row.account.accountId} className={peopleTableRowClass}>
+            <TableCell className={peopleTableCellClass}><Person name={row.profile?.fullName || row.account.username || "Invited employee"} email={row.account.email} /></TableCell>
+            <TableCell className={`${peopleTableCellClass} text-sm text-[var(--text-main)]`}>
+              {roleNames(row.account).includes("PROGRAMMING_OPERATOR") ? "Programming Operator" : roleNames(row.account).includes("BRANCH_MANAGER") ? "Branch Manager" : "Employee"}
+            </TableCell>
+            <TableCell className={`${peopleTableCellClass} text-sm text-[var(--text-main)]`}>{row.cluster?.clusterName || "Unassigned"}</TableCell>
+            <TableCell className={`${peopleTableCellClass} text-sm text-[var(--text-sub)]`}>{formatDate(row.account.createdAt)}</TableCell>
+            <TableCell className={peopleTableCellClass}><StatusBadge status="PENDING" /></TableCell>
+            <TableCell className={`${peopleTableCellClass} text-right`}>
+              <div className="flex items-center justify-end gap-1.5">
+                <Button size="sm" variant="ghost" className={primaryActionClass} onClick={() => onResend(row.account.accountId)}><MailPlus /> Resend</Button>
+                <DropdownMenu>
+                <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="size-8 rounded-lg text-[var(--text-sub)] hover:bg-black/5 hover:text-[var(--text-main)] dark:hover:bg-white/10" aria-label="Invitation actions"><MoreHorizontal /></Button></DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem variant="destructive" onClick={() => onCancel(row)}><X /> Cancel invitation</DropdownMenuItem>
+                </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
 }
 
-function CustomerActions({ row, navigate, onStatus, onResend, onRevoke }: any) {
-  return <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" variant="ghost" aria-label="Customer actions"><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => navigate(`/admin/users/${row.account.accountId}`)}><Eye /> View customer</DropdownMenuItem>{row.account.status === "PENDING" && <DropdownMenuItem onClick={() => onResend(row.account.accountId)}><MailPlus /> Resend verification</DropdownMenuItem>}<DropdownMenuItem onClick={() => onRevoke(row)}><KeyRound /> Revoke sessions</DropdownMenuItem><DropdownMenuSeparator />{row.account.status === "INACTIVE" ? <DropdownMenuItem onClick={() => onStatus(row, "ACTIVE")}><RotateCcw /> Reactivate</DropdownMenuItem> : <DropdownMenuItem variant="destructive" onClick={() => onStatus(row, "INACTIVE")}><UserRoundX /> Suspend</DropdownMenuItem>}</DropdownMenuContent></DropdownMenu>;
+const primaryActionClass = "h-8 rounded-lg border-0 bg-blue-500/10 px-3 text-blue-600 shadow-none hover:bg-blue-500/20 hover:text-blue-700 focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/20 dark:text-blue-400 dark:hover:text-blue-300 [&_svg]:size-3.5";
+
+function CustomerPrimaryAction({ row, navigate, onStatus, onResend }: any) {
+  if (row.account.status === "PENDING") return <Button size="sm" variant="ghost" className={primaryActionClass} onClick={() => onResend(row.account.accountId)}><MailPlus /> Resend</Button>;
+  if (row.account.status === "INACTIVE") return <Button size="sm" variant="ghost" className={primaryActionClass} onClick={() => onStatus(row, "ACTIVE")}><RotateCcw /> Reactivate</Button>;
+  return <Button size="sm" variant="ghost" className={primaryActionClass} onClick={() => navigate(`/admin/users/${row.account.accountId}`)}><Eye /> View</Button>;
 }
 
-function StaffActions({ row, navigate, onStatus, onResend, onRevoke }: any) {
+function CustomerActions({ row, onStatus, onRevoke }: any) {
+  return <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="size-8 rounded-lg text-[var(--text-sub)] hover:bg-black/5 hover:text-[var(--text-main)] dark:hover:bg-white/10" aria-label="More customer actions"><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => onRevoke(row)}><KeyRound /> Revoke sessions</DropdownMenuItem>{row.account.status !== "INACTIVE" && <><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onClick={() => onStatus(row, "INACTIVE")}><UserRoundX /> Suspend</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu>;
+}
+
+function StaffPrimaryAction({ row, navigate, onStatus, onResend }: any) {
   const disabled = row.account.status === "INACTIVE" || row.employee?.status === "DISABLED";
-  return <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" variant="ghost" aria-label="Staff actions"><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem disabled={!row.employee} onClick={() => row.employee && navigate(`/admin/employees/${row.employee.employeeId}`)}><Eye /> View staff</DropdownMenuItem>{row.account.status === "PENDING" && <DropdownMenuItem onClick={() => onResend(row.account.accountId)}><MailPlus /> Resend invitation</DropdownMenuItem>}<DropdownMenuItem onClick={() => onRevoke(row)}><KeyRound /> Revoke sessions</DropdownMenuItem><DropdownMenuSeparator />{disabled ? <DropdownMenuItem disabled={!row.employee} onClick={() => onStatus(row, true)}><RotateCcw /> Reactivate</DropdownMenuItem> : <DropdownMenuItem disabled={!row.employee} variant="destructive" onClick={() => onStatus(row, false)}><UserRoundX /> Suspend</DropdownMenuItem>}</DropdownMenuContent></DropdownMenu>;
+  if (row.account.status === "PENDING") return <Button size="sm" variant="ghost" className={primaryActionClass} onClick={() => onResend(row.account.accountId)}><MailPlus /> Resend</Button>;
+  if (disabled) return <Button size="sm" variant="ghost" className={primaryActionClass} disabled={!row.employee} onClick={() => onStatus(row, true)}><RotateCcw /> Reactivate</Button>;
+  return <Button size="sm" variant="ghost" className={primaryActionClass} disabled={!row.employee} onClick={() => row.employee && navigate(`/admin/employees/${row.employee.employeeId}`)}><Eye /> View</Button>;
+}
+
+function StaffActions({ row, onStatus, onRevoke }: any) {
+  const disabled = row.account.status === "INACTIVE" || row.employee?.status === "DISABLED";
+  return <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="size-8 rounded-lg text-[var(--text-sub)] hover:bg-black/5 hover:text-[var(--text-main)] dark:hover:bg-white/10" aria-label="More staff actions"><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => onRevoke(row)}><KeyRound /> Revoke sessions</DropdownMenuItem>{!disabled && <><DropdownMenuSeparator /><DropdownMenuItem disabled={!row.employee} variant="destructive" onClick={() => onStatus(row, false)}><UserRoundX /> Suspend</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu>;
 }
 
 function LoadingRows({ columns }: { columns: number }) {

@@ -40,7 +40,7 @@ class CinemaClusterControllerTest {
 
     @Test
     void submitDelegatesToTransactionalService() {
-        Authentication authentication = employee("employee.a");
+        Authentication authentication = programmingOperator("operator.a");
         CinemaClusterResponse response = new CinemaClusterResponse();
         when(cinemaClusterService.submitCluster(1L, authentication)).thenReturn(response);
 
@@ -107,7 +107,7 @@ class CinemaClusterControllerTest {
         when(clusterRepository.findById(1L)).thenReturn(Optional.of(draft));
         when(movieMapper.toCinemaClusterResponse(draft)).thenReturn(new CinemaClusterResponse());
 
-        assertEquals(200, controller.getById(1L, employee("employee.a")).getCode());
+        assertEquals(200, controller.getById(1L, programmingOperator("operator.a")).getCode());
     }
 
     @Test
@@ -119,8 +119,8 @@ class CinemaClusterControllerTest {
         assertEquals(200, controller.getById(1L, null).getCode());
     }
 
-    private Authentication employee(String username) {
-        return new TestingAuthenticationToken(username, null, "ROLE_EMPLOYEE");
+    private Authentication programmingOperator(String username) {
+        return new TestingAuthenticationToken(username, null, "ROLE_PROGRAMMING_OPERATOR");
     }
 
     private Authentication admin(String username) {

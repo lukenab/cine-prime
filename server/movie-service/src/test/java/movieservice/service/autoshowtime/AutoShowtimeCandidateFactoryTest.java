@@ -54,6 +54,7 @@ class AutoShowtimeCandidateFactoryTest {
     private CinemaCluster cluster;
     private CinemaRoom room;
     private Movie movie;
+    private MovieScreeningVersion screeningVersion;
 
     @BeforeEach
     void setUp() {
@@ -74,7 +75,7 @@ class AutoShowtimeCandidateFactoryTest {
                 .durationMinutes(60)
                 .formats(List.of(ScreeningFormat.builder().formatId(1).build()))
                 .build();
-        MovieScreeningVersion version = MovieScreeningVersion.builder()
+        screeningVersion = MovieScreeningVersion.builder()
                 .screeningVersionId(100L)
                 .movie(movie)
                 .format(movie.getFormats().getFirst())
@@ -83,11 +84,11 @@ class AutoShowtimeCandidateFactoryTest {
                 .build();
 
         when(cinemaClusterRepository.findById(1L)).thenReturn(Optional.of(cluster));
-        when(schedulingEligibilityService.evaluate(any(), any(), any(), any()))
+        org.mockito.Mockito.lenient().when(schedulingEligibilityService.evaluate(any(), any(), any(), any()))
                 .thenReturn(SchedulingEligibilityResult.allowed());
         when(movieScreeningVersionRepository.findEffectiveVersions(anyLong(), any(), any()))
-                .thenReturn(List.of(version));
-        when(cinemaRoomFormatRepository.findEligibleActiveRoomsByMovieIdAndFormatId(anyLong(), anyInt()))
+                .thenReturn(List.of(screeningVersion));
+        org.mockito.Mockito.lenient().when(cinemaRoomFormatRepository.findEligibleActiveRoomsByMovieIdAndFormatId(anyLong(), anyInt()))
                 .thenReturn(List.of(room));
         when(formatPriorityRepository.findAllByPolicyIdWithFormat(1L)).thenReturn(List.of());
         /// lenient: khi toàn bộ room bị loại trừ, không candidate nào được sinh ra nên
@@ -177,6 +178,37 @@ class AutoShowtimeCandidateFactoryTest {
         List<ShowtimeCandidate> candidates = factory.buildRawCandidates(run(15, Set.of()));
 
         assertEquals(4, candidates.size());
+    }
+
+    @Test
+    void buildRawCandidatesHonorsPerMovieScreeningVersionOverride() {
+        cluster.setOperatingHours(List.of(operatingHour(LocalTime.of(8, 0), LocalTime.of(10, 0))));
+
+        MovieScreeningVersion anotherVersion = MovieScreeningVersion.builder()
+                .screeningVersionId(999L)
+                .movie(movie)
+                .format(movie.getFormats().getFirst())
+                .audioLanguageCode("vi")
+                .status(ScreeningVersionStatus.ACTIVE)
+                .build();
+
+        ShowtimeGenerationRun customRun = ShowtimeGenerationRun.builder()
+                .generationRunId(1L)
+                .policy(ShowtimeAllocationPolicy.builder()
+                        .policyId(1L)
+                        .cleanupBufferMinutes(15)
+                        .timeSlotIntervalMinutes(15)
+                        .build())
+                .startDate(SHOW_DATE)
+                .endDate(SHOW_DATE)
+                .movies(Set.of(movie))
+                .clusters(Set.of(cluster))
+                .screeningVersionOverrides(Set.of(anotherVersion))
+                .build();
+
+        // The repository only returns version 100, while this run explicitly allows version 999.
+        // Candidate generation must not silently fall back to Auto.
+        assertEquals(0, factory.buildRawCandidates(customRun).size());
     }
 
     private ShowtimeGenerationRun run(int timeSlotIntervalMinutes) {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
@@ -15,10 +15,13 @@ import {
   Play,
   Plus,
   Search,
+  Send,
+  ShieldCheck,
   Square,
   Ticket,
   X,
 } from "lucide-react";
+import { subscribeLifecycleEvents } from "../api/lifecycleSocket";
 import {
   movieApi,
   type AvailabilityStatus,
@@ -47,6 +50,27 @@ const STATUS_META: Record<AvailabilityStatus, StatusMeta> = {
     color: "#2563eb",
     background: "rgba(37,99,235,0.09)",
     border: "rgba(37,99,235,0.22)",
+  },
+  IN_REVIEW: {
+    label: "In review",
+    description: "Awaiting administrator decision",
+    color: "#7c3aed",
+    background: "rgba(124,58,237,0.09)",
+    border: "rgba(124,58,237,0.22)",
+  },
+  CHANGES_REQUESTED: {
+    label: "Changes requested",
+    description: "Update and resubmit the release plan",
+    color: "#d97706",
+    background: "rgba(217,119,6,0.09)",
+    border: "rgba(217,119,6,0.24)",
+  },
+  APPROVED: {
+    label: "Approved",
+    description: "Public as Coming Soon; sales remain closed",
+    color: "#0891b2",
+    background: "rgba(8,145,178,0.09)",
+    border: "rgba(8,145,178,0.22)",
   },
   OPEN: {
     label: "Open",
@@ -243,6 +267,51 @@ function ClosePrompt({
   );
 }
 
+function ReleaseReviewPrompt({
+  onConfirm,
+  onCancel,
+}: {
+  onConfirm: (note: string) => void;
+  onCancel: () => void;
+}) {
+  const [note, setNote] = useState("");
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center px-4" onClick={onCancel}>
+      <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]" />
+      <div
+        className="relative w-full max-w-md rounded-2xl border p-5 shadow-2xl"
+        style={{ background: "var(--bg-main)", borderColor: "var(--border-color)" }}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h3 style={{ color: "var(--text-main)", fontSize: "15px", fontWeight: 700 }}>
+          Request release-plan changes
+        </h3>
+        <p className="mt-1" style={{ color: "var(--text-sub)", fontSize: "12px" }}>
+          Explain what the programming operator must update before resubmitting.
+        </p>
+        <textarea
+          autoFocus
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          placeholder="For example: move the sales start before the premiere date."
+          rows={3}
+          className="mt-4 w-full resize-none rounded-xl border px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+          style={{ background: "var(--bg-card)", borderColor: "var(--border-color)", color: "var(--text-main)", fontSize: "13px" }}
+        />
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" onClick={onCancel} className="rounded-xl border px-4 py-2 text-sm" style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }}>
+            Cancel
+          </button>
+          <button type="button" disabled={!note.trim()} onClick={() => onConfirm(note.trim())} className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">
+            Request changes
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CreatePlanDialog({
   movieId,
   clusters,
@@ -285,8 +354,11 @@ function CreatePlanDialog({
   const invalidDateRange = Boolean(
     showingStartDate && showingEndDate && showingEndDate < showingStartDate,
   );
+  const invalidSalesStart = Boolean(
+    salesStartAt && showingStartDate && salesStartAt.slice(0, 10) > showingStartDate,
+  );
   const hasTarget = allActive || selectedClusterIds.size > 0;
-  const canSubmit = Boolean(hasTarget && showingStartDate && !invalidDateRange && !submitting);
+  const canSubmit = Boolean(hasTarget && showingStartDate && !invalidDateRange && !invalidSalesStart && !submitting);
   const targetCount = allActive ? clusters.length : selectedClusterIds.size;
 
   const handleSubmit = async () => {
@@ -544,11 +616,12 @@ function CreatePlanDialog({
                   value={salesStartAt}
                   onChange={(event) => setSalesStartAt(event.target.value)}
                   className="w-full rounded-xl border px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500/20"
-                  style={{ colorScheme: "var(--color-scheme)" as string, background: "var(--bg-card)", borderColor: "var(--border-color)", color: "var(--text-main)", fontSize: "13px" }}
+                  style={{ colorScheme: "var(--color-scheme)" as string, background: "var(--bg-card)", borderColor: invalidSalesStart ? "#e11d48" : "var(--border-color)", color: "var(--text-main)", fontSize: "13px" }}
                 />
                 <p className="mt-1.5" style={{ color: "var(--text-sub)", fontSize: "11px" }}>
-                  Planned presale time. Opening individual showtimes remains a separate action.
+                  Once approved, this plan will open automatically at this local cinema time. Leave blank for manual opening.
                 </p>
+                {invalidSalesStart && <p className="mt-1 text-rose-500" style={{ fontSize: "11px" }}>Sales must open on or before the first showing date.</p>}
               </div>
 
               <div className="rounded-xl border p-3" style={{ borderColor: "rgba(37,99,235,0.18)", background: "rgba(37,99,235,0.05)" }}>
@@ -557,7 +630,7 @@ function CreatePlanDialog({
                   <p style={{ fontSize: "12px", fontWeight: 600 }}>New plan starts as PLANNED</p>
                 </div>
                 <p className="mt-1 pl-[22px]" style={{ color: "var(--text-sub)", fontSize: "11px" }}>
-                  Won't open ticket sales or publish a showtime automatically.
+                  Submit it for administrator review. Only an approved plan is visible to customers.
                 </p>
               </div>
             </div>
@@ -621,7 +694,8 @@ function WorkflowStep({
 
 export function MovieAvailabilityPanel({ movieId }: Props) {
   const navigate = useNavigate();
-  const { isAdmin } = useRole();
+  const { isAdmin, isProgrammingOperator } = useRole();
+  const canPrepareReleasePlan = isAdmin || isProgrammingOperator;
   const [availabilities, setAvailabilities] = useState<MovieAvailabilityResponse[]>([]);
   const [clusters, setClusters] = useState<ClusterResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -630,8 +704,9 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [suspendTarget, setSuspendTarget] = useState<number | null>(null);
   const [closeTarget, setCloseTarget] = useState<number | null>(null);
+  const [changesTarget, setChangesTarget] = useState<number | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -647,17 +722,24 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [movieId]);
 
   useEffect(() => {
     void load();
-  }, [movieId]);
+  }, [load]);
+
+  useEffect(() => subscribeLifecycleEvents((event) => {
+    if (event.aggregateType === "RELEASE_PLAN" && event.movieId === movieId) {
+      void load();
+    }
+  }), [load, movieId]);
 
   const counts = useMemo(() => ({
     total: availabilities.length,
-    planned: availabilities.filter((item) => item.status === "PLANNED").length,
+    planned: availabilities.filter((item) => item.status === "PLANNED" || item.status === "CHANGES_REQUESTED").length,
+    review: availabilities.filter((item) => item.status === "IN_REVIEW").length,
+    approved: availabilities.filter((item) => item.status === "APPROVED" || item.status === "OPEN").length,
     open: availabilities.filter((item) => item.status === "OPEN").length,
-    suspended: availabilities.filter((item) => item.status === "SUSPENDED").length,
   }), [availabilities]);
 
   const runCommand = async (id: number, command: () => Promise<unknown>) => {
@@ -697,7 +779,7 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
             </div>
           </div>
         </div>
-        {isAdmin && (
+        {canPrepareReleasePlan && (
           <button
             type="button"
             onClick={() => setShowCreateDialog(true)}
@@ -711,9 +793,9 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
       <div className="mt-4 flex items-center gap-2 rounded-xl border px-3 py-2.5" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
         <WorkflowStep icon={<Film size={13} />} label="Content approved" state="complete" />
         <ArrowRight size={12} style={{ color: "var(--text-sub)", flexShrink: 0 }} />
-        <WorkflowStep icon={<CalendarDays size={13} />} label="Release plan" state={counts.total > 0 ? "complete" : "current"} />
+        <WorkflowStep icon={<CalendarDays size={13} />} label="Release plan" state={counts.approved > 0 ? "complete" : "current"} />
         <ArrowRight size={12} style={{ color: "var(--text-sub)", flexShrink: 0 }} />
-        <WorkflowStep icon={<Clock3 size={13} />} label="Schedule shows" state={counts.total > 0 ? "current" : "upcoming"} />
+        <WorkflowStep icon={<Clock3 size={13} />} label="Schedule shows" state={counts.approved > 0 ? "current" : "upcoming"} />
         <ArrowRight size={12} style={{ color: "var(--text-sub)", flexShrink: 0 }} />
         <WorkflowStep icon={<Ticket size={13} />} label="Open sales" state="upcoming" />
       </div>
@@ -722,9 +804,9 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[
             ["Clusters", counts.total, "var(--text-main)"],
-            ["Planned", counts.planned, "#2563eb"],
-            ["Open", counts.open, "#059669"],
-            ["Suspended", counts.suspended, "#d97706"],
+            ["Draft", counts.planned, "#2563eb"],
+            ["In review", counts.review, "#7c3aed"],
+            ["Approved / open", counts.approved, "#059669"],
           ].map(([label, value, color]) => (
             <div key={String(label)} className="rounded-xl border px-3 py-2" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
               <p style={{ color: "var(--text-sub)", fontSize: "10px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</p>
@@ -756,7 +838,7 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
           <p className="mx-auto mt-1 max-w-md" style={{ color: "var(--text-sub)", fontSize: "11px" }}>
             Add a cinema cluster and exhibition window first. This does not publish showtimes or open ticket sales.
           </p>
-          {isAdmin && (
+          {canPrepareReleasePlan && (
             <button
               type="button"
               onClick={() => setShowCreateDialog(true)}
@@ -821,6 +903,12 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
                         <p style={{ fontSize: "10.5px" }}>{availability.suspensionReason}</p>
                       </div>
                     )}
+                    {(availability.status === "CHANGES_REQUESTED" || availability.status === "IN_REVIEW") && availability.reviewNote && (
+                      <div className="mt-2 flex items-start gap-2 rounded-lg bg-violet-500/10 px-2.5 py-2 text-violet-700">
+                        <ShieldCheck size={12} className="mt-0.5 flex-shrink-0" />
+                        <p style={{ fontSize: "10.5px" }}>{availability.reviewNote}</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* No max-width cap here anymore — Suspend/Close grew from icon-only 28px
@@ -828,7 +916,7 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
                       just forced an awkward wrap. flex-wrap + justify-end still keeps this
                       right-aligned and lets it wrap naturally on narrow screens. */}
                   <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
-                    {availability.status !== "CLOSED" && (
+                    {(availability.status === "APPROVED" || availability.status === "OPEN") && (
                       <button
                         type="button"
                         onClick={() => goToScheduling(availability)}
@@ -839,7 +927,37 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
                       </button>
                     )}
 
-                    {isAdmin && !busy && availability.status === "PLANNED" && (
+                    {canPrepareReleasePlan && !busy && (availability.status === "PLANNED" || availability.status === "CHANGES_REQUESTED") && (
+                      <button
+                        type="button"
+                        onClick={() => runCommand(availability.availabilityId, () => movieApi.submitAvailabilityReview(availability.availabilityId))}
+                        className="flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white"
+                      >
+                        <Send size={11} /> Submit review
+                      </button>
+                    )}
+
+                    {isAdmin && !busy && availability.status === "IN_REVIEW" && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setChangesTarget(availability.availabilityId)}
+                          className="flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-amber-600"
+                          style={{ borderColor: "rgba(217,119,6,0.3)" }}
+                        >
+                          Request changes
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => runCommand(availability.availabilityId, () => movieApi.approveAvailability(availability.availabilityId))}
+                          className="flex items-center gap-1 rounded-lg bg-cyan-600 px-2.5 py-1.5 text-xs font-semibold text-white"
+                        >
+                          <ShieldCheck size={11} /> Approve
+                        </button>
+                      </>
+                    )}
+
+                    {isAdmin && !busy && availability.status === "APPROVED" && (
                       <button
                         type="button"
                         title="Enable exhibition for this cluster"
@@ -850,7 +968,7 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
                       </button>
                     )}
 
-                    {isAdmin && !busy && (availability.status === "PLANNED" || availability.status === "OPEN") && (
+                    {isAdmin && !busy && availability.status === "OPEN" && (
                       <button
                         type="button"
                         title="Temporarily suspend exhibition"
@@ -922,6 +1040,17 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
             void runCommand(id, () => movieApi.closeAvailability(id, reason));
           }}
           onCancel={() => setCloseTarget(null)}
+        />
+      )}
+
+      {changesTarget !== null && (
+        <ReleaseReviewPrompt
+          onConfirm={(note) => {
+            const id = changesTarget;
+            setChangesTarget(null);
+            void runCommand(id, () => movieApi.requestAvailabilityChanges(id, note));
+          }}
+          onCancel={() => setChangesTarget(null)}
         />
       )}
     </section>

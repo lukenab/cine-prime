@@ -463,6 +463,11 @@ public class TmdbService {
 
     @Transactional
     public TmdbImportResponse importMovie(TmdbImportRequest request) {
+        return importMovie(request, "SYSTEM:TMDB");
+    }
+
+    @Transactional
+    public TmdbImportResponse importMovie(TmdbImportRequest request, String actor) {
         Integer tmdbId = request.getTmdbId();
 
         // 1. Duplicate check by tmdbId (cheap, before any HTTP call)
@@ -549,6 +554,8 @@ public class TmdbService {
                 .tagline(draft.getTagline())
                 .taglineSource(draft.getTagline() != null ? "TMDB" : "MANUAL")
                 .status(MovieStatus.DRAFT)
+                .createdBy(actor)
+                .updatedBy(actor)
                 .companies(companies)
                 .formats(new ArrayList<>())
                 .genres(resolvedGenres)

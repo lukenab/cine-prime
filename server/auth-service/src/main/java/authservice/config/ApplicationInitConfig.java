@@ -112,14 +112,18 @@ public class ApplicationInitConfig {
             ),
             "EMPLOYEE", Set.of(
                     "MOVIE_READ",
-                    "SHOWTIME_READ", "SHOWTIME_UPDATE",
+                    "SHOWTIME_READ",
                     "BOOKING_READ", "BOOKING_CONFIRM", "BOOKING_CANCEL",
-                    "TICKET_SELL",
-                    "USER_READ"
+                    "TICKET_SELL"
             ),
             "BRANCH_MANAGER", Set.of(
                     "CONCESSION_CATALOG_DRAFT",
                     "CONCESSION_CATALOG_SUBMIT"
+            ),
+            "PROGRAMMING_OPERATOR", Set.of(
+                    "MOVIE_READ", "MOVIE_CREATE", "MOVIE_UPDATE",
+                    "SHOWTIME_READ", "SHOWTIME_CREATE", "SHOWTIME_UPDATE",
+                    "ROOM_READ", "GENRE_READ"
             ),
             "ADMIN", Set.of(
                     "MOVIE_READ", "MOVIE_CREATE", "MOVIE_UPDATE", "MOVIE_DELETE",
@@ -169,6 +173,7 @@ public class ApplicationInitConfig {
                 "MEMBER",   "Registered member — can book tickets and manage account",
                 "EMPLOYEE", "Cinema staff — ticket sales and booking management",
                 "BRANCH_MANAGER", "Cinema branch manager — can prepare concession product proposals",
+                "PROGRAMMING_OPERATOR", "Head-office programming staff — prepares movie, release and schedule drafts",
                 "ADMIN",    "System administrator — full access to all modules"
         );
 

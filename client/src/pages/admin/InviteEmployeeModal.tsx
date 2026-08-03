@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { BriefcaseBusiness, ChevronLeft, MailPlus, ShieldCheck, UserRound } from "lucide-react";
+import { BriefcaseBusiness, Building2, ChevronLeft, MailPlus, ShieldCheck, UserRound } from "lucide-react";
 
-import { employeeApi, type EmployeeDepartment, type EmployeeInvitationPayload, type EmployeePosition, type EmploymentType } from "../../api/employeeApi";
+import { employeeApi, type EmployeeInvitationPayload, type EmploymentType } from "../../api/employeeApi";
 import type { ClusterResponse } from "../../api/movieApi";
 import { useAuth } from "../../context/AuthContext";
 import { Button } from "../../components/ui/button";
@@ -9,43 +9,38 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
-
-const DEPARTMENTS: Array<{ value: EmployeeDepartment; label: string }> = [
-  { value: "BOX_OFFICE", label: "Box office" },
-  { value: "CONCESSION", label: "Concession" },
-  { value: "FLOOR", label: "Floor operations" },
-  { value: "PROJECTION", label: "Projection" },
-  { value: "MANAGEMENT", label: "Management" },
-  { value: "CUSTOMER_SERVICE", label: "Customer service" },
-];
-
-const POSITIONS: Array<{ value: EmployeePosition; label: string }> = [
-  { value: "STAFF", label: "Staff" },
-  { value: "SUPERVISOR", label: "Supervisor" },
-  { value: "MANAGER", label: "Manager" },
-];
+import {
+  DEFAULT_JOB_ROLE_ID,
+  getJobRolePreset,
+  JOB_ROLE_PRESETS,
+  type JobRolePresetId,
+} from "./employeeJobRoles";
 
 const EMPLOYMENT_TYPES: Array<{ value: EmploymentType; label: string }> = [
   { value: "FULL_TIME", label: "Full time" },
   { value: "PART_TIME", label: "Part time" },
-  { value: "PROBATION", label: "Probation" },
-  { value: "INTERN", label: "Intern" },
-  { value: "CONTRACT", label: "Contract" },
+  { value: "FIXED_TERM", label: "Fixed term" },
+  { value: "SEASONAL", label: "Seasonal" },
 ];
 
 type InviteForm = EmployeeInvitationPayload;
 
-const initialForm = (): InviteForm => ({
-  fullName: "",
-  email: "",
-  phoneNumber: "",
-  cinemaId: "",
-  department: "CONCESSION",
-  position: "STAFF",
-  employmentType: "FULL_TIME",
-  hireDate: new Date().toISOString().slice(0, 10),
-  accessRole: "EMPLOYEE",
-});
+const fieldControlClass = "h-11 rounded-xl border-[var(--border-color)] bg-[var(--bg-main)] hover:border-blue-400/70 focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/15";
+
+const initialForm = (): InviteForm => {
+  const preset = getJobRolePreset(DEFAULT_JOB_ROLE_ID);
+  return {
+    fullName: "",
+    email: "",
+    phoneNumber: "",
+    cinemaId: "",
+    department: preset.department,
+    position: preset.position,
+    employmentType: "FULL_TIME",
+    hireDate: new Date().toISOString().slice(0, 10),
+    accessRole: preset.accessRole,
+  };
+};
 
 type Props = {
   open: boolean;
@@ -58,11 +53,19 @@ export default function InviteEmployeeModal({ open, clusters, onOpenChange, onIn
   const { user } = useAuth();
   const [step, setStep] = useState<1 | 2>(1);
   const [form, setForm] = useState<InviteForm>(initialForm);
+  const [jobRoleId, setJobRoleId] = useState<JobRolePresetId>(DEFAULT_JOB_ROLE_ID);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  const canInviteBranchManager = user?.role === "ROLE_ADMIN" || user?.role === "ROLE_SUPER_ADMIN";
+  const canAssignElevatedAccess = user?.role === "ROLE_ADMIN" || user?.role === "ROLE_SUPER_ADMIN";
+  const selectedJobRole = getJobRolePreset(jobRoleId);
+  const availableJobRoles = useMemo(
+    () => canAssignElevatedAccess
+      ? JOB_ROLE_PRESETS
+      : JOB_ROLE_PRESETS.filter((preset) => preset.accessRole === "EMPLOYEE"),
+    [canAssignElevatedAccess],
+  );
   const activeClusters = useMemo(
     () => clusters.filter((cluster) => cluster.status === "ACTIVE"),
     [clusters],
@@ -72,6 +75,7 @@ export default function InviteEmployeeModal({ open, clusters, onOpenChange, onIn
     if (!open) return;
     setStep(1);
     setForm(initialForm());
+    setJobRoleId(DEFAULT_JOB_ROLE_ID);
     setErrors({});
     setApiError(null);
   }, [open]);
@@ -94,14 +98,26 @@ export default function InviteEmployeeModal({ open, clusters, onOpenChange, onIn
 
   const validateAssignment = () => {
     const next: Record<string, string> = {};
-    if (!form.cinemaId) next.cinemaId = "Select the employee's branch.";
+    if (selectedJobRole.location === "BRANCH" && !form.cinemaId) {
+      next.cinemaId = "Select the employee's cinema branch.";
+    }
     if (!form.hireDate) next.hireDate = "Hire date is required.";
     setErrors(next);
     return Object.keys(next).length === 0;
   };
 
-  const continueToAssignment = () => {
-    if (validateIdentity()) setStep(2);
+  const selectJobRole = (value: string) => {
+    const id = value as JobRolePresetId;
+    const preset = getJobRolePreset(id);
+    setJobRoleId(id);
+    setForm((current) => ({
+      ...current,
+      department: preset.department,
+      position: preset.position,
+      accessRole: preset.accessRole,
+      cinemaId: preset.location === "HEAD_OFFICE" ? undefined : current.cinemaId,
+    }));
+    setErrors((current) => ({ ...current, cinemaId: "", jobRole: "" }));
   };
 
   const submit = async () => {
@@ -118,7 +134,10 @@ export default function InviteEmployeeModal({ open, clusters, onOpenChange, onIn
       onInvited();
       onOpenChange(false);
     } catch (error: any) {
-      setApiError(error?.response?.data?.message || "Unable to send the invitation. Please try again.");
+      const response = error?.response?.data;
+      setApiError(response?.code === 2005
+        ? "This email is already registered. Check the Invitations or Staff tab instead of creating it again."
+        : response?.message || "Unable to send the invitation. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -126,7 +145,17 @@ export default function InviteEmployeeModal({ open, clusters, onOpenChange, onIn
 
   return (
     <Dialog open={open} onOpenChange={(next) => !submitting && onOpenChange(next)}>
-      <DialogContent className="max-h-[88vh] w-[calc(100%-2rem)] max-w-[720px] gap-0 overflow-hidden border-[var(--border-color)] bg-[var(--bg-card)] p-0 text-[var(--text-main)]">
+      <DialogContent
+        className="max-h-[88vh] gap-0 overflow-hidden rounded-2xl border-[var(--border-color)] bg-[var(--bg-card)] p-0 text-[var(--text-main)] shadow-2xl [&_[data-slot=dialog-close]]:rounded-lg [&_[data-slot=dialog-close]]:p-1.5"
+        style={{
+          width: "min(720px, calc(100vw - 32px))",
+          maxWidth: "720px",
+          backgroundColor: "var(--bg-card, #ffffff)",
+          color: "var(--text-main, #111827)",
+          borderColor: "var(--border-color, #e5e7eb)",
+          opacity: 1,
+        }}
+      >
         <DialogHeader className="border-b border-[var(--border-color)] px-7 py-5 pr-14">
           <DialogTitle className="text-xl">Invite employee</DialogTitle>
           <DialogDescription className="text-[var(--text-sub)]">
@@ -166,74 +195,76 @@ export default function InviteEmployeeModal({ open, clusters, onOpenChange, onIn
                   <MailPlus className="mt-0.5 shrink-0 text-blue-500" size={18} />
                   <div>
                     <p className="text-sm font-semibold">Password-free invitation</p>
-                    <p className="mt-1 text-xs leading-5 text-[var(--text-sub)]">The employee receives a secure email link and chooses their own password. Personal profile details can be completed after activation.</p>
+                    <p className="mt-1 text-xs leading-5 text-[var(--text-sub)]">The employee receives a secure email link and chooses their own password. Personal profile details can be confirmed after activation.</p>
                   </div>
                 </div>
               </div>
 
               <Field label="Full name" required error={errors.fullName}>
-                <Input value={form.fullName} onChange={(event) => setField("fullName", event.target.value)} placeholder="Employee's legal or preferred name" className="h-11 border-[var(--border-color)] bg-[var(--bg-main)]" />
+                <Input value={form.fullName} onChange={(event) => setField("fullName", event.target.value)} placeholder="Employee's legal or preferred name" className={fieldControlClass} />
               </Field>
-
               <Field label="Work email" required error={errors.email}>
-                <Input type="email" value={form.email} onChange={(event) => setField("email", event.target.value)} placeholder="name@cineprime.vn" className="h-11 border-[var(--border-color)] bg-[var(--bg-main)]" />
+                <Input type="email" value={form.email} onChange={(event) => setField("email", event.target.value)} placeholder="name@cineprime.vn" className={fieldControlClass} />
               </Field>
-
               <Field label="Phone" hint="Optional" error={errors.phoneNumber}>
-                <Input value={form.phoneNumber} onChange={(event) => setField("phoneNumber", event.target.value)} placeholder="0901234567" className="h-11 border-[var(--border-color)] bg-[var(--bg-main)]" />
+                <Input value={form.phoneNumber} onChange={(event) => setField("phoneNumber", event.target.value)} placeholder="0901234567" className={fieldControlClass} />
               </Field>
             </div>
           ) : (
             <div className="space-y-5">
-              <Field label="Branch" required error={errors.cinemaId}>
-                <Select value={form.cinemaId} onValueChange={(value) => setField("cinemaId", value)}>
-                  <SelectTrigger className="h-11 border-[var(--border-color)] bg-[var(--bg-main)]"><SelectValue placeholder="Select an active cinema branch" /></SelectTrigger>
+              <Field label="Job role" required>
+                <Select value={jobRoleId} onValueChange={selectJobRole}>
+                  <SelectTrigger className="h-11 rounded-xl border-[var(--border-color)] bg-[var(--bg-main)]"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {activeClusters.map((cluster) => <SelectItem key={cluster.clusterId} value={String(cluster.clusterId)}>{cluster.clusterName}</SelectItem>)}
+                    {availableJobRoles.map((preset) => <SelectItem key={preset.id} value={preset.id}>{preset.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                <p className="mt-2 text-xs leading-5 text-[var(--text-sub)]">{selectedJobRole.description}</p>
               </Field>
 
+              {selectedJobRole.location === "HEAD_OFFICE" ? (
+                <Field label="Work location" required>
+                  <div className="flex h-11 items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/5 px-3 text-sm font-medium">
+                    <Building2 size={16} className="text-blue-500" /> Head office · All cinema branches
+                  </div>
+                </Field>
+              ) : (
+                <Field label="Cinema branch" required error={errors.cinemaId}>
+                  <Select value={form.cinemaId ?? ""} onValueChange={(value) => setField("cinemaId", value)}>
+                    <SelectTrigger className="h-11 rounded-xl border-[var(--border-color)] bg-[var(--bg-main)]"><SelectValue placeholder="Select an active cinema branch" /></SelectTrigger>
+                    <SelectContent>
+                      {activeClusters.map((cluster) => <SelectItem key={cluster.clusterId} value={String(cluster.clusterId)}>{cluster.clusterName}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
+
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <Field label="Department" required>
-                  <Select value={form.department} onValueChange={(value) => setField("department", value as EmployeeDepartment)}>
-                    <SelectTrigger className="h-11 border-[var(--border-color)] bg-[var(--bg-main)]"><SelectValue /></SelectTrigger>
-                    <SelectContent>{DEPARTMENTS.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
-                  </Select>
-                </Field>
-                <Field label="Position" required>
-                  <Select value={form.position} onValueChange={(value) => setField("position", value as EmployeePosition)}>
-                    <SelectTrigger className="h-11 border-[var(--border-color)] bg-[var(--bg-main)]"><SelectValue /></SelectTrigger>
-                    <SelectContent>{POSITIONS.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
-                  </Select>
-                </Field>
                 <Field label="Employment type" required>
                   <Select value={form.employmentType} onValueChange={(value) => setField("employmentType", value as EmploymentType)}>
-                    <SelectTrigger className="h-11 border-[var(--border-color)] bg-[var(--bg-main)]"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-11 rounded-xl border-[var(--border-color)] bg-[var(--bg-main)]"><SelectValue /></SelectTrigger>
                     <SelectContent>{EMPLOYMENT_TYPES.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </Field>
                 <Field label="Hire date" required error={errors.hireDate}>
-                  <Input type="date" max={new Date().toISOString().slice(0, 10)} value={form.hireDate} onChange={(event) => setField("hireDate", event.target.value)} className="h-11 border-[var(--border-color)] bg-[var(--bg-main)]" />
+                  <Input type="date" value={form.hireDate} onChange={(event) => setField("hireDate", event.target.value)} className={fieldControlClass} />
                 </Field>
               </div>
 
-              <Field label="Access role" required>
-                {canInviteBranchManager ? (
-                  <Select value={form.accessRole} onValueChange={(value) => setField("accessRole", value as InviteForm["accessRole"])}>
-                    <SelectTrigger className="h-11 border-[var(--border-color)] bg-[var(--bg-main)]"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="EMPLOYEE">Employee</SelectItem>
-                      <SelectItem value="BRANCH_MANAGER">Branch Manager</SelectItem>
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <div className="flex h-11 items-center gap-2 rounded-md border border-[var(--border-color)] bg-[var(--bg-main)] px-3 text-sm">
-                    <ShieldCheck size={16} className="text-blue-500" /> Employee
-                  </div>
-                )}
-                <p className="mt-2 text-xs text-[var(--text-sub)]">Branch Manager can only be assigned by an administrator.</p>
-              </Field>
+              <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-main)] p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--text-sub)]">Access automatically assigned</p>
+                <div className="mt-2 flex items-center gap-2 text-sm font-semibold">
+                  <ShieldCheck size={17} className="text-blue-500" />
+                  {form.accessRole === "PROGRAMMING_OPERATOR" ? "Programming operator access" : form.accessRole === "BRANCH_MANAGER" ? "Branch manager access" : "Employee access"}
+                </div>
+                <p className="mt-1 text-xs leading-5 text-[var(--text-sub)]">
+                  {form.accessRole === "PROGRAMMING_OPERATOR"
+                    ? "Can prepare movie, release and automatic-schedule drafts. An administrator must approve and publish them."
+                    : form.accessRole === "BRANCH_MANAGER"
+                    ? "Can manage staff and branch-scoped operations for the assigned cinema."
+                    : "Standard operational access limited to the assigned cinema."}
+                </p>
+              </div>
             </div>
           )}
 
@@ -241,13 +272,13 @@ export default function InviteEmployeeModal({ open, clusters, onOpenChange, onIn
         </div>
 
         <div className="sticky bottom-0 flex items-center justify-between border-t border-[var(--border-color)] bg-[var(--bg-card)] px-7 py-4">
-          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>Cancel</Button>
+          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting} className="h-10 rounded-xl px-4">Cancel</Button>
           <div className="flex gap-2">
-            {step === 2 && <Button type="button" variant="outline" onClick={() => setStep(1)} disabled={submitting}><ChevronLeft size={16} /> Back</Button>}
+            {step === 2 && <Button type="button" variant="outline" onClick={() => setStep(1)} disabled={submitting} className="h-10 rounded-xl px-4"><ChevronLeft size={16} /> Back</Button>}
             {step === 1 ? (
-              <Button type="button" onClick={continueToAssignment} className="bg-blue-600 text-white hover:bg-blue-500">Continue</Button>
+              <Button type="button" onClick={() => validateIdentity() && setStep(2)} className="h-10 rounded-xl bg-blue-600 px-5 text-white shadow-sm hover:bg-blue-500">Continue</Button>
             ) : (
-              <Button type="button" onClick={submit} disabled={submitting || activeClusters.length === 0} className="min-w-40 bg-blue-600 text-white hover:bg-blue-500">
+              <Button type="button" onClick={submit} disabled={submitting || (selectedJobRole.location === "BRANCH" && activeClusters.length === 0)} className="h-10 min-w-40 rounded-xl bg-blue-600 px-5 text-white shadow-sm hover:bg-blue-500">
                 <MailPlus size={16} /> {submitting ? "Sending invitation…" : "Send invitation"}
               </Button>
             )}
@@ -262,7 +293,7 @@ function Field({ label, required, hint, error, children }: { label: string; requ
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <Label>{label}{required && <span className="text-red-500">*</span>}</Label>
+        <Label>{label}{required && <span className="text-red-500"> *</span>}</Label>
         {hint && <span className="text-xs text-[var(--text-sub)]">{hint}</span>}
       </div>
       {children}

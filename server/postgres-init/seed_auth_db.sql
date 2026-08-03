@@ -6,7 +6,8 @@
 -- ================================
 INSERT INTO roles (role_name, description) VALUES
 ('ADMIN',    'Highest privilege — full CRUD on all modules including employees, members, cinema rooms, statistics'),
-('EMPLOYEE', 'Counter staff — ticket selling, ticket booking, search members, manage movies, promotions'),
+('PROGRAMMING_OPERATOR', 'Head-office programming staff — prepares movie, release and schedule drafts'),
+('EMPLOYEE', 'Cinema staff — ticket sales, booking and branch operations'),
 ('MEMBER',   'Registered customer — book tickets, manage account, view booking history, manage loyalty points')
 ON CONFLICT (role_name) DO NOTHING;
 

@@ -1,12 +1,14 @@
 import { Navigate } from "react-router-dom";
 import HomePage from "../pages/customer/HomePage";
+import { defaultPathForRole } from "../utils/roleRoutes";
 
 export default function RootRedirect() {
   const token = localStorage.getItem("accessToken");
   const role = localStorage.getItem("role");
 
-  if (token && (role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN")) return <Navigate to="/admin" replace />;
-  if (token && role === "ROLE_EMPLOYEE") return <Navigate to="/admin/movies" replace />;
+  if (token && role && role !== "ROLE_MEMBER") {
+    return <Navigate to={defaultPathForRole(role)} replace />;
+  }
 
   return <HomePage />;
 }

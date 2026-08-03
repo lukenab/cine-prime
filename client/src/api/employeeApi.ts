@@ -21,21 +21,33 @@ export interface EmployeeInvitationPayload {
   fullName: string;
   email: string;
   phoneNumber?: string;
-  cinemaId: string;
+  cinemaId?: string;
   position: EmployeePosition;
   department: EmployeeDepartment;
   employmentType: EmploymentType;
   hireDate: string;
-  accessRole: 'EMPLOYEE' | 'BRANCH_MANAGER';
+  accessRole: 'EMPLOYEE' | 'BRANCH_MANAGER' | 'PROGRAMMING_OPERATOR';
 }
 
 export type EmployeePosition =
+  | 'TEAM_MEMBER'
+  | 'ASSISTANT_MANAGER'
+  | 'CINEMA_MANAGER'
+  | 'PROGRAMMING_OPERATOR'
+  // Legacy API values retained while existing records are migrated.
   | 'STAFF'
   | 'SUPERVISOR'
   | 'MANAGER';
 
 export type EmployeeDepartment =
+  | 'GENERAL_OPERATIONS'
   | 'BOX_OFFICE'
+  | 'FOOD_BEVERAGE'
+  | 'FLOOR_GUEST_SERVICES'
+  | 'PROJECTION_TECHNICAL'
+  | 'FACILITIES_MAINTENANCE'
+  | 'CONTENT_PROGRAMMING'
+  // Legacy API values retained while existing records are migrated.
   | 'CONCESSION'
   | 'FLOOR'
   | 'PROJECTION'
@@ -45,6 +57,9 @@ export type EmployeeDepartment =
 export type EmploymentType =
   | 'FULL_TIME'
   | 'PART_TIME'
+  | 'FIXED_TERM'
+  | 'SEASONAL'
+  // Legacy API values retained while existing records are migrated.
   | 'PROBATION'
   | 'INTERN'
   | 'CONTRACT';
@@ -74,6 +89,9 @@ export interface EmployeeResponse {
 }
 
 export const employeeApi = {
+  getMe: () =>
+    axiosClient.get<any>('/api/employees/me'),
+
   getAll: (page = 1, size = 200) =>
     axiosClient.get<any>(`/api/employees?page=${page}&size=${size}`),
 

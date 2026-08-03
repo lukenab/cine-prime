@@ -31,7 +31,7 @@ public class InternalAccountController {
             @RequestHeader(value = "X-Internal-Service-Key", required = false) String internalKey,
             @Valid @RequestBody CreateAccountRequest request) {
         authenticator.verify(internalKey);
-        AccountResponse account = accountService.createAccount(request);
+        AccountResponse account = accountService.createOrResumeStaffInvitation(request);
         return ApiResponse.<InternalAccountResponse>builder()
                 .result(InternalAccountResponse.builder()
                         .accountId(account.getAccountId())

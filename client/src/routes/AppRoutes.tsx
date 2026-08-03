@@ -6,7 +6,7 @@ import AdminLayout from "../layouts/AdminLayout";
 
 import LoginPage from "../pages/auth/LoginPage";
 import RegisterPage from "../pages/auth/RegisterPage";
-import CompleteProfilePage from "../pages/auth/CompleteProfilePage";
+import ProfileSetupPage from "../pages/auth/ProfileSetupPage";
 import ActivateAccountPage from "../pages/auth/ActivateAccountPage";
 import ForgotPasswordPage from "../pages/auth/ForgotPasswordPage";
 import ResetPasswordPage from "../pages/auth/ResetPasswordPage";
@@ -59,6 +59,9 @@ import SettingsPage from "../pages/admin/SettingsPage";
 import TicketSalePage from "../pages/admin/TicketSalePage";
 import ConcessionFulfillmentPage from "../pages/admin/ConcessionFulfillmentPage";
 import ConcessionCatalogPage from "../pages/admin/ConcessionCatalogPage";
+import EmployeeDashboardPage from "../pages/employee/EmployeeDashboardPage";
+import ProgrammingOperatorDashboardPage from "../pages/operator/ProgrammingOperatorDashboardPage";
+import ReleasePlanningQueuePage from "../pages/operator/ReleasePlanningQueuePage";
 
 import RootRedirect from "./RootRedirect";
 import ProtectedRoute from "./ProtectedRoute";
@@ -96,24 +99,39 @@ export default function AppRoutes() {
 
       {/* Profile setup — standalone page, no layout wrapper */}
       <Route element={<ProtectedRoute
-        allowedRoles={["ROLE_MEMBER", "ROLE_EMPLOYEE", "ROLE_BRANCH_MANAGER"]}
+        allowedRoles={["ROLE_MEMBER", "ROLE_EMPLOYEE", "ROLE_BRANCH_MANAGER", "ROLE_PROGRAMMING_OPERATOR"]}
         allowIncompleteProfile
       />}>
-        <Route path="/profile-setup" element={<CompleteProfilePage />} />
+        <Route path="/profile-setup" element={<ProfileSetupPage />} />
       </Route>
 
-      {/* Admin + Employee */}
-      <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_BRANCH_MANAGER", "ROLE_EMPLOYEE"]} />}>
+      {/* Administrative workspace */}
+      <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_BRANCH_MANAGER", "ROLE_PROGRAMMING_OPERATOR"]} />}>
         <Route path="/admin" element={<AdminLayout />}>
-          <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_EMPLOYEE"]} />}>
-          <Route index element={<AdminDashboard />} />
-          <Route path="movies" element={<ManageMoviePage />}>
-            <Route path="new" element={<MovieCreationStartPage />} />
+          <Route element={<ProtectedRoute allowedRoles={["ROLE_PROGRAMMING_OPERATOR"]} />}>
+            <Route path="programming" element={<ProgrammingOperatorDashboardPage />} />
           </Route>
-          <Route path="movies/new/catalog" element={<TmdbCatalogPage />} />
-          <Route path="movies/new/manual" element={<MovieEditorPage />} />
-          <Route path="movies/:movieId/edit" element={<MovieEditorPage />} />
-          <Route path="movies/:movieId/availability" element={<MovieAvailabilityPage />} />
+
+          <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_PROGRAMMING_OPERATOR"]} />}>
+            <Route path="release-plans" element={<ReleasePlanningQueuePage />} />
+            <Route path="movies" element={<ManageMoviePage />}>
+              <Route path="new" element={<MovieCreationStartPage />} />
+            </Route>
+            <Route path="movies/new/catalog" element={<TmdbCatalogPage />} />
+            <Route path="movies/new/manual" element={<MovieEditorPage />} />
+            <Route path="movies/:movieId/edit" element={<MovieEditorPage />} />
+            <Route path="movies/:movieId/availability" element={<MovieAvailabilityPage />} />
+            <Route path="showtimes/auto" element={<AutoScheduleWorkspacePage />} />
+            <Route path="persons" element={<ManagePersonsPage />} />
+            <Route path="screening-versions" element={<ManageScreeningVersionsPage />} />
+            <Route path="formats" element={<ManageFormatsPage />} />
+            <Route path="genres" element={<ManageGenresPage />} />
+            <Route path="age-ratings" element={<ManageAgeRatingsPage />} />
+            <Route path="companies" element={<ManageCompaniesPage />} />
+          </Route>
+
+          <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN"]} />}>
+          <Route index element={<AdminDashboard />} />
           <Route path="clusters"  element={<ManageCinemaClusterPage />} />
           <Route path="rooms"     element={<AllRoomsPage />} />
           <Route path="clusters/:id" element={<ClusterDetailPage />} />
@@ -131,7 +149,6 @@ export default function AppRoutes() {
           </Route>
 
           <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN"]} />}>
-            <Route path="showtimes/auto"     element={<AutoScheduleWorkspacePage />} />
             <Route path="price-books"        element={<ManagePriceBooksPage />} />
             <Route path="people"             element={<PeopleAccessPage />} />
             <Route path="employees"          element={<Navigate to="/admin/people?tab=staff" replace />} />
@@ -142,12 +159,6 @@ export default function AppRoutes() {
             <Route path="users/create"       element={<Navigate to="/admin/people?tab=customers" replace />} />
             <Route path="users/edit/:id"     element={<EditUserPage />} />
             <Route path="users/:id"          element={<UserDetailPage />} />
-            <Route path="genres"             element={<ManageGenresPage />} />
-            <Route path="persons"            element={<ManagePersonsPage />} />
-            <Route path="age-ratings"        element={<ManageAgeRatingsPage />} />
-            <Route path="formats"            element={<ManageFormatsPage />} />
-            <Route path="screening-versions" element={<ManageScreeningVersionsPage />} />
-            <Route path="companies"          element={<ManageCompaniesPage />} />
             <Route path="promotions"          element={<ManagePromotionPage />} />
             <Route path="promotions/create"   element={<CreatePromotionPage />} />
             <Route path="promotions/:id"      element={<PromotionDetailPage />} />
@@ -155,6 +166,16 @@ export default function AppRoutes() {
             <Route path="reports"   element={<ReportPage />} />
             <Route path="settings"  element={<SettingsPage />} />
           </Route>
+        </Route>
+      </Route>
+
+      {/* Employee operations are intentionally separated from administration. */}
+      <Route element={<ProtectedRoute allowedRoles={["ROLE_EMPLOYEE"]} />}>
+        <Route path="/employee" element={<AdminLayout />}>
+          <Route index element={<EmployeeDashboardPage />} />
+          <Route path="sell" element={<TicketSalePage />} />
+          <Route path="bookings" element={<ManageBookingPage />} />
+          <Route path="concessions/fulfillment" element={<ConcessionFulfillmentPage />} />
         </Route>
       </Route>
     </Routes>

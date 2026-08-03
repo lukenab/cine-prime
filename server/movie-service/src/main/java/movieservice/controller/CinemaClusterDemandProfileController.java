@@ -27,7 +27,7 @@ public class CinemaClusterDemandProfileController {
 
     private final CinemaClusterDemandProfileAdminService demandProfileAdminService;
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     @GetMapping
     public ApiResponse<CinemaClusterDemandProfileResponse> getByClusterId(@PathVariable Long clusterId) {
         return ApiResponse.<CinemaClusterDemandProfileResponse>builder()

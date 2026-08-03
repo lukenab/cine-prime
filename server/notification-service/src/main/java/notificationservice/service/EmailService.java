@@ -43,6 +43,7 @@ public class EmailService {
         try {
             Context context = new Context();
             context.setVariable("fullName", fullName);
+            context.setVariable("loginEmail", to);
             context.setVariable("activationLink", activationLink);
             context.setVariable("expiryHours", expiryHours);
 

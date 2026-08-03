@@ -45,7 +45,7 @@ public class RoomLayoutController {
                 .build();
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{layoutId}")
     public ApiResponse<RoomLayoutResponse> save(
             @PathVariable Long roomId,
@@ -58,7 +58,7 @@ public class RoomLayoutController {
                 .build();
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/{layoutId}/submit")
     public ApiResponse<RoomLayoutResponse> submit(
             @PathVariable Long roomId, @PathVariable Long layoutId, Authentication authentication) {
@@ -99,7 +99,7 @@ public class RoomLayoutController {
                 .build();
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/{layoutId}/clone")
     public ApiResponse<RoomLayoutResponse> clone(
             @PathVariable Long roomId, @PathVariable Long layoutId, Authentication authentication) {

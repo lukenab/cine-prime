@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Eye, EyeOff, Lock, Loader2, CheckCircle2 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { authApi } from "../../api/authApi";
+import { useAuth } from "../../context/AuthContext";
 
 // Issue #161/#162 — employee sets their own password using the single-use token
 // from the activation email sent when an admin created their account.
@@ -9,6 +10,7 @@ export default function ActivateAccountPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -96,6 +98,10 @@ export default function ActivateAccountPage() {
     setIsLoading(true);
     try {
       await authApi.activateAccount({ token, newPassword });
+      // Activation may be opened in the same browser where an administrator
+      // created the invitation. Clear that stale session so /login cannot send
+      // the employee back into the administrator workspace.
+      logout();
       setSuccess(true);
     } catch (err: any) {
       const code = err?.response?.data?.code;

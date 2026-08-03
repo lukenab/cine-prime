@@ -10,6 +10,7 @@ import movieservice.dto.request.CloseRequest;
 import movieservice.dto.request.CreateMovieAvailabilityRequest;
 import movieservice.dto.request.SuspendRequest;
 import movieservice.dto.request.UpdateMovieAvailabilityRequest;
+import movieservice.dto.request.ReleasePlanReviewRequest;
 import movieservice.dto.response.BulkCreateMovieAvailabilityResponse;
 import movieservice.dto.response.MovieAvailabilityResponse;
 import movieservice.enums.AvailabilityStatus;
@@ -29,7 +30,7 @@ public class MovieAvailabilityController {
 
     MovieAvailabilityService movieAvailabilityService;
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     @GetMapping
     public ApiResponse<List<MovieAvailabilityResponse>> search(
             @RequestParam(required = false) Long movieId,
@@ -41,7 +42,7 @@ public class MovieAvailabilityController {
                 .build();
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     @PostMapping
     public ApiResponse<MovieAvailabilityResponse> create(@Valid @RequestBody CreateMovieAvailabilityRequest request) {
         return ApiResponse.<MovieAvailabilityResponse>builder()
@@ -52,7 +53,7 @@ public class MovieAvailabilityController {
 
     /** "Wide release" — plan for many clusters (or every ACTIVE cluster) in one call. Same role
      *  as the single create() since it's still just scheduling metadata (MOV-LC-06). */
-    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     @PostMapping("/bulk")
     public ApiResponse<BulkCreateMovieAvailabilityResponse> bulkCreate(
             @Valid @RequestBody BulkCreateMovieAvailabilityRequest request) {
@@ -62,13 +63,48 @@ public class MovieAvailabilityController {
                 .build();
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     @PutMapping("/{id}")
     public ApiResponse<MovieAvailabilityResponse> update(@PathVariable Long id,
             @RequestBody UpdateMovieAvailabilityRequest request) {
         return ApiResponse.<MovieAvailabilityResponse>builder()
                 .code(200)
                 .result(movieAvailabilityService.update(id, request, actor()))
+                .build();
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/{id}/request-changes")
+    public ApiResponse<MovieAvailabilityResponse> requestChanges(
+            @PathVariable Long id,
+            @Valid @RequestBody ReleasePlanReviewRequest request) {
+        return ApiResponse.<MovieAvailabilityResponse>builder()
+                .code(200).message("Release plan returned for changes")
+                .result(movieAvailabilityService.requestChanges(id, actor(), request.note()))
+                .build();
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
+    @PostMapping("/{id}/submit-review")
+    public ApiResponse<MovieAvailabilityResponse> submitReview(
+            @PathVariable Long id,
+            @Valid @RequestBody(required = false) ReleasePlanReviewRequest request) {
+        String note = request == null ? null : request.note();
+        return ApiResponse.<MovieAvailabilityResponse>builder()
+                .code(200).message("Release plan submitted for review")
+                .result(movieAvailabilityService.submitReview(id, actor(), note))
+                .build();
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/{id}/approve")
+    public ApiResponse<MovieAvailabilityResponse> approve(
+            @PathVariable Long id,
+            @Valid @RequestBody(required = false) ReleasePlanReviewRequest request) {
+        String note = request == null ? null : request.note();
+        return ApiResponse.<MovieAvailabilityResponse>builder()
+                .code(200).message("Release plan approved")
+                .result(movieAvailabilityService.approve(id, actor(), note))
                 .build();
     }
 

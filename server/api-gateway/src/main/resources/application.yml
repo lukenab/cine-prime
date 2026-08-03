@@ -29,6 +29,11 @@ spring:
           predicates:
             - Path=/ws/seat-inventory/**
 
+        - id: movie-service-lifecycle-ws
+          uri: lb:ws://movie-service
+          predicates:
+            - Path=/ws/lifecycle/**
+
         - id: movie-service
           uri: lb://movie-service
           predicates:

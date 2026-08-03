@@ -14,6 +14,7 @@ import movieservice.service.autoshowtime.AutoShowtimePersistenceResult;
 import movieservice.service.autoshowtime.ShowtimeCandidate;
 import movieservice.service.autoshowtime.SchedulingEligibilityService;
 import movieservice.service.autoshowtime.SchedulingOperationalConstraintService;
+import movieservice.lifecycle.LifecycleEventNotifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
@@ -33,6 +34,7 @@ public class SchedulePlanService {
     private final AutoShowtimeCandidatePersistenceService persistenceService;
     private final SchedulingEligibilityService eligibilityService;
     private final SchedulingOperationalConstraintService operationalConstraintService;
+    private final LifecycleEventNotifier lifecycleEventNotifier;
 
     @Transactional(readOnly = true)
     public Page<SchedulePlanSummaryResponse> list(
@@ -75,6 +77,7 @@ public class SchedulePlanService {
         plan.setSubmittedAt(LocalDateTime.now());
         plan.setSubmittedBy(actor);
         plan.setReviewNote(note);
+        notifyChange(plan, "STATUS_CHANGED");
         return toResponse(plan);
     }
 
@@ -86,6 +89,7 @@ public class SchedulePlanService {
         }
         plan.setStatus(SchedulePlanStatus.CHANGES_REQUESTED);
         plan.setReviewNote(note == null ? "Changes requested by " + actor : note);
+        notifyChange(plan, "STATUS_CHANGED");
         return toResponse(plan);
     }
 
@@ -101,6 +105,11 @@ public class SchedulePlanService {
         }
         if (plan.getBlockerCount() != null && plan.getBlockerCount() > 0) {
             throw new AppException(MovieErrorCode.SCHEDULE_PLAN_PUBLISH_CONFLICT);
+        }
+        if ((plan.getSubmittedBy() != null && plan.getSubmittedBy().equalsIgnoreCase(actor))
+                || (plan.getGenerationRun().getRequestedBy() != null
+                && plan.getGenerationRun().getRequestedBy().equalsIgnoreCase(actor))) {
+            throw new AppException(MovieErrorCode.SCHEDULE_PLAN_SELF_PUBLISH_FORBIDDEN);
         }
         validateCurrentEligibility(plan);
 
@@ -118,7 +127,18 @@ public class SchedulePlanService {
         plan.setStatus(SchedulePlanStatus.PUBLISHED);
         plan.setPublishedAt(LocalDateTime.now());
         plan.setPublishedBy(actor);
+        notifyChange(plan, "STATUS_CHANGED");
         return toResponse(plan);
+    }
+
+    private void notifyChange(SchedulePlan plan, String action) {
+        lifecycleEventNotifier.notifyChange(
+                "SCHEDULE_PLAN",
+                plan.getSchedulePlanId(),
+                plan.getStatus().name(),
+                action,
+                null,
+                null);
     }
 
     private SchedulePlan loadForUpdate(Long planId) {

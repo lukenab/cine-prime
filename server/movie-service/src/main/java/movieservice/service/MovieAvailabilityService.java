@@ -18,6 +18,7 @@ import movieservice.enums.AvailabilityStatus;
 import movieservice.enums.ClusterStatus;
 import movieservice.enums.MovieStatus;
 import movieservice.exception.MovieErrorCode;
+import movieservice.lifecycle.LifecycleEventNotifier;
 import movieservice.mapper.MovieMapper;
 import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.MovieAvailabilityHistoryRepository;
@@ -28,6 +29,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.time.LocalDateTime;
 
 /**
  * Per-cluster exhibition/release-plan commands (MOV-LC-06). Independent from
@@ -44,6 +46,7 @@ public class MovieAvailabilityService {
     MovieRepository movieRepository;
     CinemaClusterRepository cinemaClusterRepository;
     MovieMapper movieMapper;
+    LifecycleEventNotifier lifecycleEventNotifier;
 
     @Transactional
     public MovieAvailabilityResponse create(CreateMovieAvailabilityRequest request, String actor) {
@@ -60,6 +63,7 @@ public class MovieAvailabilityService {
         }
 
         validateDateRange(request.getShowingStartDate(), request.getShowingEndDate());
+        validateSalesStart(request.getSalesStartAt(), request.getShowingStartDate());
 
         MovieAvailability availability = MovieAvailability.builder()
                 .movie(movie)
@@ -75,6 +79,7 @@ public class MovieAvailabilityService {
         try {
             MovieAvailability saved = movieAvailabilityRepository.save(availability);
             recordHistory(saved.getAvailabilityId(), null, AvailabilityStatus.PLANNED, actor, null);
+            notifyChange(saved, "CREATED");
             return movieMapper.toMovieAvailabilityResponse(saved);
         } catch (DataIntegrityViolationException e) {
             throw new AppException(MovieErrorCode.AVAILABILITY_WINDOW_ALREADY_EXISTS);
@@ -94,6 +99,7 @@ public class MovieAvailabilityService {
             throw new AppException(MovieErrorCode.AVAILABILITY_MOVIE_NOT_APPROVED);
         }
         validateDateRange(request.getShowingStartDate(), request.getShowingEndDate());
+        validateSalesStart(request.getSalesStartAt(), request.getShowingStartDate());
 
         List<CinemaCluster> targetClusters = Boolean.TRUE.equals(request.getAllActiveClusters())
                 ? cinemaClusterRepository.findByStatus(ClusterStatus.ACTIVE)
@@ -140,6 +146,7 @@ public class MovieAvailabilityService {
         }
         for (MovieAvailability availability : saved) {
             recordHistory(availability.getAvailabilityId(), null, AvailabilityStatus.PLANNED, actor, null);
+            notifyChange(availability, "CREATED");
         }
 
         return BulkCreateMovieAvailabilityResponse.builder()
@@ -158,21 +165,66 @@ public class MovieAvailabilityService {
 
     @Transactional
     public MovieAvailabilityResponse update(Long id, UpdateMovieAvailabilityRequest request, String actor) {
-        MovieAvailability availability = requireStatus(id, AvailabilityStatus.PLANNED, MovieErrorCode.AVAILABILITY_NOT_EDITABLE);
+        MovieAvailability availability = findOrThrow(id);
+        if (availability.getStatus() != AvailabilityStatus.PLANNED
+                && availability.getStatus() != AvailabilityStatus.CHANGES_REQUESTED) {
+            throw new AppException(MovieErrorCode.AVAILABILITY_NOT_EDITABLE);
+        }
 
         if (request.getSalesStartAt() != null) availability.setSalesStartAt(request.getSalesStartAt());
         if (request.getShowingStartDate() != null) availability.setShowingStartDate(request.getShowingStartDate());
         if (request.getShowingEndDate() != null) availability.setShowingEndDate(request.getShowingEndDate());
         validateDateRange(availability.getShowingStartDate(), availability.getShowingEndDate());
+        validateSalesStart(availability.getSalesStartAt(), availability.getShowingStartDate());
         availability.setUpdatedBy(actor);
 
-        return movieMapper.toMovieAvailabilityResponse(movieAvailabilityRepository.save(availability));
+        MovieAvailability saved = movieAvailabilityRepository.save(availability);
+        notifyChange(saved, "UPDATED");
+        return movieMapper.toMovieAvailabilityResponse(saved);
     }
 
     /** PLANNED → OPEN */
     @Transactional
+    public MovieAvailabilityResponse submitReview(Long id, String actor, String note) {
+        MovieAvailability availability = findOrThrow(id);
+        if (availability.getStatus() != AvailabilityStatus.PLANNED
+                && availability.getStatus() != AvailabilityStatus.CHANGES_REQUESTED) {
+            throw new AppException(MovieErrorCode.AVAILABILITY_INVALID_TRANSITION);
+        }
+        availability.setSubmittedAt(LocalDateTime.now());
+        availability.setSubmittedBy(actor);
+        availability.setReviewNote(note);
+        return transitionTo(availability, AvailabilityStatus.IN_REVIEW, actor, note);
+    }
+
+    @Transactional
+    public MovieAvailabilityResponse requestChanges(Long id, String actor, String note) {
+        if (note == null || note.isBlank()) {
+            throw new AppException(MovieErrorCode.AVAILABILITY_REVIEW_NOTE_REQUIRED);
+        }
+        MovieAvailability availability = requireStatus(
+                id, AvailabilityStatus.IN_REVIEW, MovieErrorCode.AVAILABILITY_INVALID_TRANSITION);
+        availability.setReviewNote(note.trim());
+        return transitionTo(availability, AvailabilityStatus.CHANGES_REQUESTED, actor, note.trim());
+    }
+
+    @Transactional
+    public MovieAvailabilityResponse approve(Long id, String actor, String note) {
+        MovieAvailability availability = requireStatus(
+                id, AvailabilityStatus.IN_REVIEW, MovieErrorCode.AVAILABILITY_INVALID_TRANSITION);
+        if (sameActor(availability.getCreatedBy(), actor)
+                || sameActor(availability.getSubmittedBy(), actor)) {
+            throw new AppException(MovieErrorCode.AVAILABILITY_SELF_APPROVAL_FORBIDDEN);
+        }
+        availability.setApprovedAt(LocalDateTime.now());
+        availability.setApprovedBy(actor);
+        availability.setReviewNote(note);
+        return transitionTo(availability, AvailabilityStatus.APPROVED, actor, note);
+    }
+
+    @Transactional
     public MovieAvailabilityResponse open(Long id, String actor) {
-        MovieAvailability availability = requireStatus(id, AvailabilityStatus.PLANNED, MovieErrorCode.AVAILABILITY_INVALID_TRANSITION);
+        MovieAvailability availability = requireStatus(id, AvailabilityStatus.APPROVED, MovieErrorCode.AVAILABILITY_INVALID_TRANSITION);
         return transitionTo(availability, AvailabilityStatus.OPEN, actor, null);
     }
 
@@ -180,7 +232,7 @@ public class MovieAvailabilityService {
     @Transactional
     public MovieAvailabilityResponse suspend(Long id, String reason, String actor) {
         MovieAvailability availability = findOrThrow(id);
-        if (availability.getStatus() != AvailabilityStatus.PLANNED && availability.getStatus() != AvailabilityStatus.OPEN) {
+        if (availability.getStatus() != AvailabilityStatus.OPEN) {
             throw new AppException(MovieErrorCode.AVAILABILITY_INVALID_TRANSITION);
         }
         availability.setSuspensionReason(reason);
@@ -231,6 +283,7 @@ public class MovieAvailabilityService {
         availability.setUpdatedBy(actor);
         MovieAvailability saved = movieAvailabilityRepository.save(availability);
         recordHistory(saved.getAvailabilityId(), from, to, actor, reason);
+        notifyChange(saved, "STATUS_CHANGED");
         return movieMapper.toMovieAvailabilityResponse(saved);
     }
 
@@ -248,5 +301,26 @@ public class MovieAvailabilityService {
         if (start != null && end != null && end.isBefore(start)) {
             throw new AppException(MovieErrorCode.AVAILABILITY_DATE_RANGE_INVALID);
         }
+    }
+
+    private void validateSalesStart(LocalDateTime salesStartAt, java.time.LocalDate showingStartDate) {
+        if (salesStartAt != null && showingStartDate != null
+                && salesStartAt.toLocalDate().isAfter(showingStartDate)) {
+            throw new AppException(MovieErrorCode.AVAILABILITY_SALES_START_INVALID);
+        }
+    }
+
+    private boolean sameActor(String first, String second) {
+        return first != null && second != null && first.equalsIgnoreCase(second);
+    }
+
+    private void notifyChange(MovieAvailability availability, String action) {
+        lifecycleEventNotifier.notifyChange(
+                "RELEASE_PLAN",
+                availability.getAvailabilityId(),
+                availability.getStatus().name(),
+                action,
+                availability.getMovie().getMovieId(),
+                availability.getCluster().getClusterId());
     }
 }

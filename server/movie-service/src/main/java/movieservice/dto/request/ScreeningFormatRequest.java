@@ -4,8 +4,6 @@ import jakarta.validation.constraints.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
-import java.math.BigDecimal;
-
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -23,10 +21,6 @@ public class ScreeningFormatRequest {
 
     @Size(max = 255)
     String description;
-
-    @NotNull(message = "Surcharge is required")
-    @DecimalMin("0.0")
-    BigDecimal surcharge;
 
     @Size(max = 20)
     String status;

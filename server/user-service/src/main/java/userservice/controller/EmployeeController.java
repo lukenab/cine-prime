@@ -47,6 +47,14 @@ public class EmployeeController {
                 .build();
     }
 
+    @GetMapping("/me")
+    @PreAuthorize("hasAnyAuthority('ROLE_EMPLOYEE', 'ROLE_BRANCH_MANAGER', 'ROLE_PROGRAMMING_OPERATOR')")
+    public ApiResponse<EmployeeResponse> getCurrentEmployee() {
+        return ApiResponse.<EmployeeResponse>builder()
+                .result(employeeService.getCurrentEmployee())
+                .build();
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("@employeeAccessPolicy.canAccess(#id, authentication)")
     public ApiResponse<EmployeeResponse> getEmployeeById(@PathVariable String id) {

@@ -51,11 +51,12 @@ public class MovieScreeningVersionService {
             String query,
             ScreeningVersionStatus status,
             Integer formatId,
+            List<Long> clusterIds,
             boolean attentionOnly
     ) {
         String normalizedQuery = query == null || query.isBlank() ? null : query.trim();
         return versionRepository.searchCatalog(normalizedQuery, status, formatId).stream()
-                .map(this::toCatalogResponse)
+                .map(version -> toCatalogResponse(version, clusterIds))
                 .filter(item -> !attentionOnly || item.requiresAttention())
                 .toList();
     }
@@ -303,11 +304,25 @@ public class MovieScreeningVersionService {
         );
     }
 
-    private MovieScreeningVersionCatalogResponse toCatalogResponse(MovieScreeningVersion version) {
+    private MovieScreeningVersionCatalogResponse toCatalogResponse(
+            MovieScreeningVersion version,
+            List<Long> clusterIds
+    ) {
         MovieScreeningVersionResponse detail = toResponse(version);
         Movie movie = version.getMovie();
+        List<Long> scope = clusterIds == null ? List.of() : clusterIds.stream().distinct().toList();
+        long compatibleRooms = scope.isEmpty()
+                ? detail.compatibleRoomCount()
+                : detail.audioFormatId() == null
+                    ? versionRepository.countCompatibleRoomsInClusters(detail.formatId(), scope)
+                    : versionRepository.countAudioCompatibleRoomsInClusters(detail.formatId(), detail.audioFormatId(), scope);
+        long compatibleClusters = scope.isEmpty()
+                ? detail.compatibleClusterCount()
+                : detail.audioFormatId() == null
+                    ? versionRepository.countCompatibleClustersInScope(detail.formatId(), scope)
+                    : versionRepository.countAudioCompatibleClustersInScope(detail.formatId(), detail.audioFormatId(), scope);
         boolean requiresAttention = detail.status() == ScreeningVersionStatus.ACTIVE
-                && (detail.audioFormatId() == null || detail.compatibleRoomCount() == 0);
+                && (detail.audioFormatId() == null || compatibleRooms == 0);
         return new MovieScreeningVersionCatalogResponse(
                 detail.screeningVersionId(),
                 detail.movieId(),
@@ -325,8 +340,8 @@ public class MovieScreeningVersionService {
                 detail.status(),
                 detail.effectiveFrom(),
                 detail.effectiveTo(),
-                detail.compatibleRoomCount(),
-                detail.compatibleClusterCount(),
+                compatibleRooms,
+                compatibleClusters,
                 detail.referenceCount(),
                 detail.referenced(),
                 requiresAttention,

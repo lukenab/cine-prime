@@ -38,6 +38,7 @@ import userservice.mapper.UserMapper;
 import userservice.repository.UserRepository;
 import userservice.client.AuthAccountClient;
 import userservice.dto.AuthAccountStatusRequest;
+import userservice.dto.StaffProfileCompletionRequest;
 import userservice.service.ImageStorageService;
 
 @Service
@@ -152,6 +153,38 @@ public class UserService {
         auditLogService.log("User", savedUser.getAccountId(), "UPDATE", oldData, savedUser, getCurrentAccountId());
 
         return userMapper.toUserResponse(savedUser);
+    }
+
+    /**
+     * Completes the minimum staff profile after account activation. Employment,
+     * branch and access data remain administrator-owned on the Employee record;
+     * staff never have to provide customer KYC fields such as identity card.
+     */
+    @Transactional
+    public UserResponse completeStaffProfile(String id, StaffProfileCompletionRequest request) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+        if (user.getEmployee() == null) {
+            throw new AppException(ErrorCode.INVALID_EMPLOYEE_ACCOUNT);
+        }
+
+        String phoneNumber = request.getPhoneNumber().trim();
+        if (!phoneNumber.equals(user.getPhoneNumber())
+                && userRepository.existsByPhoneNumber(phoneNumber)) {
+            throw new AppException(ErrorCode.PHONE_EXISTED);
+        }
+
+        UserResponse oldData = userMapper.toUserResponse(user);
+        user.setFullName(request.getFullName().trim());
+        user.setPhoneNumber(phoneNumber);
+        user.setProfileCompleted(true);
+        user.setUpdatedAt(LocalDateTime.now());
+
+        User saved = userRepository.save(user);
+        auditLogService.log("User", saved.getAccountId(), "COMPLETE_STAFF_PROFILE",
+                oldData, saved, getCurrentAccountId());
+        return userMapper.toUserResponse(saved);
     }
 
     @Transactional

@@ -43,20 +43,29 @@ function gradientFromId(id: string) {
 }
 
 const DEPARTMENT_LABELS: Record<string, string> = {
-  BOX_OFFICE: "Box Office", CONCESSION: "Concession", FLOOR: "Floor",
+  GENERAL_OPERATIONS: "General operations", BOX_OFFICE: "Box Office",
+  FOOD_BEVERAGE: "Food & beverage", FLOOR_GUEST_SERVICES: "Floor & guest services",
+  PROJECTION_TECHNICAL: "Projection & technical", FACILITIES_MAINTENANCE: "Facilities & maintenance",
+  CONCESSION: "Concession", FLOOR: "Floor",
   PROJECTION: "Projection", MANAGEMENT: "Management", CUSTOMER_SERVICE: "Customer Service",
 };
 const EMPLOYMENT_LABELS: Record<string, string> = {
-  FULL_TIME: "Full-time", PART_TIME: "Part-time", PROBATION: "Probation",
+  FULL_TIME: "Full-time", PART_TIME: "Part-time", FIXED_TERM: "Fixed-term", SEASONAL: "Seasonal", PROBATION: "Probation",
   INTERN: "Intern", CONTRACT: "Contract",
 };
 const POSITION_LABELS: Record<string, string> = {
-  STAFF: "Staff", SUPERVISOR: "Supervisor", MANAGER: "Manager",
+  TEAM_MEMBER: "Team member", SUPERVISOR: "Supervisor", ASSISTANT_MANAGER: "Assistant manager",
+  CINEMA_MANAGER: "Cinema manager", STAFF: "Staff", MANAGER: "Manager",
 };
 
 // badge colour per department
 const DEPT_COLOR: Record<string, { bg: string; text: string }> = {
+  GENERAL_OPERATIONS: { bg: "rgba(37,99,235,0.12)", text: "#2563eb" },
   BOX_OFFICE:       { bg: "rgba(59,130,246,0.12)",  text: "#3b82f6" },
+  FOOD_BEVERAGE:    { bg: "rgba(245,158,11,0.12)",  text: "#d97706" },
+  FLOOR_GUEST_SERVICES: { bg: "rgba(16,185,129,0.12)", text: "#059669" },
+  PROJECTION_TECHNICAL: { bg: "rgba(139,92,246,0.12)", text: "#7c3aed" },
+  FACILITIES_MAINTENANCE: { bg: "rgba(107,114,128,0.12)", text: "#4b5563" },
   CONCESSION:       { bg: "rgba(245,158,11,0.12)",  text: "#d97706" },
   FLOOR:            { bg: "rgba(16,185,129,0.12)",  text: "#059669" },
   PROJECTION:       { bg: "rgba(139,92,246,0.12)",  text: "#7c3aed" },
@@ -67,6 +76,8 @@ const DEPT_COLOR: Record<string, { bg: string; text: string }> = {
 const EMPLOYMENT_COLOR: Record<string, { bg: string; text: string }> = {
   FULL_TIME:  { bg: "rgba(16,185,129,0.10)",  text: "#059669" },
   PART_TIME:  { bg: "rgba(245,158,11,0.10)",  text: "#b45309" },
+  FIXED_TERM: { bg: "rgba(59,130,246,0.10)", text: "#2563eb" },
+  SEASONAL:   { bg: "rgba(139,92,246,0.10)", text: "#7c3aed" },
   PROBATION:  { bg: "rgba(99,102,241,0.10)",  text: "#4f46e5" },
   INTERN:     { bg: "rgba(6,182,212,0.10)",   text: "#0891b2" },
   CONTRACT:   { bg: "rgba(107,114,128,0.10)", text: "#4b5563" },

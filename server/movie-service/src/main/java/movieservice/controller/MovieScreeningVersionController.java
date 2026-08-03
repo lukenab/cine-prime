@@ -29,7 +29,7 @@ public class MovieScreeningVersionController {
     private final MovieScreeningVersionService screeningVersionService;
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     public ApiResponse<List<MovieScreeningVersionResponse>> list(@PathVariable Long movieId) {
         return ApiResponse.<List<MovieScreeningVersionResponse>>builder()
                 .code(HttpStatus.OK.value())

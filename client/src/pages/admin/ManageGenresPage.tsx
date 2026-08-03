@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Plus, Search, RefreshCw, AlertCircle, Tags, Film, Hash, X, ShieldCheck, Clock } from "lucide-react";
 import { useOutletContext } from "react-router-dom";
 import { movieApi, type GenreResponse, type MovieApiResponse, type CreateGenrePayload } from "../../api/movieApi";
+import { useRole } from "../../hooks/useRole";
 
 type StatusFilter = "ALL" | "ACTIVE" | "PENDING_REVIEW";
 
@@ -114,6 +115,7 @@ function getTagColor(index: number) {
 
 export default function ManageGenresPage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
+  const { isAdmin } = useRole();
 
   const [types, setTypes] = useState<GenreResponse[]>([]);
   const [movies, setMovies] = useState<MovieApiResponse[]>([]);
@@ -196,7 +198,7 @@ export default function ManageGenresPage() {
           Movie Genres
         </h1>
         <p style={{ color: "var(--text-sub)", fontSize: "13px" }}>
-          Manage genre categories for movie classification
+          {isAdmin ? "Manage genre categories for movie classification" : "Reference the approved genre categories used for movie programming"}
         </p>
       </div>
 
@@ -314,13 +316,15 @@ export default function ManageGenresPage() {
           {loading ? "Loading…" : "Refresh"}
         </button>
 
-        <button
-          onClick={() => setModalOpen(true)}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all shadow-sm"
-          style={{ fontSize: "14px", fontWeight: 500, background: isDarkMode ? "#7c3aed" : "#6d28d9" }}
-        >
-          <Plus size={16} /> Add Genre
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setModalOpen(true)}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all shadow-sm"
+            style={{ fontSize: "14px", fontWeight: 500, background: isDarkMode ? "#7c3aed" : "#6d28d9" }}
+          >
+            <Plus size={16} /> Add Genre
+          </button>
+        )}
       </div>
 
       {/* Genre grid + table hybrid */}
@@ -328,7 +332,7 @@ export default function ManageGenresPage() {
         <table className="w-full">
           <thead>
             <tr className="border-b" style={{ borderColor: "var(--border-color)", backgroundColor: "rgba(128,128,128,0.04)" }}>
-              {["#", "Genre", "Status", "Movies Using This Genre", "ID", ""].map((h) => (
+              {["#", "Genre", "Status", "Movies Using This Genre", "ID", ...(isAdmin ? ["Actions"] : [])].map((h) => (
                 <th key={h} className="px-5 py-3.5 text-left">
                   <span style={{ color: "var(--text-sub)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>{h}</span>
                 </th>
@@ -338,14 +342,14 @@ export default function ManageGenresPage() {
           <tbody>
             {loading && types.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-5 py-16 text-center">
+                <td colSpan={isAdmin ? 6 : 5} className="px-5 py-16 text-center">
                   <RefreshCw size={18} className="animate-spin mx-auto mb-2" style={{ color: "var(--text-sub)" }} />
                   <p style={{ fontSize: "14px", color: "var(--text-sub)" }}>Loading genres…</p>
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>
+                <td colSpan={isAdmin ? 6 : 5} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>
                   {searchQuery ? "No genres match your search."
                     : statusFilter === "PENDING_REVIEW" ? "No genres awaiting review."
                     : "No genres yet. Add one to get started."}
@@ -401,7 +405,7 @@ export default function ManageGenresPage() {
                         #{type.genreId}
                       </span>
                     </td>
-                    <td className="px-5 py-3.5 text-right">
+                    {isAdmin && <td className="px-5 py-3.5 text-right">
                       {type.status === "PENDING_REVIEW" && (
                         <button
                           onClick={() => handleApprove(type.genreId)}
@@ -413,7 +417,7 @@ export default function ManageGenresPage() {
                           {approvingId === type.genreId ? "Approving…" : "Approve"}
                         </button>
                       )}
-                    </td>
+                    </td>}
                   </tr>
                 );
               })
@@ -431,12 +435,12 @@ export default function ManageGenresPage() {
         )}
       </div>
 
-      <AddGenreModal
+      {isAdmin && <AddGenreModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         onSave={handleCreate}
         submitting={submitting}
-      />
+      />}
 
       <style>{`
         .hover-row:hover { background-color: rgba(128,128,128,0.04); }

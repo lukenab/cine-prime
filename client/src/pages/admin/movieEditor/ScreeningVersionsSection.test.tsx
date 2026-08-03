@@ -27,7 +27,6 @@ const formats: ScreeningFormatResponse[] = [
     formatCode: "2D",
     formatName: "2D Standard",
     description: "Standard presentation",
-    surcharge: 0,
   },
 ];
 

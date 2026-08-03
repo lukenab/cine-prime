@@ -101,7 +101,7 @@ public class CinemaClusterController {
 
     // ── POST create → always DRAFT regardless of role; must go through submit/approve ──
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public ApiResponse<CinemaClusterResponse> create(
             @Valid @RequestBody CinemaClusterRequest req,
@@ -114,7 +114,7 @@ public class CinemaClusterController {
 
     // ── PUT update data (+ ACTIVE↔INACTIVE toggle) ────────────────────────────
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}")
     public ApiResponse<CinemaClusterResponse> update(
             @PathVariable Long id,
@@ -137,7 +137,7 @@ public class CinemaClusterController {
 
     // ── WORKFLOW: submit (DRAFT → PENDING_REVIEW) ─────────────────────────────
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/{id}/submit")
     public ApiResponse<CinemaClusterResponse> submit(
             @PathVariable Long id,
@@ -221,7 +221,7 @@ public class CinemaClusterController {
         if (authentication == null || !authentication.isAuthenticated()) return false;
         return authentication.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN")
-             || a.getAuthority().equals("ROLE_EMPLOYEE"));
+             || a.getAuthority().equals("ROLE_PROGRAMMING_OPERATOR"));
     }
 
     /** Kiểm tra đúng role ADMIN (không bao gồm EMPLOYEE) */

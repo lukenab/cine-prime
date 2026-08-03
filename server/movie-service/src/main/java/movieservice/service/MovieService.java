@@ -19,6 +19,7 @@ import movieservice.enums.MovieStatus;
 import movieservice.enums.MovieSchedulingScoreSource;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
+import movieservice.lifecycle.LifecycleEventNotifier;
 import movieservice.dto.response.ImageUploadResponse;
 import movieservice.repository.*;
 import org.springframework.data.domain.Page;
@@ -63,13 +64,14 @@ public class MovieService {
     MovieStatusHistoryRepository movieStatusHistoryRepository;
     ShowTimeRepository showTimeRepository;
     MovieSchedulingProfileRepository movieSchedulingProfileRepository;
+    LifecycleEventNotifier lifecycleEventNotifier;
 
     private static final long MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 
     // ── Create ────────────────────────────────────────────────
 
     @Transactional
-    public MovieResponse createMovie(CreateMovieRequest request) {
+    public MovieResponse createMovie(CreateMovieRequest request, String actor) {
         // Duplicate guard
         if (movieRepository.existsByOriginalTitleIgnoreCase(request.getOriginalTitle())) {
             throw new AppException(MovieErrorCode.MOVIE_ALREADY_EXISTS);
@@ -77,6 +79,8 @@ public class MovieService {
 
         Movie movie = movieMapper.toMovie(request);
         movie.setStatus(MovieStatus.DRAFT);
+        movie.setCreatedBy(actor);
+        movie.setUpdatedBy(actor);
 
         // Wire FK references
         if (request.getAgeRatingId() != null) {
@@ -114,11 +118,14 @@ public class MovieService {
             saved.setCast(cast);
         }
 
-        auditLogService.logAction("SYSTEM", "Admin", "movie:" + saved.getMovieId(),
+        auditLogService.logAction(actor, "Programming", "movie:" + saved.getMovieId(),
                 "Created movie: " + saved.getOriginalTitle());
 
         MovieResponse response = movieMapper.toMovieResponse(saved);
         attachSchedulingProfile(response, saved.getMovieId());
+        lifecycleEventNotifier.notifyChange(
+                "MOVIE", saved.getMovieId(), saved.getStatus().name(), "CREATED",
+                saved.getMovieId(), null);
         return response;
     }
 
@@ -183,6 +190,7 @@ public class MovieService {
 
         Map<Long, Movie> movieById = new LinkedHashMap<>();
         Map<Long, Boolean> anySaleableByMovie = new LinkedHashMap<>();
+        Map<Long, Boolean> anyNowShowingByMovie = new LinkedHashMap<>();
         for (MovieAvailability a : relevant) {
             Long movieId = a.getMovie().getMovieId();
             movieById.putIfAbsent(movieId, a.getMovie());
@@ -198,12 +206,20 @@ public class MovieService {
                     saleableAtCluster,
                     (existing, saleable) -> existing || saleable
             );
+            boolean nowShowingAtCluster = saleableAtCluster
+                    && !a.getShowingStartDate().isAfter(today);
+            anyNowShowingByMovie.merge(
+                    movieId,
+                    nowShowingAtCluster,
+                    (existing, nowShowing) -> existing || nowShowing
+            );
         }
 
         return movieById.values().stream()
                 .map(movie -> toPublicMovieResponse(
                         movie,
-                        Boolean.TRUE.equals(anySaleableByMovie.get(movie.getMovieId()))
+                        Boolean.TRUE.equals(anySaleableByMovie.get(movie.getMovieId())),
+                        Boolean.TRUE.equals(anyNowShowingByMovie.get(movie.getMovieId()))
                 ))
                 .collect(Collectors.toList());
     }
@@ -247,7 +263,17 @@ public class MovieService {
                                     now
                             ).isPresent()
             );
-            response = toPublicMovieResponse(movie, anySaleable);
+            boolean anyNowShowing = visible.stream().anyMatch(a ->
+                    a.getStatus() == AvailabilityStatus.OPEN
+                            && !a.getShowingStartDate().isAfter(today)
+                            && showTimeService.findNextSaleableShowTime(
+                                    movieId,
+                                    a.getCluster().getClusterId(),
+                                    today,
+                                    now
+                            ).isPresent()
+            );
+            response = toPublicMovieResponse(movie, anySaleable, anyNowShowing);
         }
         applyDetailFields(response, movie);
         return response;
@@ -277,14 +303,16 @@ public class MovieService {
      *  ID) so the two can never silently drift apart. */
     private static boolean isPubliclyVisible(MovieAvailability availability, LocalDate today) {
         return availability.getMovie().getStatus() == MovieStatus.APPROVED
-                && (availability.getStatus() == AvailabilityStatus.PLANNED || availability.getStatus() == AvailabilityStatus.OPEN)
+                && (availability.getStatus() == AvailabilityStatus.APPROVED || availability.getStatus() == AvailabilityStatus.OPEN)
                 && (availability.getShowingEndDate() == null || !availability.getShowingEndDate().isBefore(today));
     }
 
     private PublicMovieResponse toPublicMovieResponse(Movie movie, Long clusterId, MovieAvailability availability, LocalDate today, LocalTime now) {
-        java.util.Optional<ShowTime> nextShowtime =
-                showTimeService.findNextSaleableShowTime(movie.getMovieId(), clusterId, today, now);
-        boolean nowShowing = availability.getStatus() == AvailabilityStatus.OPEN && nextShowtime.isPresent();
+        java.util.Optional<ShowTime> nextShowtime = availability.getStatus() == AvailabilityStatus.OPEN
+                ? showTimeService.findNextSaleableShowTime(movie.getMovieId(), clusterId, today, now)
+                : java.util.Optional.empty();
+        boolean bookingAvailable = nextShowtime.isPresent();
+        boolean nowShowing = bookingAvailable && !availability.getShowingStartDate().isAfter(today);
         return PublicMovieResponse.builder()
                 .movieId(movie.getMovieId())
                 .originalTitle(movie.getOriginalTitle())
@@ -299,12 +327,15 @@ public class MovieService {
                 .clusterId(clusterId)
                 .clusterName(availability.getCluster() != null ? availability.getCluster().getClusterName() : null)
                 .nextShowtimeAt(nextShowtime.map(st -> LocalDateTime.of(st.getShowDate(), st.getStartTime())).orElse(null))
-                .bookingAvailable(nowShowing)
+                .bookingAvailable(bookingAvailable)
                 .build();
     }
 
     /** Aggregate-discovery variant (no clusterId) — see findAllPublic javadoc. */
-    private PublicMovieResponse toPublicMovieResponse(Movie movie, boolean anyClusterSaleable) {
+    private PublicMovieResponse toPublicMovieResponse(
+            Movie movie,
+            boolean anyClusterSaleable,
+            boolean anyClusterNowShowing) {
         return PublicMovieResponse.builder()
                 .movieId(movie.getMovieId())
                 .originalTitle(movie.getOriginalTitle())
@@ -315,7 +346,7 @@ public class MovieService {
                 .durationMinutes(movie.getDurationMinutes())
                 .releaseDate(movie.getReleaseDate())
                 .genres(mapGenres(movie))
-                .displayStatus(anyClusterSaleable ? "NOW_SHOWING" : "COMING_SOON")
+                .displayStatus(anyClusterNowShowing ? "NOW_SHOWING" : "COMING_SOON")
                 .bookingAvailable(false)
                 .build();
     }
@@ -670,8 +701,15 @@ public class MovieService {
     @Transactional
     public MovieResponse approveMovie(Long id, String updatedBy) {
         Movie movie = requireStatus(id, MovieStatus.PENDING_REVIEW);
+        if (sameActor(movie.getCreatedBy(), updatedBy)) {
+            throw new AppException(MovieErrorCode.MOVIE_SELF_APPROVAL_FORBIDDEN);
+        }
         movieReadinessValidator.requireReadyForApproval(movie);
         return transitionTo(movie, MovieStatus.APPROVED, updatedBy, null);
+    }
+
+    private boolean sameActor(String author, String actor) {
+        return author != null && actor != null && author.equalsIgnoreCase(actor);
     }
 
     /** PENDING_REVIEW → CHANGES_REQUESTED. Reason is mandatory and preserved on the movie. */
@@ -699,7 +737,13 @@ public class MovieService {
     public MovieResponse archiveMovie(Long id, String updatedBy) {
         Movie movie = requireStatus(id, MovieStatus.APPROVED);
         boolean hasActiveAvailability = movieAvailabilityRepository.existsByMovie_MovieIdAndStatusIn(
-                id, List.of(AvailabilityStatus.PLANNED, AvailabilityStatus.OPEN));
+                id, List.of(
+                        AvailabilityStatus.PLANNED,
+                        AvailabilityStatus.IN_REVIEW,
+                        AvailabilityStatus.CHANGES_REQUESTED,
+                        AvailabilityStatus.APPROVED,
+                        AvailabilityStatus.OPEN,
+                        AvailabilityStatus.SUSPENDED));
         if (hasActiveAvailability) {
             throw new AppException(MovieErrorCode.MOVIE_HAS_ACTIVE_AVAILABILITY);
         }
@@ -721,6 +765,10 @@ public class MovieService {
                 .actor(actor)
                 .reason(reason)
                 .build());
+
+        lifecycleEventNotifier.notifyChange(
+                "MOVIE", saved.getMovieId(), saved.getStatus().name(), "STATUS_CHANGED",
+                saved.getMovieId(), null);
 
         return movieMapper.toMovieResponse(saved);
     }

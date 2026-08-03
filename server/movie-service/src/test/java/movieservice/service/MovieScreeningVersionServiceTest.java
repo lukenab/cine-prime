@@ -181,7 +181,7 @@ class MovieScreeningVersionServiceTest {
         when(versionRepository.countAudioCompatibleClusters(4, 3)).thenReturn(0L);
 
         List<MovieScreeningVersionCatalogResponse> result =
-                service.searchCatalog(null, ScreeningVersionStatus.ACTIVE, 4, true);
+                service.searchCatalog(null, ScreeningVersionStatus.ACTIVE, 4, null, true);
 
         assertEquals(1, result.size());
         assertEquals("Test Movie", result.getFirst().movieTitle());

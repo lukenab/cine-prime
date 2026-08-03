@@ -20,8 +20,8 @@ class PersonControllerAuthorizationTest {
         Method create = PersonController.class.getDeclaredMethod("create", PersonRequest.class);
         Method update = PersonController.class.getDeclaredMethod("update", Long.class, PersonRequest.class);
 
-        assertEquals("hasAnyRole('ADMIN', 'EMPLOYEE')", create.getAnnotation(PreAuthorize.class).value());
-        assertEquals("hasAnyRole('ADMIN', 'EMPLOYEE')", update.getAnnotation(PreAuthorize.class).value());
+        assertEquals("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')", create.getAnnotation(PreAuthorize.class).value());
+        assertEquals("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')", update.getAnnotation(PreAuthorize.class).value());
     }
 
     @Test

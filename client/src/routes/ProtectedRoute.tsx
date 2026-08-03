@@ -30,11 +30,17 @@ export default function ProtectedRoute({ allowedRoles, allowIncompleteProfile = 
     return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-sm text-white/50">Checking your profile…</div>;
   }
 
-  if (needsProfileSetup && !allowIncompleteProfile) {
+  const staffCompletesProfileInsideWorkspace = [
+    "ROLE_EMPLOYEE",
+    "ROLE_BRANCH_MANAGER",
+    "ROLE_PROGRAMMING_OPERATOR",
+  ].includes(role ?? "");
+
+  if (needsProfileSetup && !allowIncompleteProfile && !staffCompletesProfileInsideWorkspace) {
     return <Navigate to="/profile-setup" replace state={{ returnTo: `${location.pathname}${location.search}` }} />;
   }
 
-  if (allowedRoles && role && !allowedRoles.includes(role)) {
+  if (allowedRoles && (!role || !allowedRoles.includes(role))) {
     return <Navigate to="/" replace />;
   }
 

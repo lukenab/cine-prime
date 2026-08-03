@@ -7,6 +7,7 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 
 import lombok.RequiredArgsConstructor;
 import movieservice.websocket.SeatInventoryWebSocketHandler;
+import movieservice.websocket.LifecycleWebSocketHandler;
 
 @Configuration
 @EnableWebSocket
@@ -14,10 +15,13 @@ import movieservice.websocket.SeatInventoryWebSocketHandler;
 public class SeatInventoryWebSocketConfig implements WebSocketConfigurer {
 
     private final SeatInventoryWebSocketHandler handler;
+    private final LifecycleWebSocketHandler lifecycleHandler;
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(handler, "/ws/seat-inventory")
+                .setAllowedOriginPatterns("*");
+        registry.addHandler(lifecycleHandler, "/ws/lifecycle")
                 .setAllowedOriginPatterns("*");
     }
 }

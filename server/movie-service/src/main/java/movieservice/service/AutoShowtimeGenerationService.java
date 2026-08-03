@@ -3,6 +3,7 @@ package movieservice.service;
 import lombok.RequiredArgsConstructor;
 import movie.theater.common.exception.AppException;
 import movieservice.dto.request.AutoShowtimeGenerationRequest;
+import movieservice.dto.request.MovieScreeningVersionSelectionRequest;
 import movieservice.dto.response.AutoShowtimeGenerationAcceptedResponse;
 import movieservice.dto.response.AutoShowtimeGenerationPolicyResponse;
 import movieservice.dto.response.AutoShowtimeIneligibleMovie;
@@ -12,11 +13,13 @@ import movieservice.enums.MovieStatus;
 import movieservice.enums.CinemaRoomStatus;
 import movieservice.enums.ClusterStatus;
 import movieservice.enums.LayoutStatus;
+import movieservice.enums.ScreeningVersionStatus;
 import movieservice.exception.AutoShowtimePreflightException;
 import movieservice.exception.MovieErrorCode;
 import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.CinemaRoomRepository;
 import movieservice.repository.MovieRepository;
+import movieservice.repository.MovieScreeningVersionRepository;
 import movieservice.repository.RoomLayoutRepository;
 import movieservice.repository.SchedulePlanRepository;
 import movieservice.repository.ShowTimeRepository;
@@ -43,7 +46,9 @@ import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 
@@ -57,6 +62,7 @@ public class AutoShowtimeGenerationService {
     private final ShowtimeGenerationRunRepository generationRunRepository;
     private final SchedulePlanRepository schedulePlanRepository;
     private final MovieRepository  movieRepository;
+    private final MovieScreeningVersionRepository movieScreeningVersionRepository;
     private final CinemaClusterRepository cinemaClusterRepository;
     private final CinemaRoomRepository cinemaRoomRepository;
     private final RoomLayoutRepository roomLayoutRepository;
@@ -101,6 +107,12 @@ public class AutoShowtimeGenerationService {
         /// đúng theo hợp đồng frontend đã thống nhất (client chỉ hiện room của cluster đang chọn,
         /// nhưng scope có thể đổi giữa lúc load trang và lúc submit).
         Set<CinemaRoom> excludedRooms = resolveExcludedRooms(request.excludedRoomIds(), clusters);
+        Set<MovieScreeningVersion> screeningVersionOverrides = resolveScreeningVersionOverrides(
+                request.screeningVersionSelections(),
+                movies,
+                request.startDate(),
+                request.endDate()
+        );
 
         /// Cùng policy + date range + movie scope + cluster scope + excluded room scope +
         /// optimizer + scenario sẽ tạo ra cùng một idempotency key. Nhờ đó user gọi lại request
@@ -114,6 +126,7 @@ public class AutoShowtimeGenerationService {
                 movies.stream().map(Movie::getMovieId).toList(),
                 clusters.stream().map(CinemaCluster::getClusterId).toList(),
                 excludedRooms.stream().map(CinemaRoom::getCinemaRoomId).toList(),
+                screeningVersionOverrides,
                 optimizerMode,
                 scenario
         );
@@ -128,6 +141,7 @@ public class AutoShowtimeGenerationService {
                         movies,
                         clusters,
                         excludedRooms,
+                        screeningVersionOverrides,
                         idempotencyKey,
                         requesterBy,
                         optimizerMode,
@@ -151,12 +165,74 @@ public class AutoShowtimeGenerationService {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
+    private Set<MovieScreeningVersion> resolveScreeningVersionOverrides(
+            List<MovieScreeningVersionSelectionRequest> selections,
+            Set<Movie> selectedMovies,
+            LocalDate startDate,
+            LocalDate endDate
+    ) {
+        if (selections == null || selections.isEmpty()) {
+            return Set.of();
+        }
+
+        Set<Long> selectedMovieIds = selectedMovies.stream()
+                .map(Movie::getMovieId)
+                .collect(Collectors.toSet());
+        Set<Long> seenMovieIds = new LinkedHashSet<>();
+        Set<Long> requestedVersionIds = new LinkedHashSet<>();
+
+        for (MovieScreeningVersionSelectionRequest selection : selections) {
+            if (selection == null
+                    || selection.movieId() == null
+                    || selection.screeningVersionIds() == null
+                    || selection.screeningVersionIds().isEmpty()
+                    || !selectedMovieIds.contains(selection.movieId())
+                    || !seenMovieIds.add(selection.movieId())) {
+                throw new AppException(MovieErrorCode.AUTO_SHOWTIME_INVALID_SCREENING_VERSION_SELECTION);
+            }
+            requestedVersionIds.addAll(selection.screeningVersionIds());
+        }
+
+        Map<Long, MovieScreeningVersion> versionsById = movieScreeningVersionRepository
+                .findAllById(requestedVersionIds).stream()
+                .collect(Collectors.toMap(MovieScreeningVersion::getScreeningVersionId, Function.identity()));
+
+        if (versionsById.size() != requestedVersionIds.size()) {
+            throw new AppException(MovieErrorCode.AUTO_SHOWTIME_INVALID_SCREENING_VERSION_SELECTION);
+        }
+
+        Set<MovieScreeningVersion> resolved = new LinkedHashSet<>();
+        for (MovieScreeningVersionSelectionRequest selection : selections) {
+            Set<Long> distinctVersionIds = new LinkedHashSet<>(selection.screeningVersionIds());
+            if (distinctVersionIds.size() != selection.screeningVersionIds().size()) {
+                throw new AppException(MovieErrorCode.AUTO_SHOWTIME_INVALID_SCREENING_VERSION_SELECTION);
+            }
+
+            for (Long versionId : distinctVersionIds) {
+                MovieScreeningVersion version = versionsById.get(versionId);
+                boolean overlapsPlanningWindow = (version.getEffectiveFrom() == null
+                        || !version.getEffectiveFrom().isAfter(endDate))
+                        && (version.getEffectiveTo() == null
+                        || !version.getEffectiveTo().isBefore(startDate));
+                if (!version.getMovie().getMovieId().equals(selection.movieId())
+                        || version.getStatus() != ScreeningVersionStatus.ACTIVE
+                        || version.getAudioFormat() == null
+                        || !overlapsPlanningWindow) {
+                    throw new AppException(MovieErrorCode.AUTO_SHOWTIME_INVALID_SCREENING_VERSION_SELECTION);
+                }
+                resolved.add(version);
+            }
+        }
+        return resolved;
+    }
+
     private AutoShowtimeGenerationAcceptedResponse createRun(
             ShowtimeAllocationPolicy policy,
             AutoShowtimeGenerationRequest request,
             Set<Movie> movies,
             Set<CinemaCluster> clusters,
             Set<CinemaRoom> excludedRooms,
+            Set<MovieScreeningVersion> screeningVersionOverrides,
             String idempotencyKey,
             String requesterBy,
             movieservice.enums.OptimizerMode optimizerMode,
@@ -169,7 +245,7 @@ public class AutoShowtimeGenerationService {
         /// Bước này chỉ tạo candidate trong bộ nhớ, chưa persist ShowTime hay generation run.
         /// excludedRooms phải được truyền vào preflight, nếu không một movie chỉ khớp room bị loại
         /// trừ sẽ bị coi là eligible nhầm ở bước này rồi mới thất bại thật ở execute step sau.
-        validateEligibleCandidates(policy, request, movies, clusters, excludedRooms);
+        validateEligibleCandidates(policy, request, movies, clusters, excludedRooms, screeningVersionOverrides);
 
         ShowtimeGenerationRun run = ShowtimeGenerationRun.builder()
                 .policy(policy)
@@ -179,6 +255,7 @@ public class AutoShowtimeGenerationService {
                 .movies(movies)
                 .clusters(clusters)
                 .excludedRooms(excludedRooms)
+                .screeningVersionOverrides(screeningVersionOverrides)
                 .requestedBy(requesterBy)
                 .optimizerMode(optimizerMode)
                 .scenario(scenario)
@@ -205,7 +282,8 @@ public class AutoShowtimeGenerationService {
             AutoShowtimeGenerationRequest request,
             Set<Movie> movies,
             Set<CinemaCluster> clusters,
-            Set<CinemaRoom> excludedRooms
+            Set<CinemaRoom> excludedRooms,
+            Set<MovieScreeningVersion> screeningVersionOverrides
     ) {
         ShowtimeGenerationRun preflightRun = ShowtimeGenerationRun.builder()
                 .policy(policy)
@@ -214,6 +292,7 @@ public class AutoShowtimeGenerationService {
                 .movies(movies)
                 .clusters(clusters)
                 .excludedRooms(excludedRooms)
+                .screeningVersionOverrides(screeningVersionOverrides)
                 .build();
 
         Set<Long> eligibleMovieIds = candidateFactory.buildRawCandidates(preflightRun).stream()
@@ -335,6 +414,7 @@ public class AutoShowtimeGenerationService {
             List<Long> movieIds,
             List<Long> clusterIds,
             List<Long> excludedRoomIds,
+            Set<MovieScreeningVersion> screeningVersionOverrides,
             movieservice.enums.OptimizerMode optimizerMode,
             movieservice.enums.OptimizationScenario scenario
     ){
@@ -350,6 +430,7 @@ public class AutoShowtimeGenerationService {
                 + "|" + sortedIds(movieIds)
                 + "|" + sortedIds(clusterIds)
                 + "|" + sortedIds(excludedRoomIds)
+                + "|" + sortedVersionOverrides(screeningVersionOverrides)
                 + "|" + optimizerMode
                 + "|" + scenario;
 
@@ -361,6 +442,18 @@ public class AutoShowtimeGenerationService {
         return ids.stream()
                 .sorted(Comparator.naturalOrder())
                 .map(String::valueOf)
+                .collect(Collectors.joining(","));
+    }
+
+    private String sortedVersionOverrides(Set<MovieScreeningVersion> overrides) {
+        if (overrides == null || overrides.isEmpty()) {
+            return "AUTO";
+        }
+        return overrides.stream()
+                .sorted(Comparator
+                        .comparing((MovieScreeningVersion version) -> version.getMovie().getMovieId())
+                        .thenComparing(MovieScreeningVersion::getScreeningVersionId))
+                .map(version -> version.getMovie().getMovieId() + ":" + version.getScreeningVersionId())
                 .collect(Collectors.joining(","));
     }
 
@@ -467,8 +560,29 @@ public class AutoShowtimeGenerationService {
                 run.getShadowComparison(),
                 run.getExcludedRooms() == null
                         ? List.of()
-                        : run.getExcludedRooms().stream().map(CinemaRoom::getCinemaRoomId).toList()
+                        : run.getExcludedRooms().stream().map(CinemaRoom::getCinemaRoomId).toList(),
+                buildScreeningVersionSelections(run.getScreeningVersionOverrides())
         );
+    }
+
+    private List<AutoShowtimeGenerationRunResponse.ScreeningVersionSelection> buildScreeningVersionSelections(
+            Set<MovieScreeningVersion> overrides
+    ) {
+        if (overrides == null || overrides.isEmpty()) {
+            return List.of();
+        }
+        return overrides.stream()
+                .collect(Collectors.groupingBy(version -> version.getMovie().getMovieId()))
+                .entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> new AutoShowtimeGenerationRunResponse.ScreeningVersionSelection(
+                        entry.getKey(),
+                        entry.getValue().stream()
+                                .map(MovieScreeningVersion::getScreeningVersionId)
+                                .sorted()
+                                .toList()
+                ))
+                .toList();
     }
 
     /// Tính số candidate theo phim từ các bản ghi đã tạo và các candidate bị skip.

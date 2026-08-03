@@ -38,19 +38,20 @@ public class MovieController {
 
     MovieService movieService;
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     @PostMapping
     public ApiResponse<MovieResponse> createMovie(@Valid @RequestBody CreateMovieRequest request) {
+        String actor = SecurityContextHolder.getContext().getAuthentication().getName();
         return ApiResponse.<MovieResponse>builder()
                 .code(200)
-                .result(movieService.createMovie(request))
+                .result(movieService.createMovie(request, actor))
                 .build();
     }
 
     /** Internal catalog detail - exposes full workflow state (rejectionNote, audit fields via
      *  MovieResponse) so it must never be reachable by guessing an ID as a customer/anonymous
      *  caller. Public detail is the separate GET /api/movies/public/{id} below. */
-    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     @GetMapping("/{id}")
     public ApiResponse<MovieResponse> findById(
             @PathVariable Long id,
@@ -61,7 +62,7 @@ public class MovieController {
                 .build();
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     @GetMapping
     public ApiResponse<Page<MovieResponse>> getPage(
             @RequestParam(defaultValue = "1") int page,
@@ -76,7 +77,7 @@ public class MovieController {
                 .build();
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     @GetMapping("/all")
     public ApiResponse<List<MovieResponse>> getAll() {
         return ApiResponse.<List<MovieResponse>>builder()
@@ -107,7 +108,7 @@ public class MovieController {
                 .build();
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     @PutMapping("/{id}")
     public ApiResponse<MovieResponse> updateMovie(@PathVariable Long id,
             @Valid @RequestBody UpdateMovieRequest request) {
@@ -119,7 +120,7 @@ public class MovieController {
     }
 
     /** DRAFT → PENDING_REVIEW */
-    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     @PostMapping("/{id}/submit")
     public ApiResponse<MovieResponse> submit(@PathVariable Long id) {
         String updatedBy = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -153,7 +154,7 @@ public class MovieController {
     }
 
     /** CHANGES_REQUESTED → DRAFT */
-    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     @PostMapping("/{id}/start-revision")
     public ApiResponse<MovieResponse> startRevision(@PathVariable Long id) {
         String updatedBy = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -176,7 +177,7 @@ public class MovieController {
 
     // ── Image upload ──────────────────────────────────────────
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<ImageUploadResponse> uploadImage(@RequestParam("file") MultipartFile file) {
         return ApiResponse.<ImageUploadResponse>builder()

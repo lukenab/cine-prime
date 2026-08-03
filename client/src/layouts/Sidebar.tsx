@@ -11,24 +11,24 @@ type NavItem = {
   children?: NavChild[];
 };
 
-const navItems: NavItem[] = [
-  { icon: LayoutDashboard, label: "Dashboard", id: "dashboard", path: "/admin", group: "main", roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"] },
+const adminNavItems: NavItem[] = [
+  { icon: LayoutDashboard, label: "Dashboard", id: "dashboard", path: "/admin", group: "main", roles: ["ROLE_ADMIN"] },
   {
     icon: Film, label: "Movies", id: "movies", path: "/admin/movies", group: "catalog",
-    roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"],
+    roles: ["ROLE_ADMIN", "ROLE_PROGRAMMING_OPERATOR"],
     children: [
-      { icon: List,        label: "Movie List",  path: "/admin/movies" },
+      { icon: List,        label: "Movie List",  path: "/admin/movies", roles: ["ROLE_ADMIN", "ROLE_PROGRAMMING_OPERATOR"] },
       { icon: Tags,        label: "Genres",      path: "/admin/genres",      roles: ["ROLE_ADMIN"] },
       { icon: ShieldCheck, label: "Age Ratings", path: "/admin/age-ratings", roles: ["ROLE_ADMIN"] },
       { icon: Monitor,     label: "Formats",     path: "/admin/formats",     roles: ["ROLE_ADMIN"] },
-      { icon: Languages,   label: "Screening Versions", path: "/admin/screening-versions", roles: ["ROLE_ADMIN"] },
-      { icon: Factory,     label: "Companies",   path: "/admin/companies",   roles: ["ROLE_ADMIN"] },
-      { icon: UserSquare2, label: "Persons",     path: "/admin/persons",     roles: ["ROLE_ADMIN"] },
+      { icon: Languages,   label: "Screening Versions", path: "/admin/screening-versions", roles: ["ROLE_ADMIN", "ROLE_PROGRAMMING_OPERATOR"] },
+      { icon: Factory,     label: "Companies",   path: "/admin/companies",   roles: ["ROLE_ADMIN", "ROLE_PROGRAMMING_OPERATOR"] },
+      { icon: UserSquare2, label: "Persons",     path: "/admin/persons",     roles: ["ROLE_ADMIN", "ROLE_PROGRAMMING_OPERATOR"] },
     ],
   },
   {
     icon: Building2, label: "Cinemas", id: "cinemas", path: "/admin/clusters", group: "catalog",
-    roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"],
+    roles: ["ROLE_ADMIN"],
     children: [
       { icon: MapPin,    label: "Clusters",  path: "/admin/clusters" },
       { icon: Armchair,  label: "All Rooms", path: "/admin/rooms" },
@@ -36,19 +36,18 @@ const navItems: NavItem[] = [
   },
   {
     icon: Calendar, label: "Showtimes", id: "showtimes", path: "/admin/showtimes", group: "ops",
-    roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"],
+    roles: ["ROLE_ADMIN", "ROLE_PROGRAMMING_OPERATOR"],
     children: [
-      { icon: Calendar, label: "Showtime Workspace", path: "/admin/showtimes" },
+      { icon: Calendar, label: "Showtime Workspace", path: "/admin/showtimes", roles: ["ROLE_ADMIN"] },
       { icon: CircleDollarSign, label: "Price Books", path: "/admin/price-books", roles: ["ROLE_ADMIN"] },
     ],
   },
-  { icon: Ticket,      label: "Bookings",     id: "bookings",   path: "/admin/bookings",   group: "ops", roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"] },
-  { icon: ShoppingCart,label: "Sell Tickets", id: "sell",       path: "/admin/sell",       group: "ops", roles: ["ROLE_EMPLOYEE"] },
+  { icon: Ticket,      label: "Bookings",     id: "bookings",   path: "/admin/bookings",   group: "ops", roles: ["ROLE_ADMIN"] },
   {
     icon: Popcorn, label: "Concessions", id: "concessions", path: "/admin/concessions/fulfillment", group: "ops",
-    roles: ["ROLE_ADMIN", "ROLE_BRANCH_MANAGER", "ROLE_EMPLOYEE"],
+    roles: ["ROLE_ADMIN", "ROLE_BRANCH_MANAGER"],
     children: [
-      { icon: ShoppingCart, label: "Fulfillment", path: "/admin/concessions/fulfillment", roles: ["ROLE_ADMIN", "ROLE_EMPLOYEE"] },
+      { icon: ShoppingCart, label: "Fulfillment", path: "/admin/concessions/fulfillment", roles: ["ROLE_ADMIN"] },
       { icon: Tags, label: "Catalog & Stock", path: "/admin/concessions/catalog", roles: ["ROLE_ADMIN", "ROLE_BRANCH_MANAGER"] },
     ],
   },
@@ -56,6 +55,31 @@ const navItems: NavItem[] = [
   { icon: Gift,        label: "Promotions",   id: "promotions", path: "/admin/promotions", group: "ops",    roles: ["ROLE_ADMIN"] },
   { icon: BarChart2,   label: "Reports",      id: "reports",    path: "/admin/reports",    group: "system", roles: ["ROLE_ADMIN"] },
   { icon: Settings,    label: "Settings",     id: "settings",   path: "/admin/settings",   group: "system", roles: ["ROLE_ADMIN"] },
+];
+
+const employeeNavItems: NavItem[] = [
+  { icon: LayoutDashboard, label: "Workspace", id: "dashboard", path: "/employee", group: "main", roles: ["ROLE_EMPLOYEE"] },
+  { icon: ShoppingCart, label: "Sell Tickets", id: "sell", path: "/employee/sell", group: "ops", roles: ["ROLE_EMPLOYEE"] },
+  { icon: Ticket, label: "Bookings", id: "bookings", path: "/employee/bookings", group: "ops", roles: ["ROLE_EMPLOYEE"] },
+  { icon: Popcorn, label: "Concession Fulfillment", id: "concessions", path: "/employee/concessions/fulfillment", group: "ops", roles: ["ROLE_EMPLOYEE"] },
+];
+
+/**
+ * Film programmers use a focused, flat workspace. Keeping the admin catalogue
+ * tree for this role left two oversized parent menus with only a handful of
+ * usable children and made the sidebar look unfinished.
+ */
+const programmingNavItems: NavItem[] = [
+  { icon: LayoutDashboard, label: "Overview", id: "programming-overview", path: "/admin/programming", group: "main", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
+  { icon: Film, label: "Movie Catalogue", id: "programming-movies", path: "/admin/movies", group: "main", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
+  { icon: Calendar, label: "Release Planning", id: "programming-release", path: "/admin/release-plans", group: "main", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
+  { icon: Languages, label: "Screening Versions", id: "programming-versions", path: "/admin/screening-versions", group: "main", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
+  { icon: Monitor, label: "Screening Formats", id: "programming-formats", path: "/admin/formats", group: "reference", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
+  { icon: Tags, label: "Genres", id: "programming-genres", path: "/admin/genres", group: "reference", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
+  { icon: ShieldCheck, label: "Age Ratings", id: "programming-ratings", path: "/admin/age-ratings", group: "reference", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
+  { icon: Clapperboard, label: "Automatic Scheduling", id: "programming-schedule", path: "/admin/showtimes/auto", group: "scheduling", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
+  { icon: Factory, label: "Companies", id: "programming-companies", path: "/admin/companies", group: "reference", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
+  { icon: UserSquare2, label: "Cast & Crew", id: "programming-persons", path: "/admin/persons", group: "reference", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
 ];
 
 interface SidebarProps {
@@ -66,9 +90,16 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  const role = user?.role === "ROLE_SUPER_ADMIN" ? "ROLE_ADMIN" : (user?.role ?? "");
+  const isProgrammingOperator = user?.role === "ROLE_PROGRAMMING_OPERATOR";
+  const visibleNavItems = user?.role === "ROLE_EMPLOYEE"
+    ? employeeNavItems
+    : isProgrammingOperator
+      ? programmingNavItems
+      : adminNavItems;
 
   // Auto-expand items whose children match the current path
-  const autoExpanded = navItems
+  const autoExpanded = visibleNavItems
     .filter(item => item.children?.some(c => location.pathname.startsWith(c.path) && c.path !== "/admin/movies" || location.pathname === c.path))
     .map(item => item.id);
   const [expandedIds, setExpandedIds] = useState<string[]>(autoExpanded);
@@ -171,20 +202,19 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
           transition: "color 0.25s ease",
         }}
       >
-        Main Menu
+        {isProgrammingOperator ? "Programming workspace" : "Main Menu"}
       </div>
 
       {/* Nav items */}
       <nav style={{ padding: "0 10px", flex: 1, overflowY: "auto", minHeight: 0 }}>
-        {navItems.filter(({ roles }) => !roles || roles.includes(user?.role ?? "")).map((item, idx, visibleItems) => {
+        {visibleNavItems.filter(({ roles }) => !roles || roles.includes(role)).map((item, idx, visibleItems) => {
           const { icon: Icon, label, id, path, group, children } = item;
           const hasChildren = !!children?.length;
           const isExpanded = expandedIds.includes(id);
-          const role = user?.role ?? "";
-
-          // Active: exact for /admin, startsWith for others
-          const isActive = path === "/admin"
-            ? location.pathname === "/admin"
+          // Active: exact for workspace roots, startsWith for operational pages
+          const isWorkspaceRoot = path === "/admin" || path === "/employee";
+          const isActive = isWorkspaceRoot
+            ? location.pathname === path
             : !hasChildren && location.pathname.startsWith(path);
 
           // Parent is "active" style when any child is active
@@ -192,7 +222,13 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
 
           const prevGroup = idx > 0 ? visibleItems[idx - 1].group : group;
           const showSectionLabel = group !== prevGroup;
-          const sectionLabels: Record<string, string> = { catalog: "Catalog", ops: "Operations", system: "System" };
+          const sectionLabels: Record<string, string> = {
+            catalog: "Catalog",
+            ops: "Operations",
+            system: "System",
+            scheduling: "Scheduling",
+            reference: "Reference data",
+          };
 
           const btnStyle = (active: boolean): React.CSSProperties => ({
             width: "100%", display: "flex", alignItems: "center", gap: "11px",

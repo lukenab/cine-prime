@@ -22,8 +22,8 @@ class ProductionCompanyControllerAuthorizationTest {
         Method create = ProductionCompanyController.class.getDeclaredMethod("create", ProductionCompanyRequest.class);
         Method update = ProductionCompanyController.class.getDeclaredMethod("update", Long.class, ProductionCompanyRequest.class);
 
-        assertEquals("hasAnyRole('ADMIN', 'EMPLOYEE')", create.getAnnotation(PreAuthorize.class).value());
-        assertEquals("hasAnyRole('ADMIN', 'EMPLOYEE')", update.getAnnotation(PreAuthorize.class).value());
+        assertEquals("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')", create.getAnnotation(PreAuthorize.class).value());
+        assertEquals("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')", update.getAnnotation(PreAuthorize.class).value());
     }
 
     @Test

@@ -3,8 +3,6 @@ package movieservice.dto.response;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
-import java.math.BigDecimal;
-
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -14,7 +12,6 @@ public class CinemaRoomFormatResponse {
     Integer formatId;
     String formatCode;
     String formatName;
-    BigDecimal surcharge;
     Boolean enabled;
     /** True for 2D/3D/IMAX/SCREENX/ATMOS/4DX — derived from supports2d/supports3d/
      *  presentationSystem on every room save; toggling those directly is rejected
