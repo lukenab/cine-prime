@@ -24,6 +24,9 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class ShowtimeSeatMapResponse {
+    /** Logical context consumed by checkout; it is not supplied by the client. */
+    private Long movieId;
+    private Long clusterId;
     private List<ShowtimeSeatDto> seats;
     private List<LayoutPositionResponse> positions;
     private PresentationSystem presentationSystem;

@@ -22,4 +22,8 @@ public class CreateBookingResponse {
     BigDecimal total;
     String currency;
     List<BookingItemResponse> seats;
+    
+    // Promotion fields from HEAD
+    String promotionCode;
+    BigDecimal promotionDiscountAmount;
 }

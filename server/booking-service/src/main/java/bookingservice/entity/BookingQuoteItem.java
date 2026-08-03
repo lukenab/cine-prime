@@ -6,6 +6,10 @@ import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 
+/**
+ * Line items in a booking quote, supporting both seat and non-seat items.
+ * Promotion integration stores SEAT items only with pricing snapshot.
+ */
 @Entity
 @Table(name = "booking_quote_item", indexes = {
         @Index(name = "idx_quote_item_quote", columnList = "quote_id")
@@ -42,4 +46,11 @@ public class BookingQuoteItem {
 
     @Column(name = "final_amount", precision = 15, scale = 2, nullable = false)
     BigDecimal finalAmount;
+
+    // Fields from HEAD (promotion integration) for SEAT items
+    @Column(name = "showtime_seat_id")
+    Long showtimeSeatId;
+
+    @Column(name = "seat_code", length = 20)
+    String seatCode;
 }

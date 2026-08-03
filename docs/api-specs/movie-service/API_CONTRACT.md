@@ -41,6 +41,17 @@
 - `message`: Mô tả kết quả (optional)
 - `result`: Payload chính — object, array, hoặc null
 
+### Seat-hold checkout context
+
+`POST /api/showtimes/{showtimeId}/seat-holds` additionally returns `movieId` and `clusterId`.
+Both values are derived by Movie Service from the authoritative `ShowTime` record (`ShowTime.movie` and
+`ShowTime.cinemaRoom.cluster`), not accepted from the client. Booking Service consumes this context when it calls
+Promotion Service, so a client cannot apply a movie/showtime promotion to a different showtime.
+
+`GET /api/showtimes/{showtimeId}/seat-map` also returns this read-only `movieId` and `clusterId` context for checkout
+quote creation. Booking Service still creates the authoritative hold only through `POST /seat-holds` when it materializes
+the booking.
+
 ---
 
 ## 4. Danh sách toàn bộ API

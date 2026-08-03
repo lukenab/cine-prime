@@ -24,6 +24,8 @@ public class SecurityConfig extends JwtResourceServerSecuritySupport {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/actuator/health/**", "/actuator/info").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/internal/payments/webhooks/**").permitAll()
+                        .requestMatchers("/api/booking-quotes/**").authenticated()
+                        .requestMatchers("/api/bookings/**").authenticated()
                         .anyRequest().authenticated());
         configureJwtResourceServer(http);
         return http.build();

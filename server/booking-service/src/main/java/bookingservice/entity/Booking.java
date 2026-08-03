@@ -5,6 +5,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.data.domain.Persistable;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -12,6 +13,7 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Table(name = "booking", indexes = {
@@ -26,11 +28,20 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class Booking {
+public class Booking implements Persistable<String> {
 
     @Id
     @Column(name = "booking_id", length = 50)
     String bookingId;
+
+    /**
+     * Booking ID is assigned before Promotion Service reservation. Persistable
+     * prevents Spring Data from treating that assigned UUID as a detached row
+     * and issuing merge on the first save.
+     */
+    @Transient
+    @Builder.Default
+    boolean newBooking = true;
 
     @Column(name = "booking_code", length = 30, nullable = false, unique = true)
     String bookingCode;
@@ -100,6 +111,22 @@ public class Booking {
 
     @Column(name = "final_amount", precision = 15, scale = 2, nullable = false)
     BigDecimal finalAmount;
+
+    /** Immutable promotion snapshot used for audit, refund and analytics. */
+    @Column(name = "promotion_id", length = 36, updatable = false)
+    String promotionId;
+
+    @Column(name = "promotion_code", length = 100, updatable = false)
+    String promotionCode;
+
+    @Column(name = "promotion_reservation_id", length = 36, unique = true, updatable = false)
+    String promotionReservationId;
+
+    @Column(name = "promotion_discount_amount", precision = 12, scale = 2, updatable = false)
+    BigDecimal promotionDiscountAmount;
+
+    @Column(name = "promotion_currency", length = 10, updatable = false)
+    String promotionCurrency;
 
     @Column(name = "currency", length = 3, nullable = false)
     @Builder.Default
@@ -178,4 +205,27 @@ public class Booking {
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     List<BookingCancellation> cancellations = new ArrayList<>();
+
+    @PrePersist
+    void assignIdIfMissing() {
+        if (bookingId == null || bookingId.isBlank()) {
+            bookingId = UUID.randomUUID().toString();
+        }
+    }
+
+    @PostLoad
+    @PostPersist
+    void markNotNew() {
+        newBooking = false;
+    }
+
+    @Override
+    public String getId() {
+        return bookingId;
+    }
+
+    @Override
+    public boolean isNew() {
+        return newBooking;
+    }
 }

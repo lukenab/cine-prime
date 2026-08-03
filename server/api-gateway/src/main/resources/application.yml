@@ -49,11 +49,6 @@ spring:
           predicates:
             - Path=/api/payments/**
 
-        - id: promotion-service
-          uri: lb://promotion-service
-          predicates:
-            - Path=/api/promotions/**
-
         - id: user-service
           uri: lb://user-service
           predicates:

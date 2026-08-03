@@ -17,6 +17,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class BookingServiceApplication {
 
 	public static void main(String[] args) {
+		// Inter-service timestamps are stored and compared in UTC. Business-zone
+		// formatting belongs at the API/UI boundary, never in checkout lifecycle.
 		TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 		SpringApplication.run(BookingServiceApplication.class, args);
 	}

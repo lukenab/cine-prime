@@ -47,6 +47,10 @@ eureka:
 jwt:
   signerKey: ${JWT_SIGNER_KEY}
 booking:
+  quote:
+    ttl-seconds: 300
+  internal-auth:
+    token-ttl-seconds: 60
   abuse:
     max-active-pending: ${BOOKING_MAX_ACTIVE_PENDING:3}
     max-attempts-per-minute: ${BOOKING_MAX_ATTEMPTS_PER_MINUTE:10}
