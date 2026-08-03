@@ -25,6 +25,11 @@ public class MovieAvailabilityResponse {
     LocalDate showingStartDate;
     LocalDate showingEndDate;
     String suspensionReason;
+    String reviewNote;
+    LocalDateTime submittedAt;
+    String submittedBy;
+    LocalDateTime approvedAt;
+    String approvedBy;
 
     Long version;
     LocalDateTime createdAt;

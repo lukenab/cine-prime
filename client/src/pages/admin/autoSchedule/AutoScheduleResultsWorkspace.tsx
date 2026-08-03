@@ -26,6 +26,7 @@ import type {
   SolverDiagnostics,
 } from "../../../api/showtimeApi";
 import { OPTIMIZER_META, SOLVER_STATUS_META } from "./optimizerMeta";
+import { useAuth } from "../../../context/AuthContext";
 
 function parseJson<T>(raw: string | undefined): T | null {
   if (!raw) return null;
@@ -410,6 +411,8 @@ function buildValidationIssues(summary: string | undefined, slots: SchedulePlanS
 }
 
 export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, onNewRun, onRevalidate, onTransition }: Props) {
+  const { user } = useAuth();
+  const canApprovePlan = user?.role === "ROLE_ADMIN" || user?.role === "ROLE_SUPER_ADMIN";
   const slots = plan?.slots ?? [];
   const scopeDates = useMemo(() => enumerateDates(run.startDate, run.endDate), [run.endDate, run.startDate]);
   const availableDates = useMemo(() => Array.from(new Set([...scopeDates, ...slots.map((slot) => slot.businessDate)])).sort(), [scopeDates, slots]);
@@ -675,13 +678,18 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
                 <Send size={13} /> Submit for review
               </button>
             )}
-            {plan?.status === "IN_REVIEW" && (
+            {plan?.status === "IN_REVIEW" && canApprovePlan && (
               <>
                 <button type="button" disabled={busy} onClick={() => setAction("changes")} className="rounded-xl border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }}>Request changes</button>
                 <button type="button" disabled={busy || backendBlockers > 0 || conflicts.length > 0} onClick={() => setAction("publish")} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">
                   <ShieldCheck size={13} /> Publish schedule
                 </button>
               </>
+            )}
+            {plan?.status === "IN_REVIEW" && !canApprovePlan && (
+              <span className="rounded-xl border px-3 py-2 text-xs font-semibold text-blue-600" style={{ borderColor: "rgba(37,99,235,.25)", background: "rgba(37,99,235,.06)" }}>
+                Awaiting administrator review
+              </span>
             )}
             {isPublished && (
               <a href="/admin/showtimes" className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white">

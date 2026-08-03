@@ -8,6 +8,7 @@ import movieservice.repository.SchedulePlanRepository;
 import movieservice.service.autoshowtime.AutoShowtimeCandidatePersistenceService;
 import movieservice.service.autoshowtime.SchedulingEligibilityService;
 import movieservice.service.autoshowtime.SchedulingOperationalConstraintService;
+import movieservice.lifecycle.LifecycleEventNotifier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +33,7 @@ class SchedulePlanServiceTest {
     @Mock AutoShowtimeCandidatePersistenceService persistenceService;
     @Mock SchedulingEligibilityService eligibilityService;
     @Mock SchedulingOperationalConstraintService operationalConstraintService;
+    @Mock LifecycleEventNotifier lifecycleEventNotifier;
 
     private SchedulePlanService service;
 
@@ -39,7 +41,7 @@ class SchedulePlanServiceTest {
     void setUp() {
         service = new SchedulePlanService(
                 schedulePlanRepository, revalidationService, persistenceService,
-                eligibilityService, operationalConstraintService);
+                eligibilityService, operationalConstraintService, lifecycleEventNotifier);
     }
 
     @Test
@@ -113,6 +115,19 @@ class SchedulePlanServiceTest {
         when(schedulePlanRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(plan));
 
         assertThrows(AppException.class, () -> service.publish(10L, "admin-2"));
+        verifyNoInteractions(persistenceService);
+    }
+
+    @Test
+    void submittingAuthorCannotPublishOwnSchedulePlan() {
+        SchedulePlan plan = plan(SchedulePlanStatus.IN_REVIEW);
+        plan.setSubmittedBy("programmer@cineprime.vn");
+        when(schedulePlanRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(plan));
+
+        AppException ex = assertThrows(AppException.class,
+                () -> service.publish(10L, "programmer@cineprime.vn"));
+
+        assertEquals(MovieErrorCode.SCHEDULE_PLAN_SELF_PUBLISH_FORBIDDEN, ex.getErrorCode());
         verifyNoInteractions(persistenceService);
     }
 

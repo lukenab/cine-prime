@@ -14,7 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TmdbControllerAuthorizationTest {
 
-    private static final String ADMIN_OR_EMPLOYEE = "hasAnyRole('ADMIN', 'EMPLOYEE')";
+    private static final String ADMIN_OR_PROGRAMMING_OPERATOR =
+            "hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')";
 
     static Stream<Arguments> employeeAccessibleEndpoints() {
         return Stream.of(
@@ -32,7 +33,7 @@ class TmdbControllerAuthorizationTest {
             throws NoSuchMethodException {
         Method method = TmdbController.class.getDeclaredMethod(methodName, parameterTypes);
 
-        assertEquals(ADMIN_OR_EMPLOYEE, method.getAnnotation(PreAuthorize.class).value());
+        assertEquals(ADMIN_OR_PROGRAMMING_OPERATOR, method.getAnnotation(PreAuthorize.class).value());
     }
 
     @Test

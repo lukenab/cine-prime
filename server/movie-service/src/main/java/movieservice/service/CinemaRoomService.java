@@ -626,7 +626,6 @@ public class CinemaRoomService {
                             .formatId(format.getFormatId())
                             .formatCode(format.getFormatCode())
                             .formatName(format.getFormatName())
-                            .surcharge(format.getSurcharge())
                             .enabled(existing != null && Boolean.TRUE.equals(existing.getEnabled()))
                             .managedAutomatically(AUTO_MANAGED_FORMAT_CODES.contains(format.getFormatCode()))
                             .build();
@@ -672,7 +671,6 @@ public class CinemaRoomService {
                 .formatId(format.getFormatId())
                 .formatCode(format.getFormatCode())
                 .formatName(format.getFormatName())
-                .surcharge(format.getSurcharge())
                 .enabled(existing.getEnabled())
                 .managedAutomatically(false)
                 .build();

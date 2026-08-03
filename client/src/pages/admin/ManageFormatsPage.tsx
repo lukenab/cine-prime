@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Plus, Search, RefreshCw, AlertCircle, Monitor, Pencil, Trash2, X } from "lucide-react";
-import { useOutletContext } from "react-router-dom";
 import { movieApi, type ScreeningFormatResponse, type ScreeningFormatRequest } from "../../api/movieApi";
+import { useRole } from "../../hooks/useRole";
 
 // ── Format code palette ────────────────────────────────────────────────────────
 
@@ -33,14 +33,12 @@ function FormatModal({ open, editing, onClose, onSave, submitting }: ModalProps)
   const [formatCode, setFormatCode] = useState("");
   const [formatName, setFormatName] = useState("");
   const [description, setDescription] = useState("");
-  const [surcharge, setSurcharge] = useState(0);
 
   useEffect(() => {
     if (open) {
       setFormatCode(editing?.formatCode ?? "");
       setFormatName(editing?.formatName ?? "");
       setDescription(editing?.description ?? "");
-      setSurcharge(editing?.surcharge ?? 0);
     }
   }, [open, editing]);
 
@@ -72,34 +70,20 @@ function FormatModal({ open, editing, onClose, onSave, submitting }: ModalProps)
         </div>
 
         <form
-          onSubmit={(e) => { e.preventDefault(); onSave({ formatCode, formatName, description: description || undefined, surcharge }, editing?.formatId); }}
+          onSubmit={(e) => { e.preventDefault(); onSave({ formatCode, formatName, description: description || undefined }, editing?.formatId); }}
           className="px-6 py-5 space-y-4"
         >
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
-                Format Code <span className="text-rose-500">*</span>
-              </label>
-              <input
-                required type="text" placeholder="e.g. 2D, 3D, IMAX"
-                maxLength={20} value={formatCode}
-                onChange={(e) => setFormatCode(e.target.value.toUpperCase())}
-                className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-blue-400 transition-colors"
-                style={inputStyle} autoFocus
-              />
-            </div>
-            <div>
-              <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
-                Surcharge (VND) <span className="text-rose-500">*</span>
-              </label>
-              <input
-                required type="number" min={0} step={1000}
-                value={surcharge}
-                onChange={(e) => setSurcharge(Number(e.target.value))}
-                className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-blue-400 transition-colors"
-                style={inputStyle}
-              />
-            </div>
+          <div>
+            <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+              Format Code <span className="text-rose-500">*</span>
+            </label>
+            <input
+              required type="text" placeholder="e.g. 2D, 3D, IMAX"
+              maxLength={20} value={formatCode}
+              onChange={(e) => setFormatCode(e.target.value.toUpperCase())}
+              className="w-full px-3.5 py-2.5 rounded-xl border outline-none focus:border-blue-400 transition-colors"
+              style={inputStyle} autoFocus
+            />
           </div>
 
           <div>
@@ -114,6 +98,10 @@ function FormatModal({ open, editing, onClose, onSave, submitting }: ModalProps)
               style={inputStyle}
             />
           </div>
+
+          <p className="rounded-xl border px-3.5 py-3" style={{ borderColor: "rgba(59,130,246,.24)", background: "rgba(59,130,246,.07)", color: "var(--text-sub)", fontSize: 12, lineHeight: 1.5 }}>
+            Ticket prices and format-specific rates are configured separately in Price Books.
+          </p>
 
           <div>
             <label className="block mb-1.5" style={{ fontSize: "13px", color: "var(--text-sub)" }}>Description</label>
@@ -142,12 +130,8 @@ function FormatModal({ open, editing, onClose, onSave, submitting }: ModalProps)
 
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
-function formatVND(n: number) {
-  return n === 0 ? "No surcharge" : new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(n);
-}
-
 export default function ManageFormatsPage() {
-  useOutletContext<{ isDarkMode: boolean }>();
+  const { isAdmin } = useRole();
 
   const [formats, setFormats] = useState<ScreeningFormatResponse[]>([]);
   const [loading, setLoading] = useState(false);
@@ -226,7 +210,9 @@ export default function ManageFormatsPage() {
           Screening Formats
         </h1>
         <p style={{ color: "var(--text-sub)", fontSize: "13px" }}>
-          Manage projection formats and their ticket surcharges
+          {isAdmin
+            ? "Manage technical presentation formats used by movies, rooms and scheduling. Pricing is configured in Price Books."
+            : "Reference the technical presentation formats used to match movies with compatible rooms."}
         </p>
       </div>
 
@@ -234,8 +220,8 @@ export default function ManageFormatsPage() {
       <div className="grid grid-cols-3 gap-5 mb-6">
         {[
           { label: "Total Formats", value: String(formats.length) },
-          { label: "Free Formats", value: String(formats.filter((f) => f.surcharge === 0).length) },
-          { label: "Highest Surcharge", value: formats.length ? formatVND(Math.max(...formats.map((f) => f.surcharge))) : "—" },
+          { label: "Catalog Scope", value: "Global" },
+          { label: "Pricing Source", value: "Price Books" },
         ].map(({ label, value }) => (
           <div key={label} className="rounded-2xl border p-5 flex items-center gap-4" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
             <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
@@ -273,16 +259,18 @@ export default function ManageFormatsPage() {
         <button onClick={load} disabled={loading} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all hover:opacity-80 disabled:opacity-50" style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}>
           <RefreshCw size={15} className={loading ? "animate-spin" : ""} /> {loading ? "Loading…" : "Refresh"}
         </button>
-        <button onClick={openCreate} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all shadow-sm" style={{ fontSize: "14px", fontWeight: 500, background: "#2563eb" }}>
-          <Plus size={16} /> Add Format
-        </button>
+        {isAdmin && (
+          <button onClick={openCreate} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all shadow-sm" style={{ fontSize: "14px", fontWeight: 500, background: "#2563eb" }}>
+            <Plus size={16} /> Add Format
+          </button>
+        )}
       </div>
 
       <div className="rounded-2xl border overflow-hidden" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
         <table className="w-full">
           <thead>
             <tr className="border-b" style={{ borderColor: "var(--border-color)", backgroundColor: "rgba(128,128,128,0.04)" }}>
-              {["Code", "Name", "Surcharge", "Description", "Actions"].map((h) => (
+              {["Code", "Name", "Description", "Status", ...(isAdmin ? ["Actions"] : [])].map((h) => (
                 <th key={h} className="px-5 py-3.5 text-left">
                   <span style={{ color: "var(--text-sub)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>{h}</span>
                 </th>
@@ -291,9 +279,9 @@ export default function ManageFormatsPage() {
           </thead>
           <tbody>
             {loading && formats.length === 0 ? (
-              <tr><td colSpan={5} className="px-5 py-16 text-center"><RefreshCw size={18} className="animate-spin mx-auto mb-2" style={{ color: "var(--text-sub)" }} /><p style={{ fontSize: "14px", color: "var(--text-sub)" }}>Loading…</p></td></tr>
+              <tr><td colSpan={isAdmin ? 5 : 4} className="px-5 py-16 text-center"><RefreshCw size={18} className="animate-spin mx-auto mb-2" style={{ color: "var(--text-sub)" }} /><p style={{ fontSize: "14px", color: "var(--text-sub)" }}>Loading…</p></td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={5} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>{search ? "No results." : "No formats yet."}</td></tr>
+              <tr><td colSpan={isAdmin ? 5 : 4} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>{search ? "No results." : "No formats yet."}</td></tr>
             ) : (
               filtered.map((f) => {
                 const style = getFormatStyle(f.formatCode);
@@ -307,18 +295,15 @@ export default function ManageFormatsPage() {
                     <td className="px-5 py-3.5">
                       <span style={{ fontSize: "14px", fontWeight: 500, color: "var(--text-main)" }}>{f.formatName}</span>
                     </td>
-                    <td className="px-5 py-3.5">
-                      <span style={{
-                        fontSize: "13px", fontWeight: 500,
-                        color: f.surcharge === 0 ? "var(--text-sub)" : "#16a34a",
-                      }}>
-                        {formatVND(f.surcharge)}
-                      </span>
-                    </td>
                     <td className="px-5 py-3.5" style={{ maxWidth: "280px" }}>
                       <span style={{ fontSize: "13px", color: "var(--text-sub)" }}>{f.description || "—"}</span>
                     </td>
                     <td className="px-5 py-3.5">
+                      <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style={{ color: "#10b981", background: "rgba(16,185,129,.1)" }}>
+                        {f.status ?? "ACTIVE"}
+                      </span>
+                    </td>
+                    {isAdmin && <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">
                         <button onClick={() => openEdit(f)} className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-colors" style={{ fontSize: "13px", color: "var(--text-sub)", borderColor: "var(--border-color)" }}>
                           <Pencil size={14} /> Edit
@@ -327,7 +312,7 @@ export default function ManageFormatsPage() {
                           <Trash2 size={14} /> Delete
                         </button>
                       </div>
-                    </td>
+                    </td>}
                   </tr>
                 );
               })
@@ -344,7 +329,7 @@ export default function ManageFormatsPage() {
       </div>
 
       {/* Confirm delete */}
-      {deleteTarget && (
+      {isAdmin && deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={() => setDeleteTarget(null)} />
           <div className="relative w-full max-w-sm mx-4 rounded-2xl shadow-2xl p-6" style={{ background: "var(--bg-main)" }}>
@@ -364,7 +349,7 @@ export default function ManageFormatsPage() {
         </div>
       )}
 
-      <FormatModal open={modalOpen} editing={editing} onClose={() => setModalOpen(false)} onSave={handleSave} submitting={submitting} />
+      {isAdmin && <FormatModal open={modalOpen} editing={editing} onClose={() => setModalOpen(false)} onSave={handleSave} submitting={submitting} />}
 
       <style>{`
         .hover-row:hover { background-color: rgba(128,128,128,0.04); }

@@ -32,7 +32,7 @@ public class EmployeeCreateRequest {
     @NotNull(message = "Position is required")
     EmployeePosition position;
 
-    @NotNull(message = "Department is required")
+    @NotNull(message = "Primary work area is required")
     EmployeeDepartment department;
 
     @NotNull(message = "Employment type is required")

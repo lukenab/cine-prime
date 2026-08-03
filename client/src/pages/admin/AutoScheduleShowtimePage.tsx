@@ -8,7 +8,10 @@ import {
   CalendarCog,
   Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   ClipboardCheck,
+  DoorClosed,
   Film,
   Info,
   Loader2,
@@ -21,7 +24,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { movieApi, type ClusterResponse, type MovieApiResponse, type RoomResponse, type MovieAvailabilityResponse } from "../../api/movieApi";
+import { movieApi, type ClusterResponse, type MovieApiResponse, type RoomResponse, type MovieAvailabilityResponse, type MovieScreeningVersionCatalogResponse } from "../../api/movieApi";
 import {
   assessClusterEligibility,
   type ClusterScheduleEligibility,
@@ -38,8 +41,26 @@ import {
   type SchedulePlanSummaryResponse,
 } from "../../api/showtimeApi";
 import AutoScheduleResultsWorkspace from "./autoSchedule/AutoScheduleResultsWorkspace";
+import { subscribeLifecycleEvents } from "../../api/lifecycleSocket";
 import AllocationPolicyPanel from "./autoSchedule/AllocationPolicyPanel";
 import { OPTIMIZER_META, SCENARIO_META } from "./autoSchedule/optimizerMeta";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../../components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../../components/ui/dropdown-menu";
 
 type StepKey = "scope" | "review" | "running" | "results";
 type WorkspaceSection = "create" | "review-plans" | "published" | "policy";
@@ -92,6 +113,550 @@ function formatUpdatedAt(value: string): string {
         hour: "2-digit",
         minute: "2-digit",
       });
+}
+
+type RoomExceptionFilter = "all" | "available" | "excluded";
+
+function RoomCheckbox({
+  checked,
+  onCheckedChange,
+  label,
+  disabled = false,
+}: {
+  checked: boolean | "indeterminate";
+  onCheckedChange: () => void;
+  label: string;
+  disabled?: boolean;
+}) {
+  const selected = checked === true;
+  const mixed = checked === "indeterminate";
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={mixed ? "mixed" : selected}
+      aria-label={label}
+      disabled={disabled}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onCheckedChange();
+      }}
+      className="flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 disabled:cursor-not-allowed disabled:opacity-50"
+      style={{
+        borderColor: selected || mixed ? "#2563eb" : "var(--border-color)",
+        background: selected || mixed ? "#2563eb" : "var(--bg-main)",
+        color: "#fff",
+      }}
+    >
+      {selected ? <Check size={12} strokeWidth={3} /> : mixed ? <span className="h-0.5 w-2 rounded bg-white" /> : null}
+    </button>
+  );
+}
+
+function RoomExceptionsDialog({
+  open,
+  onOpenChange,
+  rooms,
+  appliedRoomIds,
+  startDate,
+  endDate,
+  onApply,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  rooms: RoomResponse[];
+  appliedRoomIds: Set<number>;
+  startDate: string;
+  endDate: string;
+  onApply: (roomIds: Set<number>) => void;
+}) {
+  const [draftRoomIds, setDraftRoomIds] = useState<Set<number>>(new Set());
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<RoomExceptionFilter>("all");
+
+  useEffect(() => {
+    if (!open) return;
+    setDraftRoomIds(new Set(appliedRoomIds));
+    setSearch("");
+    setFilter("all");
+  }, [appliedRoomIds, open]);
+
+  const filteredRooms = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return rooms.filter((room) => {
+      const excluded = draftRoomIds.has(room.cinemaRoomId);
+      const matchesFilter = filter === "all"
+        || (filter === "excluded" && excluded)
+        || (filter === "available" && !excluded);
+      const matchesSearch = !query || [room.cinemaRoomName, room.roomCode, room.clusterName]
+        .some((value) => value?.toLowerCase().includes(query));
+      return matchesFilter && matchesSearch;
+    });
+  }, [draftRoomIds, filter, rooms, search]);
+
+  const groupedRooms = useMemo(() => {
+    const groups = new Map<string, RoomResponse[]>();
+    filteredRooms.forEach((room) => {
+      const key = room.clusterName || "Selected cinema";
+      const group = groups.get(key) ?? [];
+      group.push(room);
+      groups.set(key, group);
+    });
+    return Array.from(groups.entries());
+  }, [filteredRooms]);
+
+  const toggleRoom = (roomId: number) => setDraftRoomIds((current) => {
+    const next = new Set(current);
+    next.has(roomId) ? next.delete(roomId) : next.add(roomId);
+    return next;
+  });
+
+  const toggleGroup = (groupRooms: RoomResponse[], exclude: boolean) => setDraftRoomIds((current) => {
+    const next = new Set(current);
+    groupRooms.forEach((room) => exclude
+      ? next.add(room.cinemaRoomId)
+      : next.delete(room.cinemaRoomId));
+    return next;
+  });
+
+  const formattedWindow = startDate && endDate
+    ? `${formatPlanningDate(startDate)}–${formatPlanningDate(endDate)}`
+    : "the selected planning window";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="flex max-h-[calc(100vh-2rem)] max-w-[760px] flex-col gap-0 overflow-hidden rounded-2xl border p-0"
+        style={{ borderColor: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-main)" }}
+      >
+        <DialogHeader className="border-b px-6 py-5 pr-14" style={{ borderColor: "var(--border-color)" }}>
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600">
+              <DoorClosed size={19} />
+            </span>
+            <div>
+              <DialogTitle className="text-lg">Room exceptions</DialogTitle>
+              <DialogDescription className="mt-1 text-xs leading-5" style={{ color: "var(--text-sub)" }}>
+                Excluded rooms will not be used anywhere in this generation run for {formattedWindow}.
+              </DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="border-b px-6 py-4" style={{ borderColor: "var(--border-color)" }}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border px-3 py-2.5" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
+              <Search size={15} style={{ color: "var(--text-sub)" }} />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search room or cinema..."
+                className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm outline-none"
+                style={{ color: "var(--text-main)" }}
+              />
+            </label>
+            <div className="flex rounded-xl border p-1" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
+              {([
+                ["all", "All"],
+                ["available", "Included"],
+                ["excluded", "Excluded"],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setFilter(value)}
+                  className="rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors"
+                  style={{
+                    color: filter === value ? "#fff" : "var(--text-sub)",
+                    background: filter === value ? "#2563eb" : "transparent",
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-3 text-xs">
+            <span style={{ color: "var(--text-sub)" }}>
+              {draftRoomIds.size === 0
+                ? `All ${rooms.length} eligible rooms are included.`
+                : `${draftRoomIds.size} of ${rooms.length} rooms excluded.`}
+            </span>
+            {draftRoomIds.size > 0 && (
+              <button type="button" onClick={() => setDraftRoomIds(new Set())} className="font-semibold text-blue-600">
+                Clear all
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4" style={{ maxHeight: "min(480px, 52vh)" }}>
+          {groupedRooms.length === 0 ? (
+            <div className="flex min-h-40 flex-col items-center justify-center gap-2 text-center">
+              <Search size={21} style={{ color: "var(--text-sub)" }} />
+              <p className="text-sm font-semibold">No matching rooms</p>
+              <p className="text-xs" style={{ color: "var(--text-sub)" }}>Try another search or room filter.</p>
+            </div>
+          ) : groupedRooms.map(([clusterName, groupRooms]) => {
+            const excludedCount = groupRooms.filter((room) => draftRoomIds.has(room.cinemaRoomId)).length;
+            const allExcluded = excludedCount === groupRooms.length;
+            const groupState = allExcluded ? true : excludedCount > 0 ? "indeterminate" : false;
+            return (
+              <section key={clusterName} className="mb-4 overflow-hidden rounded-xl border last:mb-0" style={{ borderColor: "var(--border-color)" }}>
+                <div className="flex items-center justify-between gap-3 border-b px-4 py-3" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <RoomCheckbox
+                      checked={groupState}
+                      onCheckedChange={() => toggleGroup(groupRooms, !allExcluded)}
+                      label={`Exclude all rooms at ${clusterName}`}
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{clusterName}</p>
+                      <p className="text-[11px]" style={{ color: "var(--text-sub)" }}>
+                        {excludedCount === 0 ? `${groupRooms.length} rooms included` : `${excludedCount} of ${groupRooms.length} excluded`}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(groupRooms, !allExcluded)}
+                    className="text-xs font-semibold text-blue-600"
+                  >
+                    {allExcluded ? "Include all" : "Exclude all"}
+                  </button>
+                </div>
+                <div className="divide-y divide-[var(--border-color)]">
+                  {groupRooms.map((room) => {
+                    const excluded = draftRoomIds.has(room.cinemaRoomId);
+                    const capability = room.presentationSystem
+                      || (room.supports3d ? "2D / 3D" : room.supports2d ? "2D" : "Format not set");
+                    return (
+                      <label
+                        key={room.cinemaRoomId}
+                        onClick={() => toggleRoom(room.cinemaRoomId)}
+                        className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors"
+                        style={{ background: excluded ? "rgba(225,29,72,.055)" : "transparent" }}
+                      >
+                        <RoomCheckbox
+                          checked={excluded}
+                          onCheckedChange={() => toggleRoom(room.cinemaRoomId)}
+                          label={`Exclude ${room.cinemaRoomName}`}
+                        />
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ background: excluded ? "rgba(225,29,72,.1)" : "rgba(37,99,235,.09)", color: excluded ? "#e11d48" : "#2563eb" }}>
+                          <DoorClosed size={16} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold">{room.cinemaRoomName}</span>
+                          <span className="block truncate text-[11px]" style={{ color: "var(--text-sub)" }}>
+                            {[room.roomCode, `${room.seatQuantity ?? 0} seats`, capability].filter(Boolean).join(" · ")}
+                          </span>
+                        </span>
+                        <span className="text-xs font-semibold" style={{ color: excluded ? "#e11d48" : "#059669" }}>
+                          {excluded ? "Excluded" : "Included"}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+
+        <DialogFooter className="flex-row items-center justify-between gap-4 border-t px-6 py-4" style={{ borderColor: "var(--border-color)" }}>
+          <p className="min-w-0 text-xs leading-4" style={{ color: "var(--text-sub)" }}>
+            This does not change the operational status of a room.
+          </p>
+          <div className="flex shrink-0 justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="whitespace-nowrap rounded-xl border px-4 py-2.5 text-sm font-semibold"
+              style={{ borderColor: "var(--border-color)", color: "var(--text-main)", background: "var(--bg-card)" }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onApply(new Set(draftRoomIds));
+                onOpenChange(false);
+              }}
+              className="whitespace-nowrap rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+            >
+              Apply exceptions{draftRoomIds.size > 0 ? ` (${draftRoomIds.size})` : ""}
+            </button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ScreeningVersionDialog({
+  open,
+  onOpenChange,
+  movie,
+  versions,
+  appliedVersionIds,
+  startDate,
+  endDate,
+  onApply,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  movie?: MovieApiResponse;
+  versions: MovieScreeningVersionCatalogResponse[];
+  appliedVersionIds?: Set<number>;
+  startDate: string;
+  endDate: string;
+  onApply: (versionIds: Set<number> | null) => void;
+}) {
+  const [strategy, setStrategy] = useState<"auto" | "custom">("auto");
+  const [draftIds, setDraftIds] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (!open) return;
+    if (appliedVersionIds?.size) {
+      setStrategy("custom");
+      setDraftIds(new Set(appliedVersionIds));
+    } else {
+      setStrategy("auto");
+      setDraftIds(new Set());
+    }
+  }, [appliedVersionIds, open]);
+
+  const chooseCustom = () => {
+    setStrategy("custom");
+    setDraftIds((current) => current.size > 0
+      ? current
+      : new Set(versions.map((version) => version.screeningVersionId)));
+  };
+  const toggleVersion = (id: number) => setDraftIds((current) => {
+    const next = new Set(current);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const title = movie?.movieNameEnglish || movie?.movieNameVn || "Selected movie";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="flex max-h-[calc(100vh-2rem)] max-w-[720px] flex-col gap-0 overflow-hidden rounded-2xl border p-0"
+        style={{ borderColor: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-main)" }}
+      >
+        <DialogHeader className="border-b px-6 py-5 pr-14" style={{ borderColor: "var(--border-color)" }}>
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-600/10 text-purple-600"><Film size={19} /></span>
+            <div className="min-w-0">
+              <DialogTitle className="truncate text-lg">Screening versions</DialogTitle>
+              <DialogDescription className="mt-1 line-clamp-2 text-xs leading-5" style={{ color: "var(--text-sub)" }}>
+                {title} · {formatPlanningDate(startDate)}–{formatPlanningDate(endDate)}
+              </DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="space-y-3 border-b px-6 py-4" style={{ borderColor: "var(--border-color)" }}>
+          <button type="button" onClick={() => setStrategy("auto")} className="flex w-full items-start gap-3 rounded-xl border p-3.5 text-left"
+            style={{ borderColor: strategy === "auto" ? "#2563eb" : "var(--border-color)", background: strategy === "auto" ? "rgba(37,99,235,.07)" : "var(--bg-main)" }}>
+            <span className="mt-0.5 flex h-4 w-4 items-center justify-center rounded-full border" style={{ borderColor: strategy === "auto" ? "#2563eb" : "var(--border-color)" }}>
+              {strategy === "auto" && <span className="h-2 w-2 rounded-full bg-blue-600" />}
+            </span>
+            <span><span className="block text-sm font-bold">Auto (recommended)</span><span className="mt-0.5 block text-xs leading-5" style={{ color: "var(--text-sub)" }}>Use every active, effective version that is compatible with each cinema room.</span></span>
+          </button>
+          <button type="button" onClick={chooseCustom} disabled={versions.length === 0} className="flex w-full items-start gap-3 rounded-xl border p-3.5 text-left disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ borderColor: strategy === "custom" ? "#2563eb" : "var(--border-color)", background: strategy === "custom" ? "rgba(37,99,235,.07)" : "var(--bg-main)" }}>
+            <span className="mt-0.5 flex h-4 w-4 items-center justify-center rounded-full border" style={{ borderColor: strategy === "custom" ? "#2563eb" : "var(--border-color)" }}>
+              {strategy === "custom" && <span className="h-2 w-2 rounded-full bg-blue-600" />}
+            </span>
+            <span><span className="block text-sm font-bold">Custom versions</span><span className="mt-0.5 block text-xs leading-5" style={{ color: "var(--text-sub)" }}>Restrict this run to selected presentation, audio and subtitle packages.</span></span>
+          </button>
+        </div>
+
+        {strategy === "custom" && (
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4" style={{ maxHeight: "min(400px, 45vh)" }}>
+            <div className="mb-3 flex items-center justify-between text-xs">
+              <span style={{ color: "var(--text-sub)" }}>{draftIds.size} of {versions.length} versions selected</span>
+              <button type="button" onClick={() => setDraftIds(new Set(versions.map((version) => version.screeningVersionId)))} className="font-semibold text-blue-600">Select all</button>
+            </div>
+            <div className="space-y-2">
+              {versions.map((version) => {
+                const selected = draftIds.has(version.screeningVersionId);
+                const language = version.audioLanguageCode || "Original audio";
+                const subtitle = version.subtitleLanguageCode ? `${version.subtitleLanguageCode} subtitles` : "No subtitles";
+                return (
+                  <label key={version.screeningVersionId} onClick={() => toggleVersion(version.screeningVersionId)} className="flex cursor-pointer items-center gap-3 rounded-xl border p-3.5"
+                    style={{ borderColor: selected ? "rgba(37,99,235,.55)" : "var(--border-color)", background: selected ? "rgba(37,99,235,.055)" : "var(--bg-main)" }}>
+                    <RoomCheckbox checked={selected} onCheckedChange={() => toggleVersion(version.screeningVersionId)} label={`Select ${version.formatName}`} />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-sm font-bold">{version.formatName || version.formatCode}</span>
+                        {version.audioFormatName && <span className="rounded-md bg-purple-500/10 px-1.5 py-0.5 text-[10.5px] font-semibold text-purple-600">{version.audioFormatName}</span>}
+                      </span>
+                      <span className="mt-1 block text-xs" style={{ color: "var(--text-sub)" }}>{language} · {subtitle} · {version.compatibleRoomCount} compatible rooms</span>
+                    </span>
+                  </label>
+                );
+              })}
+              {versions.length === 0 && <p className="py-8 text-center text-sm" style={{ color: "var(--text-sub)" }}>No active version overlaps this planning window.</p>}
+            </div>
+          </div>
+        )}
+
+        <DialogFooter className="border-t px-6 py-4 sm:items-center sm:justify-between" style={{ borderColor: "var(--border-color)" }}>
+          <p className="text-xs" style={{ color: "var(--text-sub)" }}>Room compatibility is validated again when the run is submitted.</p>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => onOpenChange(false)} className="rounded-xl border px-4 py-2.5 text-sm font-semibold" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>Cancel</button>
+            <button type="button" disabled={strategy === "custom" && draftIds.size === 0} onClick={() => { onApply(strategy === "auto" ? null : new Set(draftIds)); onOpenChange(false); }} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40">Apply strategy</button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function MovieCatalogAccordionItem({
+  movie,
+  eligible,
+  reason,
+  selected,
+  expanded,
+  versions,
+  scopeRoomCount,
+  overrideIds,
+  onToggleSelected,
+  onToggleExpanded,
+  onUseAuto,
+  onToggleVersion,
+}: {
+  movie: MovieApiResponse;
+  eligible: boolean;
+  reason?: string;
+  selected: boolean;
+  expanded: boolean;
+  versions: MovieScreeningVersionCatalogResponse[];
+  scopeRoomCount: number;
+  overrideIds?: Set<number>;
+  onToggleSelected: () => void;
+  onToggleExpanded: () => void;
+  onUseAuto: () => void;
+  onToggleVersion: (versionId: number) => void;
+}) {
+  const title = movie.movieNameEnglish || movie.movieNameVn;
+  const alternateTitle = movie.movieNameVn && movie.movieNameVn !== title ? movie.movieNameVn : null;
+  const schedulableCount = versions.filter((version) => version.compatibleRoomCount > 0).length;
+  const custom = Boolean(overrideIds?.size);
+
+  return (
+    <article className="overflow-hidden rounded-xl border" style={{ borderColor: selected ? "rgba(37,99,235,.55)" : !eligible ? "rgba(245,158,11,.3)" : "var(--border-color)", background: "var(--bg-main)", opacity: eligible ? 1 : 0.72 }}>
+      <div className="flex items-center gap-3 p-3">
+        <RoomCheckbox checked={selected} onCheckedChange={onToggleSelected} label={`Select ${title}`} disabled={!eligible} />
+        <button type="button" onClick={onToggleExpanded} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+          <div className="h-16 w-11 shrink-0 overflow-hidden rounded-lg bg-purple-500/10">
+            {movie.smallImage || movie.largeImage
+              ? <img src={movie.smallImage || movie.largeImage} alt="" className="h-full w-full object-cover" />
+              : <div className="flex h-full items-center justify-center text-purple-500"><Film size={18} /></div>}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="truncate text-sm font-bold" style={{ color: "var(--text-main)" }}>{title}</p>
+              {movie.ageRatingCode && <span className="rounded-md bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-bold text-rose-500">{movie.ageRatingCode}</span>}
+              <span className="rounded-md bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-500">{movie.duration || "—"} min</span>
+            </div>
+            {alternateTitle && <p className="mt-0.5 truncate text-xs" style={{ color: "var(--text-sub)" }}>{alternateTitle}</p>}
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]" style={{ color: "var(--text-sub)" }}>
+              <span className={schedulableCount > 0 ? "text-emerald-500" : "text-rose-500"}>
+                {schedulableCount > 0
+                  ? `${schedulableCount} schedulable version${schedulableCount === 1 ? "" : "s"}`
+                  : "No schedulable version"}
+              </span>
+              {selected && <span className="font-semibold text-blue-600">{custom ? `${overrideIds?.size} manually selected` : "Auto"}</span>}
+            </div>
+            {!eligible && <p className="mt-1.5 line-clamp-1 text-[10.5px] font-semibold text-amber-600">Unavailable · {reason}</p>}
+          </div>
+          <span className="shrink-0" style={{ color: "var(--text-sub)" }}>{expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}</span>
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="border-t" style={{ borderColor: "var(--border-color)" }}>
+          {versions.length > 1 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--text-sub)" }}>Version strategy</p>
+                <p className="mt-0.5 text-[11px]" style={{ color: "var(--text-sub)" }}>Use Auto, or select specific versions below.</p>
+              </div>
+              <button
+                type="button"
+                disabled={!eligible}
+                onClick={onUseAuto}
+                className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ borderColor: selected && !custom ? "#2563eb" : "var(--border-color)", background: selected && !custom ? "rgba(37,99,235,.08)" : "var(--bg-main)", color: selected && !custom ? "#2563eb" : "var(--text-main)" }}
+              >
+                <span className="flex h-4 w-4 items-center justify-center rounded-full border" style={{ borderColor: selected && !custom ? "#2563eb" : "var(--border-color)" }}>
+                  {selected && !custom && <span className="h-2 w-2 rounded-full bg-blue-600" />}
+                </span>
+                Auto (recommended)
+              </button>
+            </div>
+          )}
+
+          {versions.map((version) => {
+            const checked = overrideIds?.has(version.screeningVersionId) ?? false;
+            const ready = version.compatibleRoomCount > 0;
+            const canChooseVersion = eligible && ready;
+            const effectiveWindow = version.effectiveFrom || version.effectiveTo
+              ? `${version.effectiveFrom ? formatPlanningDate(version.effectiveFrom) : "Any date"}–${version.effectiveTo ? formatPlanningDate(version.effectiveTo) : "No end date"}`
+              : null;
+            const fullyCompatible = scopeRoomCount > 0 && version.compatibleRoomCount >= scopeRoomCount;
+            return (
+              <div key={version.screeningVersionId} className="grid gap-3 border-b px-4 py-3 last:border-b-0 lg:grid-cols-[minmax(280px,1.35fr)_minmax(220px,1fr)] lg:items-center" style={{ borderColor: "var(--border-color)", background: checked ? "rgba(37,99,235,.055)" : "transparent" }}>
+                <div
+                  role="button"
+                  tabIndex={canChooseVersion ? 0 : -1}
+                  aria-disabled={!canChooseVersion}
+                  onClick={() => { if (canChooseVersion) onToggleVersion(version.screeningVersionId); }}
+                  onKeyDown={(event) => {
+                    if (canChooseVersion && (event.key === "Enter" || event.key === " ")) {
+                      event.preventDefault();
+                      onToggleVersion(version.screeningVersionId);
+                    }
+                  }}
+                  className={`flex min-w-0 items-start gap-3 text-left ${canChooseVersion ? "cursor-pointer" : "cursor-not-allowed"}`}
+                >
+                  <RoomCheckbox checked={checked} onCheckedChange={() => onToggleVersion(version.screeningVersionId)} label={`Select ${version.formatName}`} disabled={!canChooseVersion} />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-lg bg-blue-500/10 px-2 py-1 text-[11px] font-bold text-blue-500">{version.formatCode}</span>
+                      <span className="text-xs font-semibold" style={{ color: "var(--text-main)" }}>{version.audioLanguageCode.toUpperCase()} audio</span>
+                      <span className="text-xs" style={{ color: "var(--text-sub)" }}>· {version.subtitleLanguageCode ? `${version.subtitleLanguageCode.toUpperCase()} subtitles` : "No subtitles"}</span>
+                    </div>
+                    {effectiveWindow && <p className="mt-1.5 text-[10.5px]" style={{ color: "var(--text-sub)" }}><Calendar size={11} className="mr-1 inline" />{effectiveWindow}</p>}
+                  </div>
+                </div>
+                <div>
+                  <div className={`flex items-center gap-2 text-xs font-semibold ${ready ? fullyCompatible ? "text-emerald-500" : "text-amber-500" : "text-rose-500"}`}>
+                    {ready ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}{ready ? "Ready" : "No compatible room"}
+                  </div>
+                  <p className="mt-1 text-[10.5px]" style={{ color: fullyCompatible ? "var(--text-sub)" : ready ? "#d97706" : "var(--text-sub)" }}>
+                    {version.audioFormatName || version.audioFormatCode}
+                    {scopeRoomCount > 0
+                      ? fullyCompatible
+                        ? ` · ${scopeRoomCount} rooms`
+                        : ` · Compatible with ${version.compatibleRoomCount}/${scopeRoomCount} rooms`
+                      : ` · ${version.compatibleRoomCount} compatible rooms`}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+          {versions.length === 0 && <p className="px-4 py-8 text-center text-xs" style={{ color: "var(--text-sub)" }}>No active screening version overlaps this planning window and cinema scope.</p>}
+        </div>
+      )}
+    </article>
+  );
 }
 
 function extractErrorMessage(err: unknown): { message: string; ineligibleMovies?: AutoShowtimeIneligibleMovie[] } {
@@ -286,8 +851,12 @@ export default function AutoScheduleShowtimePage({
   const [allClusters, setAllClusters] = useState(false);
   const [selectedClusterIds, setSelectedClusterIds] = useState<Set<number>>(new Set());
   const [selectedMovieIds, setSelectedMovieIds] = useState<Set<number>>(new Set());
+  const [expandedMovieIds, setExpandedMovieIds] = useState<Set<number>>(new Set());
+  const [screeningVersions, setScreeningVersions] = useState<MovieScreeningVersionCatalogResponse[]>([]);
+  const [screeningVersionOverrides, setScreeningVersionOverrides] = useState<Map<number, Set<number>>>(new Map());
   const [rooms, setRooms] = useState<RoomResponse[]>([]);
   const [excludedRoomIds, setExcludedRoomIds] = useState<Set<number>>(new Set());
+  const [roomExceptionsOpen, setRoomExceptionsOpen] = useState(false);
   const [clusterEligibility, setClusterEligibility] = useState<Map<number, ClusterScheduleEligibility>>(new Map());
   const [availabilities, setAvailabilities] = useState<MovieAvailabilityResponse[]>([]);
   const [clusterSearch, setClusterSearch] = useState("");
@@ -319,6 +888,27 @@ export default function AutoScheduleShowtimePage({
   const canProcessNow = user?.role === "ROLE_SUPER_ADMIN"
     || (user?.role === "ROLE_ADMIN" && manualProcessingEnvironment);
 
+  useEffect(() => subscribeLifecycleEvents((event) => {
+    if (event.aggregateType === "SCHEDULE_PLAN") {
+      setPlanLibraryRefresh((value) => value + 1);
+      if (plan?.schedulePlanId === event.aggregateId) {
+        showtimeApi.getSchedulePlan(event.aggregateId)
+          .then((response) => setPlan(response.result))
+          .catch(() => undefined);
+      }
+    }
+    if (event.aggregateType === "RELEASE_PLAN") {
+      movieApi.searchAvailabilities({})
+        .then((response) => setAvailabilities(response.result ?? []))
+        .catch(() => undefined);
+    }
+    if (event.aggregateType === "MOVIE") {
+      movieApi.getAllMovies()
+        .then((response) => setMovies((response.result ?? []).filter((movie) => movie.movieStatus === "APPROVED")))
+        .catch(() => undefined);
+    }
+  }), [plan?.schedulePlanId]);
+
   useEffect(() => {
     Promise.all([movieApi.getClusters(), movieApi.getAllMovies(), movieApi.getRooms(), movieApi.searchAvailabilities({})])
       .then(([clusterRes, movieRes, roomRes, availabilityRes]) => {
@@ -338,7 +928,7 @@ export default function AutoScheduleShowtimePage({
         setRooms(roomRes.result ?? []);
         setAvailabilities(availabilityRes.result ?? []);
       })
-      .catch(() => { setClusters([]); setMovies([]); setRooms([]); setClusterEligibility(new Map()); setAvailabilities([]); })
+      .catch(() => { setClusters([]); setMovies([]); setRooms([]); setClusterEligibility(new Map()); setAvailabilities([]); setScreeningVersions([]); })
       .finally(() => setLoadingOptions(false));
     showtimeApi.getActiveGenerationPolicy()
       .then((res) => setGenerationPolicy(res.result ?? null))
@@ -370,6 +960,20 @@ export default function AutoScheduleShowtimePage({
 
   const clusterById = useMemo(() => new Map(clusters.map((c) => [c.clusterId, c])), [clusters]);
   const movieById = useMemo(() => new Map(movies.map((m) => [m.movieId, m])), [movies]);
+  const screeningVersionsByMovie = useMemo(() => {
+    const grouped = new Map<number, MovieScreeningVersionCatalogResponse[]>();
+    screeningVersions.forEach((version) => {
+      const overlapsWindow = (!version.effectiveFrom || !endDate || version.effectiveFrom <= endDate)
+        && (!version.effectiveTo || !startDate || version.effectiveTo >= startDate);
+      if (!overlapsWindow) return;
+      const group = grouped.get(version.movieId) ?? [];
+      group.push(version);
+      grouped.set(version.movieId, group);
+    });
+    grouped.forEach((group) => group.sort((a, b) => a.formatName.localeCompare(b.formatName)
+      || a.audioLanguageCode.localeCompare(b.audioLanguageCode)));
+    return grouped;
+  }, [endDate, screeningVersions, startDate]);
   const genreOptions = useMemo(() => Array.from(new Set(movies.flatMap((movie) => movie.movieType ?? []))).sort(), [movies]);
   const visibleClusters = useMemo(() => {
     const query = clusterSearch.trim().toLowerCase();
@@ -400,15 +1004,19 @@ export default function AutoScheduleShowtimePage({
   });
   const toggleMovie = (id: number) => setSelectedMovieIds((prev) => {
     const next = new Set(prev);
-    next.has(id) ? next.delete(id) : next.add(id);
+    if (next.has(id)) {
+      next.delete(id);
+      setScreeningVersionOverrides((current) => {
+        if (!current.has(id)) return current;
+        const updated = new Map(current);
+        updated.delete(id);
+        return updated;
+      });
+    } else {
+      next.add(id);
+    }
     return next;
   });
-  const toggleExcludedRoom = (id: number) => setExcludedRoomIds((prev) => {
-    const next = new Set(prev);
-    next.has(id) ? next.delete(id) : next.add(id);
-    return next;
-  });
-
   const schedulableClusters = useMemo(() => clusters.filter((cluster) => clusterEligibility.get(cluster.clusterId)?.schedulable), [clusterEligibility, clusters]);
   const invalidDateRange = Boolean(startDate && endDate && endDate < startDate);
   // Mirrors AutoShowtimeGenerationService.validateGenerationRange's D+start ~ D+end horizon
@@ -434,6 +1042,25 @@ export default function AutoScheduleShowtimePage({
     setEndDate(clampedEnd);
   };
   const effectiveClusterIds = allClusters ? schedulableClusters.map((c) => c.clusterId) : Array.from(selectedClusterIds);
+  const selectedScopeRoomCount = effectiveClusterIds.reduce(
+    (total, clusterId) => total + (clusterEligibility.get(clusterId)?.eligibleRoomCount ?? 0),
+    0,
+  );
+  const effectiveClusterKey = [...effectiveClusterIds].sort((a, b) => a - b).join(",");
+  useEffect(() => {
+    if (!effectiveClusterKey) {
+      setScreeningVersions([]);
+      return;
+    }
+    let active = true;
+    movieApi.searchMovieScreeningVersions({
+      status: "ACTIVE",
+      clusterIds: effectiveClusterKey.split(",").map(Number),
+    })
+      .then((response) => { if (active) setScreeningVersions(response.result ?? []); })
+      .catch(() => { if (active) setScreeningVersions([]); });
+    return () => { active = false; };
+  }, [effectiveClusterKey]);
   const canProceedFromScope = Boolean(
     startDate && endDate && !invalidDateRange && !horizonViolation
     && effectiveClusterIds.length > 0 && selectedMovieIds.size > 0
@@ -459,7 +1086,7 @@ export default function AutoScheduleShowtimePage({
   }, [excludableRooms]);
 
   // Mirrors SchedulingEligibilityService's AVAILABILITY_NOT_OPEN gate (movie_availability.status
-  // IN (PLANNED, OPEN), showingStartDate <= day <= showingEndDate) so an admin sees which movies
+  // IN (APPROVED, OPEN), showingStartDate <= day <= showingEndDate) so an admin sees which movies
   // will actually be eligible for the chosen clusters/dates *before* submitting, instead of only
   // finding out from the "Prerequisites missing" error at Review. Classification/room-format are
   // checked elsewhere (Cinema scope eligibility, and preflight on submit) - this only covers the
@@ -474,12 +1101,12 @@ export default function AutoScheduleShowtimePage({
       const hasWindow = availabilities.some((availability) =>
         availability.movieId === movie.movieId
         && clusterIdSet.has(availability.clusterId)
-        && (availability.status === "PLANNED" || availability.status === "OPEN")
+        && (availability.status === "APPROVED" || availability.status === "OPEN")
         && availability.showingStartDate <= endDate
         && (!availability.showingEndDate || availability.showingEndDate >= startDate));
       result.set(movie.movieId, hasWindow
         ? { eligible: true }
-        : { eligible: false, reason: "No release plan (PLANNED/OPEN) covers the selected cinemas and dates." });
+        : { eligible: false, reason: "No approved release plan covers the selected cinemas and dates." });
     }
     return result;
   }, [availabilities, effectiveClusterIds, startDate, endDate, invalidDateRange, movies]);
@@ -527,6 +1154,9 @@ export default function AutoScheduleShowtimePage({
         optimizer: optimizerMode,
         scenario: optimizerMode === "LEGACY" ? undefined : scenario,
         excludedRoomIds: excludedRoomIds.size > 0 ? Array.from(excludedRoomIds) : undefined,
+        screeningVersionSelections: Array.from(screeningVersionOverrides.entries())
+          .filter(([movieId, versionIds]) => selectedMovieIds.has(movieId) && versionIds.size > 0)
+          .map(([movieId, versionIds]) => ({ movieId, screeningVersionIds: Array.from(versionIds) })),
       });
       const accepted = res.result;
       saveRecentRun({ generationRunId: accepted.generationRunId, submittedAt: new Date().toISOString(), startDate, endDate });
@@ -575,6 +1205,8 @@ export default function AutoScheduleShowtimePage({
     setIneligibleMovies([]);
     setSelectedClusterIds(new Set());
     setSelectedMovieIds(new Set());
+    setExpandedMovieIds(new Set());
+    setScreeningVersionOverrides(new Map());
     setExcludedRoomIds(new Set());
     setAllClusters(false);
     setResultsPage(0);
@@ -752,12 +1384,6 @@ export default function AutoScheduleShowtimePage({
                           </button>
                         </div>
                       )}
-                      {!invalidDateRange && !horizonViolation && generationPolicy && (
-                        <div className="mt-2 flex items-center gap-1.5" style={{ color: "var(--text-sub)", fontSize: "11px" }}>
-                          <CheckCircle2 size={12} className="text-emerald-500" />
-                          Available window: {formatPlanningDate(generationPolicy.earliestAllowedDate)}–{formatPlanningDate(generationPolicy.latestAllowedDate)}
-                        </div>
-                      )}
                     </section>
 
                     <section className="flex min-h-0 flex-1 flex-col rounded-2xl border p-4" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
@@ -790,6 +1416,9 @@ export default function AutoScheduleShowtimePage({
                           const eligibility = clusterEligibility.get(cluster.clusterId);
                           const schedulable = eligibility?.schedulable === true;
                           const selected = schedulable && (allClusters || selectedClusterIds.has(cluster.clusterId));
+                          const eligibleRoomCount = eligibility?.eligibleRoomCount ?? 0;
+                          const totalRoomCount = eligibility?.totalRoomCount ?? 0;
+                          const partiallyEligible = schedulable && totalRoomCount > 0 && eligibleRoomCount < totalRoomCount;
                           return (
                             <label
                               key={cluster.clusterId}
@@ -806,8 +1435,8 @@ export default function AutoScheduleShowtimePage({
                                 <p className="truncate" style={{ color: "var(--text-main)", fontSize: "13.5px", fontWeight: 700 }}>{cluster.clusterName}</p>
                                 <p className="mt-0.5 flex items-center gap-1 truncate" style={{ color: "var(--text-sub)", fontSize: "12px" }}><MapPin size={11} /> {cluster.province || cluster.address}</p>
                                 {schedulable ? (
-                                  <p className="mt-1" style={{ color: "#059669", fontSize: "11.5px", fontWeight: 650 }}>
-                                    {eligibility?.eligibleRoomCount} eligible of {eligibility?.totalRoomCount} rooms · {(cluster.totalSeats ?? 0).toLocaleString()} seats
+                                  <p className="mt-1" style={{ color: partiallyEligible ? "#d97706" : "#059669", fontSize: "11.5px", fontWeight: 650 }}>
+                                    {partiallyEligible ? `${eligibleRoomCount}/${totalRoomCount} rooms ready` : `${totalRoomCount} rooms`} · {(cluster.totalSeats ?? 0).toLocaleString()} seats
                                   </p>
                                 ) : (
                                   <p className="mt-1 line-clamp-2" style={{ color: "#d97706", fontSize: "11.5px", fontWeight: 600 }}>
@@ -832,7 +1461,7 @@ export default function AutoScheduleShowtimePage({
                         <div className="flex items-center gap-2"><Film size={16} className="text-blue-600" /><p style={{ fontSize: "14.5px", fontWeight: 700, color: "var(--text-main)" }}>Movie catalog</p></div>
                         <p className="mt-1" style={{ fontSize: "12px", color: "var(--text-sub)" }}>Approved catalog titles · scheduling eligibility is revalidated on submit · {selectedMovieIds.size} selected</p>
                       </div>
-                      {selectedMovieIds.size > 0 && <button type="button" onClick={() => setSelectedMovieIds(new Set())} className="text-xs font-semibold text-blue-600">Clear selection</button>}
+                      {selectedMovieIds.size > 0 && <button type="button" onClick={() => { setSelectedMovieIds(new Set()); setScreeningVersionOverrides(new Map()); }} className="text-xs font-semibold text-blue-600">Clear selection</button>}
                     </div>
                     <div className="mb-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_180px]">
                       <div className="relative">
@@ -849,7 +1478,55 @@ export default function AutoScheduleShowtimePage({
                     </div>
 
                     <div className="nice-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2" style={{ scrollbarGutter: "stable" }}>
-                      <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+                      <div className="space-y-2">
+                        {visibleMovies.map((movie) => {
+                          const scopeChosen = effectiveClusterIds.length > 0;
+                          const availabilityCheck = movieAvailabilityEligibility.get(movie.movieId);
+                          const eligible = !scopeChosen || availabilityCheck?.eligible !== false;
+                          const selected = eligible && selectedMovieIds.has(movie.movieId);
+                          return (
+                            <MovieCatalogAccordionItem
+                              key={movie.movieId}
+                              movie={movie}
+                              eligible={eligible}
+                              reason={availabilityCheck?.reason}
+                              selected={selected}
+                              expanded={expandedMovieIds.has(movie.movieId)}
+                              versions={screeningVersionsByMovie.get(movie.movieId) ?? []}
+                              scopeRoomCount={selectedScopeRoomCount}
+                              overrideIds={screeningVersionOverrides.get(movie.movieId)}
+                              onToggleSelected={() => { if (eligible) toggleMovie(movie.movieId); }}
+                              onToggleExpanded={() => setExpandedMovieIds((current) => {
+                                const next = new Set(current);
+                                next.has(movie.movieId) ? next.delete(movie.movieId) : next.add(movie.movieId);
+                                return next;
+                              })}
+                              onUseAuto={() => {
+                                if (!eligible) return;
+                                setSelectedMovieIds((current) => new Set(current).add(movie.movieId));
+                                setScreeningVersionOverrides((current) => {
+                                  const next = new Map(current);
+                                  next.delete(movie.movieId);
+                                  return next;
+                                });
+                              }}
+                              onToggleVersion={(versionId) => {
+                                if (!eligible) return;
+                                setSelectedMovieIds((current) => new Set(current).add(movie.movieId));
+                                setScreeningVersionOverrides((current) => {
+                                  const next = new Map(current);
+                                  const ids = new Set(next.get(movie.movieId) ?? []);
+                                  ids.has(versionId) ? ids.delete(versionId) : ids.add(versionId);
+                                  ids.size ? next.set(movie.movieId, ids) : next.delete(movie.movieId);
+                                  return next;
+                                });
+                              }}
+                            />
+                          );
+                        })}
+                        {visibleMovies.length === 0 && <div className="py-16 text-center"><Film size={24} className="mx-auto mb-2" style={{ color: "var(--text-sub)" }} /><p style={{ fontSize: "13px", color: "var(--text-sub)" }}>No matching approved movie.</p></div>}
+                      </div>
+                      <div className="hidden">
                         {visibleMovies.map((movie) => {
                           const scopeChosen = effectiveClusterIds.length > 0;
                           const availabilityCheck = movieAvailabilityEligibility.get(movie.movieId);
@@ -858,8 +1535,18 @@ export default function AutoScheduleShowtimePage({
                           const title = movie.movieNameEnglish || movie.movieNameVn;
                           const alternateTitle = movie.movieNameVn && movie.movieNameVn !== title ? movie.movieNameVn : "";
                           return (
-                            <label
+                            <article
                               key={movie.movieId}
+                              role="checkbox"
+                              aria-checked={selected}
+                              tabIndex={eligible ? 0 : -1}
+                              onClick={() => { if (eligible) toggleMovie(movie.movieId); }}
+                              onKeyDown={(event) => {
+                                if (eligible && (event.key === "Enter" || event.key === " ")) {
+                                  event.preventDefault();
+                                  toggleMovie(movie.movieId);
+                                }
+                              }}
                               className={`group relative flex h-full gap-2.5 overflow-hidden rounded-xl border p-2.5 transition-all ${eligible ? "cursor-pointer hover:-translate-y-0.5 hover:shadow-md" : "cursor-not-allowed"}`}
                               style={{
                                 borderColor: selected ? "rgba(37,99,235,.7)" : !eligible ? "rgba(245,158,11,.28)" : "var(--border-color)",
@@ -867,7 +1554,6 @@ export default function AutoScheduleShowtimePage({
                                 opacity: !eligible ? 0.72 : 1,
                               }}
                             >
-                              <input className="sr-only" type="checkbox" disabled={!eligible} checked={selected} onChange={() => toggleMovie(movie.movieId)} />
                               <div className="h-full w-16 flex-shrink-0 overflow-hidden rounded-lg" style={{ background: "rgba(124,58,237,.08)" }}>
                                 {movie.smallImage || movie.largeImage
                                   ? <img src={movie.smallImage || movie.largeImage} alt={`${title} poster`} className="h-full w-full object-cover" />
@@ -898,8 +1584,77 @@ export default function AutoScheduleShowtimePage({
                                 <div className="mt-1.5 flex flex-nowrap gap-1 overflow-hidden">
                                   {movie.movieType.slice(0, 2).map((genre) => <span key={genre} className="max-w-24 flex-shrink-0 truncate rounded-md border px-1.5 py-0.5" style={{ borderColor: "var(--border-color)", color: "var(--text-sub)", fontSize: "10px" }}>{genre}</span>)}
                                 </div>
+                                {selected && (
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <button
+                                        type="button"
+                                        onClick={(event) => event.stopPropagation()}
+                                        className="mt-2 flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left"
+                                        style={{
+                                          borderColor: screeningVersionOverrides.get(movie.movieId)?.size ? "rgba(37,99,235,.45)" : "var(--border-color)",
+                                          background: "var(--bg-card)",
+                                          color: "var(--text-main)",
+                                        }}
+                                      >
+                                        <span className="min-w-0 truncate text-[10.5px] font-bold">
+                                          {screeningVersionOverrides.get(movie.movieId)?.size
+                                            ? `Custom · ${screeningVersionOverrides.get(movie.movieId)?.size} version${screeningVersionOverrides.get(movie.movieId)?.size === 1 ? "" : "s"}`
+                                            : `Auto · ${(screeningVersionsByMovie.get(movie.movieId) ?? []).length} version${(screeningVersionsByMovie.get(movie.movieId) ?? []).length === 1 ? "" : "s"}`}
+                                        </span>
+                                        <ChevronDown size={12} className="shrink-0 text-blue-600" />
+                                      </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent
+                                      align="end"
+                                      className="w-[330px] max-w-[calc(100vw-2rem)] p-2"
+                                      onClick={(event) => event.stopPropagation()}
+                                    >
+                                      <DropdownMenuLabel className="px-2 py-2">
+                                        <span className="block text-xs font-bold">Screening versions</span>
+                                        <span className="mt-0.5 block text-[10.5px] font-normal" style={{ color: "var(--text-sub)" }}>Compatibility is scoped to the selected cinemas.</span>
+                                      </DropdownMenuLabel>
+                                      <DropdownMenuItem
+                                        onSelect={() => setScreeningVersionOverrides((current) => {
+                                          const next = new Map(current);
+                                          next.delete(movie.movieId);
+                                          return next;
+                                        })}
+                                        className="justify-between"
+                                      >
+                                        <span><span className="block text-xs font-semibold">Auto (recommended)</span><span className="block text-[10px]" style={{ color: "var(--text-sub)" }}>Use every compatible active version</span></span>
+                                        {!screeningVersionOverrides.get(movie.movieId)?.size && <Check size={14} className="text-blue-600" />}
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuLabel className="px-2 py-1 text-[10px] uppercase tracking-wide" style={{ color: "var(--text-sub)" }}>Or select specific versions</DropdownMenuLabel>
+                                      {(screeningVersionsByMovie.get(movie.movieId) ?? []).map((version) => (
+                                        <DropdownMenuCheckboxItem
+                                          key={version.screeningVersionId}
+                                          checked={screeningVersionOverrides.get(movie.movieId)?.has(version.screeningVersionId) ?? false}
+                                          onSelect={(event) => event.preventDefault()}
+                                          onCheckedChange={(checked) => setScreeningVersionOverrides((current) => {
+                                            const next = new Map(current);
+                                            const ids = new Set(next.get(movie.movieId) ?? []);
+                                            checked ? ids.add(version.screeningVersionId) : ids.delete(version.screeningVersionId);
+                                            ids.size ? next.set(movie.movieId, ids) : next.delete(movie.movieId);
+                                            return next;
+                                          })}
+                                          className="rounded-lg py-2 pl-8 pr-2"
+                                        >
+                                          <span className="min-w-0">
+                                            <span className="block truncate text-xs font-semibold">{version.formatName} · {version.audioLanguageCode}{version.subtitleLanguageCode ? ` / ${version.subtitleLanguageCode} sub` : ""}</span>
+                                            <span className="mt-0.5 block text-[10px]" style={{ color: "var(--text-sub)" }}>{version.compatibleRoomCount} compatible room{version.compatibleRoomCount === 1 ? "" : "s"} in selected cinemas</span>
+                                          </span>
+                                        </DropdownMenuCheckboxItem>
+                                      ))}
+                                      {(screeningVersionsByMovie.get(movie.movieId) ?? []).length === 0 && (
+                                        <p className="px-2 py-4 text-center text-xs" style={{ color: "var(--text-sub)" }}>No active version is compatible with this cinema scope.</p>
+                                      )}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                )}
                               </div>
-                            </label>
+                            </article>
                           );
                         })}
                         {visibleMovies.length === 0 && <div className="col-span-full py-16 text-center"><Film size={24} className="mx-auto mb-2" style={{ color: "var(--text-sub)" }} /><p style={{ fontSize: "13px", color: "var(--text-sub)" }}>No matching approved movie.</p></div>}
@@ -909,49 +1664,70 @@ export default function AutoScheduleShowtimePage({
                 </div>
 
                 {excludableRooms.length > 0 && (
-                  <section className="rounded-2xl border p-4" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <XCircle size={15} className="text-rose-500" />
-                          <p style={{ fontSize: "14.5px", fontWeight: 700, color: "var(--text-main)" }}>Exclude rooms (optional)</p>
+                  <section className="rounded-2xl border px-4 py-3.5" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600">
+                          <DoorClosed size={17} />
+                        </span>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-bold" style={{ color: "var(--text-main)" }}>Room exceptions</p>
+                            {excludedRoomIds.size > 0 && (
+                              <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[10.5px] font-bold text-rose-500">
+                                {excludedRoomIds.size} excluded
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-0.5 truncate text-xs" style={{ color: "var(--text-sub)" }}>
+                            {excludedRoomIds.size === 0
+                              ? `All ${excludableRooms.length} eligible rooms can be used.`
+                              : `Applied to the entire ${formatPlanningDate(startDate)}–${formatPlanningDate(endDate)} planning window.`}
+                          </p>
                         </div>
-                        <p className="mt-1" style={{ fontSize: "12px", color: "var(--text-sub)" }}>
-                          Hold specific rooms out of this run only — e.g. a room reserved for a private event or short-notice maintenance. Everything else is picked automatically as usual.
-                          {excludedRoomIds.size > 0 && ` · ${excludedRoomIds.size} excluded`}
-                        </p>
                       </div>
-                      {excludedRoomIds.size > 0 && (
-                        <button type="button" onClick={() => setExcludedRoomIds(new Set())} className="text-xs font-semibold text-blue-600">Clear exclusions</button>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {excludableRooms.map((room) => {
-                        const excluded = excludedRoomIds.has(room.cinemaRoomId);
-                        return (
-                          <button
-                            key={room.cinemaRoomId}
-                            type="button"
-                            onClick={() => toggleExcludedRoom(room.cinemaRoomId)}
-                            className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 transition-colors"
-                            style={{
-                              borderColor: excluded ? "rgba(225,29,72,.5)" : "var(--border-color)",
-                              background: excluded ? "rgba(225,29,72,.08)" : "var(--bg-main)",
-                              color: excluded ? "#e11d48" : "var(--text-main)",
-                              fontSize: "12px",
-                              fontWeight: 650,
-                            }}
-                            title={room.clusterName ? `${room.clusterName} · ${room.cinemaRoomName}` : room.cinemaRoomName}
-                          >
-                            {excluded ? <XCircle size={12} /> : <Check size={12} className="opacity-0" />}
-                            {room.cinemaRoomName}
-                            {room.clusterName && <span style={{ color: "var(--text-sub)", fontWeight: 500 }}>· {room.clusterName}</span>}
+                      <div className="flex items-center gap-2">
+                        {excludedRoomIds.size > 0 && (
+                          <button type="button" onClick={() => setExcludedRoomIds(new Set())} className="rounded-lg px-3 py-2 text-xs font-semibold text-blue-600">
+                            Clear
                           </button>
-                        );
-                      })}
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setRoomExceptionsOpen(true)}
+                          className="flex items-center gap-1.5 rounded-xl border px-3.5 py-2.5 text-xs font-semibold"
+                          style={{ borderColor: "var(--border-color)", color: "var(--text-main)", background: "var(--bg-main)" }}
+                        >
+                          <Settings2 size={14} /> Configure
+                        </button>
+                      </div>
                     </div>
+                    {excludedRoomIds.size > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-1.5 border-t pt-3" style={{ borderColor: "var(--border-color)" }}>
+                        {excludableRooms.filter((room) => excludedRoomIds.has(room.cinemaRoomId)).slice(0, 4).map((room) => (
+                          <span key={room.cinemaRoomId} className="rounded-lg bg-rose-500/10 px-2 py-1 text-[11px] font-semibold text-rose-500">
+                            {room.cinemaRoomName} · {room.clusterName}
+                          </span>
+                        ))}
+                        {excludedRoomIds.size > 4 && (
+                          <span className="rounded-lg px-2 py-1 text-[11px] font-semibold" style={{ background: "var(--bg-main)", color: "var(--text-sub)" }}>
+                            +{excludedRoomIds.size - 4} more
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </section>
                 )}
+
+                <RoomExceptionsDialog
+                  open={roomExceptionsOpen}
+                  onOpenChange={setRoomExceptionsOpen}
+                  rooms={excludableRooms}
+                  appliedRoomIds={excludedRoomIds}
+                  startDate={startDate}
+                  endDate={endDate}
+                  onApply={setExcludedRoomIds}
+                />
               </div>
 
               <div className="sticky bottom-3 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 shadow-lg"
@@ -1103,6 +1879,28 @@ export default function AutoScheduleShowtimePage({
                             {movie?.ageRatingCode && <span className="rounded-md border px-2 py-1" style={{ borderColor: "var(--border-color)", color: "var(--text-main)", fontSize: "11.5px", fontWeight: 650 }}>{movie.ageRatingCode}</span>}
                             {movie?.version && <span className="rounded-md border px-2 py-1" style={{ borderColor: "var(--border-color)", color: "var(--text-main)", fontSize: "11.5px", fontWeight: 650 }}>{movie.version}</span>}
                             {(movie?.movieType ?? []).slice(0, 3).map((genre) => <span key={genre} className="rounded-md bg-purple-500/10 px-2 py-1 text-purple-600" style={{ fontSize: "11.5px", fontWeight: 650 }}>{genre}</span>)}
+                          </div>
+
+                          <div className="mt-2.5 rounded-xl border px-3 py-2.5" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: "var(--text-sub)" }}>Screening versions</p>
+                              <span className="rounded-md bg-blue-600/10 px-2 py-1 text-[10.5px] font-bold text-blue-600">
+                                {screeningVersionOverrides.get(id)?.size ? `Custom · ${screeningVersionOverrides.get(id)?.size}` : "Auto"}
+                              </span>
+                            </div>
+                            {screeningVersionOverrides.get(id)?.size ? (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {(screeningVersionsByMovie.get(id) ?? [])
+                                  .filter((version) => screeningVersionOverrides.get(id)?.has(version.screeningVersionId))
+                                  .map((version) => (
+                                    <span key={version.screeningVersionId} className="rounded-md border px-2 py-1 text-[11px] font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }}>
+                                      {version.formatCode} · {version.audioLanguageCode}{version.subtitleLanguageCode ? ` / ${version.subtitleLanguageCode} sub` : ""}
+                                    </span>
+                                  ))}
+                              </div>
+                            ) : (
+                              <p className="mt-1 text-[11.5px]" style={{ color: "var(--text-sub)" }}>The scheduler will choose every compatible active version effective on each date.</p>
+                            )}
                           </div>
 
                           <div className="mt-2.5 grid gap-x-4 gap-y-1 sm:grid-cols-2 xl:grid-cols-3">

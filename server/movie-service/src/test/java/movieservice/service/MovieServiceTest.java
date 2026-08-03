@@ -12,6 +12,7 @@ import movieservice.enums.MovieStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.exception.MovieReadinessException;
 import movieservice.mapper.MovieMapper;
+import movieservice.lifecycle.LifecycleEventNotifier;
 import movieservice.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,6 +57,7 @@ class MovieServiceTest {
     @Mock MovieStatusHistoryRepository movieStatusHistoryRepository;
     @Mock ShowTimeRepository showTimeRepository;
     @Mock MovieSchedulingProfileRepository movieSchedulingProfileRepository;
+    @Mock LifecycleEventNotifier lifecycleEventNotifier;
 
     private MovieService movieService;
     private Movie movie;
@@ -68,7 +70,7 @@ class MovieServiceTest {
                 movieCastRepository, movieTranslationRepository, cinemaRoomService,
                 showTimeService, auditLogService, imageStorageService, movieReadinessValidator,
                 movieAvailabilityRepository, movieStatusHistoryRepository,
-                showTimeRepository, movieSchedulingProfileRepository);
+                showTimeRepository, movieSchedulingProfileRepository, lifecycleEventNotifier);
 
         movie = Movie.builder().movieId(1L).originalTitle("Existing Movie").build();
         // lenient(): cac test kiem tra "throw truoc khi mutate" khong bao gio toi duoc dong
@@ -242,6 +244,40 @@ class MovieServiceTest {
     }
 
     @Test
+    void approvedReleasePlanIsComingSoonButNotYetBookable() {
+        Movie approved = Movie.builder().movieId(8L).originalTitle("Coming Soon").status(MovieStatus.APPROVED).build();
+        when(movieRepository.findById(8L)).thenReturn(java.util.Optional.of(approved));
+        MovieAvailability availability = availabilityFor(approved, AvailabilityStatus.APPROVED, null);
+        availability.setShowingStartDate(LocalDate.now().plusDays(7));
+        when(movieAvailabilityRepository.findByMovie_MovieId(8L)).thenReturn(List.of(availability));
+
+        var response = movieService.getPublicMovieDetail(8L, 10L);
+
+        assertEquals("COMING_SOON", response.getDisplayStatus());
+        assertFalse(response.isBookingAvailable());
+        verifyNoInteractions(showTimeService);
+    }
+
+    @Test
+    void openPresaleCanBeBookableWithoutBeingNowShowing() {
+        Movie approved = Movie.builder().movieId(9L).originalTitle("Presale").status(MovieStatus.APPROVED).build();
+        when(movieRepository.findById(9L)).thenReturn(java.util.Optional.of(approved));
+        MovieAvailability availability = availabilityFor(approved, AvailabilityStatus.OPEN, null);
+        availability.setShowingStartDate(LocalDate.now().plusDays(3));
+        when(movieAvailabilityRepository.findByMovie_MovieId(9L)).thenReturn(List.of(availability));
+        when(showTimeService.findNextSaleableShowTime(any(), any(), any(), any()))
+                .thenReturn(java.util.Optional.of(ShowTime.builder()
+                        .showDate(LocalDate.now().plusDays(3))
+                        .startTime(java.time.LocalTime.of(19, 0))
+                        .build()));
+
+        var response = movieService.getPublicMovieDetail(9L, 10L);
+
+        assertEquals("COMING_SOON", response.getDisplayStatus());
+        assertTrue(response.isBookingAvailable());
+    }
+
+    @Test
     void publicDetailIsNowShowingOnlyWhenAnOpenAvailabilityHasAFutureOnSaleShowtime() {
         Movie approved = Movie.builder()
                 .movieId(7L)
@@ -270,7 +306,7 @@ class MovieServiceTest {
     }
 
     @Test
-    void publicDetailRejectsApprovedMovieWithNoOpenOrPlannedAvailability() {
+    void publicDetailRejectsApprovedMovieWithNoApprovedOrOpenAvailability() {
         // Approved content, but every availability window is SUSPENDED/CLOSED - must still 404.
         Movie approved = Movie.builder().movieId(4L).originalTitle("Approved But Suspended").status(MovieStatus.APPROVED).build();
         when(movieRepository.findById(4L)).thenReturn(java.util.Optional.of(approved));
@@ -620,6 +656,19 @@ class MovieServiceTest {
     }
 
     @Test
+    void authorCannotApproveOwnMovieDraft() {
+        movie.setStatus(MovieStatus.PENDING_REVIEW);
+        movie.setCreatedBy("programmer@cineprime.vn");
+
+        AppException ex = assertThrows(AppException.class,
+                () -> movieService.approveMovie(1L, "programmer@cineprime.vn"));
+
+        assertEquals(MovieErrorCode.MOVIE_SELF_APPROVAL_FORBIDDEN, ex.getErrorCode());
+        verify(movieReadinessValidator, never()).requireReadyForApproval(movie);
+        verify(movieRepository, never()).save(any(Movie.class));
+    }
+
+    @Test
     void approveRejectsWhenNotPendingReview() {
         movie.setStatus(MovieStatus.DRAFT);
 
@@ -661,7 +710,7 @@ class MovieServiceTest {
     void archiveRequiresApprovedAndNoActiveAvailability() {
         movie.setStatus(MovieStatus.APPROVED);
         when(movieAvailabilityRepository.existsByMovie_MovieIdAndStatusIn(1L,
-                List.of(AvailabilityStatus.PLANNED, AvailabilityStatus.OPEN))).thenReturn(false);
+                activeAvailabilityStatuses())).thenReturn(false);
 
         movieService.archiveMovie(1L, "admin");
 
@@ -672,7 +721,7 @@ class MovieServiceTest {
     void archiveBlockedWhileAvailabilityIsPlannedOrOpen() {
         movie.setStatus(MovieStatus.APPROVED);
         when(movieAvailabilityRepository.existsByMovie_MovieIdAndStatusIn(1L,
-                List.of(AvailabilityStatus.PLANNED, AvailabilityStatus.OPEN))).thenReturn(true);
+                activeAvailabilityStatuses())).thenReturn(true);
 
         AppException ex = assertThrows(AppException.class, () -> movieService.archiveMovie(1L, "admin"));
 
@@ -700,5 +749,15 @@ class MovieServiceTest {
 
         assertEquals(MovieErrorCode.MOVIE_NOT_EDITABLE, ex.getErrorCode());
         verify(movieRepository, never()).save(any(Movie.class));
+    }
+
+    private List<AvailabilityStatus> activeAvailabilityStatuses() {
+        return List.of(
+                AvailabilityStatus.PLANNED,
+                AvailabilityStatus.IN_REVIEW,
+                AvailabilityStatus.CHANGES_REQUESTED,
+                AvailabilityStatus.APPROVED,
+                AvailabilityStatus.OPEN,
+                AvailabilityStatus.SUSPENDED);
     }
 }

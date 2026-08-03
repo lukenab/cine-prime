@@ -2,8 +2,11 @@ import { useState, useEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Sidebar } from "../layouts/Sidebar";
 import { Header } from "../layouts/Header";
+import StaffOnboardingGate from "../components/staff/StaffOnboardingGate";
+import { useAuth } from "../context/AuthContext";
 
 export default function AdminLayout() {
+  const { user, needsProfileSetup } = useAuth();
   // 1. Logic tự động nhận diện trang hiện tại để bôi sáng Menu
   const location = useLocation();
   const activeNav = location.pathname.split("/")[2] || "dashboard";
@@ -13,6 +16,12 @@ export default function AdminLayout() {
     const savedTheme = localStorage.getItem("admin-theme");
     return savedTheme ? savedTheme === "dark" : true;
   });
+
+  const isIncompleteStaff = needsProfileSetup && [
+    "ROLE_EMPLOYEE",
+    "ROLE_BRANCH_MANAGER",
+    "ROLE_PROGRAMMING_OPERATOR",
+  ].includes(user?.role ?? "");
 
   useEffect(() => {
     localStorage.setItem("admin-theme", isDarkMode ? "dark" : "light");
@@ -75,9 +84,19 @@ export default function AdminLayout() {
         >
           {/* 🌟 ĐÂY LÀ ĐIỂM ĂN TIỀN: Nội dung các trang sẽ được nhét vào đây */}
           {/* Truyền isDarkMode xuống cho các trang con qua context */}
-          <Outlet context={{ isDarkMode }} />
+          {isIncompleteStaff ? (
+            <div aria-hidden="true" className="space-y-5 opacity-45 blur-[1px]">
+              <div className="h-8 w-64 rounded-lg bg-[var(--bg-card)]" />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                {[1, 2, 3].map((item) => <div key={item} className="h-28 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]" />)}
+              </div>
+              <div className="h-72 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]" />
+            </div>
+          ) : <Outlet context={{ isDarkMode }} />}
         </main>
       </div>
+
+      {isIncompleteStaff && <StaffOnboardingGate />}
 
       {/* Hệ biến màu tập trung */}
       <style>{`

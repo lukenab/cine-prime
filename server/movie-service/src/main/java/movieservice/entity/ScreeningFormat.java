@@ -4,7 +4,6 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -31,9 +30,6 @@ public class ScreeningFormat {
 
     @Column(name = "description", length = 255)
     String description;
-
-    @Column(name = "surcharge", nullable = false, precision = 10, scale = 2)
-    BigDecimal surcharge;
 
     @Builder.Default
     @Column(name = "status", nullable = false, length = 20)

@@ -25,7 +25,7 @@ public class MovieImageController {
     MovieImageService movieImageService;
 
     // GET /api/movies/{movieId}/images
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     @GetMapping
     public ApiResponse<List<MovieImageResponse>> getImages(@PathVariable Long movieId) {
         return ApiResponse.<List<MovieImageResponse>>builder()
@@ -35,7 +35,7 @@ public class MovieImageController {
     }
 
     // POST /api/movies/{movieId}/images
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<MovieImageResponse> addImage(
@@ -48,7 +48,7 @@ public class MovieImageController {
     }
 
     // POST /api/movies/{movieId}/images/tmdb-import — TMDB-FIX-05: selective poster/backdrop/still import
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     @PostMapping("/tmdb-import")
     public ApiResponse<TmdbImageImportResponse> importFromTmdb(
             @PathVariable Long movieId,
@@ -60,7 +60,7 @@ public class MovieImageController {
     }
 
     // DELETE /api/movies/{movieId}/images/{imageId}
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     @DeleteMapping("/{imageId}")
     public ApiResponse<Void> deleteImage(
             @PathVariable Long movieId,

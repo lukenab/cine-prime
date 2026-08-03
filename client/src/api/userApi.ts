@@ -13,6 +13,10 @@ export const userApi = {
     return axiosClient.put(`/api/users/${id}`, payload);
   },
 
+  completeStaffProfile: (id: string, payload: { fullName: string; phoneNumber: string }) => {
+    return axiosClient.put(`/api/users/${id}/staff-profile`, payload);
+  },
+
   uploadAvatar: (id: string, file: File) => {
     const form = new FormData();
     form.append("file", file);

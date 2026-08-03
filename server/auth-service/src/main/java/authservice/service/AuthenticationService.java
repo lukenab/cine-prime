@@ -62,21 +62,22 @@ public class AuthenticationService {
 
     @Transactional(dontRollbackOn = AppException.class)
     public LoginResponse authenticate(LoginRequest request) {
-        abuseProtectionService.guardLogin(request.getUsername());
-        Account account = accountRepository.findByUsername(request.getUsername())
+        String identifier = request.getUsername().trim().toLowerCase();
+        abuseProtectionService.guardLogin(identifier);
+        Account account = accountRepository.findByUsernameIgnoreCaseOrEmailIgnoreCase(identifier, identifier)
                 .orElseThrow(() -> {
                     // Perform the same expensive password operation for missing accounts to
                     // reduce username enumeration through response-time differences.
                     passwordEncoder.matches(request.getPassword(), dummyPasswordHash);
                     auditLogService.failed("LOGIN_FAILED", null, "Account not found",
-                            auditLogService.metadata("username", request.getUsername()));
+                            auditLogService.metadata("identifier", identifier));
                     return new AppException(GlobalErrorCode.UNAUTHENTICATED);
                 });
 
         // 1. Check account lock BEFORE password check to prevent timing attacks
         if (account.getLockedUntil() != null && account.getLockedUntil().isAfter(LocalDateTime.now())) {
             auditLogService.failed("LOGIN_FAILED", account.getAccountId(), "Account locked",
-                    auditLogService.metadata("username", request.getUsername()));
+                    auditLogService.metadata("identifier", identifier));
             throw new AppException(AuthErrorCode.ACCOUNT_LOCKED);
         }
 
@@ -84,7 +85,7 @@ public class AuthenticationService {
         if (account.getStatus() == null || account.getStatus() != AccountStatus.ACTIVE) {
             auditLogService.failed("LOGIN_FAILED", account.getAccountId(),
                     "Account status " + account.getStatus(),
-                    auditLogService.metadata("username", request.getUsername()));
+                    auditLogService.metadata("identifier", identifier));
             // PENDING = admin created the account but the employee hasn't used the
             // activation email yet — distinct from INACTIVE (admin disabled the account).
             if (account.getStatus() == AccountStatus.PENDING) {
@@ -101,11 +102,11 @@ public class AuthenticationService {
                 account.setLockedUntil(LocalDateTime.now().plusMinutes(LOCK_DURATION_MINUTES));
                 auditLogService.failed("LOGIN_FAILED", account.getAccountId(),
                         "Account locked after " + attempts + " failed attempts",
-                        auditLogService.metadata("username", request.getUsername()));
+                        auditLogService.metadata("identifier", identifier));
             } else {
                 auditLogService.failed("LOGIN_FAILED", account.getAccountId(),
                         "Invalid password (attempt " + attempts + "/" + MAX_FAILED_ATTEMPTS + ")",
-                        auditLogService.metadata("username", request.getUsername()));
+                        auditLogService.metadata("identifier", identifier));
             }
             accountRepository.save(account);
             throw new AppException(GlobalErrorCode.UNAUTHENTICATED);
@@ -116,7 +117,7 @@ public class AuthenticationService {
         account.setLockedUntil(null);
         account.setLastLoginAt(LocalDateTime.now());
         accountRepository.save(account);
-        abuseProtectionService.loginSucceeded(account.getUsername());
+        abuseProtectionService.loginSucceeded(identifier);
 
         String token = jwtService.generateToken(account);
         saveAuthToken(account, token);

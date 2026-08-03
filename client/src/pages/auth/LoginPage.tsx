@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Eye, EyeOff, User, Lock, Loader2 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { defaultPathForRole, EMPLOYEE_HOME_PATH } from "../../utils/roleRoutes";
 
 const MOCK_EMPLOYEE_USERNAME = "employee";
 const MOCK_EMPLOYEE_EMAIL = "employee@cineprime.com";
@@ -52,13 +53,6 @@ function isSafeInternalPath(value: unknown): value is string {
   );
 }
 
-function defaultPathForRole(role: string): string {
-  if (role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN") return "/admin";
-  if (role === "ROLE_BRANCH_MANAGER") return "/admin/concessions/catalog";
-  if (role === "ROLE_EMPLOYEE") return "/admin/movies";
-  return "/";
-}
-
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState("");
@@ -104,7 +98,7 @@ export default function LoginPage() {
       const token = createMockEmployeeToken();
       localStorage.setItem("accessToken", token);
       localStorage.setItem("role", "ROLE_EMPLOYEE");
-      window.location.href = "/admin/movies";
+      window.location.href = EMPLOYEE_HOME_PATH;
       return;
     }
 
@@ -118,7 +112,10 @@ export default function LoginPage() {
       navigateAfterLogin(role);
     } catch (err: any) {
       const code = err?.response?.data?.code;
-      if (code === 1008) {
+      const status = err?.response?.status;
+      if (code === 1031 || status === 429) {
+        setError("Too many sign-in attempts. Please wait a few minutes and try again.");
+      } else if (code === 1008) {
         setError("Incorrect username or password. Please try again.");
       } else if (code === 1020) {
         setError("Your account has been deactivated. Please contact support.");
@@ -198,7 +195,7 @@ export default function LoginPage() {
         {/* Username field */}
         <div className="flex flex-col gap-2">
           <label htmlFor="username" style={{ color: "rgba(255,255,255,0.6)", fontSize: "12px", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            Account / Username
+            Work email or username
           </label>
           <div style={{ position: "relative" }}>
             <User
@@ -218,7 +215,7 @@ export default function LoginPage() {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter your username or email"
+              placeholder="Enter your work email or username"
               autoComplete="username"
               style={{
                 ...inputBaseStyle,

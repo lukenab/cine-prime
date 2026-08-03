@@ -13,6 +13,7 @@ import movieservice.enums.ClusterStatus;
 import movieservice.enums.MovieStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.mapper.MovieMapper;
+import movieservice.lifecycle.LifecycleEventNotifier;
 import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.MovieAvailabilityHistoryRepository;
 import movieservice.repository.MovieAvailabilityRepository;
@@ -43,6 +44,7 @@ class MovieAvailabilityServiceTest {
     @Mock MovieRepository movieRepository;
     @Mock CinemaClusterRepository cinemaClusterRepository;
     @Mock MovieMapper movieMapper;
+    @Mock LifecycleEventNotifier lifecycleEventNotifier;
 
     private MovieAvailabilityService service;
     private Movie approvedMovie;
@@ -52,7 +54,7 @@ class MovieAvailabilityServiceTest {
     void setUp() {
         service = new MovieAvailabilityService(
                 movieAvailabilityRepository, movieAvailabilityHistoryRepository,
-                movieRepository, cinemaClusterRepository, movieMapper);
+                movieRepository, cinemaClusterRepository, movieMapper, lifecycleEventNotifier);
 
         approvedMovie = Movie.builder().movieId(1L).status(MovieStatus.APPROVED).build();
         activeCluster = CinemaCluster.builder().clusterId(1L).status(ClusterStatus.ACTIVE).build();
@@ -211,7 +213,7 @@ class MovieAvailabilityServiceTest {
     }
 
     @Test
-    void openRequiresPlanned() {
+    void openRequiresApproved() {
         when(movieAvailabilityRepository.findById(10L)).thenReturn(Optional.of(availabilityWith(AvailabilityStatus.OPEN)));
 
         AppException ex = assertThrows(AppException.class, () -> service.open(10L, "admin"));
@@ -220,13 +222,41 @@ class MovieAvailabilityServiceTest {
     }
 
     @Test
-    void openTransitionsPlannedToOpen() {
-        MovieAvailability availability = availabilityWith(AvailabilityStatus.PLANNED);
+    void openTransitionsApprovedToOpen() {
+        MovieAvailability availability = availabilityWith(AvailabilityStatus.APPROVED);
         when(movieAvailabilityRepository.findById(10L)).thenReturn(Optional.of(availability));
 
         service.open(10L, "admin");
 
         assertEquals(AvailabilityStatus.OPEN, availability.getStatus());
+    }
+
+    @Test
+    void releasePlanAuthorCannotApproveOwnPlan() {
+        MovieAvailability availability = availabilityWith(AvailabilityStatus.IN_REVIEW);
+        availability.setCreatedBy("programmer@cineprime.vn");
+        when(movieAvailabilityRepository.findById(10L)).thenReturn(Optional.of(availability));
+
+        AppException ex = assertThrows(AppException.class,
+                () -> service.approve(10L, "programmer@cineprime.vn", null));
+
+        assertEquals(MovieErrorCode.AVAILABILITY_SELF_APPROVAL_FORBIDDEN, ex.getErrorCode());
+        assertEquals(AvailabilityStatus.IN_REVIEW, availability.getStatus());
+    }
+
+    @Test
+    void operatorSubmitsPlanAndDifferentAdminApprovesIt() {
+        MovieAvailability availability = availabilityWith(AvailabilityStatus.PLANNED);
+        availability.setCreatedBy("operator@cineprime.vn");
+        when(movieAvailabilityRepository.findById(10L)).thenReturn(Optional.of(availability));
+
+        service.submitReview(10L, "operator@cineprime.vn", "Ready for review");
+        assertEquals(AvailabilityStatus.IN_REVIEW, availability.getStatus());
+        assertEquals("operator@cineprime.vn", availability.getSubmittedBy());
+
+        service.approve(10L, "admin@cineprime.vn", "Approved");
+        assertEquals(AvailabilityStatus.APPROVED, availability.getStatus());
+        assertEquals("admin@cineprime.vn", availability.getApprovedBy());
     }
 
     @Test

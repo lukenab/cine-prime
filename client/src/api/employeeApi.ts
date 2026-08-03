@@ -17,13 +17,37 @@ export interface EmployeeUpdatePayload {
   hireDate?: string;
 }
 
+export interface EmployeeInvitationPayload {
+  fullName: string;
+  email: string;
+  phoneNumber?: string;
+  cinemaId?: string;
+  position: EmployeePosition;
+  department: EmployeeDepartment;
+  employmentType: EmploymentType;
+  hireDate: string;
+  accessRole: 'EMPLOYEE' | 'BRANCH_MANAGER' | 'PROGRAMMING_OPERATOR';
+}
+
 export type EmployeePosition =
+  | 'TEAM_MEMBER'
+  | 'ASSISTANT_MANAGER'
+  | 'CINEMA_MANAGER'
+  | 'PROGRAMMING_OPERATOR'
+  // Legacy API values retained while existing records are migrated.
   | 'STAFF'
   | 'SUPERVISOR'
   | 'MANAGER';
 
 export type EmployeeDepartment =
+  | 'GENERAL_OPERATIONS'
   | 'BOX_OFFICE'
+  | 'FOOD_BEVERAGE'
+  | 'FLOOR_GUEST_SERVICES'
+  | 'PROJECTION_TECHNICAL'
+  | 'FACILITIES_MAINTENANCE'
+  | 'CONTENT_PROGRAMMING'
+  // Legacy API values retained while existing records are migrated.
   | 'CONCESSION'
   | 'FLOOR'
   | 'PROJECTION'
@@ -33,6 +57,9 @@ export type EmployeeDepartment =
 export type EmploymentType =
   | 'FULL_TIME'
   | 'PART_TIME'
+  | 'FIXED_TERM'
+  | 'SEASONAL'
+  // Legacy API values retained while existing records are migrated.
   | 'PROBATION'
   | 'INTERN'
   | 'CONTRACT';
@@ -62,6 +89,9 @@ export interface EmployeeResponse {
 }
 
 export const employeeApi = {
+  getMe: () =>
+    axiosClient.get<any>('/api/employees/me'),
+
   getAll: (page = 1, size = 200) =>
     axiosClient.get<any>(`/api/employees?page=${page}&size=${size}`),
 
@@ -71,9 +101,15 @@ export const employeeApi = {
   create: (payload: EmployeeCreatePayload) =>
     axiosClient.post<any>('/api/employees', payload),
 
+  invite: (payload: EmployeeInvitationPayload) =>
+    axiosClient.post<any>('/api/employees/invitations', payload),
+
   update: (id: string, payload: EmployeeUpdatePayload) =>
     axiosClient.put<any>(`/api/employees/${id}`, payload),
 
   disable: (id: string) =>
     axiosClient.delete<any>(`/api/employees/${id}`),
+
+  reactivate: (id: string) =>
+    axiosClient.post<any>(`/api/employees/${id}/reactivate`),
 };

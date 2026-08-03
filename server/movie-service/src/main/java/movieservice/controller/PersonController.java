@@ -66,7 +66,7 @@ public class PersonController {
     // previously had no @PreAuthorize at all, so any authenticated CUSTOMER could create/edit/
     // delete cast & crew reference data. ADMIN/EMPLOYEE matches who actually needs this - cast
     // is added inline while creating/editing a movie in MovieEditorPage (both roles use it).
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<PersonResponse> create(@Valid @RequestBody PersonRequest request) {
@@ -118,7 +118,7 @@ public class PersonController {
     }
 
     // PUT /api/persons/{id}
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     @PutMapping("/{id}")
     public ApiResponse<PersonResponse> update(
             @PathVariable Long id,

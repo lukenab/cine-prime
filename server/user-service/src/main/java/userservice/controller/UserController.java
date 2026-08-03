@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import userservice.dto.PageResponse;
 import userservice.dto.UserResponse;
 import userservice.dto.UserUpdateRequest;
+import userservice.dto.StaffProfileCompletionRequest;
 import userservice.service.UserService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +38,17 @@ public class UserController {
     public ApiResponse<UserResponse> updateUser(@PathVariable String id, @Valid @RequestBody UserUpdateRequest request){
         return ApiResponse.<UserResponse>builder()
                 .result(userService.updateUser(id, request))
+                .build();
+    }
+
+    @PutMapping("/{id}/staff-profile")
+    @PreAuthorize("hasAnyAuthority('ROLE_EMPLOYEE', 'ROLE_BRANCH_MANAGER', 'ROLE_PROGRAMMING_OPERATOR') and #id == authentication.principal.claims['accountId']")
+    public ApiResponse<UserResponse> completeStaffProfile(
+            @PathVariable String id,
+            @Valid @RequestBody StaffProfileCompletionRequest request) {
+        return ApiResponse.<UserResponse>builder()
+                .message("Staff profile completed")
+                .result(userService.completeStaffProfile(id, request))
                 .build();
     }
 

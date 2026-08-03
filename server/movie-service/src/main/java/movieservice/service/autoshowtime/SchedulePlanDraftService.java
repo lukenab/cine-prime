@@ -7,6 +7,7 @@ import movieservice.exception.MovieErrorCode;
 import movieservice.repository.*;
 import movieservice.enums.GenerationPartitionStatus;
 import movieservice.service.PriceBookPricingService;
+import movieservice.lifecycle.LifecycleEventNotifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +26,7 @@ public class SchedulePlanDraftService {
     private final MovieScreeningVersionRepository screeningVersionRepository;
     private final ShowtimeGenerationPartitionRepository partitionRepository;
     private final PriceBookPricingService priceBookPricingService;
+    private final LifecycleEventNotifier lifecycleEventNotifier;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public SchedulePlan createDraftShell(Long generationRunId,
@@ -50,7 +52,15 @@ public class SchedulePlanDraftService {
                 .validatedBy("SYSTEM:GENERATOR")
                 .build();
 
-        return schedulePlanRepository.save(plan);
+        SchedulePlan saved = schedulePlanRepository.save(plan);
+        lifecycleEventNotifier.notifyChange(
+                "SCHEDULE_PLAN",
+                saved.getSchedulePlanId(),
+                saved.getStatus().name(),
+                "CREATED",
+                null,
+                null);
+        return saved;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

@@ -1,5 +1,6 @@
 package movieservice.dto.request;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import movieservice.enums.OptimizationScenario;
@@ -42,6 +43,13 @@ public record AutoShowtimeGenerationRequest (
      * since the frontend only offers rooms from the selected clusters but scope can change
      * between page load and submit.
      */
-    List<Long> excludedRoomIds
+    List<Long> excludedRoomIds,
+
+    /**
+     * Optional custom screening-version strategy per selected movie. A selected movie omitted
+     * from this list uses AUTO and considers every ACTIVE version effective on each business day.
+     */
+    @Valid
+    List<MovieScreeningVersionSelectionRequest> screeningVersionSelections
 ){
 }

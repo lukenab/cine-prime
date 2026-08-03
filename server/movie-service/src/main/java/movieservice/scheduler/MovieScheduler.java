@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import movieservice.entity.MovieAvailability;
 import movieservice.enums.AvailabilityStatus;
 import movieservice.repository.MovieAvailabilityRepository;
+import movieservice.lifecycle.LifecycleEventNotifier;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 
@@ -27,21 +29,33 @@ import java.util.List;
 public class MovieScheduler {
 
     private static final List<AvailabilityStatus> CLOSEABLE =
-            List.of(AvailabilityStatus.PLANNED, AvailabilityStatus.OPEN, AvailabilityStatus.SUSPENDED);
+            List.of(
+                    AvailabilityStatus.PLANNED,
+                    AvailabilityStatus.IN_REVIEW,
+                    AvailabilityStatus.CHANGES_REQUESTED,
+                    AvailabilityStatus.APPROVED,
+                    AvailabilityStatus.OPEN,
+                    AvailabilityStatus.SUSPENDED);
 
     private final MovieAvailabilityRepository movieAvailabilityRepository;
     private final Clock businessClock;
+    private final LifecycleEventNotifier lifecycleEventNotifier;
 
     @Autowired
     public MovieScheduler(
             MovieAvailabilityRepository movieAvailabilityRepository,
+            LifecycleEventNotifier lifecycleEventNotifier,
             @Value("${movie.lifecycle.time-zone:Asia/Ho_Chi_Minh}") String timeZone) {
-        this(movieAvailabilityRepository, Clock.system(ZoneId.of(timeZone)));
+        this(movieAvailabilityRepository, Clock.system(ZoneId.of(timeZone)), lifecycleEventNotifier);
     }
 
-    MovieScheduler(MovieAvailabilityRepository movieAvailabilityRepository, Clock businessClock) {
+    MovieScheduler(
+            MovieAvailabilityRepository movieAvailabilityRepository,
+            Clock businessClock,
+            LifecycleEventNotifier lifecycleEventNotifier) {
         this.movieAvailabilityRepository = movieAvailabilityRepository;
         this.businessClock = businessClock;
+        this.lifecycleEventNotifier = lifecycleEventNotifier;
     }
 
     @Scheduled(
@@ -68,16 +82,18 @@ public class MovieScheduler {
         }
 
         movieAvailabilityRepository.saveAll(expired);
+        expired.forEach(availability -> notifyChange(availability, "AUTO_CLOSED"));
         log.info("[MovieScheduler] Done. {} availability window(s) transitioned to CLOSED.", expired.size());
     }
 
     @Scheduled(
-            cron = "${movie.lifecycle.open-cron:0 10 0 * * *}",
+            cron = "${movie.lifecycle.open-cron:0 * * * * *}",
             zone = "${movie.lifecycle.time-zone:Asia/Ho_Chi_Minh}")
     @Transactional
     public void autoOpenDueAvailability() {
         LocalDate today = LocalDate.now(businessClock);
-        List<MovieAvailability> dueToOpen = movieAvailabilityRepository.findDueToOpen(today);
+        LocalDateTime now = LocalDateTime.now(businessClock);
+        List<MovieAvailability> dueToOpen = movieAvailabilityRepository.findDueToOpen(now, today);
 
         if (dueToOpen.isEmpty()) {
             log.debug("[MovieScheduler] No release-plan windows to open for {}", today);
@@ -97,7 +113,18 @@ public class MovieScheduler {
         }
 
         movieAvailabilityRepository.saveAll(dueToOpen);
+        dueToOpen.forEach(availability -> notifyChange(availability, "AUTO_OPENED"));
         log.info("[MovieScheduler] Done. {} availability window(s) transitioned to OPEN.",
                 dueToOpen.size());
+    }
+
+    private void notifyChange(MovieAvailability availability, String action) {
+        lifecycleEventNotifier.notifyChange(
+                "RELEASE_PLAN",
+                availability.getAvailabilityId(),
+                availability.getStatus().name(),
+                action,
+                availability.getMovie().getMovieId(),
+                availability.getCluster().getClusterId());
     }
 }

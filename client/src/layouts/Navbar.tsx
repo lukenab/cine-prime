@@ -4,6 +4,7 @@ import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { userApi } from "../api/userApi";
 import { movieApi } from "../api/movieApi";
+import { defaultPathForRole } from "../utils/roleRoutes";
 import { useBookingFlow } from "../context/BookingFlowContext";
 
 const ACCENT = "#3b82f6";
@@ -25,6 +26,8 @@ const roleLabels: Record<string, string> = {
   ROLE_SUPER_ADMIN: "Super Admin",
   ROLE_ADMIN: "Admin",
   ROLE_EMPLOYEE: "Employee",
+  ROLE_BRANCH_MANAGER: "Branch Manager",
+  ROLE_PROGRAMMING_OPERATOR: "Programming Operator",
   ROLE_MEMBER: "Member",
 };
 
@@ -42,7 +45,8 @@ export function Navbar() {
   const token = localStorage.getItem("accessToken");
   const isLogged = !!token;
   const username = user?.username || "User";
-  const isStaff = user?.role === "ROLE_SUPER_ADMIN" || user?.role === "ROLE_ADMIN" || user?.role === "ROLE_EMPLOYEE";
+  const isStaff = ["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_PROGRAMMING_OPERATOR", "ROLE_BRANCH_MANAGER", "ROLE_EMPLOYEE"].includes(user?.role ?? "");
+  const staffWorkspacePath = defaultPathForRole(user?.role ?? "");
 
   // Fetch avatar khi user đăng nhập
   useEffect(() => {
@@ -324,12 +328,12 @@ export function Navbar() {
                   )}
                   {isStaff && (
                     <button
-                      onClick={() => { navigate("/admin"); setDropdownOpen(false); }}
+                      onClick={() => { navigate(staffWorkspacePath); setDropdownOpen(false); }}
                       style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", border: "none", background: "transparent", cursor: "pointer", borderRadius: 8, color: "rgba(255,255,255,0.6)", fontSize: 13, transition: "all 0.15s" }}
                       onMouseEnter={e => { e.currentTarget.style.background = "rgba(59,130,246,0.1)"; e.currentTarget.style.color = "#60a5fa"; }}
                       onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "rgba(255,255,255,0.6)"; }}
                     >
-                      <LayoutDashboard size={15} /> Back to Admin
+                      <LayoutDashboard size={15} /> Back to workspace
                     </button>
                   )}
                   <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "4px 0" }} />
@@ -461,12 +465,12 @@ export function Navbar() {
 
           {isStaff && (
             <button
-              onClick={() => { navigate("/admin"); setMenuOpen(false); }}
+              onClick={() => { navigate(staffWorkspacePath); setMenuOpen(false); }}
               className="flex items-center justify-center gap-2 px-5 py-3 rounded-full w-full mt-1 text-sm font-semibold"
               style={{ color: "#60a5fa", border: "1px solid rgba(59,130,246,0.4)", backgroundColor: "rgba(59,130,246,0.08)" }}
             >
               <LayoutDashboard size={16} />
-              Back to Admin
+              Back to workspace
             </button>
           )}
 

@@ -50,7 +50,7 @@ public class ProductionCompanyController {
     // ADMIN + EMPLOYEE - a production company is added inline while creating/editing a movie
     // in MovieEditorPage (both roles use it, same rationale as PersonController's create/update),
     // not a standalone governance action like genre creation.
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     @PostMapping
     public ApiResponse<ProductionCompanyResponse> create(@Valid @RequestBody ProductionCompanyRequest req) {
         // If this exact TMDB company was already created (e.g. a concurrent save, or the same
@@ -79,7 +79,7 @@ public class ProductionCompanyController {
                 .build();
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     @PutMapping("/{id}")
     public ApiResponse<ProductionCompanyResponse> update(@PathVariable Long id,
                                                           @Valid @RequestBody ProductionCompanyRequest req) {

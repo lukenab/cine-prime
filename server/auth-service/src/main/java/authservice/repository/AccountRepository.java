@@ -15,6 +15,7 @@ import org.springframework.data.repository.query.Param;
 public interface AccountRepository extends JpaRepository<Account, String>, JpaSpecificationExecutor<Account> {
     Optional<Account> findByUsername(String username);
     Optional<Account> findByEmail(String email);
+    Optional<Account> findByUsernameIgnoreCaseOrEmailIgnoreCase(String username, String email);
 
     boolean existsByUsername(String username);
     boolean existsByEmail(String email);

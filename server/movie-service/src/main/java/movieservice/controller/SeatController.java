@@ -49,7 +49,7 @@ public class SeatController {
     // `[Backend] Enforce movie-service endpoint authorization matrix`: edits seat structure
     // (type/price), not a booking action - had no @PreAuthorize at all, so any authenticated
     // CUSTOMER could change a seat's type/price. Room/seat configuration is ADMIN/EMPLOYEE only.
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}")
     public ApiResponse<SeatResponse> updateSeat(@PathVariable long id,
                                                 @Valid @RequestBody SeatRequest request) {

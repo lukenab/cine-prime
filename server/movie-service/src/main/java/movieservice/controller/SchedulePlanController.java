@@ -17,11 +17,11 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/schedule-plans")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
 public class SchedulePlanController {
     private final SchedulePlanService schedulePlanService;
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     public ApiResponse<Page<SchedulePlanSummaryResponse>> list(
             @RequestParam(required = false) SchedulePlanStatus status,
             @RequestParam(defaultValue = "0") int page,
@@ -33,11 +33,13 @@ public class SchedulePlanController {
     }
 
     @GetMapping("/{planId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     public ApiResponse<SchedulePlanResponse> get(@PathVariable Long planId) {
         return ok(schedulePlanService.get(planId));
     }
 
     @PostMapping("/{planId}/revalidate")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     public ApiResponse<SchedulePlanResponse> revalidate(
             @PathVariable Long planId,
             Authentication authentication) {
@@ -45,6 +47,7 @@ public class SchedulePlanController {
     }
 
     @PostMapping("/{planId}/submit-review")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     public ApiResponse<SchedulePlanResponse> submitReview(
             @PathVariable Long planId,
             @Valid @RequestBody(required = false) SchedulePlanReviewRequest request,
@@ -54,6 +57,7 @@ public class SchedulePlanController {
     }
 
     @PostMapping("/{planId}/request-changes")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<SchedulePlanResponse> requestChanges(
             @PathVariable Long planId,
             @Valid @RequestBody(required = false) SchedulePlanReviewRequest request,
@@ -63,6 +67,7 @@ public class SchedulePlanController {
     }
 
     @PostMapping("/{planId}/publish")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<SchedulePlanResponse> publish(
             @PathVariable Long planId,
             Authentication authentication) {

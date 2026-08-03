@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Plus, Search, RefreshCw, AlertCircle, ShieldCheck, Pencil, Trash2, X } from "lucide-react";
-import { useOutletContext } from "react-router-dom";
 import { movieApi, type AgeRatingResponse, type AgeRatingRequest } from "../../api/movieApi";
+import { useRole } from "../../hooks/useRole";
 
 // ── Rating badge color map ─────────────────────────────────────────────────────
 
@@ -143,7 +143,7 @@ function AgeRatingModal({ open, editing, onClose, onSave, submitting }: ModalPro
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function ManageAgeRatingsPage() {
-  const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
+  const { isAdmin } = useRole();
 
   const [ratings, setRatings] = useState<AgeRatingResponse[]>([]);
   const [loading, setLoading] = useState(false);
@@ -223,7 +223,7 @@ export default function ManageAgeRatingsPage() {
           Age Ratings
         </h1>
         <p style={{ color: "var(--text-sub)", fontSize: "13px" }}>
-          Manage content rating codes shown on movies
+          {isAdmin ? "Manage content rating codes shown on movies" : "Reference audience classifications and minimum ages used in film programming"}
         </p>
       </div>
 
@@ -277,9 +277,11 @@ export default function ManageAgeRatingsPage() {
         <button onClick={load} disabled={loading} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all hover:opacity-80 disabled:opacity-50" style={{ fontSize: "14px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}>
           <RefreshCw size={15} className={loading ? "animate-spin" : ""} /> {loading ? "Loading…" : "Refresh"}
         </button>
-        <button onClick={openCreate} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all shadow-sm" style={{ fontSize: "14px", fontWeight: 500, background: "#d97706" }}>
-          <Plus size={16} /> Add Rating
-        </button>
+        {isAdmin && (
+          <button onClick={openCreate} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all shadow-sm" style={{ fontSize: "14px", fontWeight: 500, background: "#d97706" }}>
+            <Plus size={16} /> Add Rating
+          </button>
+        )}
       </div>
 
       {/* Table */}
@@ -287,7 +289,7 @@ export default function ManageAgeRatingsPage() {
         <table className="w-full">
           <thead>
             <tr className="border-b" style={{ borderColor: "var(--border-color)", backgroundColor: "rgba(128,128,128,0.04)" }}>
-              {["Code", "Min Age", "Description", "Actions"].map((h) => (
+              {["Code", "Min Age", "Description", ...(isAdmin ? ["Actions"] : [])].map((h) => (
                 <th key={h} className="px-5 py-3.5 text-left">
                   <span style={{ color: "var(--text-sub)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>{h}</span>
                 </th>
@@ -296,9 +298,9 @@ export default function ManageAgeRatingsPage() {
           </thead>
           <tbody>
             {loading && ratings.length === 0 ? (
-              <tr><td colSpan={4} className="px-5 py-16 text-center"><RefreshCw size={18} className="animate-spin mx-auto mb-2" style={{ color: "var(--text-sub)" }} /><p style={{ fontSize: "14px", color: "var(--text-sub)" }}>Loading…</p></td></tr>
+              <tr><td colSpan={isAdmin ? 4 : 3} className="px-5 py-16 text-center"><RefreshCw size={18} className="animate-spin mx-auto mb-2" style={{ color: "var(--text-sub)" }} /><p style={{ fontSize: "14px", color: "var(--text-sub)" }}>Loading…</p></td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={4} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>{search ? "No results." : "No age ratings yet."}</td></tr>
+              <tr><td colSpan={isAdmin ? 4 : 3} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>{search ? "No results." : "No age ratings yet."}</td></tr>
             ) : (
               filtered.map((r) => {
                 const style = getRatingStyle(r.ratingCode);
@@ -317,7 +319,7 @@ export default function ManageAgeRatingsPage() {
                         {r.description}
                       </span>
                     </td>
-                    <td className="px-5 py-3.5">
+                    {isAdmin && <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">
                         <button onClick={() => openEdit(r)} className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-colors" style={{ fontSize: "13px", color: "var(--text-sub)", borderColor: "var(--border-color)" }}>
                           <Pencil size={14} /> Edit
@@ -326,7 +328,7 @@ export default function ManageAgeRatingsPage() {
                           <Trash2 size={14} /> Delete
                         </button>
                       </div>
-                    </td>
+                    </td>}
                   </tr>
                 );
               })
@@ -343,7 +345,7 @@ export default function ManageAgeRatingsPage() {
       </div>
 
       {/* Confirm delete */}
-      {deleteTarget && (
+      {isAdmin && deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={() => setDeleteTarget(null)} />
           <div className="relative w-full max-w-sm mx-4 rounded-2xl shadow-2xl p-6" style={{ background: "var(--bg-main)" }}>
@@ -363,13 +365,13 @@ export default function ManageAgeRatingsPage() {
         </div>
       )}
 
-      <AgeRatingModal
+      {isAdmin && <AgeRatingModal
         open={modalOpen}
         editing={editing}
         onClose={() => setModalOpen(false)}
         onSave={handleSave}
         submitting={submitting}
-      />
+      />}
 
       <style>{`
         .hover-row:hover { background-color: rgba(128,128,128,0.04); }

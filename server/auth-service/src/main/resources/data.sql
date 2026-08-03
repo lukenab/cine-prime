@@ -4,7 +4,8 @@
 INSERT INTO roles (role_name, description) VALUES
 ('ADMIN',    'Highest privilege — full CRUD on all modules including employees, members, cinema rooms, statistics'),
 ('BRANCH_MANAGER', 'Cinema branch manager — can prepare concession product proposals'),
-('EMPLOYEE', 'Counter staff — ticket selling, ticket booking, search members, manage movies, promotions'),
+('PROGRAMMING_OPERATOR', 'Head-office programming staff — prepares movie, release and schedule drafts'),
+('EMPLOYEE', 'Cinema staff — ticket sales, booking and branch operations'),
 ('MEMBER',   'Registered customer — book tickets, manage account, view booking history, manage loyalty points')
 ON CONFLICT (role_name) DO NOTHING;
 
@@ -64,11 +65,16 @@ ON CONFLICT DO NOTHING;
 
 -- EMPLOYEE:
 INSERT INTO role_permissions (role_name, permission_name) VALUES
-('EMPLOYEE', 'MOVIE_READ'),      ('EMPLOYEE', 'MOVIE_MANAGE'),
-('EMPLOYEE', 'SHOWTIME_READ'),   ('EMPLOYEE', 'SHOWTIME_MANAGE'),
+('EMPLOYEE', 'MOVIE_READ'),
+('EMPLOYEE', 'SHOWTIME_READ'),
 ('EMPLOYEE', 'BOOKING_READ'),    ('EMPLOYEE', 'BOOKING_MANAGE'), ('EMPLOYEE', 'TICKET_MANAGE'),
-('EMPLOYEE', 'MEMBER_READ'),
-('EMPLOYEE', 'PROMOTION_READ'),  ('EMPLOYEE', 'PROMOTION_MANAGE')
+('EMPLOYEE', 'PROMOTION_READ')
+ON CONFLICT DO NOTHING;
+
+-- PROGRAMMING OPERATOR: prepares content and scheduling drafts; approval remains ADMIN-only.
+INSERT INTO role_permissions (role_name, permission_name) VALUES
+('PROGRAMMING_OPERATOR', 'MOVIE_READ'), ('PROGRAMMING_OPERATOR', 'MOVIE_MANAGE'),
+('PROGRAMMING_OPERATOR', 'SHOWTIME_READ'), ('PROGRAMMING_OPERATOR', 'SHOWTIME_MANAGE')
 ON CONFLICT DO NOTHING;
 
 -- MEMBER:

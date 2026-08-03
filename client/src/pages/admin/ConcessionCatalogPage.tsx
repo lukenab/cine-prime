@@ -1102,7 +1102,12 @@ function ProductCard({
   return (
     <article className="group overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] transition hover:-translate-y-0.5 hover:border-blue-500/30 hover:shadow-lg">
       <div className="relative">
-        <ProductVisual imageUrl={product.imageUrl} name={product.name} className="h-44 w-full" />
+        <ProductVisual
+          imageUrl={product.imageUrl}
+          name={product.name}
+          className="aspect-[3/2] w-full bg-slate-950"
+          fit="contain"
+        />
         <div className="absolute left-3 top-3 flex gap-2">
           <span className="rounded-lg bg-black/65 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white backdrop-blur">{product.category}</span>
           <ProductWorkflowBadge status={workflowStatus} />
@@ -1193,7 +1198,12 @@ function ComboWorkspace({
           .join(" · ");
         return (
           <article key={combo.id} className="overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] transition hover:border-blue-500/30">
-            <ProductVisual imageUrl={combo.imageUrl} name={combo.name} className="h-48 w-full" />
+            <ProductVisual
+              imageUrl={combo.imageUrl}
+              name={combo.name}
+              className="aspect-[3/2] w-full bg-slate-950"
+              fit="contain"
+            />
             <div className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -1936,12 +1946,30 @@ function Modal({
   );
 }
 
-function ProductVisual({ imageUrl, name, className }: { imageUrl?: string; name: string; className: string }) {
+function ProductVisual({
+  imageUrl,
+  name,
+  className,
+  fit = "cover",
+}: {
+  imageUrl?: string;
+  name: string;
+  className: string;
+  fit?: "cover" | "contain";
+}) {
   if (imageUrl) {
     const resolvedUrl = imageUrl.startsWith("/api/")
       ? `${import.meta.env.VITE_API_URL ?? "http://localhost:8080"}${imageUrl}`
       : imageUrl;
-    return <ImageWithFallback key={resolvedUrl} src={resolvedUrl} alt={name} className={`${className} block object-cover`} loading="lazy" />;
+    return (
+      <ImageWithFallback
+        key={resolvedUrl}
+        src={resolvedUrl}
+        alt={name}
+        className={`${className} block ${fit === "contain" ? "object-contain" : "object-cover"}`}
+        loading="lazy"
+      />
+    );
   }
   return (
     <div className={`${className} grid place-items-center bg-gradient-to-br from-blue-500/15 via-violet-500/10 to-amber-500/15 text-blue-500`}>

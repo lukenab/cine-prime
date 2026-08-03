@@ -151,6 +151,19 @@ public class ShowtimeGenerationRun {
     )
     Set<CinemaRoom> excludedRooms = new LinkedHashSet<>();
 
+    /**
+     * Explicit screening-version overrides selected for this run. If a movie has no version in
+     * this set, candidate generation uses the default AUTO strategy for that movie.
+     */
+    @Builder.Default
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "showtime_generation_run_screening_version_override",
+            joinColumns = @JoinColumn(name = "generation_run_id"),
+            inverseJoinColumns = @JoinColumn(name = "screening_version_id")
+    )
+    Set<MovieScreeningVersion> screeningVersionOverrides = new LinkedHashSet<>();
+
     @OneToMany(mappedBy = "generationRun", fetch = FetchType.LAZY)
     @OrderBy("showDate ASC, startTime ASC ")
     List<ShowTime> generateShowtimes;

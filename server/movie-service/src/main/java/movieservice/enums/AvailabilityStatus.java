@@ -7,6 +7,9 @@ package movieservice.enums;
  */
 public enum AvailabilityStatus {
     PLANNED,
+    IN_REVIEW,
+    CHANGES_REQUESTED,
+    APPROVED,
     OPEN,
     SUSPENDED,
     CLOSED

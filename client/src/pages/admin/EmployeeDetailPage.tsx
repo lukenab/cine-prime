@@ -1,349 +1,458 @@
-import { useState, useEffect } from "react";
-import { useParams, useNavigate, useOutletContext } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
-  ArrowLeft, User, Phone, MapPin, CreditCard,
-  Calendar, Shield, Clock, Copy, Check, Briefcase, Hash,
-  Send, Loader2, CheckCircle2, AlertCircle,
+  ArrowLeft,
+  BriefcaseBusiness,
+  Check,
+  ChevronDown,
+  Copy,
+  Ellipsis,
+  IdCard,
+  KeyRound,
+  MailPlus,
+  Pencil,
+  RotateCcw,
+  ShieldCheck,
+  UserRound,
+  UserRoundX,
 } from "lucide-react";
-import { employeeApi, type EmployeeResponse } from "../../api/employeeApi";
-import { authApi } from "../../api/authApi";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+import { authApi } from "../../api/authApi";
+import { employeeApi, type EmployeeResponse } from "../../api/employeeApi";
+import { movieApi, type ClusterResponse } from "../../api/movieApi";
+import { Toast } from "../../components/shared/Toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../components/ui/alert-dialog";
+import { Badge } from "../../components/ui/badge";
+import { Button } from "../../components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../../components/ui/dropdown-menu";
+
 interface AccountInfo {
   accountId: string;
-  username: string;
-  email: string;
+  username?: string;
+  email?: string;
   status: string;
-  createdAt: string;
-  roles: { roleName: string }[];
-}
-
-// ── Sub-components ────────────────────────────────────────────────────────────
-function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value?: string }) {
-  return (
-    <div className="flex items-start gap-3 py-3" style={{ borderBottom: "1px solid var(--border-color)" }}>
-      <div className="mt-0.5 flex-shrink-0" style={{ color: "var(--text-sub)" }}>{icon}</div>
-      <div className="min-w-0 flex-1">
-        <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-sub)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "2px" }}>
-          {label}
-        </p>
-        <p style={{ fontSize: "14px", color: "var(--text-main)", wordBreak: "break-word" }}>{value || "—"}</p>
-      </div>
-    </div>
-  );
-}
-
-function CopyableId({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = () => {
-    navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-  const truncated = value.length > 20 ? `${value.slice(0, 8)}...${value.slice(-5)}` : value;
-  return (
-    <div className="flex items-start gap-3 py-3" style={{ borderBottom: "1px solid var(--border-color)" }}>
-      <div className="mt-0.5 flex-shrink-0" style={{ color: "var(--text-sub)" }}>{icon}</div>
-      <div className="min-w-0 flex-1">
-        <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-sub)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "2px" }}>{label}</p>
-        <div className="flex items-center gap-2">
-          <code style={{ fontSize: "13px", color: "var(--text-main)", fontFamily: "monospace" }}>{truncated}</code>
-          <button
-            onClick={handleCopy}
-            className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-gray-100 transition-colors"
-            style={{ color: copied ? "#10b981" : "var(--text-sub)" }}
-            title="Copy full ID"
-          >
-            {copied ? <Check size={12} /> : <Copy size={12} />}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const AVATAR_GRADIENTS = [
-  "linear-gradient(135deg, #3b82f6, #6366f1)",
-  "linear-gradient(135deg, #10b981, #059669)",
-  "linear-gradient(135deg, #f59e0b, #ef4444)",
-  "linear-gradient(135deg, #8b5cf6, #ec4899)",
-  "linear-gradient(135deg, #06b6d4, #3b82f6)",
-  "linear-gradient(135deg, #f97316, #f59e0b)",
-];
-function gradientFromId(id: string) {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xffffffff;
-  return AVATAR_GRADIENTS[Math.abs(h) % AVATAR_GRADIENTS.length];
+  createdAt?: string;
+  lastLoginAt?: string | null;
+  roles?: Array<{ roleName: string }>;
 }
 
 const DEPARTMENT_LABELS: Record<string, string> = {
-  BOX_OFFICE: "Box Office",
+  GENERAL_OPERATIONS: "General operations",
+  BOX_OFFICE: "Box office",
+  FOOD_BEVERAGE: "Food & beverage",
+  FLOOR_GUEST_SERVICES: "Floor & guest services",
+  PROJECTION_TECHNICAL: "Projection & technical",
+  FACILITIES_MAINTENANCE: "Facilities & maintenance",
   CONCESSION: "Concession",
-  FLOOR: "Floor",
+  FLOOR: "Floor operations",
   PROJECTION: "Projection",
   MANAGEMENT: "Management",
-  CUSTOMER_SERVICE: "Customer Service",
+  CUSTOMER_SERVICE: "Customer service",
+};
+
+const POSITION_LABELS: Record<string, string> = {
+  TEAM_MEMBER: "Team member",
+  STAFF: "Staff",
+  SUPERVISOR: "Supervisor",
+  ASSISTANT_MANAGER: "Assistant manager",
+  CINEMA_MANAGER: "Cinema manager",
+  MANAGER: "Manager",
 };
 
 const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
   FULL_TIME: "Full-time",
   PART_TIME: "Part-time",
+  FIXED_TERM: "Fixed-term",
+  SEASONAL: "Seasonal",
   PROBATION: "Probation",
   INTERN: "Intern",
   CONTRACT: "Contract",
 };
 
-const POSITION_LABELS: Record<string, string> = {
-  STAFF: "Staff",
-  SUPERVISOR: "Supervisor",
-  MANAGER: "Manager",
-};
+const formatDate = (value?: string | null) => value
+  ? new Date(value).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+  : "—";
 
-// Issue #162 Part C: local toast, matches the pattern used in SettingsPage.tsx / CreateUserPage.tsx
-function Toast({ type, message, onClose }: { type: "success" | "error"; message: string; onClose: () => void }) {
-  return (
-    <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-xl"
-      style={{ background: type === "success" ? "#059669" : "#ef4444", color: "#fff", minWidth: "280px" }}>
-      {type === "success" ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
-      <span style={{ fontSize: "14px", fontWeight: 500 }}>{message}</span>
-      <button onClick={onClose} className="ml-auto opacity-75 hover:opacity-100" style={{ fontSize: "18px", lineHeight: 1 }}>×</button>
-    </div>
-  );
-}
+const formatDateTime = (value?: string | null) => value
+  ? new Date(value).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+  : "Never";
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+const titleCase = (value?: string | null) => value
+  ? value.toLowerCase().split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ")
+  : "—";
+
 export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
 
   const [employee, setEmployee] = useState<EmployeeResponse | null>(null);
-  const [account, setAccount]   = useState<AccountInfo | null>(null);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState<string | null>(null);
-  const [toast, setToast]       = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [resending, setResending] = useState(false);
+  const [account, setAccount] = useState<AccountInfo | null>(null);
+  const [cluster, setCluster] = useState<ClusterResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [technicalOpen, setTechnicalOpen] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [confirmStatus, setConfirmStatus] = useState<"disable" | "reactivate" | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
     if (!id) return;
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        // Fetch employee (includes user profile fields)
-        const empRes = await employeeApi.getById(id);
-        const emp: EmployeeResponse = (empRes as any)?.result;
-        setEmployee(emp);
 
-        // Fetch account info from auth-service
-        try {
-          const accRes = await authApi.getAccountById(emp.accountId);
-          setAccount((accRes as any)?.result ?? null);
-        } catch {
-          // auth-service unreachable — show what we have
-          setAccount(null);
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const employeeResponse = await employeeApi.getById(id);
+        const nextEmployee: EmployeeResponse = (employeeResponse as any)?.result;
+        setEmployee(nextEmployee);
+
+        const [accountResult, clusterResult] = await Promise.allSettled([
+          authApi.getAccountById(nextEmployee.accountId),
+          movieApi.getClusters(),
+        ]);
+
+        if (accountResult.status === "fulfilled") {
+          setAccount((accountResult.value as any)?.result ?? null);
         }
-      } catch (err: any) {
-        setError(err?.response?.data?.message || "Failed to load employee details.");
+
+        if (clusterResult.status === "fulfilled") {
+          const clusters: ClusterResponse[] = (clusterResult.value as any)?.result ?? [];
+          setCluster(clusters.find((item) =>
+            String(item.clusterId) === String(nextEmployee.cinemaId)
+            || item.clusterCode === nextEmployee.cinemaId,
+          ) ?? null);
+        }
+      } catch (requestError: any) {
+        setError(requestError?.response?.data?.message || "Unable to load employee details.");
       } finally {
         setLoading(false);
       }
     };
-    fetchData();
+
+    load();
   }, [id]);
 
-  // Issue #162 Part C: admin resends the activation email when the 24h link
-  // expired before the employee used it. Only relevant while account is PENDING.
-  const handleResendActivation = async () => {
-    if (!account?.accountId) return;
-    setResending(true);
+  const initials = useMemo(() => employee?.fullName
+    ?.split(/\s+/)
+    .filter(Boolean)
+    .slice(-2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase() || "?", [employee?.fullName]);
+
+  const isDisabled = employee?.status === "DISABLED" || account?.status === "INACTIVE";
+  const isPending = account?.status === "PENDING";
+  const branchName = cluster?.clusterName || employee?.cinemaId || "Unassigned";
+
+  const runAction = async (action: () => Promise<unknown>, successMessage: string) => {
+    setWorking(true);
     try {
-      await authApi.resendActivation(account.accountId);
-      setToast({ type: "success", message: `Activation email resent to ${account.email}.` });
-    } catch (err: any) {
-      setToast({ type: "error", message: err?.response?.data?.message || "Failed to resend activation email." });
+      await action();
+      setToast({ type: "success", message: successMessage });
+    } catch (actionError: any) {
+      setToast({ type: "error", message: actionError?.response?.data?.message || "Action failed. Please try again." });
+      throw actionError;
     } finally {
-      setResending(false);
+      setWorking(false);
     }
   };
 
-  const accentColor    = isDarkMode ? "#3b82f6" : "#2563eb";
-  const initials       = employee?.fullName?.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) ?? "??";
-  const avatarGradient = id ? gradientFromId(id) : AVATAR_GRADIENTS[0];
-  const isActive       = employee?.status === "ACTIVE";
+  const resendActivation = async () => {
+    if (!account?.accountId) return;
+    try {
+      await runAction(() => authApi.resendActivation(account.accountId), `Activation email resent to ${account.email || "the employee"}.`);
+    } catch {
+      // Toast is handled by runAction.
+    }
+  };
+
+  const revokeSessions = async () => {
+    if (!account?.accountId) return;
+    try {
+      await runAction(() => authApi.revokeSessions(account.accountId), "All active sessions have been revoked.");
+    } catch {
+      // Toast is handled by runAction.
+    }
+  };
+
+  const updateStatus = async () => {
+    if (!employee || !confirmStatus) return;
+    const action = confirmStatus;
+    try {
+      await runAction(
+        () => action === "disable" ? employeeApi.disable(employee.employeeId) : employeeApi.reactivate(employee.employeeId),
+        action === "disable" ? "Employee access suspended." : "Employee access reactivated.",
+      );
+      setEmployee((current) => current ? { ...current, status: action === "disable" ? "DISABLED" : "ACTIVE" } : current);
+      setConfirmStatus(null);
+    } catch {
+      // Keep the dialog open so the user can retry or cancel.
+    }
+  };
 
   return (
-    <div>
+    <div className="w-full pb-10 text-left text-[var(--text-main)]">
       {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
 
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <button
-          onClick={() => navigate("/admin/employees")}
-          className="w-9 h-9 rounded-xl flex items-center justify-center border transition-colors hover:opacity-80"
-          style={{ background: "var(--bg-card)", borderColor: "var(--border-color)", color: "var(--text-main)" }}
-        >
-          <ArrowLeft size={16} />
-        </button>
-        <div>
-          <h1 style={{ fontSize: "22px", fontWeight: 600, color: "var(--text-main)", letterSpacing: "-0.01em" }}>Employee Detail</h1>
-          <p style={{ fontSize: "13px", color: "var(--text-sub)" }}>Profile and employment information</p>
-        </div>
-      </div>
+      <button
+        type="button"
+        onClick={() => navigate("/admin/people?tab=staff")}
+        className="mb-5 inline-flex items-center gap-2 rounded-lg px-1 py-1 text-sm font-medium text-[var(--text-sub)] transition-colors hover:text-blue-500"
+      >
+        <ArrowLeft size={16} /> Staff
+      </button>
 
-      {/* Loading */}
-      {loading && (
-        <div className="flex justify-center items-center py-24">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-        </div>
-      )}
+      {loading && <EmployeeDetailSkeleton />}
 
-      {/* Error */}
       {!loading && error && (
-        <div className="rounded-2xl border p-8 text-center" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-          <p style={{ color: "#ef4444", fontSize: "14px" }}>{error}</p>
-          <button onClick={() => navigate("/admin/employees")} className="mt-4 text-sm underline" style={{ color: "var(--text-sub)" }}>
-            Back to Employees
-          </button>
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-6 py-12 text-center">
+          <p className="text-sm font-medium text-red-500">{error}</p>
+          <Button variant="outline" onClick={() => navigate("/admin/people?tab=staff")} className="mt-5 rounded-xl border-[var(--border-color)] bg-[var(--bg-card)]">
+            Return to staff
+          </Button>
         </div>
       )}
 
-      {/* Content */}
       {!loading && !error && employee && (
-        <div className="grid gap-5" style={{ gridTemplateColumns: "280px 1fr" }}>
-
-          {/* Left — Avatar & status */}
-          <div className="flex flex-col gap-4">
-            <div
-              className="rounded-2xl border p-6 flex flex-col items-center text-center"
-              style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
-            >
-              <div
-                className="w-20 h-20 rounded-full flex items-center justify-center text-white text-xl mb-4"
-                style={{ background: avatarGradient, fontWeight: 700 }}
-              >
-                {initials}
+        <>
+          <section className="mb-5 flex flex-col gap-5 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] p-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 items-center gap-4">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-lg font-bold text-white shadow-sm">
+                {employee.avatarUrl ? <img src={employee.avatarUrl} alt="" className="h-full w-full object-cover" /> : initials}
               </div>
-
-              <p style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-main)", marginBottom: "2px" }}>
-                {employee.fullName}
-              </p>
-              {account && (
-                <p style={{ fontSize: "13px", color: "var(--text-sub)", marginBottom: "4px" }}>
-                  @{account.username}
-                </p>
-              )}
-              <p style={{ fontSize: "12px", color: "var(--text-sub)", marginBottom: "12px" }}>
-                {POSITION_LABELS[employee.position] ?? employee.position}
-              </p>
-
-              <span
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium mb-4"
-                style={{
-                  background: isActive ? "rgba(16,185,129,0.08)" : "rgba(107,114,128,0.08)",
-                  color: isActive ? "#059669" : "#6b7280",
-                }}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-emerald-500" : "bg-gray-400"}`} />
-                {isActive ? "Active" : "Disabled"}
-              </span>
-
-              {account?.status === "PENDING" && (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium mb-4"
-                  style={{ background: "rgba(245,158,11,0.1)", color: "#d97706" }}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                  Pending Activation
-                </span>
-              )}
-
-              {account && (
-                <div className="w-full">
-                  <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-sub)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "8px" }}>Role</p>
-                  {(account.roles ?? []).map((r) => (
-                    <span
-                      key={r.roleName}
-                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg border text-xs font-medium"
-                      style={{ background: "rgba(59,130,246,0.08)", color: "#2563eb", borderColor: "rgba(59,130,246,0.2)" }}
-                    >
-                      <Shield size={10} /> {r.roleName}
-                    </span>
-                  ))}
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="truncate text-2xl font-bold tracking-tight">{employee.fullName || "Unnamed employee"}</h1>
+                  <StatusBadge status={isPending ? "PENDING" : isDisabled ? "DISABLED" : "ACTIVE"} />
                 </div>
-              )}
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => navigate(`/admin/employees/edit/${id}`)}
-                className="w-full py-2.5 rounded-xl text-sm font-medium text-white hover:opacity-90 transition-all"
-                style={{ background: accentColor }}
-              >
-                Edit Employee
-              </button>
-              {account?.status === "PENDING" && (
-                <button
-                  onClick={handleResendActivation}
-                  disabled={resending}
-                  className="w-full py-2.5 rounded-xl border text-sm font-medium transition-colors hover:opacity-80 flex items-center justify-center gap-2 disabled:opacity-60"
-                  style={{ color: "#d97706", borderColor: "rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.05)" }}
-                >
-                  {resending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                  {resending ? "Sending..." : "Resend Activation Email"}
-                </button>
-              )}
-              <button
-                onClick={() => navigate("/admin/employees")}
-                className="w-full py-2.5 rounded-xl border text-sm font-medium hover:opacity-80 transition-all"
-                style={{ color: "var(--text-main)", borderColor: "var(--border-color)", background: "transparent" }}
-              >
-                Back to List
-              </button>
-            </div>
-          </div>
-
-          {/* Right — Info sections */}
-          <div className="flex flex-col gap-5">
-
-            {/* Employment Info */}
-            <div className="rounded-2xl border p-6" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-              <h2 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-main)", marginBottom: "4px" }}>Employment Information</h2>
-              <p style={{ fontSize: "12px", color: "var(--text-sub)", marginBottom: "16px" }}>Position and tenure data</p>
-              <CopyableId icon={<Hash size={15} />}      label="Employee ID" value={employee.employeeId} />
-              <InfoRow icon={<Hash size={15} />}         label="Employee Code" value={employee.employeeCode ?? "—"} />
-              <InfoRow icon={<Briefcase size={15} />}    label="Cinema ID" value={employee.cinemaId ?? "—"} />
-              <InfoRow icon={<Briefcase size={15} />}    label="Position"    value={POSITION_LABELS[employee.position] ?? employee.position} />
-              <InfoRow icon={<Briefcase size={15} />}    label="Department"  value={employee.department ? DEPARTMENT_LABELS[employee.department] ?? employee.department : "—"} />
-              <InfoRow icon={<Briefcase size={15} />}    label="Employment Type" value={employee.employmentType ? EMPLOYMENT_TYPE_LABELS[employee.employmentType] ?? employee.employmentType : "—"} />
-              <InfoRow icon={<Calendar size={15} />}     label="Hire Date"   value={employee.hireDate} />
-              <InfoRow icon={<Clock size={15} />}        label="Created At"  value={employee.createdAt ? new Date(employee.createdAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "—"} />
-            </div>
-
-            {/* Account Info */}
-            {account && (
-              <div className="rounded-2xl border p-6" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-                <h2 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-main)", marginBottom: "4px" }}>Account Information</h2>
-                <p style={{ fontSize: "12px", color: "var(--text-sub)", marginBottom: "16px" }}>Login credentials from Auth Service</p>
-                <CopyableId icon={<User size={15} />}   label="Account ID" value={account.accountId} />
-                <InfoRow icon={<User size={15} />}      label="Username"   value={account.username} />
-                <InfoRow icon={<Hash size={15} />}      label="Email"      value={account.email} />
-                <InfoRow icon={<Clock size={15} />}     label="Registered" value={account.createdAt ? new Date(account.createdAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "—"} />
+                <p className="mt-1 text-sm text-[var(--text-sub)]">
+                  {POSITION_LABELS[employee.position] ?? titleCase(employee.position)}
+                  <span className="mx-2 text-[var(--border-color)]">•</span>
+                  {branchName}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--text-sub)]">
+                  <span className="rounded-lg bg-blue-500/10 px-2 py-1 font-semibold text-blue-500">{employee.employeeCode || "Code pending"}</span>
+                  {account?.username && <span>@{account.username}</span>}
+                </div>
               </div>
-            )}
-
-            {/* Personal Info */}
-            <div className="rounded-2xl border p-6" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-              <h2 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-main)", marginBottom: "4px" }}>Personal Information</h2>
-              <p style={{ fontSize: "12px", color: "var(--text-sub)", marginBottom: "16px" }}>Profile data from User Service</p>
-              <InfoRow icon={<Phone size={15} />}      label="Phone Number"   value={employee.phoneNumber} />
-              <InfoRow icon={<Calendar size={15} />}   label="Date of Birth"  value={employee.dateOfBirth} />
-              <InfoRow icon={<User size={15} />}       label="Gender" value={employee.gender} />
-              <InfoRow icon={<CreditCard size={15} />} label="Identity Card"  value={employee.identityCard} />
-              <InfoRow icon={<MapPin size={15} />}     label="Address"        value={employee.address} />
             </div>
 
+            <div className="flex shrink-0 items-center gap-2 self-end lg:self-auto">
+              {isPending && (
+                <Button variant="outline" onClick={resendActivation} disabled={working} className="h-10 rounded-xl border-[var(--border-color)] bg-[var(--bg-main)] px-4">
+                  <MailPlus size={16} /> Resend activation
+                </Button>
+              )}
+              <Button onClick={() => navigate(`/admin/employees/edit/${employee.employeeId}`)} className="h-10 rounded-xl bg-blue-600 px-5 text-white hover:bg-blue-500">
+                <Pencil size={16} /> Edit employee
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="icon" variant="outline" className="size-10 rounded-xl border-[var(--border-color)] bg-[var(--bg-main)]" aria-label="More employee actions">
+                    <Ellipsis size={18} />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  <DropdownMenuItem disabled={!account || working} onClick={revokeSessions}><KeyRound /> Revoke sessions</DropdownMenuItem>
+                  {isPending && <DropdownMenuItem disabled={working} onClick={resendActivation}><MailPlus /> Resend activation</DropdownMenuItem>}
+                  <DropdownMenuSeparator />
+                  {isDisabled
+                    ? <DropdownMenuItem disabled={working} onClick={() => setConfirmStatus("reactivate")}><RotateCcw /> Reactivate employee</DropdownMenuItem>
+                    : <DropdownMenuItem disabled={working} variant="destructive" onClick={() => setConfirmStatus("disable")}><UserRoundX /> Suspend employee</DropdownMenuItem>}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </section>
+
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.75fr)]">
+            <div className="space-y-5">
+              <DetailCard icon={BriefcaseBusiness} title="Assignment" description="Branch assignment and employment terms">
+                <div className="grid grid-cols-1 sm:grid-cols-2">
+                  <DetailField label="Branch" value={branchName} supporting={cluster?.clusterCode} />
+                  <DetailField label="Primary work area" value={employee.department ? DEPARTMENT_LABELS[employee.department] ?? titleCase(employee.department) : "—"} />
+                  <DetailField label="Position" value={POSITION_LABELS[employee.position] ?? titleCase(employee.position)} />
+                  <DetailField label="Employment type" value={employee.employmentType ? EMPLOYMENT_TYPE_LABELS[employee.employmentType] ?? titleCase(employee.employmentType) : "—"} />
+                  <DetailField label="Hire date" value={formatDate(employee.hireDate)} />
+                  <DetailField label="Employee status" value={<StatusBadge status={employee.status} />} />
+                </div>
+              </DetailCard>
+
+              <DetailCard icon={UserRound} title="Contact & profile" description="Personal information supplied by the employee">
+                <div className="grid grid-cols-1 sm:grid-cols-2">
+                  <DetailField label="Full name" value={employee.fullName || "—"} />
+                  <DetailField label="Work email" value={account?.email || "—"} />
+                  <DetailField label="Phone" value={employee.phoneNumber || "—"} />
+                  <DetailField label="Date of birth" value={formatDate(employee.dateOfBirth)} />
+                  <DetailField label="Gender" value={titleCase(employee.gender)} />
+                  <DetailField label="Address" value={employee.address || "—"} />
+                </div>
+              </DetailCard>
+            </div>
+
+            <div className="space-y-5">
+              <DetailCard icon={ShieldCheck} title="Account & access" description="Authentication and operational permissions">
+                <div className="space-y-0">
+                  <SideField label="Account status" value={<StatusBadge status={account?.status || "UNAVAILABLE"} />} />
+                  <SideField label="Access role" value={
+                    <div className="flex flex-wrap justify-end gap-1.5">
+                      {(account?.roles?.length ? account.roles : [{ roleName: "EMPLOYEE" }]).map((role) => (
+                        <Badge key={role.roleName} variant="outline" className="border-blue-500/20 bg-blue-500/10 text-blue-500">{titleCase(role.roleName.replace(/^ROLE_/, ""))}</Badge>
+                      ))}
+                    </div>
+                  } />
+                  <SideField label="Username" value={account?.username || "Not activated"} />
+                  <SideField label="Email" value={account?.email || "—"} />
+                  <SideField label="Last login" value={formatDateTime(account?.lastLoginAt)} last />
+                </div>
+
+                {isPending && (
+                  <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+                    <p className="text-sm font-semibold text-amber-500">Activation pending</p>
+                    <p className="mt-1 text-xs leading-5 text-[var(--text-sub)]">The employee must use the secure email link to create a password before signing in.</p>
+                  </div>
+                )}
+              </DetailCard>
+
+              <section className="overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]">
+                <button type="button" onClick={() => setTechnicalOpen((open) => !open)} className="flex w-full items-center justify-between p-5 text-left transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.03]" aria-expanded={technicalOpen}>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-500/10 text-[var(--text-sub)]"><IdCard size={18} /></div>
+                    <div>
+                      <h2 className="text-sm font-semibold">Technical details</h2>
+                      <p className="mt-0.5 text-xs text-[var(--text-sub)]">Internal identifiers and audit timestamps</p>
+                    </div>
+                  </div>
+                  <ChevronDown size={17} className={`text-[var(--text-sub)] transition-transform ${technicalOpen ? "rotate-180" : ""}`} />
+                </button>
+                {technicalOpen && (
+                  <div className="border-t border-[var(--border-color)] px-5 pb-2">
+                    <CopyableField label="Employee ID" value={employee.employeeId} />
+                    <CopyableField label="Account ID" value={account?.accountId || employee.accountId} />
+                    <CopyableField label="Cinema reference" value={employee.cinemaId || "—"} />
+                    <SideField label="Created" value={formatDateTime(employee.createdAt)} />
+                    <SideField label="Updated" value={formatDateTime(employee.updatedAt)} last />
+                  </div>
+                )}
+              </section>
+            </div>
           </div>
-        </div>
+        </>
       )}
+
+      <AlertDialog open={!!confirmStatus} onOpenChange={(open) => !open && !working && setConfirmStatus(null)}>
+        <AlertDialogContent className="border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-main)]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmStatus === "disable" ? "Suspend this employee?" : "Reactivate this employee?"}</AlertDialogTitle>
+            <AlertDialogDescription className="text-[var(--text-sub)]">
+              {confirmStatus === "disable"
+                ? "The employee will lose operational access until an administrator reactivates the assignment."
+                : "The employee will regain operational access for the assigned branch."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={working}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={working}
+              onClick={(event) => { event.preventDefault(); updateStatus(); }}
+              className={confirmStatus === "disable" ? "bg-red-600 text-white hover:bg-red-500" : "bg-blue-600 text-white hover:bg-blue-500"}
+            >
+              {working ? "Working…" : confirmStatus === "disable" ? "Suspend" : "Reactivate"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+function DetailCard({ icon: Icon, title, description, children }: { icon: React.ElementType; title: string; description: string; children: React.ReactNode }) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]">
+      <header className="flex items-center gap-3 border-b border-[var(--border-color)] px-5 py-4">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-500"><Icon size={18} /></div>
+        <div>
+          <h2 className="text-sm font-semibold">{title}</h2>
+          <p className="mt-0.5 text-xs text-[var(--text-sub)]">{description}</p>
+        </div>
+      </header>
+      <div className="p-5">{children}</div>
+    </section>
+  );
+}
+
+function DetailField({ label, value, supporting }: { label: string; value: React.ReactNode; supporting?: string | null }) {
+  return (
+    <div className="min-h-20 border-b border-[var(--border-color)] py-3 pr-4 sm:odd:border-r sm:even:pl-5">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--text-sub)]">{label}</p>
+      <div className="mt-2 text-sm font-semibold text-[var(--text-main)]">{value}</div>
+      {supporting && <p className="mt-1 text-xs text-[var(--text-sub)]">{supporting}</p>}
+    </div>
+  );
+}
+
+function SideField({ label, value, last = false }: { label: string; value: React.ReactNode; last?: boolean }) {
+  return (
+    <div className={`flex min-h-12 items-center justify-between gap-4 py-3 ${last ? "" : "border-b border-[var(--border-color)]"}`}>
+      <span className="text-xs font-medium text-[var(--text-sub)]">{label}</span>
+      <div className="max-w-[65%] break-words text-right text-sm font-semibold text-[var(--text-main)]">{value}</div>
+    </div>
+  );
+}
+
+function CopyableField({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <div className="flex min-h-12 items-center justify-between gap-4 border-b border-[var(--border-color)] py-3">
+      <span className="text-xs font-medium text-[var(--text-sub)]">{label}</span>
+      <div className="flex min-w-0 items-center justify-end gap-2">
+        <code className="max-w-52 truncate text-xs text-[var(--text-main)]">{value}</code>
+        <button type="button" onClick={copy} className="flex size-7 shrink-0 items-center justify-center rounded-lg text-[var(--text-sub)] transition-colors hover:bg-blue-500/10 hover:text-blue-500" aria-label={`Copy ${label}`}>
+          {copied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const classes: Record<string, string> = {
+    ACTIVE: "border-emerald-500/20 bg-emerald-500/10 text-emerald-500",
+    PENDING: "border-amber-500/20 bg-amber-500/10 text-amber-500",
+    INACTIVE: "border-rose-500/20 bg-rose-500/10 text-rose-500",
+    DISABLED: "border-rose-500/20 bg-rose-500/10 text-rose-500",
+  };
+  return <Badge variant="outline" className={classes[status] || "border-[var(--border-color)] text-[var(--text-sub)]"}>{titleCase(status)}</Badge>;
+}
+
+function EmployeeDetailSkeleton() {
+  return (
+    <div className="space-y-5">
+      <div className="h-28 animate-pulse rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]" />
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.75fr)]">
+        <div className="h-96 animate-pulse rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]" />
+        <div className="h-80 animate-pulse rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]" />
+      </div>
     </div>
   );
 }

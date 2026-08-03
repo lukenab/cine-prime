@@ -31,7 +31,8 @@ public class AutoShowtimeManualExecutionAccess {
         boolean nonProduction = explicitlyEnabled || environment.acceptsProfiles(
                 Profiles.of("dev", "development", "demo", "local")
         );
-        return nonProduction && hasAuthority(authentication, "ROLE_ADMIN");
+        return nonProduction && (hasAuthority(authentication, "ROLE_ADMIN")
+                || hasAuthority(authentication, "ROLE_PROGRAMMING_OPERATOR"));
     }
 
     private boolean hasAuthority(Authentication authentication, String authority) {

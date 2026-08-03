@@ -1,6 +1,7 @@
 package authservice;
 
 import authservice.repository.AccountRepository;
+import authservice.repository.RoleRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,6 +18,9 @@ class AuthServiceApplicationTests {
 
 	@Autowired
 	AccountRepository accountRepository;
+
+	@Autowired
+	RoleRepository roleRepository;
 
 	@Autowired
 	PasswordEncoder passwordEncoder;
@@ -37,6 +41,20 @@ class AuthServiceApplicationTests {
 		assertThat(branchManager.getRoles()).extracting("roleName").contains("BRANCH_MANAGER");
 		assertThat(passwordEncoder.matches(adminPassword, admin.getPasswordHash())).isTrue();
 		assertThat(passwordEncoder.matches(branchManagerPassword, branchManager.getPasswordHash())).isTrue();
+	}
+
+	@Test
+	@Transactional
+	void seedsProgrammingOperatorAndKeepsCinemaEmployeeOperationalOnly() {
+		var programming = roleRepository.findById("PROGRAMMING_OPERATOR").orElseThrow();
+		var employee = roleRepository.findById("EMPLOYEE").orElseThrow();
+
+		assertThat(programming.getPermissions()).extracting("name")
+				.contains("MOVIE_CREATE", "MOVIE_UPDATE", "SHOWTIME_CREATE")
+				.doesNotContain("MOVIE_DELETE");
+		assertThat(employee.getPermissions()).extracting("name")
+				.contains("TICKET_SELL", "BOOKING_READ")
+				.doesNotContain("MOVIE_CREATE", "SHOWTIME_UPDATE", "USER_READ");
 	}
 
 }

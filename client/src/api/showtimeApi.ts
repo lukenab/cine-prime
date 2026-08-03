@@ -124,6 +124,11 @@ export interface AutoShowtimeGenerationRequestPayload {
    *  an empty array to let the optimizer consider every eligible room as usual. Rooms outside
    *  the selected cinemaClusterIds are ignored server-side. */
   excludedRoomIds?: number[];
+  /** Optional per-movie custom screening-version strategy. Omitted movies use Auto. */
+  screeningVersionSelections?: Array<{
+    movieId: number;
+    screeningVersionIds: number[];
+  }>;
 }
 
 export interface AutoShowtimeGenerationAcceptedResponse {
@@ -183,6 +188,8 @@ export interface AutoShowtimeGenerationRunResponse {
   solverDiagnostics?: string;
   /** Raw JSON - parse with JSON.parse(...) as ShadowComparisonResult. Only set for SHADOW_COMPARE runs. */
   shadowComparison?: string;
+  excludedRoomIds?: number[];
+  screeningVersionSelections?: Array<{ movieId: number; screeningVersionIds: number[] }>;
 }
 
 export type SchedulePlanStatus = 'DRAFT_GENERATED' | 'IN_REVIEW' | 'CHANGES_REQUESTED' | 'PUBLISHED';

@@ -26,12 +26,13 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  */
 class MovieControllerAuthorizationTest {
 
-    private static final String ADMIN_OR_EMPLOYEE = "hasRole('ADMIN') or hasRole('EMPLOYEE')";
+    private static final String ADMIN_OR_PROGRAMMING_OPERATOR =
+            "hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')";
 
     static Stream<Arguments> internalEndpointsRequiringAdminOrEmployee() {
         return Stream.of(
                 Arguments.of("findById", new Class<?>[]{Long.class, String.class}),
-                Arguments.of("getPage", new Class<?>[]{int.class, int.class, movieservice.enums.MovieStatus.class, Long.class, LocalDate.class}),
+                Arguments.of("getPage", new Class<?>[]{int.class, int.class, String.class, movieservice.enums.MovieStatus.class, Long.class, LocalDate.class}),
                 Arguments.of("getAll", new Class<?>[]{}),
                 Arguments.of("createMovie", new Class<?>[]{CreateMovieRequest.class}),
                 Arguments.of("updateMovie", new Class<?>[]{Long.class, UpdateMovieRequest.class}),
@@ -47,7 +48,7 @@ class MovieControllerAuthorizationTest {
             throws NoSuchMethodException {
         Method method = MovieController.class.getDeclaredMethod(methodName, parameterTypes);
 
-        assertEquals(ADMIN_OR_EMPLOYEE, method.getAnnotation(PreAuthorize.class).value());
+        assertEquals(ADMIN_OR_PROGRAMMING_OPERATOR, method.getAnnotation(PreAuthorize.class).value());
     }
 
     @Test

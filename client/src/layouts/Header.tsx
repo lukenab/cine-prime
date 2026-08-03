@@ -7,6 +7,8 @@ const roleLabels: Record<string, string> = {
   ROLE_SUPER_ADMIN: "Super Admin",
   ROLE_ADMIN: "Admin",
   ROLE_EMPLOYEE: "Employee",
+  ROLE_BRANCH_MANAGER: "Branch Manager",
+  ROLE_PROGRAMMING_OPERATOR: "Programming Operator",
   ROLE_MEMBER: "Member",
 };
 
@@ -35,9 +37,11 @@ const pageTitles: Record<string, string> = {
   sell:       "Sell Tickets",
   employees:  "Employees",
   users:      "Users",
+  people:     "People & Access",
   promotions: "Promotions",
   reports:    "Reports",
   settings:   "Settings",
+  concessions: "Concession Fulfillment",
 };
 
 export function Header({ activePage, isDarkMode = true, onToggleTheme }: HeaderProps) {

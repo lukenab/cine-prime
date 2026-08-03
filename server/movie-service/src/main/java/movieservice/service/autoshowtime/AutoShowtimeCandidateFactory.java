@@ -51,6 +51,17 @@ public class AutoShowtimeCandidateFactory {
                         .map(CinemaRoom::getCinemaRoomId)
                         .collect(Collectors.toSet());
 
+        Map<Long, Set<Long>> versionOverridesByMovie = run.getScreeningVersionOverrides() == null
+                ? Map.of()
+                : run.getScreeningVersionOverrides().stream()
+                        .collect(Collectors.groupingBy(
+                                version -> version.getMovie().getMovieId(),
+                                Collectors.mapping(
+                                        MovieScreeningVersion::getScreeningVersionId,
+                                        Collectors.toSet()
+                                )
+                        ));
+
         List<ShowtimeCandidate> candidates = new ArrayList<>();
 
         /// Duyệt từng ngày trong scope của generation run,
@@ -83,7 +94,13 @@ public class AutoShowtimeCandidateFactory {
                     /// Format cho movie, có thể có nhiều format 2D, 3D, IMAX
                     List<MovieScreeningVersion> versions = movieScreeningVersionRepository
                             .findEffectiveVersions(movie.getMovieId(), showDate, ScreeningVersionStatus.ACTIVE)
-                            .stream().sorted(
+                            .stream()
+                            .filter(version -> {
+                                Set<Long> allowedVersionIds = versionOverridesByMovie.get(movie.getMovieId());
+                                return allowedVersionIds == null
+                                        || allowedVersionIds.contains(version.getScreeningVersionId());
+                            })
+                            .sorted(
                             Comparator.comparing(
                                     (MovieScreeningVersion version) -> formatPriorityById.getOrDefault(
                                             version.getFormat().getFormatId(),

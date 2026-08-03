@@ -32,7 +32,9 @@ public record AutoShowtimeGenerationRunResponse(
         /** Only present for SHADOW_COMPARE runs - raw JSON of the non-primary optimizer's result. */
         String shadowComparison,
         /** Rooms excluded from candidate generation for this run only. Empty if none were excluded. */
-        List<Long> excludedRoomIds
+        List<Long> excludedRoomIds,
+        /** Explicit per-movie version overrides. Movies absent from this list used AUTO. */
+        List<ScreeningVersionSelection> screeningVersionSelections
 ) {
 
     /// Tóm tắt toàn bộ candidate của run để UI/QA nhìn nhanh kết quả allocation.
@@ -86,6 +88,12 @@ public record AutoShowtimeGenerationRunResponse(
             int size,
             long totalElements,
             int totalPages
+    ) {
+    }
+
+    public record ScreeningVersionSelection(
+            Long movieId,
+            List<Long> screeningVersionIds
     ) {
     }
 

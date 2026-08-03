@@ -103,6 +103,9 @@ services:
       PAYMENT_SERVICE_URL: http://payment-service:8083
       INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
       JWT_SIGNER_KEY: ${JWT_SIGNER_KEY:?Set JWT_SIGNER_KEY in .env}
+      # Local demo flow: open the invitation email on the same machine that
+      # runs the CinePrime client. Override only when a public environment exists.
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@cineprime.vn}
@@ -143,6 +146,9 @@ services:
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:?Set CLOUDINARY_CLOUD_NAME in .env}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:?Set CLOUDINARY_API_KEY in .env}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:?Set CLOUDINARY_API_SECRET in .env}
+      MOVIE_LIFECYCLE_TIME_ZONE: ${MOVIE_LIFECYCLE_TIME_ZONE:-Asia/Ho_Chi_Minh}
+      MOVIE_LIFECYCLE_CLOSE_CRON: "${MOVIE_LIFECYCLE_CLOSE_CRON:-0 5 0 * * *}"
+      MOVIE_LIFECYCLE_OPEN_CRON: "${MOVIE_LIFECYCLE_OPEN_CRON:-0 * * * * *}"
     depends_on:
       postgres:
         condition: service_healthy

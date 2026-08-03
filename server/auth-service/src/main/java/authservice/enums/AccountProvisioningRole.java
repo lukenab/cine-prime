@@ -4,5 +4,6 @@ package authservice.enums;
 public enum AccountProvisioningRole {
     MEMBER,
     EMPLOYEE,
-    BRANCH_MANAGER
+    BRANCH_MANAGER,
+    PROGRAMMING_OPERATOR
 }

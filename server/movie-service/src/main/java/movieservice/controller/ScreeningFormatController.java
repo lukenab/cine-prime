@@ -56,7 +56,6 @@ public class ScreeningFormatController {
                 .formatCode(formatCode)
                 .formatName(req.getFormatName().trim())
                 .description(req.getDescription())
-                .surcharge(req.getSurcharge())
                 .status(req.getStatus() != null ? req.getStatus() : "ACTIVE")
                 .build();
         return ApiResponse.<ScreeningFormatResponse>builder()
@@ -74,7 +73,6 @@ public class ScreeningFormatController {
         entity.setFormatCode(normalizeAndValidatePresentationCode(req.getFormatCode()));
         entity.setFormatName(req.getFormatName().trim());
         entity.setDescription(req.getDescription());
-        entity.setSurcharge(req.getSurcharge());
         if (req.getStatus() != null) {
             entity.setStatus(req.getStatus());
         }

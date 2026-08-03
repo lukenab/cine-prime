@@ -46,6 +46,7 @@ public class SecurityConfig extends JwtResourceServerSecuritySupport {
                         .permitAll()
                         .requestMatchers("/api/internal/showtimes/**").permitAll()
                         .requestMatchers("/ws/seat-inventory/**").permitAll()
+                        .requestMatchers("/ws/lifecycle/**").permitAll()
                         // Cinema clusters — GET public (controller filters by role internally)
                         // Audit log is further protected via @PreAuthorize on the method
                         .requestMatchers(HttpMethod.GET, "/api/cinema-clusters/**").permitAll()

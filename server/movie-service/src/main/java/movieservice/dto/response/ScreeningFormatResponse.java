@@ -3,7 +3,6 @@ package movieservice.dto.response;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
@@ -16,7 +15,6 @@ public class ScreeningFormatResponse {
     String formatCode;
     String formatName;
     String description;
-    BigDecimal surcharge;
     String status;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;

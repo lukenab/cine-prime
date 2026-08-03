@@ -14,6 +14,7 @@ import movieservice.dto.response.CinemaRoomResponse;
 import movieservice.dto.response.SeatResponse;
 import movieservice.enums.CinemaRoomStatus;
 import movieservice.service.CinemaRoomService;
+import movieservice.security.CinemaRoomAccessPolicy;
 import movieservice.service.SeatService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -30,6 +31,7 @@ public class CinemaRoomController {
 
     CinemaRoomService cinemaRoomService;
     SeatService seatService;
+    CinemaRoomAccessPolicy cinemaRoomAccessPolicy;
 
     @GetMapping
     public ApiResponse<List<CinemaRoomResponse>> getAllRooms(
@@ -40,7 +42,7 @@ public class CinemaRoomController {
                 .build();
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public ApiResponse<CinemaRoomResponse> createRoom(
             @Valid @RequestBody CinemaRoomRequest request, Authentication authentication) {
@@ -59,7 +61,7 @@ public class CinemaRoomController {
     }
 
     /** Step 1/2 wizard fields — only while the room is DRAFT (see CinemaRoomService.updateRoom). */
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}")
     public ApiResponse<CinemaRoomResponse> updateRoom(
             @PathVariable Long id,
@@ -72,7 +74,7 @@ public class CinemaRoomController {
     }
 
     /** Hard delete is reserved for an unused DRAFT; operational rooms use retirement instead. */
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteRoom(@PathVariable Long id, Authentication authentication) {
         cinemaRoomService.deleteCinemaRoom(id, authentication);
@@ -98,12 +100,13 @@ public class CinemaRoomController {
      * could previously set that header to any name (including the "unknown" default) and forge
      * who reported the maintenance.
      */
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'BRANCH_MANAGER', 'EMPLOYEE')")
     @PostMapping("/{id}/maintenance")
     public ApiResponse<CinemaRoomMaintenanceResponse> reportMaintenance(
             @PathVariable Long id,
             @Valid @RequestBody MaintenanceRequest request,
             Authentication authentication) {
+        cinemaRoomAccessPolicy.requireRoomAccess(id);
         return ApiResponse.<CinemaRoomMaintenanceResponse>builder()
                 .code(200)
                 .message("Maintenance reported. Room set to TEMPORARILY_UNAVAILABLE.")
@@ -113,12 +116,13 @@ public class CinemaRoomController {
 
     /** Resolve maintenance → phòng tự động trở về ACTIVE nếu không còn sự cố mở. Actor from
      *  verified JWT, same reasoning as reportMaintenance() above. */
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'BRANCH_MANAGER')")
     @PostMapping("/maintenance/{maintenanceId}/resolve")
     public ApiResponse<CinemaRoomMaintenanceResponse> resolveMaintenance(
             @PathVariable Long maintenanceId,
             @RequestParam(required = false) String resolutionNote,
             Authentication authentication) {
+        cinemaRoomAccessPolicy.requireMaintenanceAccess(maintenanceId);
         return ApiResponse.<CinemaRoomMaintenanceResponse>builder()
                 .code(200)
                 .message("Maintenance resolved.")
@@ -128,8 +132,10 @@ public class CinemaRoomController {
 
     /** Lịch sử bảo trì đầy đủ (mở + đã xử lý) của 1 phòng — trước đây repository query đã có
      *  sẵn nhưng chưa có endpoint nào expose ra ngoài. */
+    @PreAuthorize("hasAnyRole('ADMIN', 'BRANCH_MANAGER', 'EMPLOYEE')")
     @GetMapping("/{id}/maintenance")
     public ApiResponse<List<CinemaRoomMaintenanceResponse>> listMaintenance(@PathVariable Long id) {
+        cinemaRoomAccessPolicy.requireRoomAccess(id);
         return ApiResponse.<List<CinemaRoomMaintenanceResponse>>builder()
                 .code(200)
                 .result(cinemaRoomService.listMaintenance(id))
@@ -142,12 +148,13 @@ public class CinemaRoomController {
      *  reached from here, closing the gap where this endpoint used to accept any status value
      *  and skip layout review entirely. Actor from verified JWT, same reasoning as
      *  reportMaintenance() above. */
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'BRANCH_MANAGER')")
     @PatchMapping("/{id}/status")
     public ApiResponse<CinemaRoomResponse> setRoomStatus(
             @PathVariable Long id,
             @RequestParam CinemaRoomStatus status,
             Authentication authentication) {
+        cinemaRoomAccessPolicy.requireRoomAccess(id);
         return ApiResponse.<CinemaRoomResponse>builder()
                 .code(200)
                 .result(cinemaRoomService.setRoomStatus(id, status, authentication))
@@ -185,7 +192,7 @@ public class CinemaRoomController {
     /** Only valid for a format outside the auto-managed set (2D/3D/IMAX/SCREENX/ATMOS/4DX) -
      *  those stay derived from supports2d/supports3d/presentationSystem (see reportMaintenance()
      *  above for why actor comes from the verified JWT, same reasoning applies here). */
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasRole('ADMIN')")
     @PatchMapping("/{id}/formats/{formatId}")
     public ApiResponse<CinemaRoomFormatResponse> setRoomFormat(
             @PathVariable Long id,

@@ -260,6 +260,34 @@ public class AccountService {
     }
 
     /**
+     * Internal staff provisioning is retryable across the auth/user service boundary.
+     * If auth-service committed a pending account but user-service failed before creating
+     * the employee record, retrying the same command resumes that pending invitation.
+     * Active/inactive accounts and role changes still use the normal duplicate-email guard.
+     */
+    @Transactional
+    public AccountResponse createOrResumeStaffInvitation(CreateAccountRequest request) {
+        String emailKey = request.getEmail().trim().toLowerCase();
+        var existing = accountRepository.findByEmail(emailKey);
+
+        if (existing.isPresent()) {
+            Account account = existing.get();
+            String requestedRole = request.getRole().name();
+            boolean sameRole = account.getRoles() != null && account.getRoles().stream()
+                    .anyMatch(role -> requestedRole.equals(role.getRoleName()));
+
+            if (account.getStatus() == AccountStatus.PENDING && sameRole) {
+                log.info("Resuming pending staff invitation for account {}", account.getAccountId());
+                return accountMapper.toAccountResponse(account);
+            }
+
+            throw new AppException(AuthErrorCode.EMAIL_EXISTED);
+        }
+
+        return createAccount(request);
+    }
+
+    /**
      * Employee clicks the activation link from their email and sets their own password.
      * Consumes the single-use token, flips the account to ACTIVE.
      */
@@ -324,6 +352,16 @@ public class AccountService {
 
         auditLogService.success("ACCOUNT_ACTIVATION_RESENT", account.getAccountId(),
                 "Activation email resent by admin", null);
+    }
+
+    @Transactional
+    public void revokeSessions(String accountId) {
+        accountRepository.findById(accountId)
+                .orElseThrow(() -> new AppException(AuthErrorCode.ACCOUNT_NOT_FOUND));
+        int revoked = authTokenRepository.revokeAllByAccountId(accountId, OffsetDateTime.now());
+        auditLogService.success("ACCOUNT_SESSIONS_REVOKED", accountId,
+                "Administrator revoked all active sessions",
+                auditLogService.metadata("revokedTokens", revoked));
     }
 
     public AccountResponse myInfo() {

@@ -54,6 +54,21 @@ public class MovieAvailability {
     @Column(name = "suspension_reason", length = 500)
     String suspensionReason;
 
+    @Column(name = "review_note", length = 500)
+    String reviewNote;
+
+    @Column(name = "submitted_at")
+    LocalDateTime submittedAt;
+
+    @Column(name = "submitted_by", length = 100)
+    String submittedBy;
+
+    @Column(name = "approved_at")
+    LocalDateTime approvedAt;
+
+    @Column(name = "approved_by", length = 100)
+    String approvedBy;
+
     @Builder.Default
     @Version
     @Column(name = "version", nullable = false)
