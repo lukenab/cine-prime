@@ -166,6 +166,7 @@ export default function SeatBookingPage() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [conflicts, setConflicts] = useState<Set<number>>(new Set());
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [promotionCode, setPromotionCode] = useState("");
   const [holdPolicy, setHoldPolicy] = useState<SeatHoldPolicy>(DEFAULT_HOLD_POLICY);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -466,6 +467,7 @@ export default function SeatBookingPage() {
         showtimeId: parseInt(showtimeId),
         seatIds: Array.from(selected),
         idempotencyKey: idempotencyKeyRef.current,
+        promotionCode: promotionCode.trim().toUpperCase() || undefined,
       };
       const result = await bookingApi.createBooking(payload);
 
@@ -477,7 +479,11 @@ export default function SeatBookingPage() {
       // also a real bug: releasing the hold directly against movie-service
       // left the booking stuck at PENDING_PAYMENT until BookingExpiryScheduler
       // caught up, instead of going through POST /api/bookings/{id}/cancellations.
-      navigate(`/checkout/${result.bookingId}/concessions`);
+      navigate(`/checkout/${result.bookingId}/concessions`, {
+        state: result.promotionRejectionReason
+          ? { promotionRejectionReason: result.promotionRejectionReason }
+          : undefined,
+      });
     } catch (err: any) {
       setScreen("map");
       const errResponse = err.response?.data;
@@ -488,9 +494,12 @@ export default function SeatBookingPage() {
         setErrorMsg("Some seats were just taken. Conflicting seats are highlighted — please pick alternatives.");
       } else {
         const status = err.response?.status;
+        const backendMessage = errResponse?.message || errResponse?.error;
         setErrorMsg(
           status === 401
             ? "Your session has expired. Sign in again to continue."
+            : status === 400 || status === 404 || status === 409 || status === 422
+              ? backendMessage || "This promotion code is invalid or not eligible for this booking."
             : status >= 500
               ? "We could not reserve these seats right now. Please try again in a moment."
               : "We could not complete the reservation. Review your selection and try again."
@@ -791,6 +800,24 @@ export default function SeatBookingPage() {
           holdMinutes={Math.round(holdPolicy.ttlSeconds / 60)}
           emptyHint="Select seats from the map"
           total={total}
+          extra={pickedSeats.length > 0 ? (
+            <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3.5">
+              <label htmlFor="seat-promotion-code" className="text-[11px] font-semibold uppercase tracking-[.12em] text-white/50">Promotion code</label>
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  id="seat-promotion-code"
+                  value={promotionCode}
+                  onChange={(event) => { setPromotionCode(event.target.value.toUpperCase()); renewIdempotencyKey(); setErrorMsg(null); }}
+                  placeholder="e.g. CINEPRIME20"
+                  maxLength={64}
+                  autoComplete="off"
+                  className="h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-black/20 px-3 text-sm font-semibold tracking-wide text-white outline-none placeholder:font-normal placeholder:tracking-normal placeholder:text-white/25 focus:border-blue-400"
+                />
+                {promotionCode && <button type="button" onClick={() => { setPromotionCode(""); renewIdempotencyKey(); }} className="h-10 rounded-lg px-3 text-xs font-medium text-white/50 hover:bg-white/5 hover:text-white">Clear</button>}
+              </div>
+              <p className="mt-2 text-[11px] text-white/35">The discount is validated against this showtime and seat subtotal when seats are reserved.</p>
+            </div>
+          ) : undefined}
           headerAction={pickedSeats.length > 0 ? { label: "Clear all", onClick: clearAll } : undefined}
           backAction={{ label: "Back", onClick: () => navigate(-1) }}
           primaryAction={pickedSeats.length > 0 ? {

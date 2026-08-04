@@ -36,7 +36,7 @@ class PromotionSchemaMigrationIntegrationTest {
     void freshDatabaseCreatesPromotionSchemaAndEnforcesCoreInvariants() throws Exception {
         MigrateResult result = flyway().migrate();
         assertTrue(result.success);
-        assertEquals(2, result.migrationsExecuted);
+        assertEquals(4, result.migrationsExecuted);
 
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());

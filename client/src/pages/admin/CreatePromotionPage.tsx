@@ -1,316 +1,120 @@
 import { useState } from "react";
-import { useNavigate, useOutletContext } from "react-router-dom";
-import { ArrowLeft, Tag } from "lucide-react";
-import type { DiscountType } from "./ManagePromotionPage";
+import { ArrowLeft, Save } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { promotionApi, type PromotionDiscountType, type PromotionUpsertPayload } from "../../api/promotionApi";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
 export interface PromotionFormData {
-  title: string;
+  code: string;
+  name: string;
   description: string;
-  discountType: DiscountType;
-  discountValue: string;    // stored as string for input control
-  startDate: string;
-  endDate: string;
-  bannerUrl: string;
+  discountType: PromotionDiscountType;
+  discountValue: string;
+  maximumDiscount: string;
+  minimumOrder: string;
+  validFrom: string;
+  validUntil: string;
+  globalUsageLimit: string;
+  perAccountUsageLimit: string;
 }
 
-const INITIAL_FORM: PromotionFormData = {
-  title: "",
-  description: "",
-  discountType: "PERCENTAGE",
-  discountValue: "",
-  startDate: "",
-  endDate: "",
-  bannerUrl: "",
+export const EMPTY_PROMOTION_FORM: PromotionFormData = {
+  code: "", name: "", description: "", discountType: "PERCENTAGE", discountValue: "",
+  maximumDiscount: "", minimumOrder: "0", validFrom: "", validUntil: "",
+  globalUsageLimit: "", perAccountUsageLimit: "",
 };
 
-// ── Field components ──────────────────────────────────────────────────────────
-interface FieldProps {
-  label: string;
-  required?: boolean;
-  error?: string;
-  children: React.ReactNode;
+export function toPromotionPayload(form: PromotionFormData): PromotionUpsertPayload {
+  const percentage = form.discountType === "PERCENTAGE" ? Number(form.discountValue) : null;
+  const fixedAmount = form.discountType === "FIXED_AMOUNT" ? Number(form.discountValue) : null;
+  return {
+    code: form.code.trim().toUpperCase(),
+    name: form.name.trim(),
+    description: form.description.trim(),
+    validFrom: form.validFrom ? `${form.validFrom}T00:00:00+07:00` : null,
+    validUntil: form.validUntil ? `${form.validUntil}T23:59:59+07:00` : null,
+    globalUsageLimit: form.globalUsageLimit ? Number(form.globalUsageLimit) : null,
+    perAccountUsageLimit: form.perAccountUsageLimit ? Number(form.perAccountUsageLimit) : null,
+    priceRule: {
+      discountType: form.discountType,
+      percentage,
+      fixedAmount,
+      maxDiscountAmount: form.discountType === "PERCENTAGE" && form.maximumDiscount ? Number(form.maximumDiscount) : null,
+      minimumOrderAmount: Number(form.minimumOrder || 0),
+      currency: "VND",
+    },
+    targets: [],
+  };
 }
 
-function FormField({ label, required, error, children }: FieldProps) {
-  return (
-    <div>
-      <label style={{ display: "block", fontSize: "13px", fontWeight: 500, color: "var(--text-sub)", marginBottom: "6px" }}>
-        {label}{required && <span style={{ color: "#ef4444", marginLeft: "3px" }}>*</span>}
-      </label>
-      {children}
-      {error && <p style={{ fontSize: "12px", color: "#ef4444", marginTop: "5px" }}>{error}</p>}
+export function PromotionForm({ initial = EMPTY_PROMOTION_FORM, submitLabel, onSubmit }: { initial?: PromotionFormData; submitLabel: string; onSubmit: (form: PromotionFormData) => Promise<void> }) {
+  const navigate = useNavigate();
+  const [form, setForm] = useState(initial);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const update = (field: keyof PromotionFormData, value: string) => setForm((current) => ({ ...current, [field]: value }));
+  const inputClass = "h-11 w-full rounded-xl border px-3.5 text-sm outline-none focus:border-blue-500";
+  const inputStyle = { color: "var(--text-main)", background: "var(--bg-card)", borderColor: "var(--border-color)" };
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError("");
+    if (!form.code.trim() || !form.name.trim() || !form.discountValue || Number(form.discountValue) <= 0) {
+      setError("Code, name and a positive discount value are required."); return;
+    }
+    if (form.discountType === "PERCENTAGE" && Number(form.discountValue) > 100) {
+      setError("Percentage discount cannot exceed 100%."); return;
+    }
+    if (form.validFrom && form.validUntil && form.validUntil < form.validFrom) {
+      setError("End date must be on or after the start date."); return;
+    }
+    setSaving(true);
+    try { await onSubmit(form); } catch (cause: any) {
+      setError(cause?.response?.data?.message || "Could not save this promotion. Check the values and try again.");
+    } finally { setSaving(false); }
+  };
+
+  return <form onSubmit={submit} className="mx-auto max-w-4xl space-y-5">
+    <div className="flex items-center gap-4">
+      <button type="button" onClick={() => navigate("/admin/promotions")} className="grid h-10 w-10 place-items-center rounded-xl border" style={inputStyle}><ArrowLeft size={18} /></button>
+      <div><h1 className="text-2xl font-semibold" style={{ color: "var(--text-main)" }}>{submitLabel}</h1><p className="text-sm" style={{ color: "var(--text-sub)" }}>Draft the commercial rule first, then activate it from the promotion list.</p></div>
     </div>
-  );
-}
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  hasError?: boolean;
-}
-
-function Input({ hasError, style, ...props }: InputProps) {
-  return (
-    <input
-      {...props}
-      style={{
-        width: "100%",
-        padding: "10px 13px",
-        borderRadius: "10px",
-        fontSize: "14px",
-        outline: "none",
-        transition: "border-color 0.15s",
-        background: "var(--bg-card)",
-        color: "var(--text-main)",
-        border: `1px solid ${hasError ? "#ef4444" : "var(--border-color)"}`,
-        boxSizing: "border-box",
-        ...style,
-      }}
-    />
-  );
-}
-
-interface TextAreaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
-  hasError?: boolean;
-}
-
-function TextArea({ hasError, style, ...props }: TextAreaProps) {
-  return (
-    <textarea
-      {...props}
-      style={{
-        width: "100%",
-        padding: "10px 13px",
-        borderRadius: "10px",
-        fontSize: "14px",
-        outline: "none",
-        resize: "vertical",
-        minHeight: "90px",
-        transition: "border-color 0.15s",
-        background: "var(--bg-card)",
-        color: "var(--text-main)",
-        border: `1px solid ${hasError ? "#ef4444" : "var(--border-color)"}`,
-        boxSizing: "border-box",
-        ...style,
-      }}
-    />
-  );
-}
-
-// ── Validation ────────────────────────────────────────────────────────────────
-type FormErrors = Partial<Record<keyof PromotionFormData, string>>;
-
-function validate(form: PromotionFormData): FormErrors {
-  const errors: FormErrors = {};
-  if (!form.title.trim())       errors.title       = "Title is required.";
-  if (!form.description.trim()) errors.description = "Description is required.";
-  if (!form.discountValue || isNaN(Number(form.discountValue)) || Number(form.discountValue) <= 0)
-    errors.discountValue = "Enter a valid discount value greater than 0.";
-  if (form.discountType === "PERCENTAGE" && Number(form.discountValue) > 100)
-    errors.discountValue = "Percentage cannot exceed 100.";
-  if (!form.startDate) errors.startDate = "Start date is required.";
-  if (!form.endDate)   errors.endDate   = "End date is required.";
-  if (form.startDate && form.endDate && new Date(form.endDate) <= new Date(form.startDate))
-    errors.endDate = "End date must be after start date.";
-  return errors;
-}
-
-// ── Section card ──────────────────────────────────────────────────────────────
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl border p-6" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-      <h2 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-main)", marginBottom: "20px", paddingBottom: "12px", borderBottom: "1px solid var(--border-color)" }}>
-        {title}
-      </h2>
-      <div style={{ display: "grid", gap: "16px" }}>
-        {children}
+    <section className="rounded-2xl border p-6" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+      <h2 className="mb-5 font-semibold" style={{ color: "var(--text-main)" }}>Promotion identity</h2>
+      <div className="grid gap-5 md:grid-cols-2">
+        <label className="space-y-2 text-sm" style={{ color: "var(--text-sub)" }}>Promotion code *<input value={form.code} onChange={(e) => update("code", e.target.value.replace(/\s/g, "").toUpperCase())} placeholder="CINEPRIME20" maxLength={64} className={inputClass} style={inputStyle} /></label>
+        <label className="space-y-2 text-sm" style={{ color: "var(--text-sub)" }}>Promotion name *<input value={form.name} onChange={(e) => update("name", e.target.value)} placeholder="CinePrime launch offer" className={inputClass} style={inputStyle} /></label>
+        <label className="space-y-2 text-sm md:col-span-2" style={{ color: "var(--text-sub)" }}>Description<textarea value={form.description} onChange={(e) => update("description", e.target.value)} placeholder="Short customer-facing description" className="min-h-24 w-full rounded-xl border p-3.5 text-sm outline-none focus:border-blue-500" style={inputStyle} /></label>
       </div>
-    </div>
-  );
+    </section>
+
+    <section className="rounded-2xl border p-6" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+      <h2 className="mb-5 font-semibold" style={{ color: "var(--text-main)" }}>Discount rule</h2>
+      <div className="grid gap-5 md:grid-cols-2">
+        <label className="space-y-2 text-sm" style={{ color: "var(--text-sub)" }}>Discount type<select value={form.discountType} onChange={(e) => update("discountType", e.target.value)} className={inputClass} style={inputStyle}><option value="PERCENTAGE">Percentage</option><option value="FIXED_AMOUNT">Fixed amount</option></select></label>
+        <label className="space-y-2 text-sm" style={{ color: "var(--text-sub)" }}>Discount value *<input type="number" min="1" max={form.discountType === "PERCENTAGE" ? "100" : undefined} value={form.discountValue} onChange={(e) => update("discountValue", e.target.value)} placeholder={form.discountType === "PERCENTAGE" ? "20" : "50000"} className={inputClass} style={inputStyle} /></label>
+        <label className="space-y-2 text-sm" style={{ color: "var(--text-sub)" }}>Minimum booking subtotal (VND)<input type="number" min="0" value={form.minimumOrder} onChange={(e) => update("minimumOrder", e.target.value)} className={inputClass} style={inputStyle} /></label>
+        {form.discountType === "PERCENTAGE" && <label className="space-y-2 text-sm" style={{ color: "var(--text-sub)" }}>Maximum discount (VND)<input type="number" min="0" value={form.maximumDiscount} onChange={(e) => update("maximumDiscount", e.target.value)} placeholder="50000" className={inputClass} style={inputStyle} /></label>}
+      </div>
+    </section>
+
+    <section className="rounded-2xl border p-6" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+      <h2 className="mb-5 font-semibold" style={{ color: "var(--text-main)" }}>Validity & quota</h2>
+      <div className="grid gap-5 md:grid-cols-2">
+        <label className="space-y-2 text-sm" style={{ color: "var(--text-sub)" }}>Start date<input type="date" value={form.validFrom} onChange={(e) => update("validFrom", e.target.value)} className={inputClass} style={inputStyle} /></label>
+        <label className="space-y-2 text-sm" style={{ color: "var(--text-sub)" }}>End date<input type="date" value={form.validUntil} onChange={(e) => update("validUntil", e.target.value)} className={inputClass} style={inputStyle} /></label>
+        <label className="space-y-2 text-sm" style={{ color: "var(--text-sub)" }}>Global redemption limit<input type="number" min="1" value={form.globalUsageLimit} onChange={(e) => update("globalUsageLimit", e.target.value)} placeholder="1000" className={inputClass} style={inputStyle} /></label>
+        <label className="space-y-2 text-sm" style={{ color: "var(--text-sub)" }}>Limit per customer<input type="number" min="1" value={form.perAccountUsageLimit} onChange={(e) => update("perAccountUsageLimit", e.target.value)} placeholder="1" className={inputClass} style={inputStyle} /></label>
+      </div>
+      <p className="mt-4 text-xs" style={{ color: "var(--text-sub)" }}>P0 scope: this offer applies to all eligible movies and showtimes. Targeted campaigns can be added later.</p>
+    </section>
+
+    {error && <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-500">{error}</div>}
+    <div className="flex justify-end gap-3"><button type="button" onClick={() => navigate("/admin/promotions")} className="h-11 rounded-xl border px-5 text-sm font-medium" style={inputStyle}>Cancel</button><button disabled={saving} className="flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white disabled:opacity-50"><Save size={17} /> {saving ? "Saving..." : "Save draft"}</button></div>
+  </form>;
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
 export default function CreatePromotionPage() {
   const navigate = useNavigate();
-  const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
-  const accentColor = isDarkMode ? "#3b82f6" : "#2563eb";
-
-  const [form, setForm]         = useState<PromotionFormData>(INITIAL_FORM);
-  const [errors, setErrors]     = useState<FormErrors>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const update = (field: keyof PromotionFormData, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const errs = validate(form);
-    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
-
-    setIsSubmitting(true);
-    try {
-      // TODO: Replace with actual API call
-      // await api.post("/promotions", { ...form, discountValue: Number(form.discountValue) });
-      await new Promise((res) => setTimeout(res, 600));
-      console.log("Create promotion:", { ...form, discountValue: Number(form.discountValue) });
-      navigate("/admin/promotions");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit}>
-      {/* Header */}
-      <div className="flex items-center gap-4" style={{ marginBottom: "28px" }}>
-        <button type="button" onClick={() => navigate("/admin/promotions")}
-          className="w-9 h-9 rounded-xl border flex items-center justify-center hover:opacity-80 transition-all"
-          style={{ background: "var(--bg-card)", borderColor: "var(--border-color)", color: "var(--text-sub)" }}>
-          <ArrowLeft size={16} />
-        </button>
-        <div>
-          <h1 style={{ color: "var(--text-main)", fontWeight: 600, fontSize: "22px", letterSpacing: "-0.01em", marginBottom: "3px" }}>
-            Add New Promotion
-          </h1>
-          <p style={{ color: "var(--text-sub)", fontSize: "13px" }}>Create a new discount promotion or campaign.</p>
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gap: "20px", maxWidth: "720px" }}>
-        {/* Basic Info */}
-        <SectionCard title="Promotion Information">
-          {/* Title */}
-          <FormField label="Promotion Title" required error={errors.title}>
-            <Input
-              type="text"
-              placeholder="e.g. Summer Blockbuster Sale"
-              value={form.title}
-              onChange={(e) => update("title", e.target.value)}
-              hasError={!!errors.title}
-            />
-          </FormField>
-
-          {/* Description */}
-          <FormField label="Description" required error={errors.description}>
-            <TextArea
-              placeholder="Describe what this promotion offers..."
-              value={form.description}
-              onChange={(e) => update("description", e.target.value)}
-              hasError={!!errors.description}
-            />
-          </FormField>
-
-          {/* Banner URL */}
-          <FormField label="Banner Image URL" error={errors.bannerUrl}>
-            <Input
-              type="url"
-              placeholder="https://example.com/banner.jpg"
-              value={form.bannerUrl}
-              onChange={(e) => update("bannerUrl", e.target.value)}
-            />
-            <p style={{ fontSize: "12px", color: "var(--text-sub)", marginTop: "5px" }}>
-              Optional. Paste a direct image URL. File upload will be supported in a future update.
-            </p>
-          </FormField>
-        </SectionCard>
-
-        {/* Discount */}
-        <SectionCard title="Discount Configuration">
-          {/* Discount type */}
-          <FormField label="Discount Type" required>
-            <div className="flex gap-3">
-              {(["PERCENTAGE", "FIXED_AMOUNT"] as DiscountType[]).map((type) => {
-                const selected = form.discountType === type;
-                const label = type === "PERCENTAGE" ? "Percentage (%)  " : "Fixed Amount (₫)";
-                return (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => update("discountType", type)}
-                    className="flex-1 py-3 rounded-xl border text-sm font-medium transition-all"
-                    style={{
-                      background: selected ? accentColor : "transparent",
-                      color: selected ? "#fff" : "var(--text-sub)",
-                      borderColor: selected ? accentColor : "var(--border-color)",
-                    }}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          </FormField>
-
-          {/* Discount value */}
-          <FormField
-            label={form.discountType === "PERCENTAGE" ? "Discount Percentage" : "Discount Amount (₫)"}
-            required
-            error={errors.discountValue}
-          >
-            <div className="relative">
-              <Input
-                type="number"
-                min="0"
-                max={form.discountType === "PERCENTAGE" ? "100" : undefined}
-                step={form.discountType === "PERCENTAGE" ? "1" : "1000"}
-                placeholder={form.discountType === "PERCENTAGE" ? "e.g. 20" : "e.g. 50000"}
-                value={form.discountValue}
-                onChange={(e) => update("discountValue", e.target.value)}
-                hasError={!!errors.discountValue}
-                style={{ paddingRight: "48px" }}
-              />
-              <span className="absolute right-4 top-1/2 -translate-y-1/2" style={{ fontSize: "14px", color: "var(--text-sub)", fontWeight: 500 }}>
-                {form.discountType === "PERCENTAGE" ? "%" : "₫"}
-              </span>
-            </div>
-          </FormField>
-        </SectionCard>
-
-        {/* Date range */}
-        <SectionCard title="Promotion Period">
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-            <FormField label="Start Date" required error={errors.startDate}>
-              <Input
-                type="date"
-                value={form.startDate}
-                onChange={(e) => update("startDate", e.target.value)}
-                hasError={!!errors.startDate}
-              />
-            </FormField>
-            <FormField label="End Date" required error={errors.endDate}>
-              <Input
-                type="date"
-                value={form.endDate}
-                min={form.startDate || undefined}
-                onChange={(e) => update("endDate", e.target.value)}
-                hasError={!!errors.endDate}
-              />
-            </FormField>
-          </div>
-        </SectionCard>
-
-        {/* Actions */}
-        <div className="flex items-center justify-end gap-3 pt-2 pb-8">
-          <button
-            type="button"
-            onClick={() => navigate("/admin/promotions")}
-            className="px-6 py-2.5 rounded-xl border text-sm font-medium hover:opacity-80 transition-all"
-            style={{ color: "var(--text-main)", borderColor: "var(--border-color)", background: "transparent" }}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-medium text-white hover:opacity-90 transition-all disabled:opacity-60"
-            style={{ background: accentColor }}
-          >
-            <Tag size={15} />
-            {isSubmitting ? "Creating..." : "Create Promotion"}
-          </button>
-        </div>
-      </div>
-    </form>
-  );
+  return <PromotionForm submitLabel="Create promotion" onSubmit={async (form) => { const created = await promotionApi.create(toPromotionPayload(form)); navigate(`/admin/promotions/${created.promotionId}`); }} />;
 }

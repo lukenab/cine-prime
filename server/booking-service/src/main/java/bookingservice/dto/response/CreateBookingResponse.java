@@ -26,4 +26,11 @@ public class CreateBookingResponse {
     // Promotion fields from HEAD
     String promotionCode;
     BigDecimal promotionDiscountAmount;
+
+    /**
+     * Set only when the customer entered a code but it could not be reserved (invalid, quota
+     * exhausted, or promotion-service unavailable). The booking still succeeds without the
+     * discount - a bad code must not cost the customer their seat hold.
+     */
+    String promotionRejectionReason;
 }

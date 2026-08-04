@@ -4,6 +4,11 @@ server:
 spring:
   application:
     name: promotion-service
+  config:
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:../.env[.properties]
+      - optional:file:../../.env[.properties]
 
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/promotion_db}
@@ -46,3 +51,15 @@ eureka:
 
 jwt:
   signerKey: ${JWT_SIGNER_KEY:873bcf3b6023c6cfac735831cc01cbd59c6f64c2341050f12e5f0224d7edea62}
+
+promotion:
+  internal-key: ${INTERNAL_SERVICE_KEY:local-dev-internal-key-change-before-deploy}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized

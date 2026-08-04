@@ -47,6 +47,7 @@ export interface ShowtimeSeatMap {
 export interface BookingPayload {
   showtimeId: number;
   seatIds: number[];
+  promotionCode?: string;
   /** Stable for retries of the same seat selection. */
   idempotencyKey: string;
 }
@@ -55,6 +56,14 @@ export interface BookingConfirmation {
   bookingId: string;
   holdId?: string;
   lockedUntil: string;
+  subtotal?: number;
+  discount?: number;
+  total?: number;
+  currency?: string;
+  promotionCode?: string;
+  promotionDiscountAmount?: number;
+  /** Set only when a promo code was entered but couldn't be reserved - the booking still succeeded without the discount. */
+  promotionRejectionReason?: string;
 }
 
 export type BookingStatus =
@@ -125,6 +134,8 @@ export interface BookingDetail {
   discount: number;
   total: number;
   currency: string;
+  promotionCode?: string;
+  promotionDiscountAmount?: number;
   expiresAt?: string;
   paidAt?: string;
   createdAt: string;

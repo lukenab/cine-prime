@@ -55,7 +55,7 @@ cloudinary:
   api-secret: ${CLOUDINARY_API_SECRET}
 
 jwt:
-  signerKey: ${JWT_SIGNER_KEY}
+  signerKey: ${JWT_SIGNER_KEY:873bcf3b6023c6cfac735831cc01cbd59c6f64c2341050f12e5f0224d7edea62}
 
 app:
   internal-service-key: ${INTERNAL_SERVICE_KEY:local-dev-internal-key-change-before-deploy}

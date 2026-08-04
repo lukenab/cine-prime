@@ -11,8 +11,10 @@ import java.util.UUID;
 public record PromotionResponse(UUID promotionId, String code, String name, String description,
                                 PromotionStatus status, OffsetDateTime validFrom, OffsetDateTime validUntil,
                                 Integer globalUsageLimit, Integer perAccountUsageLimit, Long version,
-                                PriceRule priceRule, List<Target> targets) {
+                                int activeReservationCount, int committedUsageCount,
+                                PriceRule priceRule, List<Target> targets, List<AuditEntry> auditLog) {
     public record PriceRule(DiscountType discountType, BigDecimal percentage, BigDecimal fixedAmount,
                             BigDecimal maxDiscountAmount, BigDecimal minimumOrderAmount, String currency) {}
     public record Target(PromotionTargetType targetType, Long movieId, Long showtimeId) {}
+    public record AuditEntry(String action, String actorAccountId, OffsetDateTime occurredAt) {}
 }

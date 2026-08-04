@@ -21,7 +21,8 @@ public enum PromotionErrorCode implements BaseErrorCode {
     PROMOTION_RESERVATION_NOT_FOUND(2703, "Promotion reservation not found.", HttpStatus.NOT_FOUND),
     PROMOTION_RESERVATION_EXPIRED(2704, "Promotion reservation has expired.", HttpStatus.GONE),
     PROMOTION_RESERVATION_INVALID_STATE(2705, "Promotion reservation lifecycle is invalid.", HttpStatus.CONFLICT),
-    PROMOTION_IDEMPOTENCY_CONFLICT(2706, "Idempotency key is already used by another reservation request.", HttpStatus.CONFLICT);
+    PROMOTION_IDEMPOTENCY_CONFLICT(2706, "Idempotency key is already used by another reservation request.", HttpStatus.CONFLICT),
+    INTERNAL_UNAUTHORIZED(2707, "Internal service authentication failed.", HttpStatus.UNAUTHORIZED);
 
     private final int code;
     private final String message;

@@ -45,7 +45,7 @@ eureka:
     service-url:
       defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
 jwt:
-  signerKey: ${JWT_SIGNER_KEY}
+  signerKey: ${JWT_SIGNER_KEY:873bcf3b6023c6cfac735831cc01cbd59c6f64c2341050f12e5f0224d7edea62}
 booking:
   quote:
     ttl-seconds: 300
@@ -71,15 +71,18 @@ booking:
 
 movie-service:
   url: ${MOVIE_SERVICE_URL:http://localhost:8081}
-  internal-key: ${INTERNAL_SERVICE_KEY}
+  internal-key: ${INTERNAL_SERVICE_KEY:local-dev-internal-key-change-before-deploy}
 
 payment-service:
   url: ${PAYMENT_SERVICE_URL:http://localhost:8083}
-  internal-key: ${INTERNAL_SERVICE_KEY}
+  internal-key: ${INTERNAL_SERVICE_KEY:local-dev-internal-key-change-before-deploy}
 
 concession-service:
   url: ${CONCESSION_SERVICE_URL:http://localhost:8085}
-  internal-key: ${INTERNAL_SERVICE_KEY}
+  internal-key: ${INTERNAL_SERVICE_KEY:local-dev-internal-key-change-before-deploy}
+
+promotion-service:
+  internal-key: ${INTERNAL_SERVICE_KEY:local-dev-internal-key-change-before-deploy}
 
 management:
   endpoints:

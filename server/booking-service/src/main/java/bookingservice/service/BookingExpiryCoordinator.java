@@ -19,6 +19,7 @@ public class BookingExpiryCoordinator {
     private final MovieInventoryClient movieInventoryClient;
     private final Clock bookingClock;
     private final ConcessionClient concessionClient;
+    private final BookingPromotionService promotionService;
 
     @Value("${movie-service.internal-key}")
     private String movieServiceInternalKey;
@@ -51,6 +52,7 @@ public class BookingExpiryCoordinator {
                         instruction.concessionReservationId(),
                         concessionServiceInternalKey);
             }
+            promotionService.release(instruction.promotionReservationId());
             stateService.completeRelease(instruction);
         } catch (RuntimeException exception) {
             stateService.markReleaseFailure(instruction, exception);
