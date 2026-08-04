@@ -16,6 +16,7 @@ class PaymentWebhookServiceTest {
     private MovieInventoryClient movieInventoryClient;
     private PaymentProcessingStateService stateService;
     private ConcessionClient concessionClient;
+    private BookingPromotionService promotionService;
     private PaymentWebhookService service;
 
     @BeforeEach
@@ -23,11 +24,13 @@ class PaymentWebhookServiceTest {
         movieInventoryClient = mock(MovieInventoryClient.class);
         stateService = mock(PaymentProcessingStateService.class);
         concessionClient = mock(ConcessionClient.class);
+        promotionService = mock(BookingPromotionService.class);
         service = new PaymentWebhookService(
                 new ObjectMapper(),
                 movieInventoryClient,
                 stateService,
-                concessionClient);
+                concessionClient,
+                promotionService);
         ReflectionTestUtils.setField(
                 service,
                 "webhookSecret",
@@ -54,6 +57,6 @@ class PaymentWebhookServiceTest {
 
         assertThatThrownBy(() -> service.process(payload, "invalid-signature"))
                 .isInstanceOf(AppException.class);
-        verifyNoInteractions(stateService, movieInventoryClient, concessionClient);
+        verifyNoInteractions(stateService, movieInventoryClient, concessionClient, promotionService);
     }
 }

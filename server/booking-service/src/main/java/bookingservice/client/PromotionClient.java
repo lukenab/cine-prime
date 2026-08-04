@@ -9,20 +9,29 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 
 import java.util.UUID;
 
-@FeignClient(name = "promotion-service", path = "/api/promotions")
+@FeignClient(name = "promotion-service", path = "/api/internal/promotions")
 public interface PromotionClient {
     @PostMapping("/quote")
-    ApiResponse<PromotionQuoteResponse> quote(@RequestBody PromotionQuoteRequest request);
+    ApiResponse<PromotionQuoteResponse> quote(
+            @RequestHeader("X-Internal-Service-Key") String internalKey,
+            @RequestBody PromotionQuoteRequest request);
 
     @PostMapping("/reservations")
-    ApiResponse<PromotionReservationResponse> reserve(@RequestBody PromotionReserveRequest request);
+    ApiResponse<PromotionReservationResponse> reserve(
+            @RequestHeader("X-Internal-Service-Key") String internalKey,
+            @RequestBody PromotionReserveRequest request);
 
     @PostMapping("/reservations/{reservationId}/commit")
-    ApiResponse<PromotionReservationResponse> commit(@PathVariable UUID reservationId);
+    ApiResponse<PromotionReservationResponse> commit(
+            @RequestHeader("X-Internal-Service-Key") String internalKey,
+            @PathVariable UUID reservationId);
 
     @PostMapping("/reservations/{reservationId}/release")
-    ApiResponse<PromotionReservationResponse> release(@PathVariable UUID reservationId);
+    ApiResponse<PromotionReservationResponse> release(
+            @RequestHeader("X-Internal-Service-Key") String internalKey,
+            @PathVariable UUID reservationId);
 }

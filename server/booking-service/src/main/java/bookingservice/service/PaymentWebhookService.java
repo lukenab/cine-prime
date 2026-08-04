@@ -30,6 +30,7 @@ public class PaymentWebhookService {
     private final MovieInventoryClient movieInventoryClient;
     private final PaymentProcessingStateService stateService;
     private final ConcessionClient concessionClient;
+    private final BookingPromotionService promotionService;
 
     @Value("${booking.payment.webhook-secret}")
     private String webhookSecret;
@@ -81,6 +82,7 @@ public class PaymentWebhookService {
                     throw new IllegalStateException("Concession confirmation returned no order");
                 }
             }
+            promotionService.commit(instruction.promotionReservationId());
             return stateService.completeInventoryConfirmation(instruction, order);
         } catch (RuntimeException exception) {
             stateService.markDependencyFailure(instruction, exception);
@@ -101,6 +103,7 @@ public class PaymentWebhookService {
                         instruction.concessionReservationId(),
                         concessionServiceInternalKey);
             }
+            promotionService.release(instruction.promotionReservationId());
             return stateService.completeInventoryRelease(instruction);
         } catch (RuntimeException exception) {
             return stateService.markDependencyFailure(instruction, exception);

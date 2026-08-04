@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { LoaderCircle, Minus, Plus, Popcorn } from "lucide-react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { LoaderCircle, Minus, Plus, Popcorn, X } from "lucide-react";
 import { bookingApi, type BookingDetail } from "../../api/bookingApi";
 import { movieApi, type ClusterResponse, type PublicMovieResponse } from "../../api/movieApi";
 import {
@@ -89,6 +89,10 @@ const comboContents = (product: CatalogConcession, selections?: ReservationSelec
 export default function ConcessionSelectionPage() {
   const { bookingId = "" } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [promotionRejectionReason, setPromotionRejectionReason] = useState<string | undefined>(
+    (location.state as { promotionRejectionReason?: string } | null)?.promotionRejectionReason,
+  );
   const [booking, setBooking] = useState<BookingDetail | null>(null);
   const [catalog, setCatalog] = useState<CatalogConcession[]>([]);
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -263,6 +267,22 @@ export default function ConcessionSelectionPage() {
             Quick-pick combos available at {booking?.cinemaClusterName}. Continue without adding anything to skip this step.
           </p>
         </div>
+
+        {promotionRejectionReason && (
+          <div className="mb-7 flex items-start gap-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-200">
+            <span className="flex-1">
+              <strong className="font-semibold">Your promotion code wasn't applied.</strong> {promotionRejectionReason} Your seats are still held — you can continue at full price.
+            </span>
+            <button
+              type="button"
+              onClick={() => setPromotionRejectionReason(undefined)}
+              className="text-amber-200/60 transition-colors hover:text-amber-200"
+              aria-label="Dismiss"
+            >
+              <X size={15} />
+            </button>
+          </div>
+        )}
 
         <CheckoutProgress currentStep={2} />
 

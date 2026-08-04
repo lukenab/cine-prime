@@ -3,9 +3,11 @@ package bookingservice.service;
 import bookingservice.dto.response.HeldShowtimeSeatResponse;
 import bookingservice.dto.response.MovieSeatHoldResponse;
 import bookingservice.dto.response.MovieShowtimeResponse;
+import bookingservice.dto.response.PromotionReservationResponse;
 import bookingservice.entity.*;
 import bookingservice.repository.BookingRepository;
 import bookingservice.repository.IdempotencyRecordRepository;
+import bookingservice.repository.PromotionReservationRepository;
 import lombok.RequiredArgsConstructor;
 import movie.theater.common.exception.AppException;
 import org.springframework.stereotype.Service;
@@ -28,6 +30,7 @@ public class BookingPersistenceService {
 
     private final BookingRepository bookingRepository;
     private final IdempotencyRecordRepository idempotencyRepository;
+    private final PromotionReservationRepository promotionReservationRepository;
     private final BookingEventService bookingEventService;
 
     @Transactional
@@ -36,13 +39,19 @@ public class BookingPersistenceService {
             MovieShowtimeResponse showtime,
             MovieSeatHoldResponse hold,
             String idempotencyKey,
-            String correlationId) {
+            String correlationId,
+            String bookingId,
+            String promotionCode,
+            PromotionReservationResponse promotion) {
         return create(
                 accountId,
                 showtime,
                 hold,
                 idempotencyKey,
                 correlationId,
+                bookingId,
+                promotionCode,
+                promotion,
                 BookingType.ONLINE,
                 CREATE_BOOKING,
                 true);
@@ -61,6 +70,9 @@ public class BookingPersistenceService {
                 hold,
                 idempotencyKey,
                 correlationId,
+                UUID.randomUUID().toString(),
+                null,
+                null,
                 BookingType.COUNTER,
                 BookingIdempotencyService.CREATE_COUNTER_BOOKING,
                 false);
@@ -72,6 +84,9 @@ public class BookingPersistenceService {
             MovieSeatHoldResponse hold,
             String idempotencyKey,
             String correlationId,
+            String bookingId,
+            String promotionCode,
+            PromotionReservationResponse promotion,
             BookingType bookingType,
             String operationScope,
             boolean completeIdempotencyOperation) {
@@ -86,7 +101,9 @@ public class BookingPersistenceService {
         if (expiresAt == null) {
             throw new AppException(SERVICE_UNAVAILABLE);
         }
-        String bookingId = UUID.randomUUID().toString();
+        BigDecimal promotionDiscount = promotion == null
+                ? BigDecimal.ZERO : promotion.discountAmount();
+        BigDecimal finalAmount = subtotal.subtract(promotionDiscount);
         Booking booking = Booking.builder()
                 .bookingId(bookingId)
                 .bookingCode(newBookingCode())
@@ -104,7 +121,15 @@ public class BookingPersistenceService {
                 .showtimeTimezone(BUSINESS_ZONE.getId())
                 .holdReference(hold.getHoldId())
                 .totalAmount(subtotal)
-                .finalAmount(subtotal)
+                .discountAmount(promotionDiscount)
+                .finalAmount(finalAmount)
+                .promotionId(promotion == null || promotion.promotionId() == null
+                        ? null : promotion.promotionId().toString())
+                .promotionCode(promotion == null ? null : promotionCode)
+                .promotionReservationId(promotion == null || promotion.reservationId() == null
+                        ? null : promotion.reservationId().toString())
+                .promotionDiscountAmount(promotion == null ? null : promotion.discountAmount())
+                .promotionCurrency(promotion == null ? null : promotion.currency())
                 .status(BookingStatus.PENDING_PAYMENT)
                 .paymentStatus(PaymentStatus.PENDING)
                 .inventoryStatus(InventoryStatus.HELD)
@@ -133,6 +158,19 @@ public class BookingPersistenceService {
                 .build();
         booking.setInventoryReservation(reservation);
         Booking saved = bookingRepository.save(booking);
+
+        if (promotion != null) {
+            promotionReservationRepository.save(PromotionReservation.builder()
+                    .booking(saved)
+                    .promotionId(promotion.promotionId().toString())
+                    .promotionCode(promotionCode)
+                    .externalReservationId(promotion.reservationId().toString())
+                    .discountAmount(promotion.discountAmount())
+                    .status(promotion.status())
+                    .expiresAt(promotion.expiresAt())
+                    .idempotencyKey("booking-promotion:" + bookingId)
+                    .build());
+        }
 
         IdempotencyRecord operation = idempotencyRepository
                 .findByCallerScopeAndOperationScopeAndIdempotencyKey(accountId, operationScope, idempotencyKey)

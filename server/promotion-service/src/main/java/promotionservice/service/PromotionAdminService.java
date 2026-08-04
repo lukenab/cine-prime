@@ -161,7 +161,11 @@ public class PromotionAdminService {
     private PromotionResponse response(Promotion p) {
         /// Response trả model cho màn hình Admin, không trả trực tiếp JPA entity ra API.
         PromotionPriceRule r = p.getPriceRule();
-        return new PromotionResponse(p.getPromotionId(), p.getCode(), p.getName(), p.getDescription(), p.getStatus(), p.getValidFrom(), p.getValidUntil(), p.getGlobalUsageLimit(), p.getPerAccountUsageLimit(), p.getVersion(), new PromotionResponse.PriceRule(r.getDiscountType(), r.getPercentage(), r.getFixedAmount(), r.getMaxDiscountAmount(), r.getMinimumOrderAmount(), r.getCurrency()), p.getTargets().stream().map(t -> new PromotionResponse.Target(t.getTargetType(), t.getMovieId(), t.getShowtimeId())).toList());
+        List<PromotionResponse.AuditEntry> auditLog = auditLogRepository
+                .findTop20ByPromotion_PromotionIdOrderByCreatedAtDesc(p.getPromotionId()).stream()
+                .map(log -> new PromotionResponse.AuditEntry(log.getAction(), log.getActorAccountId(), log.getCreatedAt()))
+                .toList();
+        return new PromotionResponse(p.getPromotionId(), p.getCode(), p.getName(), p.getDescription(), p.getStatus(), p.getValidFrom(), p.getValidUntil(), p.getGlobalUsageLimit(), p.getPerAccountUsageLimit(), p.getVersion(), p.getActiveReservationCount(), p.getCommittedUsageCount(), new PromotionResponse.PriceRule(r.getDiscountType(), r.getPercentage(), r.getFixedAmount(), r.getMaxDiscountAmount(), r.getMinimumOrderAmount(), r.getCurrency()), p.getTargets().stream().map(t -> new PromotionResponse.Target(t.getTargetType(), t.getMovieId(), t.getShowtimeId())).toList(), auditLog);
     }
 
     private String normalize(String code) {

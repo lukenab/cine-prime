@@ -16,6 +16,10 @@ import java.util.List;
 public class BookingResponseMapper {
 
     public CreateBookingResponse toCreateResponse(Booking booking) {
+        return toCreateResponse(booking, null);
+    }
+
+    public CreateBookingResponse toCreateResponse(Booking booking, String promotionRejectionReason) {
         return CreateBookingResponse.builder()
                 .bookingId(booking.getBookingId())
                 .bookingCode(booking.getBookingCode())
@@ -28,6 +32,9 @@ public class BookingResponseMapper {
                 .discount(booking.getDiscountAmount().add(booking.getPointsDiscount()))
                 .total(booking.getFinalAmount())
                 .currency(booking.getCurrency())
+                .promotionCode(booking.getPromotionCode())
+                .promotionDiscountAmount(booking.getPromotionDiscountAmount())
+                .promotionRejectionReason(promotionRejectionReason)
                 .seats(toItems(booking.getBookingDetails()))
                 .build();
     }
@@ -57,6 +64,8 @@ public class BookingResponseMapper {
                 .discount(booking.getDiscountAmount().add(booking.getPointsDiscount()))
                 .total(booking.getFinalAmount())
                 .currency(booking.getCurrency())
+                .promotionCode(booking.getPromotionCode())
+                .promotionDiscountAmount(booking.getPromotionDiscountAmount())
                 .expiresAt(booking.getExpiresAt())
                 .paidAt(booking.getPaidAt())
                 .createdAt(booking.getCreatedAt())

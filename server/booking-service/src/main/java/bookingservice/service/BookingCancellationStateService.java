@@ -261,6 +261,7 @@ public class BookingCancellationStateService {
                         .filter(java.util.Objects::nonNull)
                         .findFirst()
                         .orElse(null),
+                booking.getPromotionReservationId(),
                 replayed);
     }
 
@@ -352,6 +353,7 @@ public class BookingCancellationStateService {
             String reasonCode,
             String reason,
             String concessionReservationId,
+            String promotionReservationId,
             boolean replayed) {
     }
 }

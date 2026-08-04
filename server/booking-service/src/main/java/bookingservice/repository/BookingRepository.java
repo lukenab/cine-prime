@@ -36,9 +36,4 @@ public interface BookingRepository extends JpaRepository<Booking, String> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select b from Booking b where b.bookingId = :bookingId")
     Optional<Booking> findByIdForUpdate(@Param("bookingId") String bookingId);
-    
-    // Legacy methods from HEAD (promotion integration) - kept for compatibility
-    Optional<Booking> findBySeatHoldId(String seatHoldId);
-    List<Booking> findByAccountIdAndStatus(String accountId, BookingStatus status);
-    Page<Booking> findAllByAccountId(String accountId, Pageable pageable);
 }

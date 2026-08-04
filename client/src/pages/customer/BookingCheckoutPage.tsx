@@ -197,9 +197,12 @@ export default function BookingCheckoutPage() {
   // This stays a plain, honest "not available" response instead of faking a
   // discount, so it does not misrepresent what the system actually does.
   const applyPromoCode = () => {
-    if (!promoCode.trim()) return;
+    return;
     setPromoMessage("Promo codes aren't available yet — check back soon.");
   };
+  void applyPromoCode;
+  void promoCode;
+  void promoMessage;
 
   const startPayment = async () => {
     if (!bookingId || booking?.status !== "PENDING_PAYMENT") return;
@@ -548,19 +551,18 @@ export default function BookingCheckoutPage() {
                       </div>
                     ) : (
                       <div className="booking-promo">
-                        <label className="booking-promo__label" htmlFor="checkout-promo-code">Promotion code</label>
-                        <div className="booking-promo__row">
-                          <input
-                            id="checkout-promo-code"
-                            type="text"
-                            value={promoCode}
-                            onChange={(event) => { setPromoCode(event.target.value); setPromoMessage(""); }}
-                            placeholder="Enter code"
-                            className="booking-promo__input"
-                          />
-                          <button type="button" className="booking-promo__apply" onClick={applyPromoCode}>Apply</button>
-                        </div>
-                        {promoMessage && <p className="booking-promo__message">{promoMessage}</p>}
+                        <p className="booking-promo__label">Promotion</p>
+                        {booking.promotionCode ? (
+                          <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <strong className="text-emerald-300">{booking.promotionCode}</strong>
+                              <span className="text-sm font-semibold text-emerald-300">-{formatBookingMoney(booking.promotionDiscountAmount ?? booking.discount, booking.currency)}</span>
+                            </div>
+                            <p className="mt-1 text-xs text-white/50">Validated and reserved with this booking.</p>
+                          </div>
+                        ) : (
+                          <p className="booking-promo__message">Promotion codes are entered before seats are reserved so eligibility and quota can be validated safely.</p>
+                        )}
                       </div>
                     )}
                   </div>

@@ -20,6 +20,7 @@ public class BookingCancellationService {
     private final MovieInventoryClient movieInventoryClient;
     private final PaymentClient paymentClient;
     private final ConcessionClient concessionClient;
+    private final BookingPromotionService promotionService;
 
     @Value("${movie-service.internal-key}")
     private String movieServiceInternalKey;
@@ -54,6 +55,7 @@ public class BookingCancellationService {
                         instruction.concessionReservationId(),
                         concessionServiceInternalKey);
             }
+            promotionService.release(instruction.promotionReservationId());
             return stateService.completeRelease(instruction.cancellationId());
         } catch (RuntimeException exception) {
             stateService.markReleaseFailure(instruction.cancellationId(), exception);
