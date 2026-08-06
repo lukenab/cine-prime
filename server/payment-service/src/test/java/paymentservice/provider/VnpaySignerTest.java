@@ -11,12 +11,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 class VnpaySignerTest {
     private final VnpaySigner signer = new VnpaySigner(new VnpayProperties(
             "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html",
+            "https://sandbox.vnpayment.vn/merchant_webapi/api/transaction",
             "http://localhost:8080/api/payments/vnpay/return",
             "DEMO1234",
             "a-test-hash-secret",
             "2.1.0",
             "vn",
-            "Asia/Ho_Chi_Minh"));
+            "Asia/Ho_Chi_Minh",
+            "CinePrime",
+            "127.0.0.1"));
 
     @Test
     void generatedUrlContainsSignatureThatCanBeVerified() {

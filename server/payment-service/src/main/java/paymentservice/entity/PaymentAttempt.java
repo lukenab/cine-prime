@@ -33,6 +33,9 @@ public class PaymentAttempt {
     @Column(name = "provider_transaction_id", length = 100)
     private String providerTransactionId;
 
+    @Column(name = "provider_created_at")
+    private OffsetDateTime providerCreatedAt;
+
     @Column(name = "idempotency_key", nullable = false, length = 120)
     private String idempotencyKey;
 
