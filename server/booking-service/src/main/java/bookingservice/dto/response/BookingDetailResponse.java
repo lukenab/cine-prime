@@ -36,7 +36,10 @@ public class BookingDetailResponse {
     BigDecimal total;
     String currency;
     String promotionCode;
+    String promotionBenefitScope;
     BigDecimal promotionDiscountAmount;
+    BigDecimal ticketPromotionDiscount;
+    BigDecimal concessionPromotionDiscount;
     OffsetDateTime expiresAt;
     OffsetDateTime paidAt;
     OffsetDateTime createdAt;

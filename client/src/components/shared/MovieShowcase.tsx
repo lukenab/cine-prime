@@ -65,7 +65,7 @@ export function MovieShowcase({ movies, loading = false, error = "" }: Props) {
   };
 
   return (
-    <section style={{ backgroundColor: "#050505", paddingBottom: "64px" }}>
+    <section style={{ paddingBottom: "64px" }}>
 
       <div className="max-w-7xl mx-auto px-6">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">

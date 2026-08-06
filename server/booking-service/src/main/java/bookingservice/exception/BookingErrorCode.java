@@ -50,6 +50,8 @@ public enum BookingErrorCode implements BaseErrorCode {
     PROMOTION_NOT_APPLICABLE(2501, "This promotion code isn't valid for this booking.", HttpStatus.CONFLICT),
     PROMOTION_QUOTA_EXHAUSTED(2502, "This promotion code has reached its usage limit.", HttpStatus.CONFLICT),
     PROMOTION_SERVICE_UNAVAILABLE(2503, "Promotion service is temporarily unavailable. Please try again.", HttpStatus.SERVICE_UNAVAILABLE),
+    PROMOTION_CHANGE_NOT_ALLOWED(2504, "Promotion can only be changed before payment starts.", HttpStatus.CONFLICT),
+    PROMOTION_ALREADY_APPLIED(2505, "Remove the current promotion before applying another code.", HttpStatus.CONFLICT),
 
     SERVICE_UNAVAILABLE(4199, "A required booking dependency is temporarily unavailable.", HttpStatus.SERVICE_UNAVAILABLE);
 

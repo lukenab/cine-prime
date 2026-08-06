@@ -97,7 +97,7 @@ export function MoviePreviewModal({ movie, onClose }: Props) {
 
   if (!movie) return null;
 
-  const title = movie.movieNameEnglish || movie.movieNameVn || "Untitled Movie";
+  const title = movie.movieNameVn || movie.movieNameEnglish || "Phim chưa có tên";
   const year = releaseYear(movie);
   const isComingSoon = movie.displayStatus === "COMING_SOON";
   const embedSrc = vid
@@ -106,16 +106,8 @@ export function MoviePreviewModal({ movie, onClose }: Props) {
 
   const handleBook = () => {
     if (isComingSoon) return;
-    let preferredClusterId: number | undefined;
-    try {
-      preferredClusterId = JSON.parse(localStorage.getItem("cp_cluster") ?? "null")?.clusterId;
-    } catch {
-      preferredClusterId = undefined;
-    }
     onClose();
-    navigate(
-      `/showtime/${movie.movieId}${preferredClusterId ? `?clusterId=${preferredClusterId}` : ""}`
-    );
+    navigate(`/showtime/${movie.movieId}`);
   };
 
   return (

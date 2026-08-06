@@ -11,6 +11,7 @@ import promotionservice.enums.PromotionStatus;
 import java.util.UUID;
 import jakarta.persistence.LockModeType;
 import java.util.Optional;
+import java.util.List;
 
 public interface PromotionRepository extends JpaRepository<Promotion, UUID> {
     boolean existsByCodeIgnoreCase(String code);
@@ -22,4 +23,6 @@ public interface PromotionRepository extends JpaRepository<Promotion, UUID> {
     Optional<Promotion> findByIdForUpdate(UUID id);
 
     Page<Promotion> findByStatus(PromotionStatus status, Pageable pageable);
+
+    List<Promotion> findByStatusOrderByValidUntilAsc(PromotionStatus status);
 }

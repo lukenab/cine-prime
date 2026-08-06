@@ -5,6 +5,7 @@ import movieservice.entity.AgeRating;
 import movieservice.entity.Genre;
 import movieservice.entity.Movie;
 import movieservice.entity.MovieTranslation;
+import movieservice.entity.MovieTranslationId;
 import movieservice.entity.ScreeningFormat;
 import movieservice.enums.GenreStatus;
 import movieservice.enums.MovieStatus;
@@ -85,7 +86,10 @@ class MovieReadinessValidatorTest {
                 .ageRating(activeRating("T13"))
                 .posterUrl("https://example.com/poster.jpg")
                 .synopsis("A synopsis.")
-                .translations(List.of(MovieTranslation.builder().title("Hành Tinh Cát").build()))
+                .translations(List.of(MovieTranslation.builder()
+                        .id(new MovieTranslationId(1L, "vi"))
+                        .title("Hành Tinh Cát")
+                        .build()))
                 .status(MovieStatus.DRAFT)
                 .build();
     }
@@ -122,9 +126,10 @@ class MovieReadinessValidatorTest {
         assertTrue(fields.contains("originalLanguage"));
         assertTrue(fields.contains("durationMinutes"));
         assertTrue(fields.contains("genres"));
+        assertTrue(fields.contains("translations.vi"));
         assertTrue(fields.contains("screeningVersions"));
         // All violations reported together, not fail-fast on the first one.
-        assertEquals(5, fields.size());
+        assertEquals(6, fields.size());
     }
 
     // ── Approve gate ───────────────────────────────────────────
@@ -139,6 +144,7 @@ class MovieReadinessValidatorTest {
         Movie movie = completeMovie();
         movie.setSynopsis(null);
         movie.setTranslations(List.of(MovieTranslation.builder()
+                .id(new MovieTranslationId(1L, "vi"))
                 .title("Am Anh")
                 .synopsis("A localized synopsis.")
                 .build()));

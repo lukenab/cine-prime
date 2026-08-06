@@ -21,7 +21,7 @@ export const mockEvents: MockEvent[] = [
     time: "19:30",
     cluster: "CinePrime District 1",
     tag: "Premiere",
-    accentColor: "#FFD700",
+    accentColor: "#38bdf8",
     image: "https://images.unsplash.com/photo-1485846234645-a62644f84728?w=900&h=600&fit=crop",
   },
   {

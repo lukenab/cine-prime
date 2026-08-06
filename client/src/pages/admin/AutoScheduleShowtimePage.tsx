@@ -64,6 +64,8 @@ import {
 
 type StepKey = "scope" | "review" | "running" | "results";
 type WorkspaceSection = "create" | "review-plans" | "published" | "policy";
+const MAX_AUTO_SCHEDULE_CLUSTERS = 3;
+const MAX_AUTO_SCHEDULE_MOVIES = 5;
 const STEPS: { key: StepKey; label: string; icon: typeof Calendar }[] = [
   { key: "scope", label: "Scope", icon: Calendar },
   { key: "review", label: "Review", icon: CheckCircle2 },
@@ -999,7 +1001,8 @@ export default function AutoScheduleShowtimePage({
   );
   const toggleCluster = (id: number) => setSelectedClusterIds((prev) => {
     const next = new Set(prev);
-    next.has(id) ? next.delete(id) : next.add(id);
+    if (next.has(id)) next.delete(id);
+    else if (next.size < MAX_AUTO_SCHEDULE_CLUSTERS) next.add(id);
     return next;
   });
   const toggleMovie = (id: number) => setSelectedMovieIds((prev) => {
@@ -1012,7 +1015,7 @@ export default function AutoScheduleShowtimePage({
         updated.delete(id);
         return updated;
       });
-    } else {
+    } else if (next.size < MAX_AUTO_SCHEDULE_MOVIES) {
       next.add(id);
     }
     return next;
@@ -1041,7 +1044,9 @@ export default function AutoScheduleShowtimePage({
     setStartDate(clampedStart);
     setEndDate(clampedEnd);
   };
-  const effectiveClusterIds = allClusters ? schedulableClusters.map((c) => c.clusterId) : Array.from(selectedClusterIds);
+  const effectiveClusterIds = allClusters
+    ? schedulableClusters.slice(0, MAX_AUTO_SCHEDULE_CLUSTERS).map((c) => c.clusterId)
+    : Array.from(selectedClusterIds);
   const selectedScopeRoomCount = effectiveClusterIds.reduce(
     (total, clusterId) => total + (clusterEligibility.get(clusterId)?.eligibleRoomCount ?? 0),
     0,
@@ -1063,7 +1068,8 @@ export default function AutoScheduleShowtimePage({
   }, [effectiveClusterKey]);
   const canProceedFromScope = Boolean(
     startDate && endDate && !invalidDateRange && !horizonViolation
-    && effectiveClusterIds.length > 0 && selectedMovieIds.size > 0
+    && effectiveClusterIds.length > 0 && effectiveClusterIds.length <= MAX_AUTO_SCHEDULE_CLUSTERS
+    && selectedMovieIds.size > 0 && selectedMovieIds.size <= MAX_AUTO_SCHEDULE_MOVIES
   );
 
   // Rooms an admin can exclude from this generation run only (e.g. held for a private
@@ -1392,18 +1398,26 @@ export default function AutoScheduleShowtimePage({
                           <Building2 size={15} className="text-blue-600" />
                           <div>
                             <p style={{ fontSize: "14.5px", fontWeight: 700, color: "var(--text-main)" }}>Cinema scope</p>
-                            <p style={{ fontSize: "12px", color: "var(--text-sub)" }}>{effectiveClusterIds.length} selected</p>
+                            <p style={{ fontSize: "12px", color: "var(--text-sub)" }}>
+                              {effectiveClusterIds.length} selected · max {MAX_AUTO_SCHEDULE_CLUSTERS}
+                            </p>
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          disabled={!allClusters && schedulableClusters.length === 0}
-                          onClick={() => { setAllClusters(!allClusters); setSelectedClusterIds(new Set()); }}
-                          className="rounded-lg px-2.5 py-1.5 disabled:cursor-not-allowed disabled:opacity-40"
-                          style={{ background: allClusters ? "rgba(37,99,235,.1)" : "var(--bg-main)", color: allClusters ? "#2563eb" : "var(--text-sub)", fontSize: "12px", fontWeight: 650 }}
-                        >
-                          {allClusters ? "Clear all" : `All eligible (${schedulableClusters.length})`}
-                        </button>
+                        {schedulableClusters.length <= MAX_AUTO_SCHEDULE_CLUSTERS ? (
+                          <button
+                            type="button"
+                            disabled={!allClusters && schedulableClusters.length === 0}
+                            onClick={() => { setAllClusters(!allClusters); setSelectedClusterIds(new Set()); }}
+                            className="rounded-lg px-2.5 py-1.5 disabled:cursor-not-allowed disabled:opacity-40"
+                            style={{ background: allClusters ? "rgba(37,99,235,.1)" : "var(--bg-main)", color: allClusters ? "#2563eb" : "var(--text-sub)", fontSize: "12px", fontWeight: 650 }}
+                          >
+                            {allClusters ? "Clear all" : `Select all (${schedulableClusters.length})`}
+                          </button>
+                        ) : (
+                          <span className="rounded-lg px-2.5 py-1.5" style={{ background: "var(--bg-main)", color: "var(--text-sub)", fontSize: "11px", fontWeight: 650 }}>
+                            Choose up to {MAX_AUTO_SCHEDULE_CLUSTERS}
+                          </span>
+                        )}
                       </div>
                       <div className="relative mb-3">
                         <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-sub)" }} />
@@ -1416,16 +1430,17 @@ export default function AutoScheduleShowtimePage({
                           const eligibility = clusterEligibility.get(cluster.clusterId);
                           const schedulable = eligibility?.schedulable === true;
                           const selected = schedulable && (allClusters || selectedClusterIds.has(cluster.clusterId));
+                          const selectionLimitReached = !selected && effectiveClusterIds.length >= MAX_AUTO_SCHEDULE_CLUSTERS;
                           const eligibleRoomCount = eligibility?.eligibleRoomCount ?? 0;
                           const totalRoomCount = eligibility?.totalRoomCount ?? 0;
                           const partiallyEligible = schedulable && totalRoomCount > 0 && eligibleRoomCount < totalRoomCount;
                           return (
                             <label
                               key={cluster.clusterId}
-                              className={`relative flex items-center gap-3 rounded-xl border p-2.5 transition-colors ${schedulable && !allClusters ? "cursor-pointer" : "cursor-not-allowed"}`}
+                              className={`relative flex items-center gap-3 rounded-xl border p-2.5 transition-colors ${schedulable && !allClusters && !selectionLimitReached ? "cursor-pointer" : "cursor-not-allowed"}`}
                               style={{ borderColor: selected ? "rgba(37,99,235,.55)" : !schedulable ? "rgba(245,158,11,.28)" : "var(--border-color)", background: selected ? "rgba(37,99,235,.07)" : !schedulable ? "rgba(245,158,11,.045)" : "var(--bg-main)", opacity: !schedulable ? 0.72 : allClusters ? 0.88 : 1 }}
                             >
-                              <input className="sr-only" type="checkbox" disabled={allClusters || !schedulable} checked={selected} onChange={() => toggleCluster(cluster.clusterId)} />
+                              <input className="sr-only" type="checkbox" disabled={allClusters || !schedulable || selectionLimitReached} checked={selected} onChange={() => toggleCluster(cluster.clusterId)} />
                               <div className="h-12 w-14 flex-shrink-0 overflow-hidden rounded-lg" style={{ background: "rgba(37,99,235,.08)" }}>
                                 {cluster.coverImageUrl
                                   ? <img src={cluster.coverImageUrl} alt="" className="h-full w-full object-cover" />
@@ -1459,7 +1474,9 @@ export default function AutoScheduleShowtimePage({
                     <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2"><Film size={16} className="text-blue-600" /><p style={{ fontSize: "14.5px", fontWeight: 700, color: "var(--text-main)" }}>Movie catalog</p></div>
-                        <p className="mt-1" style={{ fontSize: "12px", color: "var(--text-sub)" }}>Approved catalog titles · scheduling eligibility is revalidated on submit · {selectedMovieIds.size} selected</p>
+                        <p className="mt-1" style={{ fontSize: "12px", color: "var(--text-sub)" }}>
+                          Approved titles · {selectedMovieIds.size}/{MAX_AUTO_SCHEDULE_MOVIES} selected · eligibility revalidated on submit
+                        </p>
                       </div>
                       {selectedMovieIds.size > 0 && <button type="button" onClick={() => { setSelectedMovieIds(new Set()); setScreeningVersionOverrides(new Map()); }} className="text-xs font-semibold text-blue-600">Clear selection</button>}
                     </div>
@@ -1484,25 +1501,27 @@ export default function AutoScheduleShowtimePage({
                           const availabilityCheck = movieAvailabilityEligibility.get(movie.movieId);
                           const eligible = !scopeChosen || availabilityCheck?.eligible !== false;
                           const selected = eligible && selectedMovieIds.has(movie.movieId);
+                          const withinSelectionLimit = selected || selectedMovieIds.size < MAX_AUTO_SCHEDULE_MOVIES;
+                          const selectable = eligible && withinSelectionLimit;
                           return (
                             <MovieCatalogAccordionItem
                               key={movie.movieId}
                               movie={movie}
-                              eligible={eligible}
-                              reason={availabilityCheck?.reason}
+                              eligible={selectable}
+                              reason={withinSelectionLimit ? availabilityCheck?.reason : `Select up to ${MAX_AUTO_SCHEDULE_MOVIES} movies per run.`}
                               selected={selected}
                               expanded={expandedMovieIds.has(movie.movieId)}
                               versions={screeningVersionsByMovie.get(movie.movieId) ?? []}
                               scopeRoomCount={selectedScopeRoomCount}
                               overrideIds={screeningVersionOverrides.get(movie.movieId)}
-                              onToggleSelected={() => { if (eligible) toggleMovie(movie.movieId); }}
+                              onToggleSelected={() => { if (selectable) toggleMovie(movie.movieId); }}
                               onToggleExpanded={() => setExpandedMovieIds((current) => {
                                 const next = new Set(current);
                                 next.has(movie.movieId) ? next.delete(movie.movieId) : next.add(movie.movieId);
                                 return next;
                               })}
                               onUseAuto={() => {
-                                if (!eligible) return;
+                                if (!selectable) return;
                                 setSelectedMovieIds((current) => new Set(current).add(movie.movieId));
                                 setScreeningVersionOverrides((current) => {
                                   const next = new Map(current);
@@ -1511,7 +1530,7 @@ export default function AutoScheduleShowtimePage({
                                 });
                               }}
                               onToggleVersion={(versionId) => {
-                                if (!eligible) return;
+                                if (!selectable) return;
                                 setSelectedMovieIds((current) => new Set(current).add(movie.movieId));
                                 setScreeningVersionOverrides((current) => {
                                   const next = new Map(current);

@@ -7,6 +7,7 @@ import movieservice.exception.MovieErrorCode;
 import movieservice.repository.SchedulePlanRepository;
 import movieservice.service.autoshowtime.AutoShowtimeCandidatePersistenceService;
 import movieservice.service.autoshowtime.SchedulingEligibilityService;
+import movieservice.service.autoshowtime.SchedulingEligibilityResult;
 import movieservice.service.autoshowtime.SchedulingOperationalConstraintService;
 import movieservice.lifecycle.LifecycleEventNotifier;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +32,7 @@ class SchedulePlanServiceTest {
     @Mock SchedulePlanRepository schedulePlanRepository;
     @Mock SchedulePlanRevalidationService revalidationService;
     @Mock AutoShowtimeCandidatePersistenceService persistenceService;
+    @Mock ShowtimeInventoryService showtimeInventoryService;
     @Mock SchedulingEligibilityService eligibilityService;
     @Mock SchedulingOperationalConstraintService operationalConstraintService;
     @Mock LifecycleEventNotifier lifecycleEventNotifier;
@@ -41,6 +43,7 @@ class SchedulePlanServiceTest {
     void setUp() {
         service = new SchedulePlanService(
                 schedulePlanRepository, revalidationService, persistenceService,
+                showtimeInventoryService,
                 eligibilityService, operationalConstraintService, lifecycleEventNotifier);
     }
 
@@ -119,6 +122,54 @@ class SchedulePlanServiceTest {
     }
 
     @Test
+    void publishingDefersSeatInventoryAndMaterializesPlanInOneBatch() {
+        SchedulePlan plan = plan(SchedulePlanStatus.IN_REVIEW);
+        plan.setSubmittedBy("operator@cineprime.vn");
+        CinemaCluster cluster = CinemaCluster.builder()
+                .clusterId(43L)
+                .timezone("Asia/Ho_Chi_Minh")
+                .build();
+        CinemaRoom room = CinemaRoom.builder()
+                .cinemaRoomId(3L)
+                .cluster(cluster)
+                .build();
+        Movie movie = Movie.builder().movieId(61L).build();
+        MovieScreeningVersion version = MovieScreeningVersion.builder()
+                .screeningVersionId(11L)
+                .format(ScreeningFormat.builder().formatId(1).build())
+                .build();
+        SchedulePlanSlot slot = SchedulePlanSlot.builder()
+                .schedulePlan(plan)
+                .movie(movie)
+                .cinemaRoom(room)
+                .screeningVersion(version)
+                .businessDate(LocalDate.of(2026, 8, 8))
+                .startAt(OffsetDateTime.parse("2026-08-08T01:00:00Z"))
+                .endAt(OffsetDateTime.parse("2026-08-08T03:00:00Z"))
+                .build();
+        plan.getSlots().add(slot);
+        ShowTime published = ShowTime.builder().showTimeId(99L).cinemaRoom(room).build();
+
+        when(schedulePlanRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(plan));
+        when(eligibilityService.evaluate(movie, cluster, version, slot.getBusinessDate()))
+                .thenReturn(SchedulingEligibilityResult.allowed());
+        when(operationalConstraintService.evaluate(
+                room, version, slot.getStartAt(), slot.getEndAt()))
+                .thenReturn(SchedulingEligibilityResult.allowed());
+        when(persistenceService.persist(eq(20L), any(), eq(15), eq(false)))
+                .thenReturn(movieservice.service.autoshowtime.AutoShowtimePersistenceResult
+                        .created(published));
+        when(showtimeInventoryService.materializeBatch(List.of(published))).thenReturn(150);
+
+        var response = service.publish(10L, "admin@cineprime.vn");
+
+        assertEquals("PUBLISHED", response.status());
+        assertSame(published, slot.getPublishedShowtime());
+        verify(persistenceService).persist(eq(20L), any(), eq(15), eq(false));
+        verify(showtimeInventoryService).materializeBatch(List.of(published));
+    }
+
+    @Test
     void submittingAuthorCannotPublishOwnSchedulePlan() {
         SchedulePlan plan = plan(SchedulePlanStatus.IN_REVIEW);
         plan.setSubmittedBy("programmer@cineprime.vn");
@@ -184,7 +235,11 @@ class SchedulePlanServiceTest {
     private SchedulePlan plan(SchedulePlanStatus status) {
         return SchedulePlan.builder()
                 .schedulePlanId(10L)
-                .generationRun(ShowtimeGenerationRun.builder().generationRunId(20L).build())
+                .generationRun(ShowtimeGenerationRun.builder()
+                        .generationRunId(20L)
+                        .requestedBy("operator@cineprime.vn")
+                        .policy(ShowtimeAllocationPolicy.builder().build())
+                        .build())
                 .status(status)
                 .slots(new ArrayList<>())
                 .build();

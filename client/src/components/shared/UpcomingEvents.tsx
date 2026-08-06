@@ -1,26 +1,12 @@
 import { useNavigate } from "react-router-dom";
-import { Calendar, Clock, ArrowRight } from "lucide-react";
-import { mockEvents } from "../../data/mockEvents";
-
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-}
-
-function formatTime(timeStr: string): string {
-  const [h, m] = timeStr.split(":").map(Number);
-  const d = new Date();
-  d.setHours(h, m, 0);
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-}
+import { ArrowRight } from "lucide-react";
 
 export function UpcomingEvents() {
   const navigate = useNavigate();
-  const events = mockEvents.slice(0, 3);
 
   return (
     <section
-      style={{ backgroundColor: "#050505", paddingTop: "80px", paddingBottom: "80px", borderTop: "1px solid rgba(255,255,255,0.06)" }}
+      style={{ paddingTop: "80px", paddingBottom: "80px", borderTop: "1px solid rgba(255,255,255,0.06)" }}
     >
       <div className="max-w-7xl mx-auto px-6">
         {/* Header */}
@@ -48,42 +34,21 @@ export function UpcomingEvents() {
           </button>
         </div>
 
-        {/* Cards */}
+        {/* Loading placeholders. Replace with API-backed events when the events service is connected. */}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-          {events.map((event) => (
+          {Array.from({ length: 3 }).map((_, index) => (
             <div
-              key={event.eventId}
-              onClick={() => navigate("/events")}
-              className="group relative cursor-pointer overflow-hidden rounded-2xl"
+              key={index}
+              className="relative overflow-hidden rounded-2xl animate-pulse"
               style={{ border: "1px solid rgba(255,255,255,0.07)", backgroundColor: "rgba(255,255,255,0.03)" }}
             >
-              <div className="relative h-40 w-full overflow-hidden">
-                <img
-                  src={event.image}
-                  alt={event.title}
-                  className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
-                />
-                <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(5,5,5,0.9), transparent 60%)" }} />
-                <div
-                  className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full px-3 py-1"
-                  style={{ backgroundColor: `${event.accentColor}20`, border: `1px solid ${event.accentColor}50`, backdropFilter: "blur(8px)" }}
-                >
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: event.accentColor }} />
-                  <span style={{ color: event.accentColor, fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.1em" }}>
-                    {event.tag.toUpperCase()}
-                  </span>
-                </div>
-              </div>
+              <div className="h-40 w-full bg-white/[0.08]" />
 
               <div className="p-5">
-                <h3 className="text-[15px] font-bold text-white leading-snug">{event.title}</h3>
-                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-white/50">
-                  <span className="flex items-center gap-1.5">
-                    <Calendar size={12} style={{ color: event.accentColor }} /> {formatDate(event.date)}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <Clock size={12} style={{ color: event.accentColor }} /> {formatTime(event.time)}
-                  </span>
+                <div className="h-4 w-2/3 rounded bg-white/[0.10]" />
+                <div className="mt-4 flex gap-4">
+                  <div className="h-3 w-24 rounded bg-white/[0.08]" />
+                  <div className="h-3 w-16 rounded bg-white/[0.08]" />
                 </div>
               </div>
             </div>

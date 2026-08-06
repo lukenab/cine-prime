@@ -3,10 +3,10 @@ package bookingservice.service;
 import bookingservice.client.PromotionClient;
 import bookingservice.dto.request.PromotionQuoteRequest;
 import bookingservice.dto.request.PromotionReserveRequest;
-import bookingservice.dto.response.HeldShowtimeSeatResponse;
-import bookingservice.dto.response.MovieSeatHoldResponse;
-import bookingservice.dto.response.MovieShowtimeResponse;
 import bookingservice.dto.response.PromotionReservationResponse;
+import bookingservice.entity.Booking;
+import bookingservice.entity.BookingItem;
+import bookingservice.entity.ConcessionItem;
 import bookingservice.repository.PromotionReservationRepository;
 import feign.FeignException;
 import lombok.RequiredArgsConstructor;
@@ -32,30 +32,33 @@ public class BookingPromotionService {
 
     public PromotionReservationResponse reserve(
             String code,
-            String bookingId,
-            String accountId,
-            MovieShowtimeResponse showtime,
-            MovieSeatHoldResponse hold) {
+            Booking booking,
+            String idempotencyKey) {
         String normalized = normalize(code);
         if (normalized == null) {
             return null;
         }
-        BigDecimal subtotal = hold.getSeats().stream()
-                .map(HeldShowtimeSeatResponse::getPrice)
+        BigDecimal ticketSubtotal = booking.getBookingDetails().stream()
+                .map(BookingItem::getFinalPrice)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal concessionSubtotal = booking.getConcessionItems().stream()
+                .map(ConcessionItem::getFinalAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         PromotionQuoteRequest snapshot = new PromotionQuoteRequest(
                 normalized,
-                bookingId,
-                accountId,
-                showtime.getMovieId(),
-                showtime.getShowTimeId(),
-                showtime.getClusterId(),
-                subtotal,
-                "VND");
+                booking.getBookingId(),
+                booking.getAccountId(),
+                booking.getMovieId(),
+                booking.getShowtimeId(),
+                booking.getClusterId(),
+                ticketSubtotal,
+                concessionSubtotal,
+                booking.getServiceFeeAmount(),
+                booking.getCurrency());
         try {
             ApiResponse<PromotionReservationResponse> wrapper = promotionClient.reserve(
                     internalKey,
-                    new PromotionReserveRequest("booking-promotion:" + bookingId, snapshot));
+                    new PromotionReserveRequest(idempotencyKey, snapshot));
             if (wrapper == null || wrapper.getResult() == null) {
                 throw new AppException(PROMOTION_SERVICE_UNAVAILABLE);
             }

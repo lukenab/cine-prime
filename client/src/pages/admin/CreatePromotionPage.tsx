@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { ArrowLeft, Save } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { promotionApi, type PromotionDiscountType, type PromotionUpsertPayload } from "../../api/promotionApi";
+import { promotionApi, type PromotionBenefitScope, type PromotionDiscountType, type PromotionUpsertPayload } from "../../api/promotionApi";
 
 export interface PromotionFormData {
   code: string;
   name: string;
   description: string;
+  benefitScope: PromotionBenefitScope;
   discountType: PromotionDiscountType;
   discountValue: string;
   maximumDiscount: string;
@@ -18,7 +19,7 @@ export interface PromotionFormData {
 }
 
 export const EMPTY_PROMOTION_FORM: PromotionFormData = {
-  code: "", name: "", description: "", discountType: "PERCENTAGE", discountValue: "",
+  code: "", name: "", description: "", benefitScope: "TICKETS", discountType: "PERCENTAGE", discountValue: "",
   maximumDiscount: "", minimumOrder: "0", validFrom: "", validUntil: "",
   globalUsageLimit: "", perAccountUsageLimit: "",
 };
@@ -30,6 +31,7 @@ export function toPromotionPayload(form: PromotionFormData): PromotionUpsertPayl
     code: form.code.trim().toUpperCase(),
     name: form.name.trim(),
     description: form.description.trim(),
+    benefitScope: form.benefitScope,
     validFrom: form.validFrom ? `${form.validFrom}T00:00:00+07:00` : null,
     validUntil: form.validUntil ? `${form.validUntil}T23:59:59+07:00` : null,
     globalUsageLimit: form.globalUsageLimit ? Number(form.globalUsageLimit) : null,
@@ -91,6 +93,7 @@ export function PromotionForm({ initial = EMPTY_PROMOTION_FORM, submitLabel, onS
     <section className="rounded-2xl border p-6" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
       <h2 className="mb-5 font-semibold" style={{ color: "var(--text-main)" }}>Discount rule</h2>
       <div className="grid gap-5 md:grid-cols-2">
+        <label className="space-y-2 text-sm md:col-span-2" style={{ color: "var(--text-sub)" }}>Applies to *<select value={form.benefitScope} onChange={(e) => update("benefitScope", e.target.value)} className={inputClass} style={inputStyle}><option value="TICKETS">Movie tickets</option><option value="CONCESSIONS">Food &amp; drinks</option><option value="ORDER">Complete eligible order</option></select><span className="block text-xs">Service fees are excluded from the eligible subtotal.</span></label>
         <label className="space-y-2 text-sm" style={{ color: "var(--text-sub)" }}>Discount type<select value={form.discountType} onChange={(e) => update("discountType", e.target.value)} className={inputClass} style={inputStyle}><option value="PERCENTAGE">Percentage</option><option value="FIXED_AMOUNT">Fixed amount</option></select></label>
         <label className="space-y-2 text-sm" style={{ color: "var(--text-sub)" }}>Discount value *<input type="number" min="1" max={form.discountType === "PERCENTAGE" ? "100" : undefined} value={form.discountValue} onChange={(e) => update("discountValue", e.target.value)} placeholder={form.discountType === "PERCENTAGE" ? "20" : "50000"} className={inputClass} style={inputStyle} /></label>
         <label className="space-y-2 text-sm" style={{ color: "var(--text-sub)" }}>Minimum booking subtotal (VND)<input type="number" min="0" value={form.minimumOrder} onChange={(e) => update("minimumOrder", e.target.value)} className={inputClass} style={inputStyle} /></label>

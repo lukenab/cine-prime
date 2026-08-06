@@ -1,17 +1,4 @@
-import { Calendar, Clock, MapPin, PartyPopper } from "lucide-react";
-import { mockEvents } from "../../data/mockEvents";
-
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-}
-
-function formatTime(timeStr: string): string {
-  const [h, m] = timeStr.split(":").map(Number);
-  const d = new Date();
-  d.setHours(h, m, 0);
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-}
+import { PartyPopper } from "lucide-react";
 
 export default function EventsPage() {
   return (
@@ -27,68 +14,44 @@ export default function EventsPage() {
           </div>
           <h1 className="text-3xl font-extrabold text-white sm:text-4xl">Events</h1>
           <p className="mt-1.5 text-sm text-white/45">
-            Premieres, marathons, and special screenings happening at CinePrime
+            New CinePrime event announcements are being prepared.
           </p>
         </div>
       </div>
 
       {/* List */}
       <div className="mx-auto max-w-5xl px-6 py-10">
-        <div className="flex flex-col gap-5">
-          {mockEvents.map((event) => (
+        <div className="flex flex-col gap-5" aria-busy="true" aria-label="Cinema events are being prepared">
+          {Array.from({ length: 3 }, (_, index) => (
             <div
-              key={event.eventId}
-              className="group relative flex flex-col overflow-hidden rounded-2xl sm:flex-row"
+              key={index}
+              className="relative flex flex-col overflow-hidden rounded-2xl sm:flex-row"
               style={{ border: "1px solid rgba(255,255,255,0.07)", backgroundColor: "rgba(255,255,255,0.03)" }}
             >
-              {/* Image */}
-              <div className="relative h-48 w-full flex-shrink-0 overflow-hidden sm:h-auto sm:w-72">
-                <img
-                  src={event.image}
-                  alt={event.title}
-                  className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
-                />
-                <div
-                  className="absolute inset-0"
-                  style={{ background: "linear-gradient(to right, transparent 40%, rgba(5,5,5,0.6) 100%)" }}
-                />
-                <div
-                  className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full px-3 py-1"
-                  style={{
-                    backgroundColor: `${event.accentColor}20`,
-                    border: `1px solid ${event.accentColor}50`,
-                    backdropFilter: "blur(8px)",
-                  }}
-                >
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: event.accentColor }} />
-                  <span style={{ color: event.accentColor, fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.1em" }}>
-                    {event.tag.toUpperCase()}
-                  </span>
-                </div>
+              <div className="relative h-48 w-full flex-shrink-0 overflow-hidden bg-white/[0.035] sm:h-auto sm:w-72">
+                <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-blue-500/[0.08] via-white/[0.025] to-transparent" />
+                <div className="absolute left-4 top-4 h-6 w-24 animate-pulse rounded-full bg-white/[0.08]" />
               </div>
 
-              {/* Info */}
-              <div className="flex flex-1 flex-col justify-center gap-2.5 p-6">
-                <div>
-                  <h3 className="text-lg font-bold text-white">{event.title}</h3>
-                  <p className="mt-0.5 text-sm text-white/50">{event.subtitle}</p>
+              <div className="flex min-h-48 flex-1 flex-col justify-center gap-4 p-6">
+                <div className="h-5 w-2/5 animate-pulse rounded-full bg-white/[0.1]" />
+                <div className="h-3 w-3/5 animate-pulse rounded-full bg-white/[0.07]" />
+                <div className="space-y-2">
+                  <div className="h-3 w-full animate-pulse rounded-full bg-white/[0.055]" />
+                  <div className="h-3 w-4/5 animate-pulse rounded-full bg-white/[0.055]" />
                 </div>
-                <p className="text-[13px] leading-relaxed text-white/60">{event.description}</p>
-                <div className="mt-1 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[12.5px] text-white/55">
-                  <span className="flex items-center gap-1.5">
-                    <Calendar size={13} style={{ color: event.accentColor }} /> {formatDate(event.date)}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <Clock size={13} style={{ color: event.accentColor }} /> {formatTime(event.time)}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <MapPin size={13} style={{ color: event.accentColor }} /> {event.cluster}
-                  </span>
+                <div className="mt-1 flex gap-5">
+                  <div className="h-3 w-24 animate-pulse rounded-full bg-white/[0.065]" />
+                  <div className="h-3 w-20 animate-pulse rounded-full bg-white/[0.065]" />
+                  <div className="h-3 w-28 animate-pulse rounded-full bg-white/[0.065]" />
                 </div>
               </div>
             </div>
           ))}
         </div>
+        <p className="mt-7 text-center text-sm text-white/40" role="status">
+          Event schedules will appear here when they are published.
+        </p>
       </div>
     </div>
   );

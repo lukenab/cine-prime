@@ -32,7 +32,7 @@ function toEmbedUrl(url?: string): string | null {
 export function TrailerModal({ movie, onClose }: Props) {
   if (!movie) return null;
 
-  const title = movie.movieNameEnglish || movie.movieNameVn || "Movie trailer";
+  const title = movie.movieNameVn || movie.movieNameEnglish || "Trailer phim";
   const embedUrl = toEmbedUrl(movie.trailerUrl);
   const isVideoFile = Boolean(embedUrl && /\.(mp4|webm|ogg)(\?.*)?$/i.test(embedUrl));
 

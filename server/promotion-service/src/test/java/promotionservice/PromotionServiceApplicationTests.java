@@ -5,6 +5,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import promotionservice.service.PromotionAdminService;
 import promotionservice.service.PromotionEligibilityService;
+import promotionservice.service.PromotionPublicQueryService;
 
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
@@ -20,6 +21,9 @@ class PromotionServiceApplicationTests {
 
 	@MockBean
 	PromotionEligibilityService promotionEligibilityService;
+
+	@MockBean
+	PromotionPublicQueryService promotionPublicQueryService;
 
 	@Test
 	void contextLoads() {

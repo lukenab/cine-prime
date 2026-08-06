@@ -37,6 +37,15 @@ public class PromotionReservation {
     @Column(name = "discount_amount", precision = 15, scale = 2, nullable = false)
     BigDecimal discountAmount;
 
+    @Column(name = "benefit_scope", length = 20, nullable = false)
+    String benefitScope;
+
+    @Column(name = "ticket_discount_amount", precision = 15, scale = 2, nullable = false)
+    BigDecimal ticketDiscountAmount;
+
+    @Column(name = "concession_discount_amount", precision = 15, scale = 2, nullable = false)
+    BigDecimal concessionDiscountAmount;
+
     @Column(name = "reservation_status", length = 30, nullable = false)
     String status;
 

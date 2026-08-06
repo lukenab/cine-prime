@@ -10,6 +10,8 @@ public record PromotionQuoteRequest(
         Long movieId,
         Long showtimeId,
         Long branchId,
-        BigDecimal subtotalAmount,
+        BigDecimal ticketSubtotal,
+        BigDecimal concessionSubtotal,
+        BigDecimal serviceFee,
         String currency) {
 }

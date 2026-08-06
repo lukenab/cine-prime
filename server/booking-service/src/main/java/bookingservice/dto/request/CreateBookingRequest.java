@@ -16,7 +16,4 @@ public class CreateBookingRequest {
     @Size(max = 8)
     private List<@NotNull Long> seatIds;
 
-    /** Optional customer-entered code. Pricing is always evaluated server-side. */
-    @Size(max = 64)
-    private String promotionCode;
 }

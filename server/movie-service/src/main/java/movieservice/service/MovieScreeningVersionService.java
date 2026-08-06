@@ -25,8 +25,10 @@ import java.util.Locale;
 import java.util.Objects;
 
 /**
- * Admin management for concrete movie versions consumed by showtime
- * scheduling. Versions are never hard-deleted because showtimes, plans and
+ * Management of concrete movie versions consumed by showtime scheduling.
+ * Programming operators prepare versions while the movie is a draft; the
+ * existing movie lifecycle still reserves approval and publication for an
+ * administrator. Versions are never hard-deleted because showtimes, plans and
  * theatrical rights may retain their IDs for audit/history.
  */
 @Service

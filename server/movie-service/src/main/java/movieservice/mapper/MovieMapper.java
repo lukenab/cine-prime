@@ -6,11 +6,13 @@ import movieservice.dto.request.UpdateMovieRequest;
 import movieservice.dto.response.*;
 import movieservice.entity.*;
 import movieservice.util.SeatLayoutUtil;
+import movieservice.util.MovieTitleResolver;
 import org.mapstruct.*;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE, imports = SeatLayoutUtil.class)
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE,
+        imports = {SeatLayoutUtil.class, MovieTitleResolver.class})
 public interface MovieMapper {
 
     // ── Movie ─────────────────────────────────────────────────
@@ -133,7 +135,7 @@ public interface MovieMapper {
     @Mapping(source = "cinemaRoom.cinemaRoomId", target = "cinemaRoomId")
     @Mapping(source = "cinemaRoom.cinemaRoomName", target = "cinemaRoomName")
     @Mapping(source = "movie.movieId", target = "movieId")
-    @Mapping(source = "movie.originalTitle", target = "movieName")
+    @Mapping(target = "movieName", expression = "java(MovieTitleResolver.preferredVietnameseTitle(showTime.getMovie()))")
     @Mapping(source = "movie.posterUrl", target = "moviePosterUrl")
     @Mapping(source = "format.formatCode", target = "formatCode")
     @Mapping(target = "status", expression = "java(showTime.getStatus() != null ? showTime.getStatus().name() : null)")

@@ -62,6 +62,7 @@ import movieservice.repository.MovieRepository;
 import movieservice.repository.RoomLayoutRepository;
 import movieservice.repository.RoomLayoutPositionRepository;
 import movieservice.util.SeatLayoutUtil;
+import movieservice.util.MovieTitleResolver;
 import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeSeatRepository;
 import movieservice.repository.SeatRepository;
@@ -293,6 +294,7 @@ public class ShowTimeService {
 
     // ── Read API ──────────────────────────────────────────────────────────────
 
+    @Transactional(readOnly = true)
     public List<ShowTimeResponse> getAll() {
         List<ShowTimeResponse> responses = movieMapper.toShowTimeResponseList(showTimeRepository.findAll());
         enrichPrices(responses);
@@ -310,6 +312,7 @@ public class ShowTimeService {
                 showTimeRepository.findAllByStatusOrderByShowDateAscStartTimeAsc(ShowTimeStatus.ON_SALE));
     }
 
+    @Transactional(readOnly = true)
     public ShowTimeResponse getById(Long id) {
         ShowTime showTime = showTimeRepository.findById(id)
                 .orElseThrow(() -> new AppException(MovieErrorCode.SHOWTIME_NOT_FOUND));
@@ -326,6 +329,7 @@ public class ShowTimeService {
         return movieMapper.toShowTimeResponse(showTime);
     }
 
+    @Transactional(readOnly = true)
     public List<ShowTimeResponse> getByMovieId(Long movieId, LocalDate date) {
         if (!movieRepository.existsById(movieId)) {
             throw new AppException(MovieErrorCode.MOVIE_NOT_FOUND);
@@ -824,7 +828,7 @@ public class ShowTimeService {
         r.setPriceRateId(s.getPriceRate() != null ? s.getPriceRate().getPriceRateId() : null);
         if (s.getMovie() != null) {
             r.setMovieId(s.getMovie().getMovieId());
-            r.setMovieName(s.getMovie().getOriginalTitle());
+            r.setMovieName(MovieTitleResolver.preferredVietnameseTitle(s.getMovie()));
             r.setMoviePosterUrl(s.getMovie().getPosterUrl());
         }
         if (s.getCinemaRoom() != null) {
@@ -861,7 +865,7 @@ public class ShowTimeService {
         response.setPriceRateId(showTime.getPriceRate() != null ? showTime.getPriceRate().getPriceRateId() : null);
         if (showTime.getMovie() != null) {
             response.setMovieId(showTime.getMovie().getMovieId());
-            response.setMovieName(showTime.getMovie().getOriginalTitle());
+            response.setMovieName(MovieTitleResolver.preferredVietnameseTitle(showTime.getMovie()));
         }
         if (showTime.getCinemaRoom() != null) {
             response.setCinemaRoomId(showTime.getCinemaRoom().getCinemaRoomId());

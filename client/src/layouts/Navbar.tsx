@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Film, Search, Menu, X, LogOut, User, ChevronDown, LayoutDashboard, TicketCheck } from "lucide-react";
+import { Search, Menu, X, LogOut, User, ChevronDown, LayoutDashboard, TicketCheck } from "lucide-react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { userApi } from "../api/userApi";
@@ -8,6 +8,12 @@ import { defaultPathForRole } from "../utils/roleRoutes";
 import { useBookingFlow } from "../context/BookingFlowContext";
 
 const ACCENT = "#3b82f6";
+// A soft aurora glow blooming from the left (behind the logo) over the
+// existing near-black glass bar — background only. Logo, search field, and
+// Sign In control are left exactly as they are.
+const NAVBAR_BG =
+  "radial-gradient(60% 140% at 0% 50%, rgba(37,99,235,0.22), transparent 70%), " +
+  "rgba(5,5,5,0.85)";
 const navItems: { label: string; to: string; children?: { label: string; to: string }[] }[] = [
   { label: "Home", to: "/home" },
   {
@@ -102,18 +108,91 @@ export function Navbar() {
 
   const logo = (
     <Link to="/" className="flex items-center gap-2.5 cursor-pointer select-none group">
-      <div
-        className="flex items-center justify-center rounded-xl transition-all duration-300 group-hover:scale-105"
-        style={{
-          width: "38px",
-          height: "38px",
-          background: "linear-gradient(135deg, rgba(96,165,250,0.18), rgba(37,99,235,0.10))",
-          border: "1px solid rgba(96,165,250,0.45)",
-          boxShadow: "0 0 18px rgba(59,130,246,0.35), inset 0 0 10px rgba(96,165,250,0.15)",
-        }}
+      {/* "Orbita" mark — pure SVG so it stays crisp at any size.
+          Layer order is load-bearing, not incidental:
+            1. the FULL tilted ring, dimmed — this is the half that will read
+               as passing behind the planet
+            2. the sphere, which covers that rear half
+            3. rim light: a thin bright crescent on the shaded limb, made by
+               masking the sphere against a slightly offset copy of itself
+            4. the ring's shadow cast onto the planet's surface, clipped to
+               the sphere — this is the detail that makes the mark read as one
+               3D object instead of two flat shapes stacked together
+            5. specular highlight on the lit side
+            6. the FRONT arc at full opacity, plus the satellite
+          Reordering 1/2/4/6 breaks the depth illusion. */}
+      <svg
+        viewBox="0 0 200 200"
+        aria-hidden="true"
+        className="shrink-0 transition-transform duration-300 group-hover:scale-105"
+        style={{ width: 44, height: 44, filter: "drop-shadow(0 0 10px rgba(59,130,246,0.45))" }}
       >
-        <Film size={20} style={{ color: "#60a5fa", filter: "drop-shadow(0 0 6px rgba(96,165,250,0.7))" }} />
-      </div>
+        <defs>
+          <radialGradient id="cpLogoSphere" cx="34%" cy="30%" r="78%">
+            <stop offset="0%" stopColor="#7DD3FC" />
+            <stop offset="45%" stopColor="#3B82F6" />
+            <stop offset="100%" stopColor="#1E3A8A" />
+          </radialGradient>
+          <linearGradient id="cpLogoRing" gradientUnits="userSpaceOnUse" x1="20" y1="30" x2="180" y2="170">
+            <stop offset="0%" stopColor="#38BDF8" />
+            <stop offset="100%" stopColor="#2563EB" />
+          </linearGradient>
+          {/* Offsetting the black circle up-left by 7 and growing it slightly
+              leaves a hairline crescent along the bottom-right limb. */}
+          <mask id="cpLogoRim">
+            <circle cx="100" cy="100" r="49" fill="#fff" />
+            <circle cx="93" cy="93" r="48.2" fill="#000" />
+          </mask>
+          <radialGradient id="cpLogoSpec">
+            <stop offset="0%" stopColor="#fff" stopOpacity="0.8" />
+            <stop offset="100%" stopColor="#fff" stopOpacity="0" />
+          </radialGradient>
+          <clipPath id="cpLogoClip">
+            <circle cx="100" cy="100" r="49" />
+          </clipPath>
+        </defs>
+
+        <g transform="rotate(-22 100 100)">
+          <ellipse
+            cx="100"
+            cy="100"
+            rx="86"
+            ry="31"
+            fill="none"
+            stroke="url(#cpLogoRing)"
+            strokeWidth="7"
+            opacity="0.5"
+          />
+        </g>
+
+        <circle cx="100" cy="100" r="49" fill="url(#cpLogoSphere)" />
+        <circle cx="100" cy="100" r="49" fill="#7DD3FC" mask="url(#cpLogoRim)" opacity="0.8" />
+
+        <g clipPath="url(#cpLogoClip)">
+          <g transform="rotate(-22 100 100)">
+            <path
+              d="M14,108 A86,31 0 0 0 186,108"
+              fill="none"
+              stroke="#0A1A42"
+              strokeWidth="7"
+              opacity="0.5"
+            />
+          </g>
+        </g>
+
+        <ellipse cx="83" cy="79" rx="15" ry="10" fill="url(#cpLogoSpec)" transform="rotate(-28 83 79)" />
+
+        <g transform="rotate(-22 100 100)">
+          <path
+            d="M14,100 A86,31 0 0 0 186,100"
+            fill="none"
+            stroke="url(#cpLogoRing)"
+            strokeWidth="7"
+            strokeLinecap="round"
+          />
+          <circle cx="186" cy="100" r="8.5" fill="#7DD3FC" />
+        </g>
+      </svg>
       <span
         className="uppercase leading-none"
         style={{
@@ -145,10 +224,15 @@ export function Navbar() {
   if (cancelAction) {
     return (
       <nav
-        style={{ backgroundColor: "rgba(5,5,5,0.85)", backdropFilter: "blur(12px)" }}
+        style={{ background: NAVBAR_BG, backdropFilter: "blur(12px)" }}
         className="fixed top-0 left-0 right-0 z-50 border-b border-white/10"
       >
-        <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-16">
+        {/* Stars are confined to their own clipped strip — NOT nav itself —
+            so this never risks clipping a dropdown that overflows below. */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-16 overflow-hidden" aria-hidden="true">
+          <div className="cp-stars absolute inset-0" />
+        </div>
+        <div className="relative max-w-7xl mx-auto px-6 flex items-center justify-between h-16">
           {logo}
           <div className="flex items-center gap-3">
             <button
@@ -166,10 +250,16 @@ export function Navbar() {
 
   return (
     <nav
-      style={{ backgroundColor: "rgba(5,5,5,0.85)", backdropFilter: "blur(12px)" }}
+      style={{ background: NAVBAR_BG, backdropFilter: "blur(12px)" }}
       className="fixed top-0 left-0 right-0 z-50 border-b border-white/10"
     >
-      <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-16">
+      {/* Stars are confined to their own clipped strip — NOT nav itself — so
+          this never risks clipping the Movies/Cinemas dropdowns, the account
+          menu, or the mobile menu panel, all of which overflow below h-16. */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-16 overflow-hidden" aria-hidden="true">
+        <div className="cp-stars absolute inset-0" />
+      </div>
+      <div className="relative max-w-7xl mx-auto px-6 flex items-center justify-between h-16">
         {logo}
 
         <div className="hidden md:flex items-center gap-8">

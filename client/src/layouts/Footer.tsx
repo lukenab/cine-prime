@@ -1,5 +1,5 @@
-import { Film } from "lucide-react";
 import { FaTwitter, FaInstagram, FaYoutube, FaFacebook } from "react-icons/fa";
+import { OrbitaLogo } from "../components/shared/OrbitaLogo";
 
 export function Footer() {
   return (
@@ -16,18 +16,32 @@ export function Footer() {
             className="md:col-span-1"
             style={{ display: "flex", flexDirection: "column", gap: "16px" }}
           >
+            {/* Matches the navbar treatment. The mark used to be gold here and
+                blue up top, which read as two different brands on one page. */}
             <div className="flex items-center gap-2">
-              <Film size={20} style={{ color: "#FFD700" }} />
+              {/* Footer type is 1rem against the navbar's 1.3rem, so the mark
+                  steps down by the same ratio to keep the lockup identical. */}
+              <OrbitaLogo size={21} glow={false} />
               <span
                 style={{
-                  color: "#FFD700",
                   fontWeight: 700,
                   fontSize: "1rem",
                   letterSpacing: "0.2em",
                   textTransform: "uppercase",
                 }}
               >
-                CinePrime
+                <span style={{ color: "#f0f6ff" }}>Cine</span>
+                <span
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #93c5fd 0%, #3b82f6 50%, #2563eb 100%)",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    backgroundClip: "text",
+                  }}
+                >
+                  Prime
+                </span>
               </span>
             </div>
             <p
@@ -144,7 +158,7 @@ export function Footer() {
           }}
         >
           <p style={{ color: "rgba(255,255,255,0.25)", fontSize: "0.75rem" }}>
-            © 2026 CineVault. All rights reserved.
+            © 2026 CinePrime. All rights reserved.
           </p>
           <div className="flex gap-6">
             {["Privacy Policy", "Terms of Service", "Cookie Settings"].map(

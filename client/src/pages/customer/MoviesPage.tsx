@@ -41,7 +41,7 @@ function PosterCard({
       <div className="relative" style={{ aspectRatio: "2/3" }}>
         <img
           src={movie.largeImage || movie.smallImage}
-          alt={movie.movieNameEnglish || movie.movieNameVn}
+          alt={movie.movieNameVn || movie.movieNameEnglish}
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
         />
         <div
@@ -70,7 +70,7 @@ function PosterCard({
             {movie.movieType?.[0] || "Cinema"}
           </span>
           <h3 style={{ color: "white", fontWeight: 700, fontSize: "0.95rem", marginTop: "3px", lineHeight: 1.3 }}>
-            {movie.movieNameEnglish || movie.movieNameVn}
+            {movie.movieNameVn || movie.movieNameEnglish}
           </h3>
           <div className="mt-1 flex items-center gap-1" style={{ color: "rgba(255,255,255,0.45)", fontSize: "0.7rem" }}>
             <Clock size={10} /> {formatDuration(movie.duration)}

@@ -11,6 +11,7 @@ import movieservice.exception.MovieErrorCode;
 import movieservice.exception.MovieReadinessException;
 import movieservice.repository.MovieScreeningVersionRepository;
 import movieservice.repository.ShowTimeRepository;
+import movieservice.util.MovieTitleResolver;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -86,6 +87,9 @@ public class MovieReadinessValidator {
         }
         if (movie.getGenres() == null || movie.getGenres().isEmpty()) {
             violations.add(violation("genres", "AT_LEAST_ONE_REQUIRED"));
+        }
+        if (!MovieTitleResolver.hasVietnameseDisplayTitle(movie)) {
+            violations.add(violation("translations.vi", "VIETNAMESE_TITLE_REQUIRED"));
         }
         boolean hasCompleteActiveVersion = movie.getMovieId() != null
                 && movieScreeningVersionRepository

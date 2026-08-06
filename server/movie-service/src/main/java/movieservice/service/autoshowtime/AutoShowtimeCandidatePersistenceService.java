@@ -46,6 +46,21 @@ public class AutoShowtimeCandidatePersistenceService {
             ShowtimeCandidate candidate,
             Integer cleanupBufferMinutes
     ) {
+        return persist(generationRunId, candidate, cleanupBufferMinutes, true);
+    }
+
+    /**
+     * Persists one generated showtime. Schedule-plan publishing disables immediate
+     * inventory creation and materializes every new showtime in one JDBC batch
+     * after all conflict checks have passed.
+     */
+    @Transactional
+    public AutoShowtimePersistenceResult persist(
+            Long generationRunId,
+            ShowtimeCandidate candidate,
+            Integer cleanupBufferMinutes,
+            boolean materializeInventory
+    ) {
         /// Lock room trước khi kiểm tra conflict để hai node không cùng chèn suất vào cùng một phòng.
         CinemaRoom room = cinemaRoomRepository.findAllByIdForUpdate(List.of(candidate.getCinemaRoomId()))
                 .stream()
@@ -131,7 +146,9 @@ public class AutoShowtimeCandidatePersistenceService {
 
         /// saveAndFlush để DB exclusion constraint phát hiện race condition ngay tại candidate này.
         ShowTime persisted = showTimeRepository.saveAndFlush(showTime);
-        showtimeInventoryService.materialize(persisted.getShowTimeId());
+        if (materializeInventory) {
+            showtimeInventoryService.materialize(persisted.getShowTimeId());
+        }
         return AutoShowtimePersistenceResult.created(persisted);
     }
 

@@ -112,21 +112,32 @@ public class Booking implements Persistable<String> {
     @Column(name = "final_amount", precision = 15, scale = 2, nullable = false)
     BigDecimal finalAmount;
 
-    /** Immutable promotion snapshot used for audit, refund and analytics. */
-    @Column(name = "promotion_id", length = 36, updatable = false)
+    /** Promotion snapshot becomes immutable once payment starts. */
+    @Column(name = "promotion_id", length = 36)
     String promotionId;
 
-    @Column(name = "promotion_code", length = 100, updatable = false)
+    @Column(name = "promotion_code", length = 100)
     String promotionCode;
 
-    @Column(name = "promotion_reservation_id", length = 36, unique = true, updatable = false)
+    @Column(name = "promotion_reservation_id", length = 36, unique = true)
     String promotionReservationId;
 
-    @Column(name = "promotion_discount_amount", precision = 12, scale = 2, updatable = false)
+    @Column(name = "promotion_discount_amount", precision = 12, scale = 2)
     BigDecimal promotionDiscountAmount;
 
-    @Column(name = "promotion_currency", length = 10, updatable = false)
+    @Column(name = "promotion_currency", length = 10)
     String promotionCurrency;
+
+    @Column(name = "promotion_benefit_scope", length = 20)
+    String promotionBenefitScope;
+
+    @Column(name = "ticket_promotion_discount", precision = 12, scale = 2, nullable = false)
+    @Builder.Default
+    BigDecimal ticketPromotionDiscount = BigDecimal.ZERO;
+
+    @Column(name = "concession_promotion_discount", precision = 12, scale = 2, nullable = false)
+    @Builder.Default
+    BigDecimal concessionPromotionDiscount = BigDecimal.ZERO;
 
     @Column(name = "currency", length = 3, nullable = false)
     @Builder.Default

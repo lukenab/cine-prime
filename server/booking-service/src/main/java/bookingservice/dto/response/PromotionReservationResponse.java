@@ -10,6 +10,7 @@ public record PromotionReservationResponse(
         String bookingId,
         String accountId,
         String status,
+        String benefitScope,
         BigDecimal subtotalAmount,
         BigDecimal discountAmount,
         BigDecimal finalAmount,

@@ -1,16 +1,13 @@
 import { useState } from "react";
-import { Tag, Calendar, Copy, Check, Ticket } from "lucide-react";
-import { mockOffers } from "../../data/mockOffers";
-
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
+import { Tag, Calendar, Copy, Check, Ticket, LoaderCircle } from "lucide-react";
+import { usePublicPromotionOffers } from "../../hooks/usePublicPromotionOffers";
+import { offerAccent, offerDiscountLabel, offerScopeLabel, offerValidityLabel } from "../../utils/promotionOfferUi";
 
 export default function OffersPage() {
-  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const { offers, loading, error } = usePublicPromotionOffers();
 
-  const handleCopy = (offerId: number, code: string) => {
+  const handleCopy = (offerId: string, code: string) => {
     navigator.clipboard?.writeText(code).catch(() => {});
     setCopiedId(offerId);
     setTimeout(() => setCopiedId((id) => (id === offerId ? null : id)), 1800);
@@ -34,17 +31,33 @@ export default function OffersPage() {
 
       {/* Grid */}
       <div className="mx-auto max-w-7xl px-6 py-10">
+        {loading && (
+          <div className="flex min-h-48 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-sm text-white/50">
+            <LoaderCircle size={18} className="mr-2 animate-spin text-blue-400" /> Loading current offers...
+          </div>
+        )}
+        {!loading && error && (
+          <div className="rounded-2xl border border-red-400/20 bg-red-400/5 px-6 py-10 text-center text-sm text-red-200">
+            Current offers could not be loaded. Please try again shortly.
+          </div>
+        )}
+        {!loading && !error && offers.length === 0 && (
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-10 text-center text-sm text-white/50">
+            No public promotion is active right now.
+          </div>
+        )}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {mockOffers.map((offer) => {
-            const copied = copiedId === offer.offerId;
+          {!loading && !error && offers.map((offer) => {
+            const copied = copiedId === offer.promotionId;
+            const accentColor = offerAccent(offer);
             return (
               <div
-                key={offer.offerId}
+                key={offer.promotionId}
                 className="group relative overflow-hidden rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1"
                 style={{ border: "1px solid rgba(255,255,255,0.07)", backgroundColor: "rgba(255,255,255,0.03)" }}
                 onMouseEnter={(e) => {
                   const el = e.currentTarget as HTMLDivElement;
-                  el.style.borderColor = `${offer.accentColor}40`;
+                  el.style.borderColor = `${accentColor}40`;
                   el.style.boxShadow = "0 20px 50px rgba(0,0,0,0.5)";
                 }}
                 onMouseLeave={(e) => {
@@ -56,24 +69,27 @@ export default function OffersPage() {
                 {/* Discount badge */}
                 <div
                   className="mb-4 inline-flex items-center gap-1.5 rounded-full px-3 py-1"
-                  style={{ backgroundColor: `${offer.accentColor}18`, border: `1px solid ${offer.accentColor}45` }}
+                  style={{ backgroundColor: `${accentColor}18`, border: `1px solid ${accentColor}45` }}
                 >
-                  <Tag size={12} style={{ color: offer.accentColor }} />
-                  <span style={{ color: offer.accentColor, fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.05em" }}>
-                    {offer.discount}
+                  <Tag size={12} style={{ color: accentColor }} />
+                  <span style={{ color: accentColor, fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.05em" }}>
+                    {offerDiscountLabel(offer)}
                   </span>
                 </div>
 
-                <h3 className="text-base font-bold text-white">{offer.title}</h3>
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-base font-bold text-white">{offer.name}</h3>
+                  <span className="shrink-0 rounded-full bg-white/[0.06] px-2 py-1 text-[10px] font-semibold text-white/55">{offerScopeLabel(offer)}</span>
+                </div>
                 <p className="mt-2 text-[13px] leading-relaxed text-white/55">{offer.description}</p>
 
                 <div className="mt-4 flex items-center gap-1.5 text-[12px] text-white/40">
-                  <Calendar size={12} /> Valid until {formatDate(offer.validUntil)}
+                  <Calendar size={12} /> {offerValidityLabel(offer.validUntil)}
                 </div>
 
                 {/* Promo code */}
                 <button
-                  onClick={() => handleCopy(offer.offerId, offer.code)}
+                  onClick={() => handleCopy(offer.promotionId, offer.code)}
                   className="mt-4 flex w-full items-center justify-between rounded-lg px-3.5 py-2.5 transition-all duration-200 cursor-pointer"
                   style={{ border: "1px dashed rgba(255,255,255,0.2)", backgroundColor: "rgba(255,255,255,0.03)" }}
                 >

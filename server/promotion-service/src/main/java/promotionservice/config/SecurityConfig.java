@@ -15,7 +15,7 @@ public class SecurityConfig extends JwtResourceServerSecuritySupport {
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
+                        .requestMatchers("/actuator/health/**", "/actuator/info", "/api/public/promotions").permitAll()
                         .anyRequest().authenticated());
         configureJwtResourceServer(http);
         return http.build();

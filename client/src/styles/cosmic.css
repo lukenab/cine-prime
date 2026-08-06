@@ -1,0 +1,277 @@
+/* ============================================================================
+   CinePrime — cosmic design tokens ("Deep Orbit")
+   ----------------------------------------------------------------------------
+   Before this file the homepage had no token layer at all: every colour was an
+   inline hex repeated across eight components, and three accent families were
+   competing (gold #FFD700 in 22 places, blue #2563EB, violet #8A2BE2). The
+   palette below collapses those into one blue/cyan system taken from the Orbita
+   brand mark, so recolouring the site is now a one-file edit.
+
+   Cyan (--cp-accent) inherits the role gold used to play: eyebrows, small
+   highlights, scarce emphasis. Blue (--cp-blue) owns anything interactive.
+   ========================================================================== */
+
+:root {
+  /* Surfaces — deliberately close to the old #050505 so the change reads as a
+     recolour of this site rather than a different site. */
+  --cp-void: #050505;
+  --cp-deep: #070c18;
+  --cp-raise: #0b1024;
+
+  --cp-surface: rgba(255, 255, 255, 0.035);
+  --cp-surface-hi: rgba(37, 99, 235, 0.09);
+  --cp-line: rgba(255, 255, 255, 0.07);
+  --cp-line-hi: rgba(96, 165, 250, 0.38);
+
+  --cp-accent: #38bdf8;
+  --cp-accent-soft: #7dd3fc;
+  --cp-blue: #2563eb;
+  --cp-blue-2: #3b82f6;
+  --cp-blue-3: #60a5fa;
+  --cp-pale: #dbeafe;
+
+  --cp-ink: #f0f6ff;
+  --cp-muted: rgba(255, 255, 255, 0.55);
+  --cp-faint: rgba(255, 255, 255, 0.4);
+
+  --cp-grad-text: linear-gradient(135deg, #93c5fd 0%, #3b82f6 50%, #2563eb 100%);
+  --cp-grad-cyan: linear-gradient(135deg, #7dd3fc, #38bdf8);
+  --cp-grad-btn: linear-gradient(135deg, #2563eb, #38bdf8);
+
+  --cp-glow: 0 8px 26px rgba(37, 99, 235, 0.38);
+  --cp-glow-lg: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(59, 130, 246, 0.12);
+  --cp-radius: 16px;
+}
+
+/* ---------------------------------------------------------------- sections */
+.cp-section {
+  background-color: var(--cp-void);
+  padding-top: 80px;
+  padding-bottom: 80px;
+  border-top: 1px solid var(--cp-line);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Deep band, used to break up long runs of otherwise identical sections. */
+.cp-section--deep {
+  background: linear-gradient(180deg, var(--cp-void) 0%, var(--cp-deep) 50%, var(--cp-void) 100%);
+  border-top-color: rgba(96, 165, 250, 0.14);
+  border-bottom: 1px solid rgba(96, 165, 250, 0.14);
+}
+
+.cp-shell {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------------------------------------------------------------- starfield
+   Two tiled gradient layers rather than one long box-shadow star list: this
+   costs a few hundred bytes and scrolls without repainting a huge shadow. */
+.cp-stars::before,
+.cp-stars::after {
+  content: "";
+  position: absolute;
+  inset: -30%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.cp-stars::before {
+  background-image:
+    radial-gradient(1.1px 1.1px at 12% 22%, rgba(255, 255, 255, 0.85), transparent),
+    radial-gradient(1px 1px at 38% 68%, rgba(191, 219, 254, 0.7), transparent),
+    radial-gradient(1.2px 1.2px at 63% 15%, rgba(255, 255, 255, 0.8), transparent),
+    radial-gradient(1px 1px at 82% 52%, rgba(147, 197, 253, 0.65), transparent),
+    radial-gradient(1px 1px at 27% 88%, rgba(255, 255, 255, 0.6), transparent),
+    radial-gradient(1.3px 1.3px at 92% 80%, rgba(125, 211, 252, 0.75), transparent);
+  background-size: 460px 400px;
+  opacity: 0.55;
+  animation: cp-drift 120s linear infinite alternate;
+}
+
+.cp-stars::after {
+  background-image:
+    radial-gradient(1.6px 1.6px at 48% 34%, rgba(125, 211, 252, 0.9), transparent),
+    radial-gradient(1.4px 1.4px at 8% 60%, rgba(255, 255, 255, 0.85), transparent),
+    radial-gradient(1.5px 1.5px at 71% 90%, rgba(191, 219, 254, 0.8), transparent);
+  background-size: 720px 620px;
+  opacity: 0.5;
+  animation: cp-drift-2 170s linear infinite alternate;
+}
+
+@keyframes cp-drift {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-140px, 24px, 0); }
+}
+@keyframes cp-drift-2 {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(90px, -18px, 0); }
+}
+
+/* A soft nebula bloom. Position it with the --x / --y custom properties. */
+.cp-nebula {
+  position: absolute;
+  width: 620px;
+  height: 420px;
+  left: var(--x, 70%);
+  top: var(--y, -30%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.3), rgba(56, 189, 248, 0.1) 45%, transparent 68%);
+  filter: blur(52px);
+}
+
+/* ------------------------------------------------------------- typography */
+.cp-eyebrow {
+  display: block;
+  font-size: 0.7rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--cp-accent);
+}
+
+.cp-grad-text {
+  background: var(--cp-grad-text);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ------------------------------------------------------------------ cards
+   These replace onMouseEnter/onMouseLeave handlers that used to write straight
+   to element.style. Inline styles set from JS outrank any stylesheet rule, so
+   the hover below only works because those handlers were deleted. */
+.cp-card {
+  border-radius: var(--cp-radius);
+  border: 1px solid var(--cp-line);
+  background-color: var(--cp-surface);
+  transition: transform 0.28s ease, border-color 0.28s ease,
+    background-color 0.28s ease, box-shadow 0.28s ease;
+}
+
+.cp-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--cp-line-hi);
+  background-color: var(--cp-surface-hi);
+  box-shadow: var(--cp-glow-lg);
+}
+
+.cp-card--lift:hover {
+  transform: translateY(-8px);
+}
+
+/* Small square icon tile sitting at the top of most cards. */
+.cp-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: rgba(56, 189, 248, 0.13);
+  border: 1px solid rgba(125, 211, 252, 0.3);
+  color: var(--cp-accent-soft);
+}
+
+/* --------------------------------------------------------------- controls */
+.cp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--cp-grad-btn);
+  box-shadow: var(--cp-glow);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.cp-btn:hover {
+  transform: translateY(-1px) scale(1.03);
+  box-shadow: 0 12px 34px rgba(37, 99, 235, 0.5);
+}
+
+.cp-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  font-weight: 600;
+  color: var(--cp-pale);
+  border: 1px solid rgba(125, 211, 252, 0.4);
+  background: rgba(56, 189, 248, 0.07);
+  backdrop-filter: blur(8px);
+  transition: transform 0.25s ease, background-color 0.25s ease, border-color 0.25s ease;
+}
+.cp-btn-ghost:hover {
+  transform: translateY(-1px) scale(1.03);
+  background: rgba(56, 189, 248, 0.14);
+  border-color: rgba(125, 211, 252, 0.65);
+}
+
+.cp-link {
+  color: var(--cp-accent);
+  font-weight: 600;
+  transition: color 0.2s ease;
+}
+.cp-link:hover {
+  color: var(--cp-accent-soft);
+}
+
+/* ----------------------------------------------------------------- motion */
+@media (prefers-reduced-motion: reduce) {
+  .cp-stars::before,
+  .cp-stars::after { animation: none; }
+  .cp-card,
+  .cp-card:hover,
+  .cp-btn:hover,
+  .cp-btn-ghost:hover { transform: none; transition: none; }
+}
+
+/* ------------------------------------------------- navbar search
+   At rest this is just a magnifier, matching the rest of the nav chrome; the
+   field slides open on hover or keyboard focus. Collapsing it this way keeps
+   the search reachable without a permanently-open input competing with the
+   wordmark for attention. */
+.cp-search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  padding: 0.5rem;
+  border: 1px solid transparent;
+  transition: padding 0.28s ease, background-color 0.28s ease, border-color 0.28s ease;
+}
+.cp-search:hover,
+.cp-search:focus-within {
+  padding-left: 0.9rem;
+  padding-right: 0.9rem;
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(96, 165, 250, 0.4);
+}
+.cp-search input {
+  width: 0;
+  opacity: 0;
+  padding: 0;
+  background: transparent;
+  /* border:none as well as outline:none — browsers draw a default 2px inset
+     border on inputs, which shows as a stray box once the field slides open. */
+  border: none;
+  outline: none;
+  color: #fff;
+  font-size: 0.85rem;
+  transition: width 0.28s ease, opacity 0.2s ease;
+}
+.cp-search:hover input,
+.cp-search:focus-within input {
+  width: 150px;
+  opacity: 1;
+}
+.cp-search input::placeholder { color: rgba(255, 255, 255, 0.4); }
+
+@media (prefers-reduced-motion: reduce) {
+  .cp-search,
+  .cp-search input { transition: none; }
+}

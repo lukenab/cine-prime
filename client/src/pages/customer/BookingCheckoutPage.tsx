@@ -10,7 +10,9 @@ import {
   RefreshCw,
   RotateCcw,
   ShieldCheck,
+  Tag,
   User,
+  X,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -86,6 +88,7 @@ export default function BookingCheckoutPage() {
   const [payTab, setPayTab] = useState<"payment" | "promotion">("payment");
   const [promoCode, setPromoCode] = useState("");
   const [promoMessage, setPromoMessage] = useState("");
+  const [updatingPromotion, setUpdatingPromotion] = useState(false);
   const [movieDetail, setMovieDetail] = useState<PublicMovieResponse | null>(null);
   const [clusterDetail, setClusterDetail] = useState<ClusterResponse | null>(null);
   const [bookerName, setBookerName] = useState<string | null>(null);
@@ -193,16 +196,43 @@ export default function BookingCheckoutPage() {
     booking?.status === "PENDING_PAYMENT" && canCancelBooking(booking) ? openCancel : null,
   );
 
-  // Promotions have no backend yet (no endpoint applies a code to a booking).
-  // This stays a plain, honest "not available" response instead of faking a
-  // discount, so it does not misrepresent what the system actually does.
-  const applyPromoCode = () => {
-    return;
-    setPromoMessage("Promo codes aren't available yet — check back soon.");
+  const handleApplyPromoCode = async () => {
+    const normalized = promoCode.trim().toUpperCase();
+    if (!bookingId || !normalized || booking?.status !== "PENDING_PAYMENT") return;
+    setUpdatingPromotion(true);
+    setPromoMessage("");
+    setPaymentError("");
+    try {
+      const updated = await bookingApi.applyPromotion(
+        bookingId,
+        normalized,
+        window.crypto.randomUUID(),
+      );
+      setBooking(updated);
+      setPromoCode("");
+      setPromoMessage("Promotion applied. Your checkout total has been updated.");
+    } catch (requestError) {
+      setPromoMessage(getApiErrorMessage(requestError, "This promotion is not valid for your order."));
+    } finally {
+      setUpdatingPromotion(false);
+    }
   };
-  void applyPromoCode;
-  void promoCode;
-  void promoMessage;
+
+  const removePromoCode = async () => {
+    if (!bookingId || !booking?.promotionCode) return;
+    setUpdatingPromotion(true);
+    setPromoMessage("");
+    setPaymentError("");
+    try {
+      const updated = await bookingApi.removePromotion(bookingId);
+      setBooking(updated);
+      setPromoMessage("Promotion removed.");
+    } catch (requestError) {
+      setPromoMessage(getApiErrorMessage(requestError, "The promotion could not be removed."));
+    } finally {
+      setUpdatingPromotion(false);
+    }
+  };
 
   const startPayment = async () => {
     if (!bookingId || booking?.status !== "PENDING_PAYMENT") return;
@@ -555,14 +585,52 @@ export default function BookingCheckoutPage() {
                         {booking.promotionCode ? (
                           <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3">
                             <div className="flex items-center justify-between gap-3">
-                              <strong className="text-emerald-300">{booking.promotionCode}</strong>
-                              <span className="text-sm font-semibold text-emerald-300">-{formatBookingMoney(booking.promotionDiscountAmount ?? booking.discount, booking.currency)}</span>
+                              <div className="flex items-center gap-2">
+                                <Tag size={16} className="text-emerald-300" />
+                                <strong className="text-emerald-300">{booking.promotionCode}</strong>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-sm font-semibold text-emerald-300">-{formatBookingMoney(booking.promotionDiscountAmount ?? booking.discount, booking.currency)}</span>
+                                <button
+                                  type="button"
+                                  aria-label="Remove promotion"
+                                  disabled={updatingPromotion}
+                                  onClick={() => void removePromoCode()}
+                                  className="grid h-8 w-8 place-items-center rounded-lg text-white/50 transition hover:bg-white/10 hover:text-white disabled:opacity-40"
+                                >
+                                  <X size={16} />
+                                </button>
+                              </div>
                             </div>
-                            <p className="mt-1 text-xs text-white/50">Validated and reserved with this booking.</p>
+                            <p className="mt-1 text-xs text-white/50">
+                              {booking.promotionBenefitScope === "ORDER" ? "Applied to eligible tickets and food & drinks." : booking.promotionBenefitScope === "CONCESSIONS" ? "Applied to eligible food & drinks." : "Applied to eligible movie tickets."}
+                            </p>
                           </div>
                         ) : (
-                          <p className="booking-promo__message">Promotion codes are entered before seats are reserved so eligibility and quota can be validated safely.</p>
+                          <div>
+                            <div className="flex gap-2">
+                              <input
+                                value={promoCode}
+                                onChange={(event) => { setPromoCode(event.target.value.toUpperCase()); setPromoMessage(""); }}
+                                onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void handleApplyPromoCode(); } }}
+                                placeholder="Enter promotion code"
+                                maxLength={64}
+                                autoComplete="off"
+                                className="h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-semibold tracking-wide text-white outline-none placeholder:font-normal placeholder:tracking-normal placeholder:text-white/30 focus:border-blue-400"
+                              />
+                              <button
+                                type="button"
+                                disabled={!promoCode.trim() || updatingPromotion}
+                                onClick={() => void handleApplyPromoCode()}
+                                className="h-11 shrink-0 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                {updatingPromotion ? "Applying..." : "Apply"}
+                              </button>
+                            </div>
+                            <p className="mt-2 text-xs text-white/45">Eligibility is calculated securely from your tickets and food & drinks.</p>
+                          </div>
                         )}
+                        {promoMessage && <p className={`mt-2 text-xs ${promoMessage.includes("applied") || promoMessage.includes("removed") ? "text-emerald-300" : "text-red-300"}`}>{promoMessage}</p>}
                       </div>
                     )}
                   </div>
@@ -600,7 +668,7 @@ export default function BookingCheckoutPage() {
               primaryAction={booking.status === "PENDING_PAYMENT" ? {
                 label: startingPayment ? "Opening…" : "Pay now",
                 onClick: () => void startPayment(),
-                disabled: startingPayment,
+                disabled: startingPayment || updatingPromotion,
                 loading: startingPayment,
               } : undefined}
             />

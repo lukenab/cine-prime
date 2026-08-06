@@ -89,6 +89,21 @@ public class PriceBookPricingService {
         showtime.setPriceRate(decision.priceRate());
     }
 
+    /**
+     * Recreates the immutable pricing decision already stored on a showtime.
+     * This avoids querying the price book again while bulk materializing seats.
+     */
+    public PricingDecision fromSnapshot(ShowTime showtime) {
+        ShowtimePriceSource source = showtime.getPriceSource();
+        if (source == ShowtimePriceSource.PRICE_BOOK && showtime.getPriceRate() != null) {
+            return PricingDecision.priceBook(showtime.getPriceBook(), showtime.getPriceRate());
+        }
+        if (source == ShowtimePriceSource.SHOWTIME_OVERRIDE) {
+            return PricingDecision.override(showtime.getBasePrice());
+        }
+        return PricingDecision.roomDefault(showtime.getBasePrice());
+    }
+
     private boolean matchesDay(PriceRate rate, LocalDate date) {
         if (rate.getDayType() == PriceRateDayType.ALL_DAYS) {
             return true;

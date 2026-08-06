@@ -3,6 +3,7 @@ import axiosClient from "./api";
 export type PromotionStatus = "DRAFT" | "ACTIVE" | "PAUSED" | "ARCHIVED";
 export type PromotionDiscountType = "PERCENTAGE" | "FIXED_AMOUNT";
 export type PromotionTargetType = "MOVIE" | "SHOWTIME";
+export type PromotionBenefitScope = "TICKETS" | "CONCESSIONS" | "ORDER";
 
 export interface PromotionPriceRule {
   discountType: PromotionDiscountType;
@@ -31,6 +32,7 @@ export interface Promotion {
   name: string;
   description?: string;
   status: PromotionStatus;
+  benefitScope: PromotionBenefitScope;
   validFrom?: string | null;
   validUntil?: string | null;
   globalUsageLimit?: number | null;
@@ -47,6 +49,7 @@ export interface PromotionUpsertPayload {
   code: string;
   name: string;
   description?: string;
+  benefitScope: PromotionBenefitScope;
   validFrom?: string | null;
   validUntil?: string | null;
   globalUsageLimit?: number | null;
@@ -63,9 +66,27 @@ export interface PromotionPage {
   size: number;
 }
 
+export interface PublicPromotionOffer {
+  promotionId: string;
+  code: string;
+  name: string;
+  description?: string;
+  benefitScope: PromotionBenefitScope;
+  validFrom?: string | null;
+  validUntil?: string | null;
+  discountType: PromotionDiscountType;
+  percentage?: number | null;
+  fixedAmount?: number | null;
+  maxDiscountAmount?: number | null;
+  minimumOrderAmount: number;
+  currency: string;
+}
+
 const resultOf = <T>(response: any): T => (response?.result ?? response) as T;
 
 export const promotionApi = {
+  listPublicOffers: async (): Promise<PublicPromotionOffer[]> =>
+    resultOf<PublicPromotionOffer[]>(await axiosClient.get("/api/public/promotions")) ?? [],
   list: async (status?: PromotionStatus): Promise<Promotion[]> => {
     const response = await axiosClient.get("/api/promotions", {
       params: { status: status || undefined, page: 0, size: 100 },
