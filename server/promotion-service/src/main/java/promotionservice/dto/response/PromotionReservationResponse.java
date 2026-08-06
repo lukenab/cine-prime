@@ -5,8 +5,10 @@ import promotionservice.enums.PromotionReservationStatus;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
+import promotionservice.enums.PromotionBenefitScope;
 
 public record PromotionReservationResponse(UUID reservationId, UUID promotionId, String bookingId,
                                            String accountId, PromotionReservationStatus status,
+                                           PromotionBenefitScope benefitScope,
                                            BigDecimal subtotalAmount, BigDecimal discountAmount,
                                            BigDecimal finalAmount, String currency, OffsetDateTime expiresAt) {}

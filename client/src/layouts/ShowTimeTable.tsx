@@ -1,6 +1,13 @@
-import { useState } from "react";
-import { Pencil, Trash2, ChevronLeft, ChevronRight, Monitor, Building2, Clock, PlayCircle, PauseCircle, XCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Pencil, Trash2, ChevronLeft, ChevronRight, Monitor, Building2, Clock, PlayCircle, PauseCircle, XCircle, MoreHorizontal, Film, Armchair } from "lucide-react";
 import type { ShowtimeResponse, ShowtimeStatus } from "../api/showtimeApi";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../components/ui/dropdown-menu";
 
 type Props = {
   showtimes: ShowtimeResponse[];
@@ -38,6 +45,14 @@ const STATUS_LABEL: Record<ShowtimeStatus, string> = {
 /** "HH:mm:ss" → "HH:mm" */
 const fmt = (time: string) => time?.slice(0, 5) ?? "—";
 
+const formatSessionDate = (date: string) => {
+  const parsed = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return new Intl.DateTimeFormat("en", { weekday: "short", day: "2-digit", month: "short" }).format(parsed);
+};
+
+const formatLanguage = (code?: string) => code?.toUpperCase() || "—";
+
 export function ShowtimeTable({
   showtimes,
   onEdit,
@@ -53,6 +68,7 @@ export function ShowtimeTable({
   const [confirmDelete, setConfirmDelete] = useState<ShowtimeResponse | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [openSaleConfirm, setOpenSaleConfirm] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
 
@@ -75,7 +91,32 @@ export function ShowtimeTable({
   const actionablePageIds = pageItems
     .filter((item) => item.status !== "CANCELLED" && item.status !== "COMPLETED")
     .map((item) => item.showTimeId);
-  const allPageSelected = actionablePageIds.length > 0 && actionablePageIds.every((id) => selectedIds.includes(id));
+  const actionableFilteredIds = filtered
+    .filter((item) => item.status !== "CANCELLED" && item.status !== "COMPLETED")
+    .map((item) => item.showTimeId);
+  const hasNarrowingFilter = Boolean(searchQuery.trim() || statusFilter || dateFilter || roomFilter);
+  // When an operator deliberately narrows the result set (for example one movie
+  // in Scheduled state), the header checkbox represents that whole result set,
+  // not merely the eight rows rendered by the current page. The page command
+  // splits large selections into backend-safe batches before submitting them.
+  const headerSelectionIds = hasNarrowingFilter
+    ? actionableFilteredIds
+    : actionablePageIds;
+  const allHeaderSelected = headerSelectionIds.length > 0
+    && headerSelectionIds.every((id) => selectedIds.includes(id));
+  const canOpenSelected = selectedIds.length > 0 && selectedIds.every((id) => {
+    const status = filtered.find((item) => item.showTimeId === id)?.status;
+    return status === "SCHEDULED" || status === "SUSPENDED";
+  });
+  const canSuspendSelected = selectedIds.length > 0 && selectedIds.every((id) => {
+    const status = filtered.find((item) => item.showTimeId === id)?.status;
+    return status === "SCHEDULED" || status === "ON_SALE";
+  });
+
+  useEffect(() => {
+    setPage(1);
+    setSelectedIds([]);
+  }, [searchQuery, statusFilter, dateFilter, roomFilter]);
 
   const runBulkAction = async (status: ShowtimeStatus, reason?: string) => {
     if (selectedIds.length === 0) return;
@@ -84,7 +125,22 @@ export function ShowtimeTable({
       await onBulkStatusChange(selectedIds, status, reason);
       setSelectedIds([]);
       setCancelOpen(false);
+      setOpenSaleConfirm(false);
       setCancelReason("");
+    } catch {
+      // The page owns the visible API error banner; keep the selection so the
+      // operator can adjust it and retry without starting over.
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const runSingleStatusAction = async (id: number, status: ShowtimeStatus) => {
+    setBulkBusy(true);
+    try {
+      await onBulkStatusChange([id], status);
+    } catch {
+      // The page displays the backend lifecycle/readiness error.
     } finally {
       setBulkBusy(false);
     }
@@ -107,10 +163,10 @@ export function ShowtimeTable({
               <Trash2 size={22} className="text-rose-500" />
             </div>
             <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-main)", textAlign: "center", marginBottom: "8px" }}>
-              Delete Showtime
+              Delete draft showtime
             </h3>
             <p style={{ fontSize: "13px", color: "var(--text-sub)", textAlign: "center", marginBottom: "20px" }}>
-              Are you sure you want to delete the showtime for{" "}
+              Are you sure you want to delete this unpublished showtime for{" "}
               <span style={{ fontWeight: 600, color: "var(--text-main)" }}>{confirmDelete.movieName}</span>?
               <br />
               This action cannot be undone.
@@ -130,6 +186,27 @@ export function ShowtimeTable({
               >
                 Delete
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {openSaleConfirm && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 p-4" onMouseDown={(event) => event.target === event.currentTarget && setOpenSaleConfirm(false)}>
+          <div className="w-full max-w-md rounded-2xl border p-5 shadow-2xl" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500"><PlayCircle size={19} /></div>
+              <div>
+                <h3 className="text-base font-bold" style={{ color: "var(--text-main)" }}>Open selected showtimes for sale?</h3>
+                <p className="mt-0.5 text-xs" style={{ color: "var(--text-sub)" }}>{selectedIds.length} sessions will become visible and bookable by customers.</p>
+              </div>
+            </div>
+            <div className="mt-5 rounded-xl border px-3 py-3 text-xs" style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}>
+              Only scheduled or suspended sessions can be opened. Price-book and seat-layout readiness are validated by the backend.
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setOpenSaleConfirm(false)} className="rounded-xl border px-4 py-2 text-sm font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }}>Cancel</button>
+              <button type="button" disabled={bulkBusy} onClick={() => void runBulkAction("ON_SALE")} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-40">Open sales</button>
             </div>
           </div>
         </div>
@@ -155,8 +232,8 @@ export function ShowtimeTable({
       {selectedIds.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
           <strong className="mr-auto text-sm" style={{ color: "var(--text-main)" }}>{selectedIds.length} selected</strong>
-          <button type="button" disabled={bulkBusy} onClick={() => void runBulkAction("ON_SALE")} className="flex items-center gap-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-600"><PlayCircle size={14} /> Open sales</button>
-          <button type="button" disabled={bulkBusy} onClick={() => void runBulkAction("SUSPENDED")} className="flex items-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-600"><PauseCircle size={14} /> Suspend</button>
+          <button type="button" disabled={bulkBusy || !canOpenSelected} title={!canOpenSelected ? "Open sales supports Scheduled or Suspended showtimes only" : undefined} onClick={() => setOpenSaleConfirm(true)} className="flex items-center gap-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"><PlayCircle size={14} /> Open sales</button>
+          <button type="button" disabled={bulkBusy || !canSuspendSelected} title={!canSuspendSelected ? "Suspend supports Scheduled or On-sale showtimes only" : undefined} onClick={() => void runBulkAction("SUSPENDED")} className="flex items-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-600 disabled:cursor-not-allowed disabled:opacity-40"><PauseCircle size={14} /> Suspend</button>
           <button type="button" disabled={bulkBusy} onClick={() => setCancelOpen(true)} className="flex items-center gap-1.5 rounded-lg border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-600"><XCircle size={14} /> Cancel</button>
           <button type="button" onClick={() => setSelectedIds([])} className="px-2 py-2 text-xs font-semibold" style={{ color: "var(--text-sub)" }}>Clear</button>
         </div>
@@ -170,14 +247,16 @@ export function ShowtimeTable({
                 <th className="w-12 px-5 py-3.5 text-left">
                   <input
                     type="checkbox"
-                    aria-label="Select all actionable showtimes on this page"
-                    checked={allPageSelected}
-                    onChange={() => setSelectedIds((current) => allPageSelected
-                      ? current.filter((id) => !actionablePageIds.includes(id))
-                      : Array.from(new Set([...current, ...actionablePageIds])))}
+                    aria-label={hasNarrowingFilter
+                      ? `Select all ${actionableFilteredIds.length} matching showtimes`
+                      : "Select all actionable showtimes on this page"}
+                    checked={allHeaderSelected}
+                    onChange={() => setSelectedIds((current) => allHeaderSelected
+                      ? current.filter((id) => !headerSelectionIds.includes(id))
+                      : Array.from(new Set([...current, ...headerSelectionIds])))}
                   />
                 </th>
-                {["Movie & Room", "Date", "Time", "Status", "Actions"].map((h) => (
+                {["Movie", "Session", "Cinema & room", "Experience", "Seats", "Status", "Actions"].map((h) => (
                   <th key={h} className={`px-5 py-3.5 ${h === "Actions" ? "text-right" : "text-left"}`}>
                     <span style={{ color: "var(--text-sub)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>
                       {h}
@@ -190,13 +269,14 @@ export function ShowtimeTable({
             <tbody>
               {pageItems.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>
+                  <td colSpan={8} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>
                     No showtimes found matching your filters.
                   </td>
                 </tr>
               ) : (
                 pageItems.map((item) => {
                   const st = STATUS_STYLE[item.status] ?? STATUS_STYLE.COMPLETED;
+                  const hasRowActions = item.status === "SCHEDULED" || item.status === "ON_SALE" || item.status === "SUSPENDED";
                   return (
                     <tr key={item.showTimeId} className="border-b last:border-none hover-row transition-colors" style={{ borderColor: "var(--border-color)" }}>
                       <td className="px-5 py-3.5">
@@ -211,30 +291,49 @@ export function ShowtimeTable({
                         />
                       </td>
                       <td className="px-5 py-3.5">
-                        <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-main)" }}>{item.movieName}</p>
-                        <div className="flex items-center gap-1.5 mt-1" style={{ color: "var(--text-sub)" }}>
-                          <Monitor size={12} />
-                          <span style={{ fontSize: "12px" }}>{item.cinemaRoomName}</span>
-                        </div>
-                        {!scopedToOneCinema && item.clusterName && (
-                          <div className="flex items-center gap-1.5 mt-0.5" style={{ color: "var(--text-sub)" }}>
-                            <Building2 size={12} />
-                            <span style={{ fontSize: "12px" }}>{item.clusterName}</span>
+                        <div className="flex min-w-[220px] items-center gap-3">
+                          <div className="flex h-12 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-blue-500/10 text-blue-500">
+                            {item.moviePosterUrl ? <img src={item.moviePosterUrl} alt="" className="h-full w-full object-cover" /> : <Film size={16} />}
                           </div>
-                        )}
+                          <div className="min-w-0">
+                            <p className="truncate" style={{ fontSize: "13px", fontWeight: 650, color: "var(--text-main)" }}>{item.movieName}</p>
+                            <span className="mt-1 inline-flex rounded-md bg-black/5 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide dark:bg-white/5" style={{ color: "var(--text-sub)" }}>
+                              {item.source === "AUTO" ? "AUTO-GENERATED" : "MANUAL"}
+                            </span>
+                          </div>
+                        </div>
                       </td>
 
                       <td className="px-5 py-3.5">
-                        <span style={{ fontSize: "14px", color: "var(--text-main)" }}>{item.showDate}</span>
+                        <div className="min-w-[130px]">
+                          <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-main)" }}>{formatSessionDate(item.showDate)}</p>
+                          <div className="mt-1 flex items-center gap-1.5" style={{ color: "var(--text-sub)" }}>
+                            <Clock size={12} />
+                            <span className="text-xs">{fmt(item.startTime)} – {fmt(item.endTime)}</span>
+                          </div>
+                        </div>
                       </td>
 
                       <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-2">
-                          <Clock size={14} style={{ color: "var(--text-sub)" }} />
-                          <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-main)" }}>
-                            {fmt(item.startTime)}{" "}
-                            <span style={{ color: "var(--text-sub)", fontWeight: 400 }}>– {fmt(item.endTime)}</span>
-                          </span>
+                        <div className="min-w-[155px]">
+                          <div className="flex items-center gap-1.5" style={{ color: "var(--text-main)" }}><Monitor size={12} /><span className="text-[13px] font-semibold">{item.cinemaRoomName}</span></div>
+                          {!scopedToOneCinema && item.clusterName && <div className="mt-1 flex items-center gap-1.5" style={{ color: "var(--text-sub)" }}><Building2 size={12} /><span className="max-w-[170px] truncate text-xs">{item.clusterName}</span></div>}
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-3.5">
+                        <div className="min-w-[125px]">
+                          <span className="inline-flex rounded-md bg-blue-500/10 px-2 py-1 text-[11px] font-bold text-blue-600">{item.formatCode || "Standard"}</span>
+                          <p className="mt-1.5 text-[11px]" style={{ color: "var(--text-sub)" }}>
+                            Audio {formatLanguage(item.audioLanguageCode)} · {item.subtitleLanguageCode ? `Sub ${formatLanguage(item.subtitleLanguageCode)}` : "No subtitles"}
+                          </p>
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-3.5">
+                        <div className="min-w-[105px]">
+                          <div className="flex items-center gap-1.5"><Armchair size={13} style={{ color: "var(--text-sub)" }} /><strong className="text-[13px]" style={{ color: "var(--text-main)" }}>{item.availableSeats ?? item.totalSeats ?? "—"}</strong></div>
+                          <p className="mt-1 text-[11px]" style={{ color: "var(--text-sub)" }}>{item.totalSeats != null ? `${item.soldSeats ?? 0} sold · ${item.totalSeats} total` : "Capacity unavailable"}</p>
                         </div>
                       </td>
 
@@ -246,22 +345,23 @@ export function ShowtimeTable({
                       </td>
 
                       <td className="px-5 py-3.5">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => onEdit(item)}
-                            title="Edit"
-                            className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors action-btn"
-                            style={{ color: "var(--text-sub)" }}
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            onClick={() => setConfirmDelete(item)}
-                            title="Delete"
-                            className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors action-btn text-rose-400 hover:text-rose-500"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {item.status === "SCHEDULED" && (
+                            <button onClick={() => onEdit(item)} className="flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-colors hover:bg-black/5 dark:hover:bg-white/5" style={{ color: "var(--text-main)", borderColor: "var(--border-color)" }}>
+                              <Pencil size={13} /> Edit
+                            </button>
+                          )}
+                          {hasRowActions ? <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button type="button" aria-label={`More actions for ${item.movieName}`} className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors action-btn" style={{ color: "var(--text-sub)" }}><MoreHorizontal size={16} /></button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              {(item.status === "SCHEDULED" || item.status === "SUSPENDED") && <DropdownMenuItem disabled={bulkBusy} onSelect={() => void runSingleStatusAction(item.showTimeId, "ON_SALE")}><PlayCircle /> Open sales</DropdownMenuItem>}
+                              {(item.status === "SCHEDULED" || item.status === "ON_SALE") && <DropdownMenuItem disabled={bulkBusy} onSelect={() => void runSingleStatusAction(item.showTimeId, "SUSPENDED")}><PauseCircle /> Suspend</DropdownMenuItem>}
+                              {item.status === "SCHEDULED" && <DropdownMenuSeparator />}
+                              {item.status === "SCHEDULED" && <DropdownMenuItem variant="destructive" onSelect={() => setConfirmDelete(item)}><Trash2 /> Delete draft showtime</DropdownMenuItem>}
+                            </DropdownMenuContent>
+                          </DropdownMenu> : <span className="px-2 text-xs" style={{ color: "var(--text-sub)" }}>—</span>}
                         </div>
                       </td>
                     </tr>

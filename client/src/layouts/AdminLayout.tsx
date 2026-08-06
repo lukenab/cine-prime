@@ -64,7 +64,7 @@ export default function AdminLayout() {
       {/* Vùng chứa nội dung chính */}
       <div
         style={{
-          marginLeft: "240px",
+          marginLeft: "280px",
           flex: 1,
           display: "flex",
           flexDirection: "column",

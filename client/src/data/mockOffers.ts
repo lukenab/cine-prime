@@ -16,7 +16,7 @@ export const mockOffers: MockOffer[] = [
     discount: "20% OFF",
     validUntil: "2026-08-31",
     code: "WEEKDAY20",
-    accentColor: "#FFD700",
+    accentColor: "#38bdf8",
   },
   {
     offerId: 2,

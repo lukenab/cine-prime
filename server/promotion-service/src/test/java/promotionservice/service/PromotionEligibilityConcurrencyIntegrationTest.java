@@ -44,7 +44,7 @@ class PromotionEligibilityConcurrencyIntegrationTest {
         promotions.saveAndFlush(promotion);
         ExecutorService pool = Executors.newFixedThreadPool(6); CountDownLatch ready = new CountDownLatch(6); CountDownLatch start = new CountDownLatch(1);
         List<Future<Boolean>> futures = java.util.stream.IntStream.range(0, 6).mapToObj(i -> pool.submit(() -> { ready.countDown(); start.await(); try {
-            service.reserve(new PromotionReserveRequest("race-" + i, new PromotionQuoteRequest("RACE1", "booking-" + i, "account-" + i, null, null, null, BigDecimal.valueOf(100), "VND"))); return true;
+            service.reserve(new PromotionReserveRequest("race-" + i, new PromotionQuoteRequest("RACE1", "booking-" + i, "account-" + i, null, null, null, BigDecimal.valueOf(100), BigDecimal.ZERO, BigDecimal.ZERO, "VND"))); return true;
         } catch (RuntimeException ignored) { return false; }})).toList();
         ready.await(10, TimeUnit.SECONDS); start.countDown(); int successes = 0; for (Future<Boolean> future : futures) if (future.get(10, TimeUnit.SECONDS)) successes++; pool.shutdown();
         assertEquals(1, successes); assertEquals(1, reservations.count());

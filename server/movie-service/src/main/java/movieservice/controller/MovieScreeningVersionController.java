@@ -39,7 +39,7 @@ public class MovieScreeningVersionController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     public ApiResponse<MovieScreeningVersionResponse> create(
             @PathVariable Long movieId,
             @Valid @RequestBody MovieScreeningVersionRequest request
@@ -53,7 +53,7 @@ public class MovieScreeningVersionController {
 
     @PostMapping("/batch")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     public ApiResponse<List<MovieScreeningVersionResponse>> createBulk(
             @PathVariable Long movieId,
             @Valid @RequestBody
@@ -69,7 +69,7 @@ public class MovieScreeningVersionController {
     }
 
     @PutMapping("/{versionId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     public ApiResponse<MovieScreeningVersionResponse> update(
             @PathVariable Long movieId,
             @PathVariable Long versionId,
@@ -83,7 +83,7 @@ public class MovieScreeningVersionController {
     }
 
     @PostMapping("/{versionId}/activate")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     public ApiResponse<MovieScreeningVersionResponse> activate(
             @PathVariable Long movieId,
             @PathVariable Long versionId
@@ -96,7 +96,7 @@ public class MovieScreeningVersionController {
     }
 
     @PostMapping("/{versionId}/deactivate")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
     public ApiResponse<MovieScreeningVersionResponse> deactivate(
             @PathVariable Long movieId,
             @PathVariable Long versionId

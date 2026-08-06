@@ -17,6 +17,14 @@ import CheckoutProgress from "../../components/booking/CheckoutProgress";
 import BookingSummaryCard from "../../components/booking/BookingSummaryCard";
 import { formatBookingDate } from "../../components/booking/bookingUi";
 
+// "Screen-glow deep space" — the same cosmic wash used on the movie-detail
+// page, applied page-wide here too (including the loading/error states) so
+// the booking flow doesn't drop back to flat black between screens.
+const COSMIC_PAGE_BG =
+  "radial-gradient(ellipse 70% 45% at 12% -8%, rgba(37,99,235,.14), transparent 58%), " +
+  "radial-gradient(ellipse 55% 38% at 105% 0%, rgba(56,189,248,.12), transparent 52%), " +
+  "#050914";
+
 // Keep the customer map visually aligned with the room-layout tools used by
 // administrators. Booking state is layered on top of the physical seat type.
 const SEAT_TYPE_THEME: Record<Seat["type"], { bg: string; border: string; text: string }> = {
@@ -166,7 +174,6 @@ export default function SeatBookingPage() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [conflicts, setConflicts] = useState<Set<number>>(new Set());
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [promotionCode, setPromotionCode] = useState("");
   const [holdPolicy, setHoldPolicy] = useState<SeatHoldPolicy>(DEFAULT_HOLD_POLICY);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -467,7 +474,6 @@ export default function SeatBookingPage() {
         showtimeId: parseInt(showtimeId),
         seatIds: Array.from(selected),
         idempotencyKey: idempotencyKeyRef.current,
-        promotionCode: promotionCode.trim().toUpperCase() || undefined,
       };
       const result = await bookingApi.createBooking(payload);
 
@@ -510,8 +516,9 @@ export default function SeatBookingPage() {
 
   if (isLoadingSeats) {
     return (
-      <div className="min-h-screen bg-[#050505] flex items-center justify-center p-4">
-        <div className="flex flex-col items-center gap-4">
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ background: COSMIC_PAGE_BG }}>
+        <div className="cp-stars pointer-events-none fixed inset-0" aria-hidden="true" />
+        <div className="relative flex flex-col items-center gap-4">
           <Loader2 size={32} className="animate-spin text-[#60a5fa]" />
           <p className="text-white/70">Loading seat map...</p>
         </div>
@@ -521,8 +528,9 @@ export default function SeatBookingPage() {
 
   if (seatFetchError) {
     return (
-      <div className="min-h-screen bg-[#050505] flex items-center justify-center p-6 font-['Inter',sans-serif]">
-        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#111214] p-7 text-center shadow-2xl">
+      <div className="min-h-screen flex items-center justify-center p-6 font-['Inter',sans-serif]" style={{ background: COSMIC_PAGE_BG }}>
+        <div className="cp-stars pointer-events-none fixed inset-0" aria-hidden="true" />
+        <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#111214] p-7 text-center shadow-2xl">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-amber-400/20 bg-amber-400/10">
             <AlertTriangle size={23} className="text-amber-300" />
           </div>
@@ -596,13 +604,17 @@ export default function SeatBookingPage() {
 
   return (
     <div
-      className="min-h-screen bg-[#050505] text-white"
-      style={{
-        fontFamily: "'Inter', sans-serif",
-        backgroundImage:
-          "radial-gradient(90% 60% at 50% -5%, rgba(96,165,250,0.07), transparent 60%), radial-gradient(60% 50% at 50% 120%, rgba(96,165,250,0.04), transparent 70%)",
-      }}
+      className="min-h-screen text-white"
+      style={{ fontFamily: "'Inter', sans-serif", background: COSMIC_PAGE_BG }}
     >
+      {/* Page-wide twinkling starfield, matching the movie-detail page —
+          keeps the booking flow feeling cosmic instead of dropping to flat
+          black once the seat panel scrolls past. */}
+      <div className="cp-stars pointer-events-none fixed inset-0" aria-hidden="true" />
+      {/* Two faint, oversized rings anchored above the seat panel — echoes
+          the "light beaming from the screen into space" idea from Option B. */}
+      <div className="pointer-events-none fixed left-1/2 top-0 h-[900px] w-[900px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/[0.05]" aria-hidden="true" />
+      <div className="pointer-events-none fixed left-1/2 top-0 h-[1200px] w-[1200px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/[0.035]" aria-hidden="true" />
 
       {/* Error toast */}
       {errorMsg && (
@@ -631,20 +643,31 @@ export default function SeatBookingPage() {
         </div>
       )}
 
-      {/* Header */}
+      {/* Header — a soft cosmic glow bleeding in from the left edge (instead
+          of a flat near-black bar) plus a small "Now booking" eyebrow, so
+          this bar reads as part of the same system as the progress row and
+          seat panel below it rather than a disconnected strip. */}
       <header
         className="sticky top-16 mt-16 z-20 border-b border-white/10 backdrop-blur"
-        style={{ background: "linear-gradient(to bottom, rgba(12,12,14,0.92), rgba(5,5,5,0.82))" }}
+        style={{
+          background:
+            "radial-gradient(60% 160% at 8% 0%, rgba(37,99,235,.22), transparent 65%), " +
+            "linear-gradient(to bottom, rgba(12,16,28,0.92), rgba(5,8,16,0.85))",
+        }}
       >
-        <div className="mx-auto flex h-16 w-full max-w-[1540px] items-center gap-3 px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex w-full max-w-[1540px] items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
           <button
             onClick={() => navigate(-1)}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white mr-1 cursor-pointer"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/60 transition-colors hover:border-white/20 hover:bg-white/10 hover:text-white mr-1 cursor-pointer"
           >
             <X size={18} />
           </button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-base sm:text-lg font-bold text-white leading-tight truncate"
+            <p className="mb-0.5 hidden items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-blue-400 sm:flex">
+              <span className="h-1.5 w-1.5 rounded-full bg-blue-400 shadow-[0_0_6px_rgba(59,130,246,.8)]" />
+              Now booking
+            </p>
+            <h1 className="text-base sm:text-lg font-extrabold text-white leading-tight truncate"
               style={{ fontFamily: "'Inter', sans-serif" }}>
               {showtimeDetails.movieTitle}
             </h1>
@@ -673,10 +696,11 @@ export default function SeatBookingPage() {
         {/* Left: map */}
         <div className="flex min-w-0 flex-col gap-5">
 
-          {/* Seat map panel */}
+          {/* Seat map panel — a richer glow bleeding down from the top edge,
+              as if the projection screen itself is the light source. */}
           <div
             className="relative min-w-0 overflow-hidden rounded-2xl border border-white/10 px-3 py-6 sm:px-6"
-            style={{ background: "radial-gradient(120% 80% at 50% 0%, rgba(96,165,250,0.05), rgba(255,255,255,0.015) 45%, transparent 75%)" }}
+            style={{ background: "radial-gradient(140% 90% at 50% -6%, rgba(59,130,246,0.16), rgba(56,189,248,0.05) 40%, transparent 72%)" }}
           >
             <div className={`relative ${showProjector ? "pb-7" : ""}`}>
               <ProjectionScreenVisualization config={auditoriumConfig} />
@@ -800,24 +824,6 @@ export default function SeatBookingPage() {
           holdMinutes={Math.round(holdPolicy.ttlSeconds / 60)}
           emptyHint="Select seats from the map"
           total={total}
-          extra={pickedSeats.length > 0 ? (
-            <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3.5">
-              <label htmlFor="seat-promotion-code" className="text-[11px] font-semibold uppercase tracking-[.12em] text-white/50">Promotion code</label>
-              <div className="mt-2 flex items-center gap-2">
-                <input
-                  id="seat-promotion-code"
-                  value={promotionCode}
-                  onChange={(event) => { setPromotionCode(event.target.value.toUpperCase()); renewIdempotencyKey(); setErrorMsg(null); }}
-                  placeholder="e.g. CINEPRIME20"
-                  maxLength={64}
-                  autoComplete="off"
-                  className="h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-black/20 px-3 text-sm font-semibold tracking-wide text-white outline-none placeholder:font-normal placeholder:tracking-normal placeholder:text-white/25 focus:border-blue-400"
-                />
-                {promotionCode && <button type="button" onClick={() => { setPromotionCode(""); renewIdempotencyKey(); }} className="h-10 rounded-lg px-3 text-xs font-medium text-white/50 hover:bg-white/5 hover:text-white">Clear</button>}
-              </div>
-              <p className="mt-2 text-[11px] text-white/35">The discount is validated against this showtime and seat subtotal when seats are reserved.</p>
-            </div>
-          ) : undefined}
           headerAction={pickedSeats.length > 0 ? { label: "Clear all", onClick: clearAll } : undefined}
           backAction={{ label: "Back", onClick: () => navigate(-1) }}
           primaryAction={pickedSeats.length > 0 ? {

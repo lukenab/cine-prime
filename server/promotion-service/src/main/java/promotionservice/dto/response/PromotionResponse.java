@@ -3,13 +3,15 @@ package promotionservice.dto.response;
 import promotionservice.enums.DiscountType;
 import promotionservice.enums.PromotionStatus;
 import promotionservice.enums.PromotionTargetType;
+import promotionservice.enums.PromotionBenefitScope;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
 public record PromotionResponse(UUID promotionId, String code, String name, String description,
-                                PromotionStatus status, OffsetDateTime validFrom, OffsetDateTime validUntil,
+                                PromotionStatus status, PromotionBenefitScope benefitScope,
+                                OffsetDateTime validFrom, OffsetDateTime validUntil,
                                 Integer globalUsageLimit, Integer perAccountUsageLimit, Long version,
                                 int activeReservationCount, int committedUsageCount,
                                 PriceRule priceRule, List<Target> targets, List<AuditEntry> auditLog) {

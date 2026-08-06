@@ -30,6 +30,7 @@ export default function PromotionDetailPage() {
   ] as const;
   const details = [
     ["Promotion code", promotion.code], ["Status", promotion.status], ["Discount", benefit],
+    ["Benefit scope", promotion.benefitScope === "ORDER" ? "Tickets + food & drinks" : promotion.benefitScope === "CONCESSIONS" ? "Food & drinks" : "Movie tickets"],
     ["Minimum subtotal", money.format(rule.minimumOrderAmount)],
     ["Maximum discount", rule.maxDiscountAmount == null ? "Not capped" : money.format(rule.maxDiscountAmount)],
     ["Valid from", promotion.validFrom ? new Date(promotion.validFrom).toLocaleString("vi-VN") : "Immediately"],

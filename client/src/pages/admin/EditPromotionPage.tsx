@@ -8,6 +8,7 @@ function formFromPromotion(promotion: Promotion): PromotionFormData {
     code: promotion.code,
     name: promotion.name,
     description: promotion.description ?? "",
+    benefitScope: promotion.benefitScope,
     discountType: promotion.priceRule.discountType,
     discountValue: String(promotion.priceRule.discountType === "PERCENTAGE" ? promotion.priceRule.percentage ?? "" : promotion.priceRule.fixedAmount ?? ""),
     maximumDiscount: promotion.priceRule.maxDiscountAmount == null ? "" : String(promotion.priceRule.maxDiscountAmount),

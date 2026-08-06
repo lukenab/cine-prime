@@ -1,11 +1,13 @@
 package movieservice.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import movie.theater.common.exception.AppException;
 import movieservice.dto.response.SchedulePlanResponse;
 import movieservice.dto.response.SchedulePlanSummaryResponse;
 import movieservice.entity.SchedulePlan;
 import movieservice.entity.SchedulePlanSlot;
+import movieservice.entity.ShowTime;
 import movieservice.enums.SchedulePlanStatus;
 import movieservice.exception.MovieErrorCode;
 import movieservice.repository.SchedulePlanRepository;
@@ -23,15 +25,19 @@ import org.springframework.data.domain.PageRequest;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class SchedulePlanService {
     private static final ZoneId DEFAULT_BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final SchedulePlanRepository schedulePlanRepository;
     private final SchedulePlanRevalidationService revalidationService;
     private final AutoShowtimeCandidatePersistenceService persistenceService;
+    private final ShowtimeInventoryService showtimeInventoryService;
     private final SchedulingEligibilityService eligibilityService;
     private final SchedulingOperationalConstraintService operationalConstraintService;
     private final LifecycleEventNotifier lifecycleEventNotifier;
@@ -95,6 +101,7 @@ public class SchedulePlanService {
 
     @Transactional
     public SchedulePlanResponse publish(Long planId, String actor) {
+        long startedAt = System.nanoTime();
         revalidationService.revalidate(planId, actor);
         SchedulePlan plan = loadForUpdate(planId);
         if (plan.getStatus() == SchedulePlanStatus.PUBLISHED) {
@@ -113,21 +120,32 @@ public class SchedulePlanService {
         }
         validateCurrentEligibility(plan);
 
+        List<ShowTime> publishedShowtimes = new ArrayList<>(plan.getSlots().size());
         for (SchedulePlanSlot slot : plan.getSlots()) {
-            if (slot.getPublishedShowtime() != null) continue;
+            if (slot.getPublishedShowtime() != null) {
+                publishedShowtimes.add(slot.getPublishedShowtime());
+                continue;
+            }
             AutoShowtimePersistenceResult result = persistenceService.persist(
                     plan.getGenerationRun().getGenerationRunId(), toCandidate(slot),
-                    plan.getGenerationRun().getPolicy().getCleanupBufferMinutes());
+                    plan.getGenerationRun().getPolicy().getCleanupBufferMinutes(), false);
             if (!result.successful()) {
                 throw new AppException(MovieErrorCode.SCHEDULE_PLAN_PUBLISH_CONFLICT);
             }
             slot.setPublishedShowtime(result.showtime());
+            publishedShowtimes.add(result.showtime());
         }
+
+        int inventoryRows = showtimeInventoryService.materializeBatch(publishedShowtimes);
 
         plan.setStatus(SchedulePlanStatus.PUBLISHED);
         plan.setPublishedAt(LocalDateTime.now());
         plan.setPublishedBy(actor);
         notifyChange(plan, "STATUS_CHANGED");
+        long elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000;
+        log.info(
+                "[SchedulePlan] published planId={} showtimes={} inventoryRows={} elapsedMs={}",
+                planId, publishedShowtimes.size(), inventoryRows, elapsedMillis);
         return toResponse(plan);
     }
 

@@ -106,6 +106,8 @@ describe("QuickBooking", () => {
     fireEvent.click(await screen.findByLabelText("1. Cinema"));
     fireEvent.click(screen.getByRole("option", { name: /CinePrime District 1/i }));
 
+    expect(screen.getByLabelText("2. Date")).toHaveTextContent("No dates available");
+    expect(screen.getByLabelText("2. Date")).toBeDisabled();
     expect(screen.getByLabelText("3. Movie")).toHaveTextContent("No movies available");
     expect(screen.getByLabelText("3. Movie")).toBeDisabled();
   });

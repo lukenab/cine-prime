@@ -3,6 +3,7 @@ package movieservice.dto.request;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import movieservice.enums.OptimizationScenario;
 import movieservice.enums.OptimizerMode;
 
@@ -17,9 +18,11 @@ public record AutoShowtimeGenerationRequest (
     LocalDate endDate,
 
     @NotEmpty
+    @Size(max = 3, message = "Select at most 3 cinema clusters per generation run")
     List<Long> cinemaClusterIds,
 
     @NotEmpty
+    @Size(max = 5, message = "Select at most 5 movies per generation run")
     List<Long> movieIds,
 
     /** Null defaults to the policy's configured default_optimizer_mode (LEGACY unless set otherwise). */

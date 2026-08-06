@@ -39,6 +39,9 @@ public class PromotionEligibilityService {
             PromotionReservation r = existing.get();
             if (!r.getBookingId().equals(request.snapshot().bookingId()) || !r.getAccountId().equals(request.snapshot().accountId()))
                 throw new AppException(PromotionErrorCode.PROMOTION_IDEMPOTENCY_CONFLICT);
+            if (r.getStatus() != PromotionReservationStatus.RESERVED) {
+                throw new AppException(PromotionErrorCode.PROMOTION_IDEMPOTENCY_CONFLICT);
+            }
             return response(r);
         }
         // Lock promotion để serialize concurrent checkout và kiểm tra quota atomically.
@@ -57,6 +60,7 @@ public class PromotionEligibilityService {
         r.setAccountId(request.snapshot().accountId());
         r.setIdempotencyKey(request.idempotencyKey().trim());
         r.setStatus(PromotionReservationStatus.RESERVED);
+        r.setBenefitScope(quote.benefitScope());
         r.setSubtotalAmount(quote.subtotalAmount());
         r.setDiscountAmount(quote.discountAmount());
         r.setFinalAmount(quote.finalAmount());
@@ -107,20 +111,30 @@ public class PromotionEligibilityService {
         if (p.getStatus() != PromotionStatus.ACTIVE || p.getValidFrom() != null && now.isBefore(p.getValidFrom()) || p.getValidUntil() != null && !now.isBefore(p.getValidUntil()))
             return ineligible("PROMOTION_INACTIVE", q);
         boolean target = p.getTargets().isEmpty() || p.getTargets().stream().anyMatch(t -> t.getMovieId() != null && t.getMovieId().equals(q.movieId()) || t.getShowtimeId() != null && t.getShowtimeId().equals(q.showtimeId()));
-        if (!target || q.subtotalAmount().compareTo(p.getPriceRule().getMinimumOrderAmount()) < 0)
+        BigDecimal eligibleSubtotal = eligibleSubtotal(p.getBenefitScope(), q);
+        if (!target || eligibleSubtotal.compareTo(p.getPriceRule().getMinimumOrderAmount()) < 0)
             return ineligible("PROMOTION_NOT_APPLICABLE", q);
         // Quote báo trước quota hiện tại; reserve vẫn lock lại để chống race condition.
         if (p.getGlobalUsageLimit() != null && p.getActiveReservationCount() + p.getCommittedUsageCount() >= p.getGlobalUsageLimit()
                 || p.getPerAccountUsageLimit() != null && reservations.countByPromotionPromotionIdAndAccountIdAndStatusIn(p.getPromotionId(), q.accountId(), QUOTA_STATUSES) >= p.getPerAccountUsageLimit())
             return ineligible("PROMOTION_QUOTA_EXHAUSTED", q);
-        BigDecimal d = p.getPriceRule().getDiscountType() == DiscountType.PERCENTAGE ? q.subtotalAmount().multiply(p.getPriceRule().getPercentage()).divide(BigDecimal.valueOf(100), 0, RoundingMode.DOWN) : p.getPriceRule().getFixedAmount();
+        BigDecimal d = p.getPriceRule().getDiscountType() == DiscountType.PERCENTAGE ? eligibleSubtotal.multiply(p.getPriceRule().getPercentage()).divide(BigDecimal.valueOf(100), 0, RoundingMode.DOWN) : p.getPriceRule().getFixedAmount();
         if (p.getPriceRule().getMaxDiscountAmount() != null) d = d.min(p.getPriceRule().getMaxDiscountAmount());
-        d = d.min(q.subtotalAmount());
-        return new PromotionQuoteResponse(true, null, p.getPromotionId(), q.subtotalAmount(), d, q.subtotalAmount().subtract(d), q.currency() == null ? "VND" : q.currency().toUpperCase());
+        d = d.min(eligibleSubtotal);
+        return new PromotionQuoteResponse(true, null, p.getPromotionId(), p.getBenefitScope(), eligibleSubtotal, d, eligibleSubtotal.subtract(d), q.currency() == null ? "VND" : q.currency().toUpperCase());
     }
 
     private PromotionQuoteResponse ineligible(String reason, PromotionQuoteRequest q) {
-        return new PromotionQuoteResponse(false, reason, null, q.subtotalAmount(), BigDecimal.ZERO, q.subtotalAmount(), q.currency() == null ? "VND" : q.currency().toUpperCase());
+        BigDecimal subtotal = q.ticketSubtotal().add(q.concessionSubtotal());
+        return new PromotionQuoteResponse(false, reason, null, null, subtotal, BigDecimal.ZERO, subtotal, q.currency() == null ? "VND" : q.currency().toUpperCase());
+    }
+
+    private BigDecimal eligibleSubtotal(PromotionBenefitScope scope, PromotionQuoteRequest q) {
+        return switch (scope) {
+            case TICKETS -> q.ticketSubtotal();
+            case CONCESSIONS -> q.concessionSubtotal();
+            case ORDER -> q.ticketSubtotal().add(q.concessionSubtotal());
+        };
     }
 
     private PromotionReservation locked(UUID id) {
@@ -152,6 +166,6 @@ public class PromotionEligibilityService {
     }
 
     private PromotionReservationResponse response(PromotionReservation r) {
-        return new PromotionReservationResponse(r.getPromotionReservationId(), r.getPromotion().getPromotionId(), r.getBookingId(), r.getAccountId(), r.getStatus(), r.getSubtotalAmount(), r.getDiscountAmount(), r.getFinalAmount(), r.getCurrency(), r.getExpiresAt());
+        return new PromotionReservationResponse(r.getPromotionReservationId(), r.getPromotion().getPromotionId(), r.getBookingId(), r.getAccountId(), r.getStatus(), r.getBenefitScope(), r.getSubtotalAmount(), r.getDiscountAmount(), r.getFinalAmount(), r.getCurrency(), r.getExpiresAt());
     }
 }

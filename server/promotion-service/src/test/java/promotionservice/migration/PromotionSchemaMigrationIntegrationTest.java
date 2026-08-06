@@ -36,7 +36,7 @@ class PromotionSchemaMigrationIntegrationTest {
     void freshDatabaseCreatesPromotionSchemaAndEnforcesCoreInvariants() throws Exception {
         MigrateResult result = flyway().migrate();
         assertTrue(result.success);
-        assertEquals(4, result.migrationsExecuted);
+        assertEquals(6, result.migrationsExecuted);
 
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
@@ -48,6 +48,25 @@ class PromotionSchemaMigrationIntegrationTest {
             assertTrue(tableExists(statement, "promotion_reservation"));
             assertTrue(tableExists(statement, "promotion_usage_ledger"));
             assertTrue(tableExists(statement, "promotion_audit_log"));
+
+            try (var resultSet = statement.executeQuery("""
+                    SELECT COUNT(*) AS promotion_count
+                    FROM promotion
+                    WHERE status = 'ACTIVE'
+                      AND code IN ('CINEPRIME20', 'CINEPRIME10', 'TICKET20K', 'SNACK20', 'ORDER30K')
+                    """)) {
+                assertTrue(resultSet.next());
+                assertEquals(5, resultSet.getInt("promotion_count"));
+            }
+
+            try (var resultSet = statement.executeQuery("""
+                    SELECT COUNT(DISTINCT benefit_scope) AS scope_count
+                    FROM promotion
+                    WHERE code IN ('CINEPRIME20', 'CINEPRIME10', 'TICKET20K', 'SNACK20', 'ORDER30K')
+                    """)) {
+                assertTrue(resultSet.next());
+                assertEquals(3, resultSet.getInt("scope_count"));
+            }
 
             statement.execute("""
                     INSERT INTO promotion (code, name, status, global_usage_limit)

@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import promotionservice.enums.PromotionReservationStatus;
+import promotionservice.enums.PromotionBenefitScope;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -28,6 +29,8 @@ public class PromotionReservation {
     private String idempotencyKey;
     @Enumerated(EnumType.STRING)
     private PromotionReservationStatus status;
+    @Enumerated(EnumType.STRING)
+    private PromotionBenefitScope benefitScope;
     private BigDecimal subtotalAmount;
     private BigDecimal discountAmount;
     private BigDecimal finalAmount;

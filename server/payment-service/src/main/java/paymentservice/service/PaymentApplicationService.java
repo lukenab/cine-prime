@@ -63,7 +63,7 @@ public class PaymentApplicationService {
             throw new AppException(PROVIDER_NOT_CONFIGURED);
         }
 
-        BookingSnapshot booking = bookingGateway.getOwnedBooking(
+        BookingSnapshot booking = bookingGateway.lockOwnedCheckout(
                 request.getBookingId(), authorization);
         validatePayable(booking);
         String requestHash = requestHash(booking);

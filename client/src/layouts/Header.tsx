@@ -61,6 +61,12 @@ export function Header({ activePage, isDarkMode = true, onToggleTheme }: HeaderP
   }, []);
 
   const { user, logout } = useAuth();
+  const currentDateLabel = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date());
 
   const handleLogout = () => {
     logout();
@@ -106,9 +112,12 @@ export function Header({ activePage, isDarkMode = true, onToggleTheme }: HeaderP
         </div>
 
         {/* Date pill */}
-        <div style={{ padding: "5px 12px", background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "6px", color: "var(--text-muted)", fontSize: "11.5px", letterSpacing: "0.02em", transition: "all 0.2s ease" }}>
-          Thu, Jun 11 2026
-        </div>
+        <time
+          dateTime={new Date().toISOString().slice(0, 10)}
+          style={{ padding: "5px 12px", background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "6px", color: "var(--text-muted)", fontSize: "11.5px", letterSpacing: "0.02em", transition: "all 0.2s ease" }}
+        >
+          {currentDateLabel}
+        </time>
 
         {/* Dark / Light mode toggle */}
         <button

@@ -6,7 +6,6 @@ import bookingservice.dto.request.MovieSeatHoldRequest;
 import bookingservice.dto.response.CreateBookingResponse;
 import bookingservice.dto.response.MovieSeatHoldResponse;
 import bookingservice.dto.response.MovieShowtimeResponse;
-import bookingservice.dto.response.PromotionReservationResponse;
 import bookingservice.entity.Booking;
 import bookingservice.repository.BookingRepository;
 import feign.FeignException;
@@ -36,7 +35,6 @@ public class BookingOrchestrationService {
     private final BookingRepository bookingRepository;
     private final BookingResponseMapper responseMapper;
     private final BookingAbuseGuard abuseGuard;
-    private final BookingPromotionService promotionService;
 
     @Value("${movie-service.internal-key}")
     private String movieServiceInternalKey;
@@ -63,7 +61,6 @@ public class BookingOrchestrationService {
         }
 
         MovieSeatHoldResponse hold = null;
-        PromotionReservationResponse promotion = null;
         try {
             abuseGuard.checkNewBooking(accountId);
             MovieShowtimeResponse showtime = requireResult(
@@ -79,18 +76,6 @@ public class BookingOrchestrationService {
                     "WEB",
                     new MovieSeatHoldRequest(request.getSeatIds())));
             String bookingId = UUID.randomUUID().toString();
-            String promotionCode = promotionService.normalize(request.getPromotionCode());
-            // A bad/expired/exhausted code must not cost the customer their seat hold: reserving
-            // the promotion is best-effort, not a precondition for the booking itself. Only the
-            // discount is lost, not the seats - the customer sees why on the next screen.
-            String promotionRejectionReason = null;
-            if (promotionCode != null) {
-                try {
-                    promotion = promotionService.reserve(promotionCode, bookingId, accountId, showtime, hold);
-                } catch (AppException promotionException) {
-                    promotionRejectionReason = promotionException.getMessage();
-                }
-            }
             Booking booking = persistenceService.create(
                     accountId,
                     showtime,
@@ -98,17 +83,15 @@ public class BookingOrchestrationService {
                     idempotencyKey,
                     correlationId,
                     bookingId,
-                    promotionCode,
-                    promotion);
-            return responseMapper.toCreateResponse(booking, promotionRejectionReason);
+                    null,
+                    null);
+            return responseMapper.toCreateResponse(booking);
         } catch (AppException exception) {
             compensateHold(request.getShowtimeId(), hold, accountId);
-            promotionService.releaseQuietly(promotion);
             idempotencyService.markRetryable(accountId, CREATE_BOOKING, idempotencyKey);
             throw exception;
         } catch (FeignException exception) {
             compensateHold(request.getShowtimeId(), hold, accountId);
-            promotionService.releaseQuietly(promotion);
             idempotencyService.markRetryable(accountId, CREATE_BOOKING, idempotencyKey);
             if (exception.status() == 404 || exception.status() == 409) {
                 throw new AppException(SEAT_HOLD_FAILED);
@@ -116,7 +99,6 @@ public class BookingOrchestrationService {
             throw new AppException(SERVICE_UNAVAILABLE);
         } catch (RuntimeException exception) {
             compensateHold(request.getShowtimeId(), hold, accountId);
-            promotionService.releaseQuietly(promotion);
             idempotencyService.markRetryable(accountId, CREATE_BOOKING, idempotencyKey);
             throw exception;
         }
@@ -158,8 +140,7 @@ public class BookingOrchestrationService {
 
     private String requestHash(CreateBookingRequest request) {
         List<Long> sortedSeats = request.getSeatIds().stream().sorted().toList();
-        String canonical = request.getShowtimeId() + ":" + sortedSeats + ":"
-                + String.valueOf(promotionService.normalize(request.getPromotionCode()));
+        String canonical = request.getShowtimeId() + ":" + sortedSeats;
         try {
             return HexFormat.of().formatHex(
                     MessageDigest.getInstance("SHA-256")

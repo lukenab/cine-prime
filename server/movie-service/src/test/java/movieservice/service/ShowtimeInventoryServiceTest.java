@@ -22,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -30,7 +31,10 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -43,6 +47,7 @@ class ShowtimeInventoryServiceTest {
     @Mock RoomLayoutPositionRepository roomLayoutPositionRepository;
     @Mock SeatRepository seatRepository;
     @Mock PriceBookPricingService priceBookPricingService;
+    @Mock JdbcTemplate jdbcTemplate;
 
     @InjectMocks
     ShowtimeInventoryService service;
@@ -114,6 +119,66 @@ class ShowtimeInventoryServiceTest {
                         org.mockito.ArgumentMatchers.anyLong(),
                         org.mockito.ArgumentMatchers.any());
         verify(showtimeSeatRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void bulkMaterializationLoadsRoomTemplateOnceAndBatchesAllRows() {
+        CinemaRoom room = CinemaRoom.builder().cinemaRoomId(3L).build();
+        ShowTime first = ShowTime.builder()
+                .showTimeId(9L)
+                .cinemaRoom(room)
+                .basePrice(new BigDecimal("120000.00"))
+                .build();
+        ShowTime second = ShowTime.builder()
+                .showTimeId(10L)
+                .cinemaRoom(room)
+                .basePrice(new BigDecimal("120000.00"))
+                .build();
+        RoomLayout layout = RoomLayout.builder()
+                .roomLayoutId(30L)
+                .cinemaRoom(room)
+                .version(4)
+                .status(LayoutStatus.ACTIVE)
+                .personCapacity(3)
+                .sellableUnitCount(2)
+                .build();
+        List<RoomLayoutPosition> positions = List.of(
+                position(layout, 0, "A1", SeatType.STANDARD, null),
+                position(layout, 1, "A2", SeatType.COUPLE, "couple-a"),
+                position(layout, 2, "A3", SeatType.COUPLE, "couple-a"));
+        List<Seat> seats = List.of(
+                seat(room, 10L, 1, SeatType.STANDARD, null),
+                seat(room, 11L, 2, SeatType.COUPLE, "couple-a"));
+
+        when(roomLayoutRepository.findByCinemaRoomCinemaRoomIdAndStatus(3L, LayoutStatus.ACTIVE))
+                .thenReturn(Optional.of(layout));
+        when(roomLayoutPositionRepository
+                .findByRoomLayoutRoomLayoutIdOrderByRowIndexAscColumnIndexAsc(30L))
+                .thenReturn(positions);
+        when(seatRepository.findByCinemaRoomCinemaRoomId(3L)).thenReturn(seats);
+        when(priceBookPricingService.fromSnapshot(first))
+                .thenReturn(PriceBookPricingService.PricingDecision.override(
+                        new BigDecimal("120000.00")));
+        when(priceBookPricingService.fromSnapshot(second))
+                .thenReturn(PriceBookPricingService.PricingDecision.override(
+                        new BigDecimal("120000.00")));
+
+        int rowCount = service.materializeBatch(List.of(first, second));
+
+        assertEquals(4, rowCount);
+        assertEquals(3, first.getTotalSeats());
+        assertEquals(3, second.getTotalSeats());
+        verify(roomLayoutRepository, times(1))
+                .findByCinemaRoomCinemaRoomIdAndStatus(3L, LayoutStatus.ACTIVE);
+        verify(roomLayoutPositionRepository, times(1))
+                .findByRoomLayoutRoomLayoutIdOrderByRowIndexAscColumnIndexAsc(30L);
+        verify(seatRepository, times(1)).findByCinemaRoomCinemaRoomId(3L);
+        verify(jdbcTemplate).batchUpdate(
+                anyString(),
+                org.mockito.ArgumentMatchers.argThat(rows -> ((List) rows).size() == 4),
+                eq(500),
+                org.mockito.ArgumentMatchers.any());
     }
 
     @Test

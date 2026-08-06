@@ -16,6 +16,7 @@ import promotionservice.entity.PromotionTarget;
 import promotionservice.enums.DiscountType;
 import promotionservice.enums.PromotionStatus;
 import promotionservice.enums.PromotionTargetType;
+import promotionservice.enums.PromotionBenefitScope;
 import promotionservice.repository.PromotionAuditLogRepository;
 import promotionservice.repository.PromotionRepository;
 import promotionservice.validation.PromotionValidator;
@@ -100,7 +101,7 @@ class PromotionAdminServiceTest {
     }
 
     private PromotionUpsertRequest request(String code, int percentage, long movieId) {
-        return new PromotionUpsertRequest(code, "Summer updated", null, null, null, 100, 1,
+        return new PromotionUpsertRequest(code, "Summer updated", null, PromotionBenefitScope.TICKETS, null, null, 100, 1,
                 new PromotionPriceRuleRequest(DiscountType.PERCENTAGE, BigDecimal.valueOf(percentage), null,
                         new BigDecimal("50000"), new BigDecimal("100000"), "VND"),
                 List.of(new PromotionTargetRequest(PromotionTargetType.MOVIE, movieId, null)));

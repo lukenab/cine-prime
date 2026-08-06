@@ -17,7 +17,19 @@ import java.util.Optional;
 public interface ShowtimeGenerationRunRepository extends JpaRepository<ShowtimeGenerationRun, Long>{
     Optional<ShowtimeGenerationRun> findByIdempotencyKey(String idempotencyKey);
 
-    @EntityGraph(attributePaths = {"policy", "movies", "clusters"})
+    /**
+     * Loads the complete immutable input snapshot needed by the asynchronous executor.
+     * The executor intentionally does not keep one database transaction open while the
+     * optimizer runs, so every collection it reads must be initialized at this boundary.
+     */
+    @EntityGraph(attributePaths = {
+            "policy",
+            "movies",
+            "clusters",
+            "excludedRooms",
+            "screeningVersionOverrides",
+            "screeningVersionOverrides.movie"
+    })
     Optional<ShowtimeGenerationRun> findByGenerationRunId(Long generationRunId);
 
     /// Lock run khi executor claim để nhiều instance scheduler không cùng execute một run.

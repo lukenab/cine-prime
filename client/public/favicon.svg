@@ -1,19 +1,33 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" role="img" aria-label="CinePrime">
   <defs>
     <linearGradient id="cp-bg" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#60a5fa"/>
-      <stop offset="100%" stop-color="#1d4ed8"/>
+      <stop offset="0%" stop-color="#1e3a8a"/>
+      <stop offset="55%" stop-color="#132a63"/>
+      <stop offset="100%" stop-color="#0a1633"/>
     </linearGradient>
+    <linearGradient id="cp-ring" x1="4" y1="8" x2="44" y2="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7dd3fc"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <radialGradient id="cp-sphere" cx="34%" cy="30%" r="78%">
+      <stop offset="0%" stop-color="#bae6fd"/>
+      <stop offset="45%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </radialGradient>
   </defs>
+
   <rect width="48" height="48" rx="11" fill="url(#cp-bg)"/>
-  <g transform="translate(9,9) scale(1.25)" stroke="#f5f9ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <rect width="18" height="18" x="3" y="3" rx="2"/>
-    <path d="M7 3v18"/>
-    <path d="M3 7.5h4"/>
-    <path d="M3 12h18"/>
-    <path d="M3 16.5h4"/>
-    <path d="M17 3v18"/>
-    <path d="M17 7.5h4"/>
-    <path d="M17 16.5h4"/>
+
+  <!-- Back half of the ring; the sphere is painted over it next. -->
+  <g transform="rotate(-20 24 25)">
+    <ellipse cx="24" cy="25" rx="18.5" ry="6.4" fill="none" stroke="url(#cp-ring)" stroke-width="2.2" opacity="0.55"/>
+  </g>
+
+  <circle cx="24" cy="25" r="10.6" fill="url(#cp-sphere)"/>
+
+  <!-- Front half of the ring, plus the moon. -->
+  <g transform="rotate(-20 24 25)">
+    <path d="M5.5,25 A18.5,6.4 0 0 0 42.5,25" fill="none" stroke="url(#cp-ring)" stroke-width="2.2" stroke-linecap="round"/>
+    <circle cx="42.5" cy="25" r="2.6" fill="#7dd3fc"/>
   </g>
 </svg>

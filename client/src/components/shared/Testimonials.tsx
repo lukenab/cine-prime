@@ -1,11 +1,8 @@
-import { Star, Quote } from "lucide-react";
-import { mockTestimonials } from "../../data/mockTestimonials";
-
 export function Testimonials() {
   return (
     <section
       style={{
-        background: "linear-gradient(180deg, #050505 0%, #0a0a0a 50%, #050505 100%)",
+        background: "linear-gradient(180deg, rgba(5,9,20,0) 0%, rgba(255,255,255,0.022) 50%, rgba(5,9,20,0) 100%)",
         paddingTop: "80px",
         paddingBottom: "80px",
         borderTop: "1px solid rgba(255,255,255,0.06)",
@@ -27,49 +24,30 @@ export function Testimonials() {
           </h2>
         </div>
 
-        {/* Cards */}
+        {/* Loading placeholders. Replace with API-backed reviews when the review service is connected. */}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {mockTestimonials.slice(0, 6).map((t) => (
+          {Array.from({ length: 6 }).map((_, index) => (
             <div
-              key={t.id}
-              className="group relative flex flex-col rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1"
+              key={index}
+              className="relative flex min-h-[250px] flex-col rounded-2xl p-6 animate-pulse"
               style={{ border: "1px solid rgba(255,255,255,0.07)", backgroundColor: "rgba(255,255,255,0.03)" }}
-              onMouseEnter={(e) => {
-                const el = e.currentTarget as HTMLDivElement;
-                el.style.borderColor = "rgba(255,215,0,0.25)";
-                el.style.boxShadow = "0 20px 50px rgba(0,0,0,0.5)";
-              }}
-              onMouseLeave={(e) => {
-                const el = e.currentTarget as HTMLDivElement;
-                el.style.borderColor = "rgba(255,255,255,0.07)";
-                el.style.boxShadow = "none";
-              }}
             >
-              <Quote size={26} style={{ color: "rgba(255,215,0,0.25)" }} className="mb-3" />
-
-              <div className="flex gap-0.5 mb-3">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Star
-                    key={i}
-                    size={13}
-                    fill={i < t.rating ? "#FFD700" : "none"}
-                    style={{ color: i < t.rating ? "#FFD700" : "rgba(255,255,255,0.2)" }}
-                  />
+              <div className="mb-4 h-7 w-7 rounded bg-white/[0.10]" />
+              <div className="mb-4 flex gap-1">
+                {Array.from({ length: 5 }).map((_, starIndex) => (
+                  <div key={starIndex} className="h-3 w-3 rounded-sm bg-white/[0.10]" />
                 ))}
               </div>
-
-              <p className="flex-1 text-[13.5px] leading-relaxed text-white/70">"{t.quote}"</p>
-
-              <div className="mt-5 flex items-center gap-3 pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                <img
-                  src={t.avatar}
-                  alt={t.name}
-                  className="h-9 w-9 rounded-full object-cover"
-                  style={{ border: "1px solid rgba(255,215,0,0.3)" }}
-                />
-                <div className="min-w-0">
-                  <p className="text-[13px] font-semibold text-white truncate">{t.name}</p>
-                  <p className="text-[11px] text-white/40 truncate">{t.role}</p>
+              <div className="space-y-2">
+                <div className="h-3 w-full rounded bg-white/[0.10]" />
+                <div className="h-3 w-11/12 rounded bg-white/[0.08]" />
+                <div className="h-3 w-3/4 rounded bg-white/[0.08]" />
+              </div>
+              <div className="mt-auto flex items-center gap-3 border-t border-white/[0.06] pt-4">
+                <div className="h-9 w-9 rounded-full bg-white/[0.10]" />
+                <div className="space-y-2">
+                  <div className="h-3 w-24 rounded bg-white/[0.10]" />
+                  <div className="h-2.5 w-16 rounded bg-white/[0.07]" />
                 </div>
               </div>
             </div>

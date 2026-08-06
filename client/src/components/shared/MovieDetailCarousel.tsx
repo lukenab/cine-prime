@@ -87,20 +87,15 @@ export function MovieDetailCarousel({ movie, onClose }: Props) {
 
   if (!movie) return null;
 
-  const title = movie.movieNameEnglish || movie.movieNameVn || "Untitled Movie";
+  const title = movie.movieNameVn || movie.movieNameEnglish || "Phim chưa có tên";
+  const alternateTitle = movie.movieNameEnglish && movie.movieNameEnglish !== title
+    ? movie.movieNameEnglish
+    : null;
   const releaseDate = movie.showTimes?.[0]?.showDate;
 
   const handleBook = () => {
-    let preferredClusterId: number | undefined;
-    try {
-      preferredClusterId = JSON.parse(localStorage.getItem("cp_cluster") ?? "null")?.clusterId;
-    } catch {
-      preferredClusterId = undefined;
-    }
     onClose();
-    navigate(
-      `/showtime/${movie.movieId}${preferredClusterId ? `?clusterId=${preferredClusterId}` : ""}`
-    );
+    navigate(`/showtime/${movie.movieId}`);
   };
 
   return (
@@ -207,8 +202,8 @@ export function MovieDetailCarousel({ movie, onClose }: Props) {
 
           {/* Title */}
           <h2 className="text-2xl font-extrabold leading-tight text-white">{title}</h2>
-          {movie.movieNameVn && movie.movieNameVn !== title && (
-            <p className="mt-0.5 text-sm text-white/45">{movie.movieNameVn}</p>
+          {alternateTitle && (
+            <p className="mt-0.5 text-sm text-white/45">{alternateTitle}</p>
           )}
 
           {/* Genres */}

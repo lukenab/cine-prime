@@ -9,6 +9,7 @@ import movieservice.repository.MovieScreeningVersionRepository;
 import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeAllocationFormatPriorityRepository;
 import movieservice.repository.CinemaRoomMaintenanceRepository;
+import movieservice.service.AudioFormatCompatibilityService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import movieservice.enums.ScreeningVersionStatus;
@@ -35,6 +36,7 @@ public class AutoShowtimeCandidateFactory {
     private final ShowtimeAllocationFormatPriorityRepository formatPriorityRepository;
     private final ShowTimeRepository showTimeRepository;
     private final CinemaRoomMaintenanceRepository maintenanceRepository;
+    private final AudioFormatCompatibilityService audioFormatCompatibilityService;
 
     @Transactional(readOnly = true)
     public List<ShowtimeCandidate> buildRawCandidates(ShowtimeGenerationRun run){
@@ -129,6 +131,13 @@ public class AutoShowtimeCandidateFactory {
                             }
                             /// Room bị loại trừ cho run này: không sinh candidate nào từ room này.
                             if (excludedRoomIds.contains(room.getCinemaRoomId())) {
+                                continue;
+                            }
+
+                            // Format support alone is insufficient. Do not let the optimizer select
+                            // a room whose installed sound system cannot reproduce this content mix.
+                            if (!audioFormatCompatibilityService.supports(
+                                    room.getAudioFormat(), version.getAudioFormat())) {
                                 continue;
                             }
 

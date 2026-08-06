@@ -10,12 +10,14 @@ import movieservice.entity.ShowTime;
 import movieservice.entity.ShowtimeAllocationPolicy;
 import movieservice.entity.ShowtimeGenerationRun;
 import movieservice.entity.CinemaRoomMaintenance;
+import movieservice.entity.AudioFormat;
 import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.CinemaRoomFormatRepository;
 import movieservice.repository.MovieScreeningVersionRepository;
 import movieservice.repository.ShowTimeRepository;
 import movieservice.repository.ShowtimeAllocationFormatPriorityRepository;
 import movieservice.repository.CinemaRoomMaintenanceRepository;
+import movieservice.service.AudioFormatCompatibilityService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,6 +51,7 @@ class AutoShowtimeCandidateFactoryTest {
     @Mock ShowtimeAllocationFormatPriorityRepository formatPriorityRepository;
     @Mock ShowTimeRepository showTimeRepository;
     @Mock CinemaRoomMaintenanceRepository maintenanceRepository;
+    @Mock AudioFormatCompatibilityService audioFormatCompatibilityService;
 
     private AutoShowtimeCandidateFactory factory;
     private CinemaCluster cluster;
@@ -65,7 +68,8 @@ class AutoShowtimeCandidateFactoryTest {
                 schedulingEligibilityService,
                 formatPriorityRepository,
                 showTimeRepository,
-                maintenanceRepository
+                maintenanceRepository,
+                audioFormatCompatibilityService
         );
 
         cluster = CinemaCluster.builder().clusterId(1L).timezone("Asia/Ho_Chi_Minh").build();
@@ -90,6 +94,8 @@ class AutoShowtimeCandidateFactoryTest {
                 .thenReturn(List.of(screeningVersion));
         org.mockito.Mockito.lenient().when(cinemaRoomFormatRepository.findEligibleActiveRoomsByMovieIdAndFormatId(anyLong(), anyInt()))
                 .thenReturn(List.of(room));
+        org.mockito.Mockito.lenient().when(audioFormatCompatibilityService.supports(any(), any()))
+                .thenReturn(true);
         when(formatPriorityRepository.findAllByPolicyIdWithFormat(1L)).thenReturn(List.of());
         /// lenient: khi toàn bộ room bị loại trừ, không candidate nào được sinh ra nên
         /// removeCandidatesConflictingWithMaintenance() early-return trước khi gọi repo này -
@@ -209,6 +215,28 @@ class AutoShowtimeCandidateFactoryTest {
         // The repository only returns version 100, while this run explicitly allows version 999.
         // Candidate generation must not silently fall back to Auto.
         assertEquals(0, factory.buildRawCandidates(customRun).size());
+    }
+
+    @Test
+    void buildRawCandidatesSkipsRoomWhenScreeningVersionAudioIsNotSupported() {
+        cluster.setOperatingHours(List.of(operatingHour(LocalTime.of(8, 0), LocalTime.of(10, 0))));
+        AudioFormat roomAudio = AudioFormat.builder()
+                .audioFormatId(1)
+                .formatCode("DOLBY_5_1")
+                .active(true)
+                .build();
+        AudioFormat contentAudio = AudioFormat.builder()
+                .audioFormatId(2)
+                .formatCode("DOLBY_ATMOS")
+                .active(true)
+                .build();
+        room.setAudioFormat(roomAudio);
+        screeningVersion.setAudioFormat(contentAudio);
+        when(audioFormatCompatibilityService.supports(roomAudio, contentAudio)).thenReturn(false);
+
+        List<ShowtimeCandidate> candidates = factory.buildRawCandidates(run(15));
+
+        assertEquals(0, candidates.size());
     }
 
     private ShowtimeGenerationRun run(int timeSlotIntervalMinutes) {

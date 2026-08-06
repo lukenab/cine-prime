@@ -11,5 +11,8 @@ import java.math.BigDecimal;
  */
 public record PromotionQuoteRequest(@NotBlank String promotionCode, @NotBlank String bookingId,
                                     @NotBlank String accountId, Long movieId, Long showtimeId, Long branchId,
-                                    @NotNull @PositiveOrZero BigDecimal subtotalAmount, String currency) {
+                                    @NotNull @PositiveOrZero BigDecimal ticketSubtotal,
+                                    @NotNull @PositiveOrZero BigDecimal concessionSubtotal,
+                                    @NotNull @PositiveOrZero BigDecimal serviceFee,
+                                    String currency) {
 }

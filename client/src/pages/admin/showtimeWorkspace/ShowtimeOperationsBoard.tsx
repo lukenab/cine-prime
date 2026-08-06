@@ -15,18 +15,27 @@ import {
   PauseCircle,
   Pencil,
   PlayCircle,
-  ShieldCheck,
   Ticket,
   X,
   XCircle,
 } from "lucide-react";
 
-import type { SchedulePlanResponse, ShowtimeResponse, ShowtimeStatus } from "../../../api/showtimeApi";
+import type { ShowtimeResponse, ShowtimeStatus } from "../../../api/showtimeApi";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../../components/ui/select";
 
 type BoardMode = "schedule" | "timeline" | "utilization";
 
 type Props = {
   showtimes: ShowtimeResponse[];
+  /** Unfiltered operational data used to verify what customers can actually see.
+   *  Table-only movie/status/room filters must not hide sessions from this view. */
+  customerPreviewShowtimes?: ShowtimeResponse[];
   busy?: boolean;
   onEdit: (showtime: ShowtimeResponse) => void;
   onMove: (showtime: ShowtimeResponse, roomId: number, showDate: string, startTime: string) => Promise<void>;
@@ -34,7 +43,6 @@ type Props = {
   /** Bulk sibling of onStatusChange — lets ops open/suspend a whole batch (e.g.
    *  every session of one movie today) in one call instead of one at a time. */
   onBulkStatusChange?: (showtimeIds: number[], status: ShowtimeStatus, reason?: string) => Promise<void>;
-  draftPlan?: SchedulePlanResponse | null;
 };
 
 type RoomGroup = {
@@ -188,12 +196,12 @@ function CustomerPreview({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section role="dialog" aria-modal="true" aria-label="Customer schedule preview" className="max-h-[calc(100vh-3rem)] w-full max-w-5xl overflow-hidden rounded-3xl border shadow-2xl" style={{ background: "var(--bg-main)", borderColor: "var(--border-color)" }}>
+      <section role="dialog" aria-modal="true" aria-label="Customer schedule view" className="max-h-[calc(100vh-3rem)] w-full max-w-5xl overflow-hidden rounded-3xl border shadow-2xl" style={{ background: "var(--bg-main)", borderColor: "var(--border-color)" }}>
         <header className="flex items-start justify-between gap-4 border-b px-6 py-5" style={{ borderColor: "var(--border-color)" }}>
           <div>
             <div className="flex items-center gap-2">
               <Eye size={18} className="text-blue-600" />
-              <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>Customer preview</h2>
+              <h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>Customer view</h2>
               <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-bold uppercase text-emerald-600">Read only</span>
             </div>
             <p className="mt-1 text-xs" style={{ color: "var(--text-sub)" }}>
@@ -242,55 +250,7 @@ function CustomerPreview({
   );
 }
 
-function DraftComparison({
-  plan,
-  showtimes,
-  onClose,
-}: {
-  plan: SchedulePlanResponse;
-  showtimes: ShowtimeResponse[];
-  onClose: () => void;
-}) {
-  const publishedIds = new Set(showtimes.map((showtime) => showtime.showTimeId));
-  const materialized = plan.slots.filter((slot) => slot.publishedShowtimeId && publishedIds.has(slot.publishedShowtimeId));
-  const proposed = plan.slots.filter((slot) => !slot.publishedShowtimeId || !publishedIds.has(slot.publishedShowtimeId));
-  const cinemaCount = new Set(plan.slots.map((slot) => slot.clusterId)).size;
-  const roomCount = new Set(plan.slots.map((slot) => slot.cinemaRoomId)).size;
-
-  return (
-    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section role="dialog" aria-modal="true" aria-label="Draft and published schedule comparison" className="w-full max-w-3xl overflow-hidden rounded-3xl border shadow-2xl" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
-        <header className="flex items-start justify-between gap-4 border-b px-6 py-5" style={{ borderColor: "var(--border-color)" }}>
-          <div>
-            <div className="flex items-center gap-2"><CalendarDays size={18} className="text-blue-600" /><h2 className="text-lg font-bold" style={{ color: "var(--text-main)" }}>Draft versus published</h2></div>
-            <p className="mt-1 text-xs" style={{ color: "var(--text-sub)" }}>Schedule plan #{plan.schedulePlanId} · {plan.status.replace(/_/g, " ")}</p>
-          </div>
-          <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-xl border" style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}><X size={17} /></button>
-        </header>
-        <div className="grid gap-3 p-6 sm:grid-cols-4">
-          {[
-            ["Draft slots", plan.slots.length, "#2563eb"],
-            ["Not published", proposed.length, "#d97706"],
-            ["Already materialized", materialized.length, "#059669"],
-            ["Scope", `${cinemaCount} cinema · ${roomCount} rooms`, "#7c3aed"],
-          ].map(([label, value, color]) => (
-            <div key={String(label)} className="rounded-xl border p-4" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
-              <p className="text-[10px] font-bold uppercase" style={{ color: "var(--text-sub)" }}>{label}</p>
-              <p className="mt-2 text-lg font-bold" style={{ color: String(color) }}>{value}</p>
-            </div>
-          ))}
-        </div>
-        <div className="border-t px-6 py-4" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
-          <p className="text-xs" style={{ color: "var(--text-sub)" }}>
-            Draft slots remain internal until the schedule plan is published. The Operations board above represents materialized showtimes only.
-          </p>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdit, onMove, onStatusChange, onBulkStatusChange, draftPlan }: Props) {
+export default function ShowtimeOperationsBoard({ showtimes, customerPreviewShowtimes = showtimes, busy = false, onEdit, onMove, onStatusChange, onBulkStatusChange }: Props) {
   const datesWithSessions = useMemo(() => Array.from(new Set(showtimes.map((item) => item.showDate))).sort(), [showtimes]);
 
   // A continuous day-by-day strip (not just days that already have a session) so admins can
@@ -320,7 +280,6 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
   const [onlyIssues, setOnlyIssues] = useState(false);
   const [selected, setSelected] = useState<ShowtimeResponse | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [comparisonOpen, setComparisonOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelPromptOpen, setCancelPromptOpen] = useState(false);
   // Bulk selection lives only on the Schedule board view (individual session
@@ -570,24 +529,25 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
                 {formatDate(selectedDate)} · {rooms.length} rooms · {scoped.length} sessions · {formatMinuteValue(timelineWindow.start)}–{formatMinuteValue(timelineWindow.end)}
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={movieId}
-                onChange={(event) => setMovieId(event.target.value)}
-                aria-label="Filter by movie"
-                className="h-9 rounded-lg border px-2 text-xs outline-none"
-                style={{ background: "var(--bg-main)", borderColor: "var(--border-color)", color: "var(--text-main)" }}
-              >
-                <option value="all">All movies</option>
-                {movieOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-              </select>
-              <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold" style={{ color: conflictIds.size ? "#dc2626" : "#059669", background: conflictIds.size ? "rgba(220,38,38,.10)" : "rgba(5,150,105,.10)" }}>
-                {conflictIds.size ? <AlertTriangle size={13} /> : <ShieldCheck size={13} />}
-                {conflictIds.size ? "Action required" : "No room overlaps"}
-              </span>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <div className="flex h-9 min-w-[190px] overflow-hidden rounded-lg border" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
+                <Select value={movieId} onValueChange={setMovieId}>
+                  <SelectTrigger
+                    aria-label="Filter by movie"
+                    className="h-full w-full rounded-none border-0 bg-transparent px-3 text-xs font-semibold focus-visible:ring-0 dark:bg-transparent dark:hover:bg-white/5"
+                    style={{ height: "34px", color: "var(--text-main)" }}
+                  >
+                    <SelectValue placeholder="All movies" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All movies</SelectItem>
+                    {movieOptions.map(([id, name]) => <SelectItem key={id} value={String(id)}>{name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
               {conflictIds.size > 0 && (
-                <button type="button" aria-pressed={onlyIssues} onClick={() => setOnlyIssues((value) => !value)} className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold" style={{ borderColor: "rgba(220,38,38,.3)", color: "#dc2626", background: onlyIssues ? "rgba(220,38,38,.12)" : "transparent" }}>
-                  <AlertTriangle size={13} /> {onlyIssues ? "Showing conflicts" : `${conflictIds.size} conflicts`}
+                <button type="button" aria-pressed={onlyIssues} onClick={() => setOnlyIssues((value) => !value)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold" style={{ borderColor: "rgba(220,38,38,.3)", color: "#dc2626", background: onlyIssues ? "rgba(220,38,38,.12)" : "transparent" }}>
+                  <AlertTriangle size={13} /> {onlyIssues ? `Showing ${conflictIds.size} conflicts` : `${conflictIds.size} scheduling conflicts`}
                 </button>
               )}
               <div className="flex rounded-lg border p-0.5" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
@@ -595,8 +555,16 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
                 <button type="button" onClick={() => setMode("schedule")} className="rounded-md px-3 py-1.5 text-xs font-semibold" style={{ color: mode === "schedule" ? "#2563eb" : "var(--text-sub)", background: mode === "schedule" ? "rgba(37,99,235,.12)" : "transparent" }}>Schedule board</button>
                 <button type="button" onClick={() => setMode("utilization")} className="rounded-md px-3 py-1.5 text-xs font-semibold" style={{ color: mode === "utilization" ? "#2563eb" : "var(--text-sub)", background: mode === "utilization" ? "rgba(37,99,235,.12)" : "transparent" }}>Room utilization</button>
               </div>
-              <button type="button" onClick={() => setPreviewOpen(true)} title="Customer preview" aria-label="Customer preview" className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-main)", background: "var(--bg-main)" }}><Eye size={14} /> Preview</button>
-              {draftPlan && <button type="button" onClick={() => setComparisonOpen(true)} title="Compare with draft schedule" className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-main)", background: "var(--bg-main)" }}><CalendarDays size={14} /> Draft</button>}
+              <button
+                type="button"
+                onClick={() => setPreviewOpen(true)}
+                title="Customer view"
+                aria-label="Customer view"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                style={{ borderColor: "var(--border-color)", color: "var(--text-main)", background: "var(--bg-main)" }}
+              >
+                <Eye size={15} />
+              </button>
             </div>
           </div>
         </header>
@@ -976,8 +944,7 @@ export default function ShowtimeOperationsBoard({ showtimes, busy = false, onEdi
         </div>
       )}
 
-      <CustomerPreview open={previewOpen} showtimes={showtimes} date={selectedDate} clusterId={clusterId} onClose={() => setPreviewOpen(false)} />
-      {comparisonOpen && draftPlan && <DraftComparison plan={draftPlan} showtimes={showtimes} onClose={() => setComparisonOpen(false)} />}
+      <CustomerPreview open={previewOpen} showtimes={customerPreviewShowtimes} date={selectedDate} clusterId={clusterId} onClose={() => setPreviewOpen(false)} />
     </>
   );
 }

@@ -17,6 +17,9 @@ public class PromotionValidator {
 
     /** Kiểm tra toàn bộ dữ liệu Admin được phép thay đổi trên promotion DRAFT. */
     public void validateEditableFields(PromotionUpsertRequest request) {
+        if (request.benefitScope() == null) {
+            throw new AppException(PromotionErrorCode.PROMOTION_INVALID_RULE);
+        }
         validateValidityWindow(request);
         validateUsageLimits(request);
         validatePriceRule(request.priceRule());

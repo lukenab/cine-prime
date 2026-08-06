@@ -42,4 +42,23 @@ public class BookingGateway {
             throw new AppException(BOOKING_SERVICE_UNAVAILABLE);
         }
     }
+
+    public BookingSnapshot lockOwnedCheckout(String bookingId, String authorization) {
+        try {
+            ApiResponse<BookingSnapshot> response = restClient.post()
+                    .uri(bookingServiceUrl + "/api/bookings/{bookingId}/checkout-lock", bookingId)
+                    .header(HttpHeaders.AUTHORIZATION, authorization)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {
+                    });
+            if (response == null || response.getResult() == null) {
+                throw new AppException(BOOKING_SERVICE_UNAVAILABLE);
+            }
+            return response.getResult();
+        } catch (AppException exception) {
+            throw exception;
+        } catch (RestClientException exception) {
+            throw new AppException(BOOKING_SERVICE_UNAVAILABLE);
+        }
+    }
 }

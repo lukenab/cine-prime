@@ -1,57 +1,58 @@
 import { Zap, Volume2, Monitor, Armchair } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
+// Blue/cyan ramp: the four cards still read as distinct, but stay inside the cosmic palette.
 const FEATURES = [
   {
     icon: Monitor,
     title: "4K Ultra HD",
     description: "Crystal-clear projection on massive screens up to 30 metres wide.",
-    color: "#FFD700",
+    color: "#7DD3FC",
   },
   {
     icon: Volume2,
     title: "Dolby Atmos",
     description: "Immersive 3D sound that fills the entire theatre with breathtaking audio.",
-    color: "#8A2BE2",
+    color: "#38BDF8",
   },
   {
     icon: Armchair,
     title: "Recliner Seats",
     description: "Fully electric leather recliners with footrests and heated cushions.",
-    color: "#00CED1",
+    color: "#60A5FA",
   },
   {
     icon: Zap,
     title: "4DX & IMAX",
     description: "Motion seats, wind, rain effects, and the largest screens in the world.",
-    color: "#FF4500",
+    color: "#2563EB",
   },
 ];
 
 export function ExperienceBanner() {
+  const navigate = useNavigate();
+
   return (
+    // cp-stars adds the drifting starfield; this section is the visual peak of the page,
+    // so it keeps its own deep-navy gradient instead of the flat .cp-section shell.
+    // position/overflow are needed locally so the starfield layers are clipped to the section.
     <section
+      className="cp-stars"
       style={{
-        background: "linear-gradient(135deg, #07071a 0%, #0d0d2e 50%, #07071a 100%)",
+        background: "linear-gradient(135deg, #050b1c 0%, #0b1430 50%, #050b1c 100%)",
         paddingTop: "80px",
         paddingBottom: "80px",
-        borderTop: "1px solid rgba(138,43,226,0.15)",
-        borderBottom: "1px solid rgba(138,43,226,0.15)",
+        borderTop: "1px solid rgba(96,165,250,0.18)",
+        borderBottom: "1px solid rgba(96,165,250,0.18)",
+        position: "relative",
+        overflow: "hidden",
       }}
     >
-      <div className="max-w-7xl mx-auto px-6">
+      {/* cp-shell lifts the content above the starfield layers */}
+      <div className="cp-shell max-w-7xl mx-auto px-6">
         {/* Header */}
         <div className="text-center mb-12">
-          <span
-            style={{
-              color: "#8A2BE2",
-              fontSize: "0.7rem",
-              letterSpacing: "0.25em",
-              fontWeight: 700,
-              textTransform: "uppercase",
-            }}
-          >
-            Why Choose CinePrime
-          </span>
+          <span className="cp-eyebrow">Why Choose CinePrime</span>
           <h2
             style={{
               color: "white",
@@ -61,17 +62,7 @@ export function ExperienceBanner() {
               lineHeight: 1.2,
             }}
           >
-            The Ultimate{" "}
-            <span
-              style={{
-                background: "linear-gradient(135deg, #8A2BE2, #FF00FF)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
-              }}
-            >
-              Cinema Experience
-            </span>
+            The Ultimate <span className="cp-grad-text">Cinema Experience</span>
           </h2>
           <p style={{ color: "rgba(255,255,255,0.45)", fontSize: "0.9rem", marginTop: "12px" }}>
             State-of-the-art technology meets luxurious comfort for an unparalleled night out.
@@ -83,23 +74,9 @@ export function ExperienceBanner() {
           {FEATURES.map(({ icon: Icon, title, description, color }) => (
             <div
               key={title}
-              className="group relative p-6 rounded-2xl cursor-default transition-all duration-300 hover:-translate-y-2"
-              style={{
-                border: "1px solid rgba(255,255,255,0.06)",
-                backgroundColor: "rgba(255,255,255,0.03)",
-              }}
-              onMouseEnter={(e) => {
-                const el = e.currentTarget as HTMLDivElement;
-                el.style.borderColor = `${color}30`;
-                el.style.backgroundColor = `${color}08`;
-                el.style.boxShadow = `0 20px 50px rgba(0,0,0,0.4), 0 0 0 1px ${color}20`;
-              }}
-              onMouseLeave={(e) => {
-                const el = e.currentTarget as HTMLDivElement;
-                el.style.borderColor = "rgba(255,255,255,0.06)";
-                el.style.backgroundColor = "rgba(255,255,255,0.03)";
-                el.style.boxShadow = "none";
-              }}
+              // cp-card--lift reproduces the old -8px hover lift in CSS. The border/background
+              // and glow live in the class: inline styles set from JS would always win over it.
+              className="cp-card cp-card--lift group relative p-6 cursor-default"
             >
               {/* Icon */}
               <div
@@ -132,8 +109,8 @@ export function ExperienceBanner() {
         <div
           className="flex flex-col sm:flex-row items-center justify-between gap-6 mt-12 p-8 rounded-2xl"
           style={{
-            background: "linear-gradient(135deg, rgba(138,43,226,0.15) 0%, rgba(255,215,0,0.08) 100%)",
-            border: "1px solid rgba(138,43,226,0.2)",
+            background: "linear-gradient(135deg, rgba(37,99,235,0.18) 0%, rgba(56,189,248,0.08) 100%)",
+            border: "1px solid rgba(96,165,250,0.22)",
           }}
         >
           <div>
@@ -145,14 +122,14 @@ export function ExperienceBanner() {
             </p>
           </div>
           <button
-            className="flex-shrink-0 px-8 py-3.5 rounded-full transition-all duration-200 hover:scale-105 hover:brightness-110"
+            // The page's closing CTA had no handler at all; send it to the movie listing.
+            onClick={() => navigate("/movies")}
+            // .cp-btn supplies background, colour, radius, shadow and hover state.
+            className="cp-btn flex-shrink-0 px-8 py-3.5"
             style={{
-              background: "linear-gradient(135deg, #FFD700, #FFA500)",
-              color: "#050505",
               fontWeight: 800,
               fontSize: "0.9rem",
               whiteSpace: "nowrap",
-              boxShadow: "0 8px 32px rgba(255,215,0,0.3)",
             }}
           >
             Browse All Movies

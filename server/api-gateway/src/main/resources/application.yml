@@ -57,7 +57,7 @@ spring:
         - id: promotion-service
           uri: lb://promotion-service
           predicates:
-            - Path=/api/promotions/**
+            - Path=/api/promotions/**, /api/public/promotions
 
         - id: user-service
           uri: lb://user-service

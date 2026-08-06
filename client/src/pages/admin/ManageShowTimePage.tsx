@@ -13,13 +13,19 @@ import {
   type ShowtimeAssignPayload,
   type ShowtimeUpdatePayload,
   type ShowtimeStatus,
-  type SchedulePlanResponse,
 } from "../../api/showtimeApi";
 import {
   GenerationRunsView,
   ShowtimeCreateChoiceDialog,
 } from "./showtimeWorkspace/ShowtimeWorkspaceViews";
 import ShowtimeOperationsBoard from "./showtimeWorkspace/ShowtimeOperationsBoard";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../components/ui/select";
 
 type WorkspaceView = "operations" | "list" | "runs";
 
@@ -90,7 +96,6 @@ export default function ManageShowtimePage() {
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>("operations");
   const [createChoiceOpen, setCreateChoiceOpen] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
-  const [draftPlan, setDraftPlan] = useState<SchedulePlanResponse | null>(null);
 
   const loadShowtimes = useCallback(async (silent = false) => {
     if (!silent) {
@@ -110,25 +115,6 @@ export default function ManageShowtimePage() {
   }, []);
 
   useEffect(() => { void loadShowtimes(); }, [loadShowtimes]);
-  useEffect(() => {
-    let active = true;
-    const loadDraftPlan = async () => {
-      try {
-        const summaries = await showtimeApi.listSchedulePlans(undefined, 0, 20);
-        const candidate = summaries.result?.content?.find((plan) => plan.status !== "PUBLISHED");
-        if (!candidate) {
-          if (active) setDraftPlan(null);
-          return;
-        }
-        const detail = await showtimeApi.getSchedulePlan(candidate.schedulePlanId);
-        if (active) setDraftPlan(detail.result);
-      } catch {
-        if (active) setDraftPlan(null);
-      }
-    };
-    void loadDraftPlan();
-    return () => { active = false; };
-  }, []);
   useEffect(() => {
     const interval = window.setInterval(() => {
       if (document.visibilityState === "visible") void loadShowtimes(true);
@@ -233,9 +219,19 @@ export default function ManageShowtimePage() {
     try {
       setLoading(true);
       setError(null);
-      await showtimeApi.bulkUpdateShowtimeStatus({ showtimeIds, status, reason });
+      // The backend deliberately caps one bulk command at 100 ids. A filtered
+      // movie can span more than one page (and occasionally more than 100
+      // sessions), so submit deterministic chunks while keeping one UI action.
+      for (let index = 0; index < showtimeIds.length; index += 100) {
+        await showtimeApi.bulkUpdateShowtimeStatus({
+          showtimeIds: showtimeIds.slice(index, index + 100),
+          status,
+          reason,
+        });
+      }
       await loadShowtimes(true);
     } catch (err: unknown) {
+      await loadShowtimes(true);
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(message ?? "The selected showtimes could not be updated.");
       throw err;
@@ -255,13 +251,14 @@ export default function ManageShowtimePage() {
   };
 
   const handleResetFilters = () => {
+    setClusterFilter("");
     setStatusFilter("");
     setDateFilter("");
     setRoomFilter("");
   };
 
-  const hasActiveFilters = !!(statusFilter || roomFilter || (workspaceView === "list" && dateFilter));
-  const hasClusterFilter = clusterFilter !== "";
+  const hasAdvancedFilters = !!(roomFilter || (workspaceView === "list" && dateFilter));
+  const hasActiveFilters = !!(clusterFilter || statusFilter || hasAdvancedFilters);
 
   const openManualCreate = () => {
     setCreateChoiceOpen(false);
@@ -364,21 +361,6 @@ export default function ManageShowtimePage() {
 
       {workspaceView !== "runs" && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative">
-          <select
-            value={clusterFilter}
-            onChange={(e) => setClusterFilter(e.target.value ? Number(e.target.value) : "")}
-            className="h-10 rounded-xl border pl-3 pr-8 outline-none transition-all appearance-none cursor-pointer focus:ring-2 focus:ring-blue-500/20"
-            style={{ fontSize: "13px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: hasClusterFilter ? "#2563eb" : "var(--border-color)" }}
-            aria-label="Filter by cinema cluster"
-          >
-            <option value="">All clusters</option>
-            {clusterOptions.map((c) => (
-              <option key={c.clusterId} value={c.clusterId}>{c.clusterName}</option>
-            ))}
-          </select>
-        </div>
-
         <div className="relative min-w-60 flex-[1_1_320px]">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-sub)" }} />
           <input
@@ -391,24 +373,69 @@ export default function ManageShowtimePage() {
           />
         </div>
 
-        <button
-          onClick={() => setShowFilters((v) => !v)}
-          className="flex h-10 items-center gap-2 rounded-xl border px-3 transition-all hover:opacity-80"
-          style={{ fontSize: "13px", background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
+        <div
+          className="flex h-10 overflow-hidden rounded-xl border"
+          style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
         >
-          <SlidersHorizontal size={15} /> Filters
-          {hasActiveFilters && <span className="w-2 h-2 bg-purple-600 rounded-full ml-0.5" />}
-        </button>
+          <button
+            type="button"
+            onClick={() => setShowFilters((value) => !value)}
+            title="Date and room filters"
+            aria-label="Toggle date and room filters"
+            aria-expanded={showFilters}
+            className="relative flex w-10 items-center justify-center border-r transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+            style={{ color: showFilters || hasAdvancedFilters ? "#2563eb" : "var(--text-sub)", borderColor: "var(--border-color)" }}
+          >
+            <SlidersHorizontal size={15} />
+            {hasAdvancedFilters && <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-blue-600" />}
+          </button>
+          <Select
+            value={clusterFilter === "" ? "all" : String(clusterFilter)}
+            onValueChange={(value) => setClusterFilter(value === "all" ? "" : Number(value))}
+          >
+            <SelectTrigger
+              aria-label="Filter by cinema"
+              className="h-full min-w-[170px] rounded-none border-0 border-r bg-transparent px-3 text-[13px] font-medium focus-visible:ring-0 dark:bg-transparent dark:hover:bg-white/5"
+              style={{ height: "38px", color: "var(--text-main)", borderColor: "var(--border-color)" }}
+            >
+              <SelectValue placeholder="All cinemas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All cinemas</SelectItem>
+              {clusterOptions.map((cluster) => (
+                <SelectItem key={cluster.clusterId} value={String(cluster.clusterId)}>{cluster.clusterName}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter || "all"} onValueChange={(value) => setStatusFilter(value === "all" ? "" : value)}>
+            <SelectTrigger
+              aria-label="Filter by showtime status"
+              className="h-full min-w-[135px] rounded-none border-0 bg-transparent px-3 text-[13px] font-medium focus-visible:ring-0 dark:bg-transparent dark:hover:bg-white/5"
+              style={{ height: "38px", color: "var(--text-main)" }}
+            >
+              <SelectValue placeholder="All statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="SCHEDULED">Scheduled</SelectItem>
+              <SelectItem value="ON_SALE">On sale</SelectItem>
+              <SelectItem value="COMPLETED">Completed</SelectItem>
+              <SelectItem value="CANCELLED">Cancelled</SelectItem>
+              <SelectItem value="SUSPENDED">Suspended</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
         <button
           onClick={() => void loadShowtimes()}
           disabled={loading}
           title={lastSyncedAt ? `Last synced ${lastSyncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Refresh schedules"}
           aria-label="Refresh schedules"
-          className="flex h-10 w-10 items-center justify-center rounded-xl border transition-all hover:opacity-80 disabled:opacity-50"
+          className="flex h-10 items-center justify-center gap-2 rounded-xl border px-3 transition-all hover:opacity-80 disabled:opacity-50"
           style={{ background: "var(--bg-card)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
         >
           <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+          <span className="text-[13px] font-semibold">Refresh</span>
         </button>
 
         <button
@@ -433,24 +460,7 @@ export default function ManageShowtimePage() {
             )}
           </div>
 
-          <div className={`grid grid-cols-1 gap-4 ${workspaceView === "list" ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
-            <div>
-              <label className="block mb-1.5" style={{ fontSize: "12px", color: "var(--text-sub)" }}>Status</label>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border outline-none cursor-pointer"
-                style={{ fontSize: "13px", background: "var(--bg-main)", color: "var(--text-main)", borderColor: "var(--border-color)" }}
-              >
-                <option value="">All Statuses</option>
-                <option value="SCHEDULED">Scheduled</option>
-                <option value="ON_SALE">On Sale</option>
-                <option value="COMPLETED">Completed</option>
-                <option value="CANCELLED">Cancelled</option>
-                <option value="SUSPENDED">Suspended</option>
-              </select>
-            </div>
-
+          <div className={`grid grid-cols-1 gap-4 ${workspaceView === "list" ? "md:grid-cols-2" : "md:grid-cols-1"}`}>
             {workspaceView === "list" && <div>
               <label className="block mb-1.5" style={{ fontSize: "12px", color: "var(--text-sub)" }}>Date</label>
               <input
@@ -493,7 +503,7 @@ export default function ManageShowtimePage() {
           onMove={handleMoveShowtime}
           onStatusChange={handleStatusChange}
           onBulkStatusChange={handleBulkStatusChange}
-          draftPlan={draftPlan}
+          customerPreviewShowtimes={scopedShowtimes}
         />
       ) : workspaceView === "list" ? (
         <ShowtimeTable
@@ -505,6 +515,7 @@ export default function ManageShowtimePage() {
           dateFilter={dateFilter}
           roomFilter={roomFilter}
           onBulkStatusChange={handleBulkStatusChange}
+          scopedToOneCinema={Boolean(clusterFilter || scopeClusterId)}
         />
       ) : (
         <GenerationRunsView

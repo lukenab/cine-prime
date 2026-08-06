@@ -105,6 +105,7 @@ public class PromotionAdminService {
         promotion.setCode(normalize(request.code()));
         promotion.setName(request.name().trim());
         promotion.setDescription(request.description());
+        promotion.setBenefitScope(request.benefitScope());
         promotion.setValidFrom(request.validFrom());
         promotion.setValidUntil(request.validUntil());
         promotion.setGlobalUsageLimit(request.globalUsageLimit());
@@ -165,7 +166,7 @@ public class PromotionAdminService {
                 .findTop20ByPromotion_PromotionIdOrderByCreatedAtDesc(p.getPromotionId()).stream()
                 .map(log -> new PromotionResponse.AuditEntry(log.getAction(), log.getActorAccountId(), log.getCreatedAt()))
                 .toList();
-        return new PromotionResponse(p.getPromotionId(), p.getCode(), p.getName(), p.getDescription(), p.getStatus(), p.getValidFrom(), p.getValidUntil(), p.getGlobalUsageLimit(), p.getPerAccountUsageLimit(), p.getVersion(), p.getActiveReservationCount(), p.getCommittedUsageCount(), new PromotionResponse.PriceRule(r.getDiscountType(), r.getPercentage(), r.getFixedAmount(), r.getMaxDiscountAmount(), r.getMinimumOrderAmount(), r.getCurrency()), p.getTargets().stream().map(t -> new PromotionResponse.Target(t.getTargetType(), t.getMovieId(), t.getShowtimeId())).toList(), auditLog);
+        return new PromotionResponse(p.getPromotionId(), p.getCode(), p.getName(), p.getDescription(), p.getStatus(), p.getBenefitScope(), p.getValidFrom(), p.getValidUntil(), p.getGlobalUsageLimit(), p.getPerAccountUsageLimit(), p.getVersion(), p.getActiveReservationCount(), p.getCommittedUsageCount(), new PromotionResponse.PriceRule(r.getDiscountType(), r.getPercentage(), r.getFixedAmount(), r.getMaxDiscountAmount(), r.getMinimumOrderAmount(), r.getCurrency()), p.getTargets().stream().map(t -> new PromotionResponse.Target(t.getTargetType(), t.getMovieId(), t.getShowtimeId())).toList(), auditLog);
     }
 
     private String normalize(String code) {

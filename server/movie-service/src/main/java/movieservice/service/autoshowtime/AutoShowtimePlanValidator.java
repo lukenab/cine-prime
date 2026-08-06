@@ -77,14 +77,18 @@ public class AutoShowtimePlanValidator {
             }
         });
 
+        Set<String> operationalBlockers = new LinkedHashSet<>();
         selectedCandidates.forEach(candidate -> {
             SchedulingEligibilityResult operational = operationalConstraintService.evaluate(candidate);
             if (!operational.eligible()) {
-                blockers.add("OPERATIONAL_ELIGIBILITY: room=%d date=%s reasons=%s".formatted(
+                operationalBlockers.add("OPERATIONAL_ELIGIBILITY: room=%d date=%s reasons=%s".formatted(
                         candidate.getCinemaRoomId(), candidate.getShowDate(),
                         String.join(",", operational.reasonCodes())));
             }
         });
+        // A room may contain several generated sessions on the same business date. Surface one
+        // actionable blocker per room/date/reason instead of repeating an identical card per slot.
+        blockers.addAll(operationalBlockers);
 
         validateConcurrentRoomShare(policy, eligibleCandidates, selectedCandidates, blockers);
         validateSameMovieStagger(policy, selectedCandidates, blockers);

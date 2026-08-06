@@ -1,5 +1,5 @@
 import { Outlet, Link } from "react-router-dom";
-import { Film } from "lucide-react";
+import { OrbitaLogo } from "../components/shared/OrbitaLogo";
 
 // Lớp film grain dựng bằng SVG noise — không phụ thuộc ảnh ngoài
 const FILM_GRAIN =
@@ -9,6 +9,7 @@ export function ClickableLogo({ isMobile = false }: { isMobile?: boolean }) {
   return (
     <Link
       to="/"
+      className="group"
       style={{
         textDecoration: "none",
         display: "flex",
@@ -17,22 +18,14 @@ export function ClickableLogo({ isMobile = false }: { isMobile?: boolean }) {
         cursor: "pointer",
       }}
     >
-      <div
-        style={{
-          width: isMobile ? "32px" : "36px",
-          height: isMobile ? "32px" : "36px",
-          background: "#3b82f6",
-          borderRadius: "8px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          transition: "transform 0.2s ease",
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
-        onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-      >
-        <Film size={isMobile ? 16 : 20} color="#ffffff" strokeWidth={2.5} />
-      </div>
+      {/* The solid blue tile is gone: the planet mark carries its own silhouette
+          and halo, so boxing it in would only fight that shape. Size is tuned
+          against the wordmark's cap height (20px desktop / 18px mobile), not
+          against the 36px box the old lucide glyph used to sit in. */}
+      <OrbitaLogo
+        size={isMobile ? 20 : 22}
+        className="transition-transform duration-200 group-hover:scale-105"
+      />
       <span
         style={{
           color: "#ffffff",
@@ -42,7 +35,7 @@ export function ClickableLogo({ isMobile = false }: { isMobile?: boolean }) {
           fontFamily: "Inter, sans-serif",
         }}
       >
-        CINE<span style={{ color: "#3b82f6" }}>PRIME</span>
+        CINE<span className="cp-grad-text">PRIME</span>
       </span>
     </Link>
   );

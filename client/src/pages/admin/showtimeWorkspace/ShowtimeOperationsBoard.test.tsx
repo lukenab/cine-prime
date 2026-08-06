@@ -54,21 +54,38 @@ describe("ShowtimeOperationsBoard", () => {
     renderBoard();
 
     expect(screen.getByText("Daily schedule")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /sun, jul 26/i })).toBeInTheDocument();
+    expect(screen.getByText(/Sun, Jul 26/i)).toBeInTheDocument();
     expect(screen.getByText("Room 1")).toBeInTheDocument();
-    expect(screen.getByText("Customer Visible Movie")).toBeInTheDocument();
-    expect(screen.getByText("Internal Draft Movie")).toBeInTheDocument();
+    expect(screen.getAllByText("Customer Visible Movie").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Internal Draft Movie").length).toBeGreaterThan(0);
     expect(screen.getByText("On sale")).toBeInTheDocument();
     expect(screen.getByText("Scheduled")).toBeInTheDocument();
+    expect(screen.queryByText(/No room overlaps/i)).not.toBeInTheDocument();
   });
 
-  it("customer preview exposes only ON_SALE sessions", () => {
+  it("customer view exposes only ON_SALE sessions", () => {
     renderBoard();
-    fireEvent.click(screen.getByRole("button", { name: /customer preview/i }));
+    fireEvent.click(screen.getByRole("button", { name: /customer view/i }));
 
-    const dialog = screen.getByRole("dialog", { name: /customer schedule preview/i });
+    const dialog = screen.getByRole("dialog", { name: /customer schedule view/i });
     expect(within(dialog).getByText("Customer Visible Movie")).toBeInTheDocument();
     expect(within(dialog).queryByText("Internal Draft Movie")).not.toBeInTheDocument();
     expect(within(dialog).getByText(/1 internal showtime is hidden/i)).toBeInTheDocument();
+  });
+
+  it("keeps customer view independent from operational table filters", () => {
+    render(
+      <ShowtimeOperationsBoard
+        showtimes={[showtimes[1]]}
+        customerPreviewShowtimes={showtimes}
+        onEdit={vi.fn()}
+        onMove={vi.fn().mockResolvedValue(undefined)}
+        onStatusChange={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /customer view/i }));
+    const dialog = screen.getByRole("dialog", { name: /customer schedule view/i });
+    expect(within(dialog).getByText("Customer Visible Movie")).toBeInTheDocument();
   });
 });

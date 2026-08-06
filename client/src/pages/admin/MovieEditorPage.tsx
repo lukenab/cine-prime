@@ -368,6 +368,9 @@ export default function MovieEditorPage() {
   const personRef = useRef<HTMLDivElement>(null);
 
   const [langTab, setLangTab] = useState<"vi" | "en">("vi");
+  const hasVietnameseDisplayTitle = form.originalLanguage.toLowerCase() === "vi"
+    ? Boolean(form.originalTitle.trim())
+    : Boolean(form.vi_title.trim());
   const dragIdx = useRef<number>(-1);
 
   const [movieImages, setMovieImages] = useState<MovieImageResponse[]>([]);
@@ -551,6 +554,13 @@ export default function MovieEditorPage() {
       return {
         ok: false,
         msg: `Resolve ${unresolvedTmdbGenres.length} unmapped TMDB genre(s) before submitting for review.`,
+      };
+    }
+    if (!hasVietnameseDisplayTitle) {
+      setLangTab("vi");
+      return {
+        ok: false,
+        msg: "Enter a Vietnamese movie title before submitting for review.",
       };
     }
     return { ok: true };
@@ -1048,7 +1058,7 @@ export default function MovieEditorPage() {
       description,
       complete:
         id === "details"
-          ? Boolean(form.originalTitle.trim() && form.originalLanguage && form.durationMinutes > 0 && form.genreIds.length)
+          ? Boolean(form.originalTitle.trim() && form.originalLanguage && form.durationMinutes > 0 && form.genreIds.length && hasVietnameseDisplayTitle)
           : id === "media-credits"
             ? Boolean(form.posterUrl)
             : id === "screening-versions"
@@ -1056,7 +1066,7 @@ export default function MovieEditorPage() {
               : !hasBlockingTmdbIssues && Object.keys(validationErrors).length === 0 && backendViolations.length === 0,
       hasError:
         id === "details"
-          ? Boolean(submitted && (!form.originalTitle.trim() || !form.originalLanguage || form.durationMinutes <= 0 || form.genreIds.length === 0))
+          ? Boolean(submitted && (!form.originalTitle.trim() || !form.originalLanguage || form.durationMinutes <= 0 || form.genreIds.length === 0 || !hasVietnameseDisplayTitle))
           : id === "media-credits"
             ? Boolean(submitted && !form.posterUrl)
             : id === "screening-versions"
@@ -1075,7 +1085,7 @@ export default function MovieEditorPage() {
             ? "Checking saved screening versions..."
             : undefined,
     })),
-  [form.originalTitle, form.originalLanguage, form.durationMinutes, form.genreIds.length,
+  [form.originalTitle, form.originalLanguage, form.durationMinutes, form.genreIds.length, hasVietnameseDisplayTitle,
     form.posterUrl, hasBlockingTmdbIssues, submitted, validationErrors, backendViolations,
     hasReviewReadyScreeningVersion, screeningVersionsLoadedForActiveMovie]);
 
@@ -1416,7 +1426,7 @@ export default function MovieEditorPage() {
               movieId={activeMovieId}
               originalLanguage={form.originalLanguage}
               formats={formats}
-              canManage={isAdmin}
+              canManage={can.edit}
               movieEditable={editableDraft}
               hasUnsavedMovieChanges={isDirty}
               onPrepareMovieDraft={prepareDraftForScreeningVersions}
@@ -1452,8 +1462,18 @@ export default function MovieEditorPage() {
             {langTab === "vi" && (
               <div className="space-y-3">
                 <div>
-                  <label style={FL}>Movie Title (Vietnamese)</label>
-                  <input type="text" placeholder="e.g. Ký Sinh Trùng" value={form.vi_title} onChange={(e) => set("vi_title", e.target.value)} className={IC} style={IS} />
+                  <label style={FL}>Movie Title (Vietnamese) <span className="text-rose-500">*</span></label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Ký Sinh Trùng"
+                    value={form.vi_title}
+                    onChange={(e) => set("vi_title", e.target.value)}
+                    className={IC}
+                    style={{ ...IS, border: submitted && !hasVietnameseDisplayTitle ? "1px solid #f87171" : IS.border }}
+                  />
+                  <p className="mt-1.5 text-[11px]" style={{ color: "var(--text-sub)" }}>
+                    Customer-facing title used on the home page, booking flow and showtime workspace.
+                  </p>
                 </div>
                 <div>
                   <label style={FL}>Tagline (Vietnamese) <span style={{ fontWeight: 400, color: "var(--text-sub)" }}>— short catchphrase, not a synopsis</span></label>

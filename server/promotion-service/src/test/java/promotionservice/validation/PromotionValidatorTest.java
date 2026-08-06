@@ -7,6 +7,7 @@ import promotionservice.dto.request.PromotionTargetRequest;
 import promotionservice.dto.request.PromotionUpsertRequest;
 import promotionservice.enums.DiscountType;
 import promotionservice.enums.PromotionTargetType;
+import promotionservice.enums.PromotionBenefitScope;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -26,6 +27,7 @@ class PromotionValidatorTest {
     @Test
     void rejectsInvalidValidityWindow() {
         PromotionUpsertRequest request = new PromotionUpsertRequest("SUMMER", "Summer", null,
+                PromotionBenefitScope.TICKETS,
                 OffsetDateTime.parse("2026-09-01T00:00:00Z"), OffsetDateTime.parse("2026-08-01T00:00:00Z"),
                 null, null, validRule(), List.of());
         assertThrows(AppException.class, () -> validator.validateEditableFields(request));
@@ -36,6 +38,7 @@ class PromotionValidatorTest {
         PromotionPriceRuleRequest rule = new PromotionPriceRuleRequest(DiscountType.PERCENTAGE,
                 new BigDecimal("100.01"), null, null, BigDecimal.ZERO, "VND");
         PromotionUpsertRequest request = new PromotionUpsertRequest("SUMMER", "Summer", null,
+                PromotionBenefitScope.TICKETS,
                 null, null, null, null, rule, List.of());
         assertThrows(AppException.class, () -> validator.validateEditableFields(request));
     }
@@ -43,13 +46,14 @@ class PromotionValidatorTest {
     @Test
     void rejectsTargetContainingMovieAndShowtime() {
         PromotionUpsertRequest request = new PromotionUpsertRequest("SUMMER", "Summer", null,
+                PromotionBenefitScope.TICKETS,
                 null, null, null, null, validRule(),
                 List.of(new PromotionTargetRequest(PromotionTargetType.MOVIE, 12L, 55L)));
         assertThrows(AppException.class, () -> validator.validateEditableFields(request));
     }
 
     private PromotionUpsertRequest validRequest() {
-        return new PromotionUpsertRequest("SUMMER", "Summer", null, null, null, 10, 1, validRule(),
+        return new PromotionUpsertRequest("SUMMER", "Summer", null, PromotionBenefitScope.TICKETS, null, null, 10, 1, validRule(),
                 List.of(new PromotionTargetRequest(PromotionTargetType.MOVIE, 12L, null)));
     }
 

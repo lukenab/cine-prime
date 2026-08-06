@@ -26,23 +26,14 @@ export function MovieCard({ movie, onTrailer }: MovieCardProps) {
   const handleBook = () => navigate(`/showtime/${movie.id}`);
 
   return (
+    // The scale/shadow/z-index hover used to be written imperatively onto element.style from JS
+    // mouse-hover handlers. Inline styles outrank any stylesheet rule, so nothing coming from a
+    // class could ever override them — the hover is now pure CSS via Tailwind utilities.
+    // `group` must stay: the CTA overlay below relies on `group-hover:opacity-100`.
     <div
       onClick={handleBook}
-      className="relative flex-shrink-0 rounded-2xl overflow-hidden cursor-pointer group"
-      style={{
-        width: "240px",
-        transition: "transform 0.35s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.35s ease",
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLDivElement).style.transform = "scale(1.05)";
-        (e.currentTarget as HTMLDivElement).style.boxShadow = "0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(59,130,246,0.35)";
-        (e.currentTarget as HTMLDivElement).style.zIndex = "10";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLDivElement).style.transform = "scale(1)";
-        (e.currentTarget as HTMLDivElement).style.boxShadow = "none";
-        (e.currentTarget as HTMLDivElement).style.zIndex = "1";
-      }}
+      className="group relative flex-shrink-0 rounded-2xl overflow-hidden cursor-pointer transition-transform duration-300 hover:scale-105 hover:z-10 hover:shadow-[0_20px_60px_rgba(0,0,0,0.7)]"
+      style={{ width: "240px" }}
     >
       {/* Poster */}
       <div className="relative" style={{ height: "360px" }}>
@@ -66,7 +57,7 @@ export function MovieCard({ movie, onTrailer }: MovieCardProps) {
           <div
             className="absolute top-3 left-3 px-2 py-0.5 rounded-md"
             style={{
-              backgroundColor: movie.badgeColor ?? "#FFD700",
+              backgroundColor: movie.badgeColor ?? "#38BDF8",
               color: "#050505",
               fontSize: "0.65rem",
               fontWeight: 800,
@@ -84,11 +75,11 @@ export function MovieCard({ movie, onTrailer }: MovieCardProps) {
         >
           {movie.releaseLabel ? (
             <>
-              <Calendar size={10} style={{ color: "#FFD700" }} />
-              <span style={{ color: "#FFD700", fontSize: "0.65rem", fontWeight: 700 }}>{movie.releaseLabel}</span>
+              <Calendar size={10} style={{ color: "#7DD3FC" }} />
+              <span style={{ color: "#7DD3FC", fontSize: "0.65rem", fontWeight: 700 }}>{movie.releaseLabel}</span>
             </>
           ) : (
-            <span style={{ color: "#FFD700", fontSize: "0.7rem", fontWeight: 700 }}>{movie.rating}</span>
+            <span style={{ color: "#7DD3FC", fontSize: "0.7rem", fontWeight: 700 }}>{movie.rating}</span>
           )}
         </div>}
 
@@ -124,8 +115,9 @@ export function MovieCard({ movie, onTrailer }: MovieCardProps) {
             e.stopPropagation();
             handleBook();
           }}
-          className="flex w-full max-w-[9rem] items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 px-4 py-2.5 text-white shadow-[0_8px_22px_rgba(37,99,235,0.3)] transition-all duration-200 hover:-translate-y-0.5 hover:from-blue-500 hover:to-blue-400 hover:shadow-[0_10px_26px_rgba(37,99,235,0.4)]"
+          className="flex w-full max-w-[9rem] items-center justify-center gap-1.5 rounded-lg px-4 py-2.5 text-white shadow-[0_8px_22px_rgba(37,99,235,0.3)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_26px_rgba(37,99,235,0.4)]"
           style={{
+            background: "linear-gradient(135deg, #2563EB, #38BDF8)",
             fontWeight: 800,
             fontSize: "0.75rem",
           }}
@@ -139,7 +131,8 @@ export function MovieCard({ movie, onTrailer }: MovieCardProps) {
             e.stopPropagation();
             onTrailer?.();
           }}
-          className="flex w-full max-w-[9rem] items-center justify-center gap-1.5 rounded-lg border border-blue-400/45 bg-slate-950/80 px-4 py-2.5 text-xs font-bold text-blue-100 backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-300/80 hover:bg-blue-950/80 hover:text-white"
+          className="flex w-full max-w-[9rem] items-center justify-center gap-1.5 rounded-lg border bg-slate-950/80 px-4 py-2.5 text-xs font-bold text-blue-100 backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:bg-blue-950/80 hover:text-white"
+          style={{ borderColor: "rgba(125,211,252,0.4)" }}
         >
           <Play size={12} fill="currentColor" />
           Watch trailer

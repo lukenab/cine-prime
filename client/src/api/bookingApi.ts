@@ -47,7 +47,6 @@ export interface ShowtimeSeatMap {
 export interface BookingPayload {
   showtimeId: number;
   seatIds: number[];
-  promotionCode?: string;
   /** Stable for retries of the same seat selection. */
   idempotencyKey: string;
 }
@@ -61,7 +60,10 @@ export interface BookingConfirmation {
   total?: number;
   currency?: string;
   promotionCode?: string;
+  promotionBenefitScope?: "TICKETS" | "CONCESSIONS" | "ORDER";
   promotionDiscountAmount?: number;
+  ticketPromotionDiscount?: number;
+  concessionPromotionDiscount?: number;
   /** Set only when a promo code was entered but couldn't be reserved - the booking still succeeded without the discount. */
   promotionRejectionReason?: string;
 }
@@ -245,6 +247,26 @@ export const bookingApi = {
       `/api/bookings/${encodeURIComponent(bookingId)}/concessions`,
       { items },
       { headers: { "Idempotency-Key": idempotencyKey } },
+    );
+    return res.result || res;
+  },
+
+  applyPromotion: async (
+    bookingId: string,
+    promotionCode: string,
+    idempotencyKey: string,
+  ): Promise<BookingDetail> => {
+    const res: any = await axiosClient.put(
+      `/api/bookings/${encodeURIComponent(bookingId)}/promotion`,
+      { promotionCode },
+      { headers: { "Idempotency-Key": idempotencyKey } },
+    );
+    return res.result || res;
+  },
+
+  removePromotion: async (bookingId: string): Promise<BookingDetail> => {
+    const res: any = await axiosClient.delete(
+      `/api/bookings/${encodeURIComponent(bookingId)}/promotion`,
     );
     return res.result || res;
   },

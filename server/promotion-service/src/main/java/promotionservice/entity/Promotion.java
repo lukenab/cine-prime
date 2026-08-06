@@ -19,6 +19,7 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import promotionservice.enums.PromotionStatus;
+import promotionservice.enums.PromotionBenefitScope;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -43,6 +44,10 @@ public class Promotion {
     private String name;
 
     private String description;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "benefit_scope", nullable = false, length = 20)
+    private PromotionBenefitScope benefitScope = PromotionBenefitScope.TICKETS;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
