@@ -21,6 +21,9 @@ public enum PaymentErrorCode implements BaseErrorCode {
     INVALID_INTERNAL_CREDENTIAL(5112, "Internal service credential is invalid.", HttpStatus.FORBIDDEN),
     REFUND_NOT_ALLOWED(5113, "This payment is not eligible for refund.", HttpStatus.CONFLICT),
     REFUND_AMOUNT_MISMATCH(5114, "Refund amount exceeds the paid amount.", HttpStatus.CONFLICT),
+    REFUND_NOT_FOUND(5115, "Refund record was not found.", HttpStatus.NOT_FOUND),
+    RECONCILIATION_CASE_NOT_FOUND(5116, "Reconciliation case was not found.", HttpStatus.NOT_FOUND),
+    RECONCILIATION_CASE_INVALID_STATE(5117, "This reconciliation case cannot be changed in its current state.", HttpStatus.CONFLICT),
     BOOKING_SERVICE_UNAVAILABLE(5198, "Booking service is temporarily unavailable.", HttpStatus.SERVICE_UNAVAILABLE),
     OUTCOME_DELIVERY_FAILED(5199, "Payment was recorded but booking confirmation is pending reconciliation.", HttpStatus.ACCEPTED);
 

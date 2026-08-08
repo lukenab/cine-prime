@@ -2,6 +2,7 @@ package bookingservice.service;
 
 import bookingservice.entity.Booking;
 import bookingservice.entity.OutboxEvent;
+import bookingservice.dto.event.BookingOutcomeEventPayload;
 import bookingservice.repository.OutboxEventRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,6 +12,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.math.BigDecimal;
+
+import static java.util.Objects.requireNonNullElse;
 
 import static bookingservice.exception.BookingErrorCode.SERVICE_UNAVAILABLE;
 
@@ -21,6 +25,15 @@ public class BookingEventService {
     private final ObjectMapper objectMapper;
 
     public void append(Booking booking, String eventType, String correlationId) {
+        boolean analyticsOutcome = "BOOKING_CONFIRMED".equals(eventType)
+                || "BOOKING_REFUNDED".equals(eventType);
+        Object payload = analyticsOutcome
+                ? outcomePayload(booking, "BOOKING_REFUNDED".equals(eventType))
+                : legacyPayload(booking);
+        appendOutbox(booking, eventType, correlationId, analyticsOutcome ? "2" : "1", payload);
+    }
+
+    private Map<String, Object> legacyPayload(Booking booking) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("bookingId", booking.getBookingId());
         payload.put("bookingCode", booking.getBookingCode());
@@ -33,6 +46,42 @@ public class BookingEventService {
         payload.put("total", booking.getFinalAmount());
         payload.put("currency", booking.getCurrency());
 
+        return payload;
+    }
+
+    private BookingOutcomeEventPayload outcomePayload(Booking booking, boolean refunded) {
+        BigDecimal ticketAmount = booking.getBookingDetails().stream()
+                .map(item -> requireNonNullElse(item.getFinalPrice(), BigDecimal.ZERO))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal concessionAmount = booking.getConcessionItems().stream()
+                .map(item -> requireNonNullElse(item.getFinalAmount(), BigDecimal.ZERO))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal discountAmount = requireNonNullElse(booking.getDiscountAmount(), BigDecimal.ZERO)
+                .add(requireNonNullElse(booking.getPointsDiscount(), BigDecimal.ZERO));
+
+        return BookingOutcomeEventPayload.builder()
+                .accountId(booking.getAccountId())
+                .bookingId(booking.getBookingId())
+                .clusterId(booking.getClusterId())
+                .showtimeId(booking.getShowtimeId())
+                .ticketCount(booking.getBookingDetails().size())
+                .ticketAmount(ticketAmount)
+                .concessionAmount(concessionAmount)
+                .discountAmount(discountAmount)
+                .finalAmount(requireNonNullElse(booking.getFinalAmount(), BigDecimal.ZERO))
+                .refundAmount(refunded
+                        ? requireNonNullElse(booking.getFinalAmount(), BigDecimal.ZERO)
+                        : BigDecimal.ZERO)
+                .currency(requireNonNullElse(booking.getCurrency(), "VND"))
+                .build();
+    }
+
+    private void appendOutbox(
+            Booking booking,
+            String eventType,
+            String correlationId,
+            String schemaVersion,
+            Object payload) {
         try {
             outboxEventRepository.save(OutboxEvent.builder()
                     .booking(booking)
@@ -40,7 +89,7 @@ public class BookingEventService {
                     .aggregateId(booking.getBookingId())
                     .aggregateVersion(booking.getVersion() == null ? 0L : booking.getVersion())
                     .eventType(eventType)
-                    .schemaVersion("1")
+                    .schemaVersion(schemaVersion)
                     .correlationId(correlationId)
                     .partitionKey(booking.getBookingId())
                     .payload(objectMapper.writeValueAsString(payload))

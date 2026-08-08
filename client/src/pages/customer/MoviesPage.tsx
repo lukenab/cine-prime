@@ -57,8 +57,8 @@ function PosterCard({
         >
           {isComingSoon ? (
             <>
-              <Calendar size={10} style={{ color: "#FFD700" }} />
-              <span style={{ color: "#FFD700", fontSize: "0.65rem", fontWeight: 700 }}>{formatReleaseDate(movie.releaseDate)}</span>
+              <Calendar size={10} style={{ color: "#38bdf8" }} />
+              <span style={{ color: "#38bdf8", fontSize: "0.65rem", fontWeight: 700 }}>{formatReleaseDate(movie.releaseDate)}</span>
             </>
           ) : (
             <span className="text-[10px] font-bold uppercase text-white/55">Now showing</span>
@@ -213,8 +213,8 @@ export default function MoviesPage() {
       <div className="border-b border-white/10 px-6 pb-8 pt-10">
         <div className="mx-auto max-w-7xl">
           <div className="mb-1 flex items-center gap-2.5">
-            <Film size={20} style={{ color: "#FFD700" }} />
-            <span style={{ color: "#FFD700", fontSize: "0.7rem", letterSpacing: "0.25em", fontWeight: 700, textTransform: "uppercase" }}>
+            <Film size={20} style={{ color: "#38bdf8" }} />
+            <span style={{ color: "#38bdf8", fontSize: "0.7rem", letterSpacing: "0.25em", fontWeight: 700, textTransform: "uppercase" }}>
               Full Catalogue
             </span>
           </div>
@@ -224,9 +224,9 @@ export default function MoviesPage() {
           {/* Search */}
           <div
             className="mt-6 flex items-center gap-3 rounded-2xl px-4"
-            style={{ border: "1px solid rgba(255,215,0,0.2)", backgroundColor: "rgba(255,255,255,0.04)" }}
+            style={{ border: "1px solid rgba(56,189,248,0.35)", backgroundColor: "rgba(255,255,255,0.04)" }}
           >
-            <Search size={16} style={{ color: "rgba(255,215,0,0.6)" }} />
+            <Search size={16} style={{ color: "rgba(56,189,248,0.8)" }} />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -244,7 +244,7 @@ export default function MoviesPage() {
                 className="whitespace-nowrap rounded-full px-4 py-1.5 text-[13px] transition-all duration-200 hover:scale-105 cursor-pointer"
                 style={
                   activeGenre === genre
-                    ? { background: "linear-gradient(135deg, #FFD700, #FFA500)", color: "#050505", fontWeight: 700 }
+                    ? { background: "linear-gradient(135deg, #2563eb, #38bdf8)", color: "white", fontWeight: 700 }
                     : { border: "1px solid rgba(255,255,255,0.12)", backgroundColor: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.55)" }
                 }
               >

@@ -2,8 +2,8 @@ import type { PublicPromotionOffer } from "../api/promotionApi";
 
 const ACCENTS = {
   TICKETS: "#38bdf8",
-  CONCESSIONS: "#a78bfa",
-  ORDER: "#34d399",
+  CONCESSIONS: "#60a5fa",
+  ORDER: "#2563eb",
 } as const;
 
 function formatAmount(amount: number, currency: string) {

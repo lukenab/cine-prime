@@ -33,6 +33,7 @@ const adminNavItems: NavItem[] = [
   },
 
   { icon: Gift, label: "Promotions", id: "promotions", path: "/admin/promotions", group: "business-operations", roles: ["ROLE_ADMIN"] },
+  { icon: CircleDollarSign, label: "Refunds & Reconciliation", id: "refunds-reconciliation", path: "/admin/refunds-reconciliation", group: "business-operations", roles: ["ROLE_ADMIN"] },
 
   { icon: UserCog, label: "People & Access", id: "people", path: "/admin/people", group: "administration", roles: ["ROLE_ADMIN"] },
   { icon: BarChart2, label: "Reports", id: "reports", path: "/admin/reports", group: "administration", roles: ["ROLE_ADMIN"] },

@@ -231,19 +231,123 @@ public class PaymentApplicationService {
 
     @Transactional(readOnly = true)
     public Page<ReconciliationCaseResponse> listOpenReconciliation(Pageable pageable) {
-        return reconciliationRepository
-                .findByStatusOrderByCreatedAtDesc(ReconciliationStatus.OPEN, pageable)
-                .map(item -> ReconciliationCaseResponse.builder()
-                        .caseId(item.getCaseId())
-                        .paymentId(item.getPaymentId())
-                        .bookingId(item.getBookingId())
-                        .caseType(item.getCaseType())
-                        .severity(item.getSeverity())
-                        .status(item.getStatus().name())
-                        .details(item.getDetails())
-                        .attemptCount(item.getAttemptCount())
-                        .createdAt(item.getCreatedAt())
-                        .build());
+        return listAdminReconciliation("OPEN", null, null, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<PaymentRefundResponse> listAdminRefunds(
+            String status, String bookingId, Pageable pageable) {
+        PaymentRefundStatus parsedStatus = parseEnum(status, PaymentRefundStatus.class);
+        String normalizedBookingId = normalizeFilter(bookingId);
+        return refundRepository.search(parsedStatus, normalizedBookingId, pageable)
+                .map(item -> refundResponse(item, false));
+    }
+
+    @Transactional(readOnly = true)
+    public PaymentRefundResponse getAdminRefund(String refundId) {
+        PaymentRefund refund = refundRepository.findById(refundId)
+                .orElseThrow(() -> new AppException(REFUND_NOT_FOUND));
+        return refundResponse(refund, false);
+    }
+
+    @Transactional
+    public PaymentRefundResponse retryRefund(String refundId) {
+        PaymentRefund refund = refundRepository.findById(refundId)
+                .orElseThrow(() -> new AppException(REFUND_NOT_FOUND));
+        if (refund.getStatus() == PaymentRefundStatus.SUCCEEDED) {
+            return refundResponse(refund, true);
+        }
+
+        PaymentAttempt attempt = refund.getPayment();
+        if (paymentProperties.refund().sandboxAutoApprove()) {
+            refund.setStatus(PaymentRefundStatus.SUCCEEDED);
+            refund.setProviderRefundReference(
+                    refund.getProviderRefundReference() == null
+                            ? "SANDBOX-REF-" + UUID.randomUUID()
+                            : refund.getProviderRefundReference());
+            refund.setCompletedAt(OffsetDateTime.now());
+            attempt.setStatus(PaymentStatus.REFUNDED);
+        } else {
+            applyProviderRefundResult(
+                    attempt, refund, providerRefundGateway.submit(attempt, refund));
+        }
+        refundRepository.save(refund);
+        if (refund.getStatus() == PaymentRefundStatus.SUCCEEDED) {
+            resolveOpenCasesForPayment(attempt.getPaymentId(),
+                    "Refund provider confirmation received.");
+        }
+        return refundResponse(refund, false);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ReconciliationCaseResponse> listAdminReconciliation(
+            String status, String severity, String bookingId, Pageable pageable) {
+        ReconciliationStatus parsedStatus = parseEnum(status, ReconciliationStatus.class);
+        String normalizedSeverity = normalizeFilter(severity);
+        if (normalizedSeverity != null) {
+            normalizedSeverity = normalizedSeverity.toUpperCase(Locale.ROOT);
+        }
+        return reconciliationRepository.search(
+                        parsedStatus, normalizedSeverity, normalizeFilter(bookingId), pageable)
+                .map(this::reconciliationResponse);
+    }
+
+    @Transactional
+    public ReconciliationCaseResponse syncReconciliationCase(Long caseId) {
+        PaymentReconciliationCase item = reconciliationRepository.findById(caseId)
+                .orElseThrow(() -> new AppException(RECONCILIATION_CASE_NOT_FOUND));
+        if (item.getStatus() == ReconciliationStatus.RESOLVED) {
+            throw new AppException(RECONCILIATION_CASE_INVALID_STATE);
+        }
+
+        item.setStatus(ReconciliationStatus.RETRYING);
+        item.setAttemptCount(item.getAttemptCount() + 1);
+        item.setNextAttemptAt(OffsetDateTime.now().plusMinutes(5));
+        PaymentRefund latestRefund = refundRepository
+                .findFirstByPayment_PaymentIdOrderByCreatedAtDesc(item.getPaymentId())
+                .orElse(null);
+        if (latestRefund != null && latestRefund.getStatus() == PaymentRefundStatus.SUCCEEDED) {
+            item.setStatus(ReconciliationStatus.RESOLVED);
+            item.setResolvedAt(OffsetDateTime.now());
+            item.setResolvedBy(adminActor());
+            item.setResolutionNote("Ledger already contains a successful refund.");
+            item.setNextAttemptAt(null);
+        } else {
+            item.setStatus(ReconciliationStatus.OPEN);
+            item.setDetails(item.getDetails() + " Manual sync requested by " + adminActor() + ".");
+        }
+        return reconciliationResponse(reconciliationRepository.save(item));
+    }
+
+    @Transactional
+    public ReconciliationCaseResponse resolveReconciliationCase(
+            Long caseId, String resolutionNote) {
+        PaymentReconciliationCase item = reconciliationRepository.findById(caseId)
+                .orElseThrow(() -> new AppException(RECONCILIATION_CASE_NOT_FOUND));
+        if (item.getStatus() == ReconciliationStatus.RESOLVED) {
+            return reconciliationResponse(item);
+        }
+        item.setStatus(ReconciliationStatus.RESOLVED);
+        item.setResolvedAt(OffsetDateTime.now());
+        item.setResolvedBy(adminActor());
+        item.setResolutionNote(normalizeNote(resolutionNote));
+        item.setNextAttemptAt(null);
+        return reconciliationResponse(reconciliationRepository.save(item));
+    }
+
+    @Transactional
+    public ReconciliationCaseResponse escalateReconciliationCase(
+            Long caseId, String resolutionNote) {
+        PaymentReconciliationCase item = reconciliationRepository.findById(caseId)
+                .orElseThrow(() -> new AppException(RECONCILIATION_CASE_NOT_FOUND));
+        if (item.getStatus() == ReconciliationStatus.RESOLVED) {
+            throw new AppException(RECONCILIATION_CASE_INVALID_STATE);
+        }
+        item.setStatus(ReconciliationStatus.MANUAL_REVIEW);
+        item.setResolvedBy(adminActor());
+        item.setResolutionNote(normalizeNote(resolutionNote));
+        item.setNextAttemptAt(null);
+        return reconciliationResponse(reconciliationRepository.save(item));
     }
 
     /**
@@ -540,14 +644,82 @@ public class PaymentApplicationService {
             boolean replayed) {
         return PaymentRefundResponse.builder()
                 .refundId(refund.getRefundId())
+                .paymentId(refund.getPayment() == null ? null : refund.getPayment().getPaymentId())
                 .bookingId(refund.getBookingId())
+                .paymentReference(refund.getPaymentReference())
                 .providerRefundReference(refund.getProviderRefundReference())
                 .status(refund.getStatus().name())
                 .amount(refund.getAmount())
                 .currency(refund.getCurrency())
+                .reasonCode(refund.getReasonCode())
+                .reason(refund.getReason())
+                .failureCode(refund.getFailureCode())
+                .failureMessage(refund.getFailureMessage())
+                .createdAt(refund.getCreatedAt())
+                .updatedAt(refund.getUpdatedAt())
                 .completedAt(refund.getCompletedAt())
                 .replayed(replayed)
                 .build();
+    }
+
+    private ReconciliationCaseResponse reconciliationResponse(
+            PaymentReconciliationCase item) {
+        return ReconciliationCaseResponse.builder()
+                .caseId(item.getCaseId())
+                .paymentId(item.getPaymentId())
+                .bookingId(item.getBookingId())
+                .caseType(item.getCaseType())
+                .severity(item.getSeverity())
+                .status(item.getStatus().name())
+                .details(item.getDetails())
+                .attemptCount(item.getAttemptCount())
+                .nextAttemptAt(item.getNextAttemptAt())
+                .createdAt(item.getCreatedAt())
+                .updatedAt(item.getUpdatedAt())
+                .resolvedAt(item.getResolvedAt())
+                .resolvedBy(item.getResolvedBy())
+                .resolutionNote(item.getResolutionNote())
+                .build();
+    }
+
+    private void resolveOpenCasesForPayment(String paymentId, String note) {
+        for (PaymentReconciliationCase item : reconciliationRepository
+                .findByPaymentIdAndStatus(paymentId, ReconciliationStatus.OPEN)) {
+            item.setStatus(ReconciliationStatus.RESOLVED);
+            item.setResolvedAt(OffsetDateTime.now());
+            item.setResolvedBy(adminActor());
+            item.setResolutionNote(note);
+            item.setNextAttemptAt(null);
+            reconciliationRepository.save(item);
+        }
+    }
+
+    private String adminActor() {
+        String accountId = JwtSecurityUtils.getCurrentAccountId();
+        return accountId == null || accountId.isBlank() ? "ADMIN" : accountId;
+    }
+
+    private String normalizeFilter(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String normalizeNote(String note) {
+        if (note == null || note.isBlank()) {
+            return "Resolved by administrator.";
+        }
+        return note.trim().length() > 1000 ? note.trim().substring(0, 1000) : note.trim();
+    }
+
+    private <E extends Enum<E>> E parseEnum(String raw, Class<E> type) {
+        String value = normalizeFilter(raw);
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Enum.valueOf(type, value.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new AppException(INVALID_REQUEST);
+        }
     }
 
     private boolean paymentReferenceMatches(

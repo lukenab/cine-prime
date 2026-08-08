@@ -53,64 +53,6 @@
 .booking-admin__stat--amber strong { color: #f59e0b; }
 .booking-admin__stat--green strong { color: #10b981; }
 
-.booking-admin__toolbar {
-  display: grid;
-  grid-template-columns: minmax(210px, 0.7fr) minmax(300px, 2fr) minmax(185px, 0.6fr) auto;
-  gap: 10px;
-  margin-bottom: 18px;
-}
-
-.booking-admin__toolbar label,
-.booking-admin__refresh {
-  min-height: 44px;
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  background: var(--bg-card);
-  color: var(--text-main);
-}
-
-.booking-admin__cluster,
-.booking-admin__search {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 0 13px;
-}
-
-.booking-admin__toolbar select,
-.booking-admin__toolbar input {
-  width: 100%;
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  color: inherit;
-  background: transparent;
-  font-size: 13px;
-}
-
-.booking-admin__toolbar select option {
-  color: #111827;
-  background: #fff;
-}
-
-.booking-admin__filter {
-  display: flex;
-  align-items: center;
-  padding: 0 10px;
-}
-
-.booking-admin__refresh {
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-  padding: 0 16px;
-  cursor: pointer;
-  font-weight: 650;
-}
-
-.booking-admin__refresh:disabled { opacity: 0.55; cursor: not-allowed; }
-
 .booking-admin__error {
   display: flex;
   align-items: center;
@@ -336,12 +278,10 @@
   .booking-admin__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .booking-admin__stat:nth-child(2) { border-right: 0; }
   .booking-admin__stat:nth-child(-n + 2) { border-bottom: 1px solid var(--border-color); }
-  .booking-admin__toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 680px) {
   .booking-admin__stats,
-  .booking-admin__toolbar,
   .booking-admin-modal__summary,
   .booking-admin-modal__state { grid-template-columns: 1fr; }
   .booking-admin__stat { border-right: 0; border-bottom: 1px solid var(--border-color); }

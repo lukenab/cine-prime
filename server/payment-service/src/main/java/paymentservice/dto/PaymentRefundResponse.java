@@ -12,11 +12,19 @@ import java.time.OffsetDateTime;
 @Builder
 public class PaymentRefundResponse {
     private String refundId;
+    private String paymentId;
     private String bookingId;
+    private String paymentReference;
     private String providerRefundReference;
     private String status;
     private BigDecimal amount;
     private String currency;
+    private String reasonCode;
+    private String reason;
+    private String failureCode;
+    private String failureMessage;
+    private OffsetDateTime createdAt;
+    private OffsetDateTime updatedAt;
     private OffsetDateTime completedAt;
     private boolean replayed;
 }

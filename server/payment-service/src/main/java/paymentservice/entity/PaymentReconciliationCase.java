@@ -49,10 +49,28 @@ public class PaymentReconciliationCase {
     @Column(name = "resolved_at")
     private OffsetDateTime resolvedAt;
 
+    @Column(name = "resolved_by", length = 120)
+    private String resolvedBy;
+
+    @Column(name = "resolution_note", length = 1000)
+    private String resolutionNote;
+
+    @Column(name = "updated_at", nullable = false)
+    private OffsetDateTime updatedAt;
+
     @PrePersist
     void prePersist() {
+        OffsetDateTime now = OffsetDateTime.now();
         if (createdAt == null) {
-            createdAt = OffsetDateTime.now();
+            createdAt = now;
         }
+        if (updatedAt == null) {
+            updatedAt = now;
+        }
+    }
+
+    @PreUpdate
+    void preUpdate() {
+        updatedAt = OffsetDateTime.now();
     }
 }

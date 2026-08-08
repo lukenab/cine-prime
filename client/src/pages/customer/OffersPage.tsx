@@ -19,8 +19,8 @@ export default function OffersPage() {
       <div className="border-b border-white/10 px-6 pb-8 pt-10">
         <div className="mx-auto max-w-7xl">
           <div className="mb-1 flex items-center gap-2.5">
-            <Ticket size={20} style={{ color: "#FFD700" }} />
-            <span style={{ color: "#FFD700", fontSize: "0.7rem", letterSpacing: "0.25em", fontWeight: 700, textTransform: "uppercase" }}>
+            <Ticket size={20} style={{ color: "#38bdf8" }} />
+            <span style={{ color: "#38bdf8", fontSize: "0.7rem", letterSpacing: "0.25em", fontWeight: 700, textTransform: "uppercase" }}>
               Deals & Promotions
             </span>
           </div>

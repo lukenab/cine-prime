@@ -108,7 +108,7 @@ export default function AdminLayout() {
           --border-color: rgba(255, 255, 255, 0.07);
           --text-main: #f0f0f0;
           --text-muted: #ccc;
-          --text-sub: #555;
+          --text-sub: #9ca3af;
           --progress-track: rgba(255, 255, 255, 0.05);
           --modal-surface: #171a21;
           --modal-surface-highlight: #202633;
