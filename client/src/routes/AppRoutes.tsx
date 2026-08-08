@@ -55,6 +55,7 @@ import CreatePromotionPage from "../pages/admin/CreatePromotionPage";
 import EditPromotionPage from "../pages/admin/EditPromotionPage";
 import PromotionDetailPage from "../pages/admin/PromotionDetailPage";
 import ReportPage from "../pages/admin/ReportPage";
+import RefundReconciliationPage from "../pages/admin/RefundReconciliationPage";
 import SettingsPage from "../pages/admin/SettingsPage";
 import TicketSalePage from "../pages/admin/TicketSalePage";
 import ConcessionFulfillmentPage from "../pages/admin/ConcessionFulfillmentPage";
@@ -163,6 +164,7 @@ export default function AppRoutes() {
             <Route path="promotions/create"   element={<CreatePromotionPage />} />
             <Route path="promotions/:id"      element={<PromotionDetailPage />} />
             <Route path="promotions/edit/:id" element={<EditPromotionPage />} />
+            <Route path="refunds-reconciliation" element={<RefundReconciliationPage />} />
             <Route path="reports"   element={<ReportPage />} />
             <Route path="settings"  element={<SettingsPage />} />
           </Route>

@@ -34,6 +34,6 @@ export const mockOffers: MockOffer[] = [
     discount: "SAVE 25%",
     validUntil: "2026-08-20",
     code: "FAMILY25",
-    accentColor: "#34d399",
+    accentColor: "#2563eb",
   },
 ];

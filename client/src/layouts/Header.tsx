@@ -2,6 +2,7 @@ import { useAuth } from "../context/AuthContext";
 import { Bell, Search, ChevronRight, User, Settings, LogOut, Sun, Moon, ExternalLink } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { CommandPalette } from "../components/admin/CommandPalette";
 
 const roleLabels: Record<string, string> = {
   ROLE_SUPER_ADMIN: "Super Admin",
@@ -46,6 +47,7 @@ const pageTitles: Record<string, string> = {
 
 export function Header({ activePage, isDarkMode = true, onToggleTheme }: HeaderProps) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -93,23 +95,34 @@ export function Header({ activePage, isDarkMode = true, onToggleTheme }: HeaderP
       }}
     >
       {/* Breadcrumb */}
-      <div style={{ display: "flex", alignItems: "center", gap: "6px", color: isDarkMode ? "#444" : "#999", fontSize: "13px" }}>
-        <span style={{ color: isDarkMode ? "#333" : "#666", fontWeight: 500 }}>CinePrime</span>
-        <ChevronRight size={13} style={{ color: isDarkMode ? "#2a2a2a" : "#ccc" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-sub)", fontSize: "13px" }}>
+        <span style={{ color: "var(--text-sub)", fontWeight: 500 }}>CinePrime</span>
+        <ChevronRight size={13} style={{ color: "var(--border-color)" }} />
         <span style={{ color: "var(--text-main)", fontWeight: 500, transition: "color 0.2s ease" }}>{pageTitles[activePage] ?? activePage}</span>
       </div>
 
       {/* Right controls */}
       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
         
-        {/* Search bar */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "var(--bg-main)", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "7px 14px", transition: "all 0.2s ease" }}>
-          <Search size={13} style={{ color: "var(--text-sub)" }} />
-          <input
-            placeholder="Search movies, bookings…"
-            style={{ background: "transparent", border: "none", outline: "none", color: "var(--text-main)", fontFamily: "Inter, sans-serif", fontSize: "12.5px", width: "180px", transition: "color 0.2s ease" }}
-          />
-        </div>
+        {/* Global command palette trigger */}
+        <button
+          type="button"
+          onClick={() => setIsCommandPaletteOpen(true)}
+          aria-label="Open command palette"
+          style={{ display: "flex", alignItems: "center", gap: "8px", background: "var(--bg-main)", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "7px 10px 7px 12px", minWidth: "228px", cursor: "pointer", color: "var(--text-sub)", fontFamily: "Inter, sans-serif", fontSize: "12.5px", textAlign: "left", transition: "all 0.2s ease" }}
+          onMouseEnter={(event) => {
+            event.currentTarget.style.borderColor = isDarkMode ? "rgba(59,130,246,0.6)" : "#2563eb";
+            event.currentTarget.style.color = "var(--text-main)";
+          }}
+          onMouseLeave={(event) => {
+            event.currentTarget.style.borderColor = "var(--border-color)";
+            event.currentTarget.style.color = "";
+          }}
+        >
+          <Search size={14} />
+          <span style={{ flex: 1 }}>Search or jump to…</span>
+          <kbd style={{ border: "1px solid var(--border-color)", borderRadius: "5px", padding: "2px 5px", color: "var(--text-sub)", fontSize: "10px", lineHeight: 1.2 }}>Ctrl K</kbd>
+        </button>
 
         {/* Date pill */}
         <time
@@ -248,6 +261,8 @@ export function Header({ activePage, isDarkMode = true, onToggleTheme }: HeaderP
       </div>
 
       {/* Thêm CSS cho hiệu ứng Hover của Dropdown */}
+      <CommandPalette open={isCommandPaletteOpen} onOpenChange={setIsCommandPaletteOpen} />
+
       <style>{`
         @keyframes fadeInDown {
           from { opacity: 0; transform: translateY(-10px); }

@@ -141,43 +141,60 @@ export default function ManageBookingPage() {
         <AdminStat label="Closed" value={closedCount} helper="Cancelled, expired or refunded" tone="neutral" />
       </section>
 
-      <section className="booking-admin__toolbar">
-        <label className="booking-admin__cluster">
-          <span className="sr-only">Cinema cluster</span>
-          <MapPin size={15} />
+      <section className="mb-[18px] flex flex-col gap-3 lg:flex-row lg:items-center">
+        <label className="relative min-w-0 flex-1">
+          <span className="sr-only">Search bookings</span>
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: "var(--text-sub)" }} />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search booking code, movie, room or seat..."
+            className="h-[42px] w-full rounded-xl border pl-10 pr-4 text-sm outline-none transition-colors focus:border-blue-500"
+            style={{ background: "var(--bg-card)", borderColor: "var(--border-color)", color: "var(--text-main)" }}
+          />
+        </label>
+        <div
+          className="flex min-w-0 items-center overflow-hidden rounded-xl border"
+          style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
+        >
+          <span className="flex h-[42px] shrink-0 items-center px-3" style={{ color: "var(--text-sub)" }}>
+            <MapPin size={15} />
+          </span>
           <select
             value={clusterId ?? ""}
             onChange={(event) => {
               setClusterId(event.target.value ? Number(event.target.value) : null);
               setPage(0);
             }}
+            className="h-[42px] min-w-0 flex-1 border-0 border-l px-3 text-sm outline-none sm:min-w-[190px]"
+            style={{ background: "var(--bg-card)", borderColor: "var(--border-color)", color: "var(--text-main)" }}
+            aria-label="Filter by cinema"
           >
             {clusters.length === 0 && <option value="">No active cinema</option>}
             {clusters.map((cluster) => (
               <option key={cluster.clusterId} value={cluster.clusterId}>{cluster.clusterName}</option>
             ))}
           </select>
-        </label>
-
-        <label className="booking-admin__search">
-          <Search size={16} />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search booking code, movie, room or seat..."
-          />
-        </label>
-
-        <label className="booking-admin__filter">
-          <span className="sr-only">Booking status</span>
-          <select value={status} onChange={(event) => setStatus(event.target.value as "" | BookingStatus)}>
+          <select
+            value={status}
+            onChange={(event) => setStatus(event.target.value as "" | BookingStatus)}
+            className="h-[42px] min-w-[135px] border-0 border-l px-3 text-sm outline-none"
+            style={{ background: "var(--bg-card)", borderColor: "var(--border-color)", color: "var(--text-main)" }}
+            aria-label="Filter by status"
+          >
             {STATUS_OPTIONS.map((option) => (
               <option key={option.value || "ALL"} value={option.value}>{option.label}</option>
             ))}
           </select>
-        </label>
-
-        <button className="booking-admin__refresh" onClick={() => void load(true)} disabled={refreshing}>
+        </div>
+        <button
+          type="button"
+          onClick={() => void load(true)}
+          disabled={refreshing}
+          className="inline-flex h-[42px] shrink-0 items-center justify-center gap-2 rounded-xl border px-4 text-sm transition-opacity hover:opacity-80 disabled:opacity-50"
+          style={{ background: "var(--bg-card)", borderColor: "var(--border-color)", color: "var(--text-main)" }}
+          title="Refresh"
+        >
           <RefreshCw size={16} className={refreshing ? "booking-admin__spin" : ""} />
           Refresh
         </button>

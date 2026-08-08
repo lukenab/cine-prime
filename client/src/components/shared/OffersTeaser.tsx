@@ -19,13 +19,13 @@ export function OffersTeaser() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
           <div>
-            <span style={{ color: "#FFD700", fontSize: "0.7rem", letterSpacing: "0.25em", fontWeight: 700, textTransform: "uppercase" }}>
+            <span style={{ color: "#38bdf8", fontSize: "0.7rem", letterSpacing: "0.25em", fontWeight: 700, textTransform: "uppercase" }}>
               Deals & Promotions
             </span>
             <h2 style={{ color: "white", fontWeight: 800, fontSize: "clamp(1.6rem, 4vw, 2.4rem)", marginTop: "10px", lineHeight: 1.15 }}>
               Current{" "}
               <span
-                style={{ background: "linear-gradient(135deg, #FFD700, #FFA500)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}
+                style={{ background: "linear-gradient(135deg, #60a5fa, #2563eb)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}
               >
                 Offers
               </span>
@@ -34,7 +34,7 @@ export function OffersTeaser() {
           <button
             onClick={() => navigate("/offers")}
             className="group flex items-center gap-1.5 text-sm font-semibold transition-all duration-200 cursor-pointer"
-            style={{ color: "#FFD700", background: "none", border: "none" }}
+            style={{ color: "#60a5fa", background: "none", border: "none" }}
           >
             View all offers
             <ArrowRight size={15} className="transition-transform duration-200 group-hover:translate-x-1" />

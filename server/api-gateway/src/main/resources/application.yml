@@ -59,6 +59,16 @@ spring:
           predicates:
             - Path=/api/promotions/**, /api/public/promotions
 
+        - id: analytics-service
+          uri: lb://analytics-service
+          predicates:
+            - Path=/api/analytics/**
+
+        - id: loyalty-service
+          uri: lb://loyalty-service
+          predicates:
+            - Path=/api/membership/**, /api/admin/membership/**
+
         - id: user-service
           uri: lb://user-service
           predicates:

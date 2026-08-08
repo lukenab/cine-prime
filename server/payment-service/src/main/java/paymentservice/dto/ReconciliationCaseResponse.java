@@ -16,5 +16,10 @@ public class ReconciliationCaseResponse {
     String status;
     String details;
     int attemptCount;
+    OffsetDateTime nextAttemptAt;
     OffsetDateTime createdAt;
+    OffsetDateTime updatedAt;
+    OffsetDateTime resolvedAt;
+    String resolvedBy;
+    String resolutionNote;
 }

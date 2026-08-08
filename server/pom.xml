@@ -35,6 +35,8 @@
         <module>promotion-service</module>
         <module>notification-service</module>
         <module>auth-service</module>
+        <module>analytics-service</module>
+        <module>loyalty-service</module>
         <module>common</module>
     </modules>
 

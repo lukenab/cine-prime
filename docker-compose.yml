@@ -229,6 +229,76 @@ services:
     networks:
       - cinema-network
 
+  analytics-service:
+    build:
+      context: ./server
+      dockerfile: analytics-service/Dockerfile
+    container_name: analytics-service
+    restart: unless-stopped
+    ports:
+      - "8089:8089"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/analytics_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      EUREKA_INSTANCE_HOSTNAME: analytics-service
+      JWT_SIGNER_KEY: ${JWT_SIGNER_KEY:?Set JWT_SIGNER_KEY in .env}
+      ANALYTICS_KAFKA_GROUP_ID: ${ANALYTICS_KAFKA_GROUP_ID:-analytics-booking-projection-v1}
+      ANALYTICS_BOOKING_TOPIC: ${ANALYTICS_BOOKING_TOPIC:-booking.events.v1}
+      ANALYTICS_BUSINESS_TIME_ZONE: ${ANALYTICS_BUSINESS_TIME_ZONE:-Asia/Ho_Chi_Minh}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      discovery-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8089 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - cinema-network
+
+  loyalty-service:
+    build:
+      context: ./server
+      dockerfile: loyalty-service/Dockerfile
+    container_name: loyalty-service
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/loyalty_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      EUREKA_INSTANCE_HOSTNAME: loyalty-service
+      JWT_SIGNER_KEY: ${JWT_SIGNER_KEY:?Set JWT_SIGNER_KEY in .env}
+      LOYALTY_KAFKA_GROUP_ID: ${LOYALTY_KAFKA_GROUP_ID:-loyalty-booking-v1}
+      LOYALTY_BOOKING_TOPIC: ${LOYALTY_BOOKING_TOPIC:-booking.events.v1}
+      LOYALTY_POINTS_EARN_PER_VND: ${LOYALTY_POINTS_EARN_PER_VND:-10000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      discovery-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8090 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - cinema-network
+
   concession-service:
     build:
       context: ./server

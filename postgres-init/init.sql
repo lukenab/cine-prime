@@ -6,3 +6,5 @@ CREATE DATABASE payment_db;
 CREATE DATABASE user_db;
 CREATE DATABASE promotion_db;
 CREATE DATABASE concession_db;
+CREATE DATABASE analytics_db;
+CREATE DATABASE loyalty_db;

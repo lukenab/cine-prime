@@ -1,6 +1,21 @@
-import { useState, useEffect, useRef } from "react";
-import { Camera, User, Mail, Phone, CreditCard, Calendar, MapPin, Shield, CheckCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  ArrowUpRight,
+  Award,
+  Calendar,
+  Camera,
+  CheckCircle,
+  Clock3,
+  CreditCard,
+  Mail,
+  MapPin,
+  Phone,
+  Shield,
+  Sparkles,
+  User,
+} from "lucide-react";
 import { userApi } from "../../api/userApi";
+import { loyaltyApi, MembershipSummary } from "../../api/loyaltyApi";
 import { useAuth } from "../../context/AuthContext";
 
 interface Profile {
@@ -18,35 +33,40 @@ interface Profile {
 
 function maskIdentityCard(raw?: string): string {
   if (!raw || raw.length < 4) return raw ?? "—";
-  return raw.slice(0, 4) + "••••" + raw.slice(-4);
+  return `${raw.slice(0, 4)}••••${raw.slice(-4)}`;
 }
 
-function formatDate(val?: string): string {
-  if (!val) return "—";
-  const d = new Date(val);
-  return d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+function formatDate(value?: string): string {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value?: string }) {
+function formatMoney(value?: number): string {
+  return `${(value ?? 0).toLocaleString("vi-VN")} ₫`;
+}
+
+function InfoItem({ icon: Icon, label, value }: { icon: any; label: string; value?: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", gap: 14, padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-      <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        <Icon size={16} color="#60a5fa" />
-      </div>
-      <div>
-        <p style={{ margin: 0, fontSize: 11, fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)" }}>{label}</p>
-        <p style={{ margin: "3px 0 0", fontSize: 14, color: value ? "#e2e8f0" : "rgba(255,255,255,0.2)", fontStyle: value ? "normal" : "italic" }}>
-          {value || "Not provided"}
-        </p>
+    <div className="profile-info-item">
+      <div className="profile-info-icon"><Icon size={16} /></div>
+      <div className="profile-info-copy">
+        <span className="profile-info-label">{label}</span>
+        <span className={value ? "profile-info-value" : "profile-info-value profile-info-empty"}>{value || "Not provided"}</span>
       </div>
     </div>
   );
 }
 
+function MembershipSkeleton() {
+  return <div className="membership-card membership-skeleton" aria-label="Loading membership card"><div className="skeleton-line skeleton-short" /><div className="skeleton-line skeleton-title" /><div className="skeleton-line skeleton-points" /><div className="skeleton-line skeleton-progress" /></div>;
+}
+
 export default function ProfilePage() {
   const { user } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [membership, setMembership] = useState<MembershipSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [membershipLoading, setMembershipLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
@@ -56,21 +76,24 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!user?.accountId) return;
     setLoading(true);
+    setMembershipLoading(true);
     userApi.getUserById(user.accountId)
       .then((res: any) => {
-        const p = res?.result ?? res?.data?.result ?? res?.data ?? res;
-        setProfile(p);
-        if (p?.avatarUrl) setPreview(p.avatarUrl);
+        const nextProfile = res?.result ?? res?.data?.result ?? res?.data ?? res;
+        setProfile(nextProfile);
+        if (nextProfile?.avatarUrl) setPreview(nextProfile.avatarUrl);
       })
       .catch(() => setProfile(null))
       .finally(() => setLoading(false));
+    loyaltyApi.getMyMembership()
+      .then(setMembership)
+      .catch(() => setMembership(null))
+      .finally(() => setMembershipLoading(false));
   }, [user?.accountId]);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
     if (!file || !user?.accountId) return;
-
-    // Client-side validation
     if (!file.type.startsWith("image/")) {
       setUploadError("Only image files are accepted (JPG, PNG, WEBP).");
       return;
@@ -80,175 +103,197 @@ export default function ProfilePage() {
       return;
     }
 
-    // Optimistic preview
     const objectUrl = URL.createObjectURL(file);
     setPreview(objectUrl);
     setUploadError(null);
     setUploadSuccess(false);
     setUploading(true);
-
     try {
-      const res: any = await userApi.uploadAvatar(user.accountId, file);
-      const updated = res?.result ?? res?.data?.result ?? res?.data ?? res;
+      const response: any = await userApi.uploadAvatar(user.accountId, file);
+      const updated = response?.result ?? response?.data?.result ?? response?.data ?? response;
       if (updated?.avatarUrl) setPreview(updated.avatarUrl);
-      setProfile(prev => prev ? { ...prev, avatarUrl: updated?.avatarUrl } : prev);
+      setProfile((previous) => previous ? { ...previous, avatarUrl: updated?.avatarUrl } : previous);
       setUploadSuccess(true);
-      setTimeout(() => setUploadSuccess(false), 3000);
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || "Upload failed. Please try again.";
-      setUploadError(msg);
-      // Revert preview on failure
+      window.setTimeout(() => setUploadSuccess(false), 3000);
+    } catch (error: any) {
+      setUploadError(error?.response?.data?.message || "Upload failed. Please try again.");
       setPreview(profile?.avatarUrl ?? null);
     } finally {
       setUploading(false);
-      // Reset input so same file can be re-selected
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", background: "#050505", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ width: 40, height: 40, borderRadius: "50%", border: "3px solid rgba(59,130,246,0.2)", borderTopColor: "#3b82f6", animation: "spin 0.8s linear infinite" }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-      </div>
+      <div className="profile-loading"><div className="profile-spinner" /><style>{profileStyles}</style></div>
     );
   }
 
-  const initials = (profile?.fullName || user?.username || "?").slice(0, 2).toUpperCase();
+  const displayName = profile?.fullName || user?.username || "Member";
+  const initials = displayName.slice(0, 2).toUpperCase();
+  const progress = membership ? Math.max(0, Math.min(100, Number(membership.progressPercent) || 0)) : 0;
+  const tier = membership?.membershipLevel ?? "MEMBER";
 
   return (
-    <div style={{ minHeight: "100vh", background: "#050505", paddingTop: 80, paddingBottom: 60, fontFamily: "'Inter', sans-serif" }}>
-      <style>{`@keyframes spin { to { transform: rotate(360deg) } } @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }`}</style>
+    <main className="profile-page">
+      <style>{profileStyles}</style>
+      <div className="profile-shell">
+        <header className="profile-page-header">
+          <div>
+            <p className="profile-eyebrow"><Sparkles size={14} /> ACCOUNT CENTER</p>
+            <h1>My profile</h1>
+            <p className="profile-page-subtitle">Your CinePrime identity, membership and rewards in one place.</p>
+          </div>
+          <span className="profile-security-pill"><Shield size={14} /> Private account</span>
+        </header>
 
-      <div style={{ maxWidth: 680, margin: "0 auto", padding: "0 20px", animation: "fadeIn 0.3s ease both" }}>
-
-        {/* ── Header card ── */}
-        <div style={{
-          background: "linear-gradient(145deg, #0f1117 0%, #111318 100%)",
-          border: "1px solid rgba(255,255,255,0.07)",
-          borderRadius: 20, padding: "32px 32px 28px",
-          marginBottom: 16, position: "relative", overflow: "hidden",
-        }}>
-          {/* Accent gradient top */}
-          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg,#1d4ed8,#3b82f6,#60a5fa)" }} />
-
-          <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
-            {/* ── Avatar with upload overlay ── */}
-            <div style={{ position: "relative", flexShrink: 0 }}>
-              <div
-                style={{
-                  width: 96, height: 96, borderRadius: "50%",
-                  border: "2px solid rgba(59,130,246,0.4)",
-                  overflow: "hidden", position: "relative",
-                  boxShadow: "0 0 24px rgba(59,130,246,0.2)",
-                }}
-              >
-                {preview ? (
-                  <img src={preview} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                ) : (
-                  <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#1e3a8a,#2563eb)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <span style={{ color: "#fff", fontWeight: 800, fontSize: 28 }}>{initials}</span>
-                  </div>
-                )}
-
-                {/* Upload overlay — appears on hover */}
-                <div
-                  onClick={() => !uploading && fileInputRef.current?.click()}
-                  style={{
-                    position: "absolute", inset: 0,
-                    background: uploading ? "rgba(0,0,0,0.55)" : "rgba(0,0,0,0)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    cursor: uploading ? "wait" : "pointer",
-                    transition: "background 0.2s",
-                  }}
-                  onMouseEnter={e => { if (!uploading) e.currentTarget.style.background = "rgba(0,0,0,0.5)"; }}
-                  onMouseLeave={e => { if (!uploading) e.currentTarget.style.background = "rgba(0,0,0,0)"; }}
-                >
-                  {uploading ? (
-                    <div style={{ width: 22, height: 22, borderRadius: "50%", border: "2.5px solid rgba(255,255,255,0.25)", borderTopColor: "#fff", animation: "spin 0.75s linear infinite" }} />
-                  ) : (
-                    <Camera size={20} color="#fff" style={{ opacity: 0, transition: "opacity 0.2s" }} className="avatar-cam" />
-                  )}
-                </div>
+        <section className="profile-overview-grid">
+          <article className="profile-card identity-card">
+            <div className="identity-orbit orbit-one" />
+            <div className="identity-orbit orbit-two" />
+            <div className="avatar-wrap">
+              <div className="avatar-frame">
+                {preview ? <img src={preview} alt={`${displayName} avatar`} /> : <span>{initials}</span>}
+                <button type="button" className="avatar-upload" disabled={uploading} onClick={() => !uploading && fileInputRef.current?.click()} aria-label="Upload avatar">
+                  {uploading ? <span className="mini-spinner" /> : <Camera size={14} />}
+                </button>
               </div>
-
-              {/* Upload badge */}
-              <button
-                onClick={() => !uploading && fileInputRef.current?.click()}
-                disabled={uploading}
-                style={{
-                  position: "absolute", bottom: 0, right: 0,
-                  width: 28, height: 28, borderRadius: "50%",
-                  background: uploading ? "rgba(59,130,246,0.5)" : "#2563eb",
-                  border: "2px solid #050505",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  cursor: uploading ? "wait" : "pointer",
-                  boxShadow: "0 2px 8px rgba(37,99,235,0.5)",
-                  transition: "background 0.2s",
-                }}
-              >
-                <Camera size={13} color="#fff" />
-              </button>
-
-              <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFileChange} />
+              <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleFileChange} />
             </div>
-
-            {/* ── Name + status ── */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <h1 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, color: "#f1f5f9", letterSpacing: "-0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {profile?.fullName || user?.username || "—"}
-              </h1>
-              <p style={{ margin: "0 0 10px", fontSize: 13, color: "rgba(255,255,255,0.35)" }}>
-                @{user?.username}
-              </p>
-
-              {profile?.profileCompleted ? (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600, color: "#4ade80", background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.2)", borderRadius: 99, padding: "3px 10px" }}>
-                  <CheckCircle size={12} /> Profile complete
-                </span>
-              ) : (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600, color: "#fb923c", background: "rgba(251,146,60,0.1)", border: "1px solid rgba(251,146,60,0.2)", borderRadius: 99, padding: "3px 10px" }}>
-                  <Shield size={12} /> Profile incomplete
-                </span>
-              )}
+            <div className="identity-copy">
+              <h2>{displayName}</h2>
+              <p>@{user?.username || "member"}</p>
+              {profile?.profileCompleted ? <span className="profile-status success"><CheckCircle size={13} /> Profile complete</span> : <span className="profile-status pending"><Clock3 size={13} /> Profile incomplete</span>}
             </div>
-          </div>
+            <div className="identity-divider" />
+            <div className="identity-meta"><span>Member since</span><strong>{membership?.joinedAt ? formatDate(membership.joinedAt) : "CinePrime"}</strong></div>
+            {uploadSuccess && <div className="upload-feedback success"><CheckCircle size={14} /> Avatar updated successfully</div>}
+            {uploadError && <div className="upload-feedback error">{uploadError}</div>}
+            <p className="upload-help">JPG, PNG or WEBP · Maximum 5 MB</p>
+          </article>
 
-          {/* Upload feedback */}
-          {uploadSuccess && (
-            <div style={{ marginTop: 14, padding: "10px 14px", background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.2)", borderRadius: 10, fontSize: 13, color: "#4ade80", display: "flex", alignItems: "center", gap: 8 }}>
-              <CheckCircle size={14} /> Avatar updated successfully
-            </div>
+          {membershipLoading ? <MembershipSkeleton /> : membership ? (
+            <article className={`membership-card tier-${tier.toLowerCase()}`}>
+              <div className="membership-stars" />
+              <div className="membership-card-top"><span className="membership-brand"><span className="brand-mark">C</span> CINEPRIME</span><span className="membership-chip"><Award size={13} /> MEMBER CARD</span></div>
+              <div className="membership-card-content">
+                <p className="membership-caption">CURRENT MEMBERSHIP</p>
+                <div className="membership-tier-row"><h2>{tier}</h2><span className="membership-tier-dot" /></div>
+                <p className="membership-spend">Lifetime spend <strong>{formatMoney(Number(membership.lifetimeSpend))}</strong></p>
+              </div>
+              <div className="membership-card-bottom">
+                <div><span className="membership-caption">AVAILABLE POINTS</span><strong className="membership-points">{membership.availablePoints.toLocaleString("vi-VN")}</strong>{membership.pendingPoints > 0 && <small>{membership.pendingPoints.toLocaleString("vi-VN")} pending</small>}</div>
+                {membership.nextLevel ? <div className="membership-next"><span>{Math.round(progress)}% to {membership.nextLevel}</span><div className="membership-progress"><span style={{ width: `${progress}%` }} /></div></div> : <span className="membership-max"><Sparkles size={14} /> Top tier reached</span>}
+              </div>
+              <ArrowUpRight className="membership-arrow" size={20} />
+            </article>
+          ) : (
+            <article className="membership-card membership-unavailable"><Award size={28} /><h2>Membership card unavailable</h2><p>We could not load your rewards balance right now. Please try again shortly.</p></article>
           )}
-          {uploadError && (
-            <div style={{ marginTop: 14, padding: "10px 14px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 10, fontSize: 13, color: "#f87171" }}>
-              {uploadError}
-            </div>
-          )}
+        </section>
 
-          <p style={{ margin: "18px 0 0", fontSize: 11.5, color: "rgba(255,255,255,0.18)" }}>
-            Click the camera icon to upload a new avatar · JPG, PNG, WEBP · Max 5 MB
-          </p>
-        </div>
-
-        {/* ── Info card ── */}
-        <div style={{ background: "#0f1117", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: "8px 28px 4px" }}>
-          <InfoRow icon={Mail}     label="Email"          value={profile?.email} />
-          <InfoRow icon={User}     label="Full Name"      value={profile?.fullName} />
-          <InfoRow icon={Phone}    label="Phone"          value={profile?.phoneNumber} />
-          <InfoRow icon={Calendar} label="Date of Birth"  value={formatDate(profile?.dateOfBirth)} />
-          <InfoRow icon={User}     label="Gender"         value={profile?.gender} />
-          <InfoRow icon={CreditCard} label="National ID"  value={maskIdentityCard(profile?.identityCard)} />
-          <div style={{ borderBottom: "none" }}>
-            <InfoRow icon={MapPin}   label="Address"        value={profile?.address} />
-          </div>
-        </div>
-
+        <section className="profile-details-grid">
+          <article className="profile-card detail-card">
+            <div className="detail-heading"><div><p className="profile-eyebrow">CONTACT</p><h2>Contact details</h2></div><Mail size={19} /></div>
+            <div className="detail-list"><InfoItem icon={Mail} label="Email" value={profile?.email} /><InfoItem icon={Phone} label="Phone number" value={profile?.phoneNumber} /><InfoItem icon={MapPin} label="Address" value={profile?.address} /></div>
+          </article>
+          <article className="profile-card detail-card">
+            <div className="detail-heading"><div><p className="profile-eyebrow">PERSONAL</p><h2>Personal details</h2></div><User size={19} /></div>
+            <div className="detail-list"><InfoItem icon={User} label="Full name" value={profile?.fullName} /><InfoItem icon={Calendar} label="Date of birth" value={formatDate(profile?.dateOfBirth)} /><InfoItem icon={User} label="Gender" value={profile?.gender} /><InfoItem icon={CreditCard} label="National ID" value={maskIdentityCard(profile?.identityCard)} /></div>
+          </article>
+        </section>
       </div>
-
-      {/* Hover effect for camera icon */}
-      <style>{`.avatar-cam { opacity: 0 !important; } div:hover > .avatar-cam { opacity: 1 !important; }`}</style>
-    </div>
+    </main>
   );
 }
+
+const profileStyles = `
+  @keyframes profile-spin { to { transform: rotate(360deg); } }
+  @keyframes profile-shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+  .profile-page { min-height:100vh; padding:92px 24px 72px; color:#eaf2ff; font-family:Inter, sans-serif; background:radial-gradient(circle at 78% 12%, rgba(37,99,235,.22), transparent 28%), radial-gradient(circle at 12% 28%, rgba(79,70,229,.12), transparent 30%), #030712; }
+  .profile-shell { max-width:1080px; margin:0 auto; }
+  .profile-page-header { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; margin-bottom:26px; }
+  .profile-page-header h1 { margin:8px 0 5px; font-size:32px; letter-spacing:-.04em; font-weight:800; color:#f8fbff; }
+  .profile-page-subtitle { margin:0; color:#7e91ad; font-size:14px; }
+  .profile-eyebrow { display:flex; align-items:center; gap:7px; margin:0; color:#60a5fa; font-size:10px; letter-spacing:.16em; font-weight:800; }
+  .profile-security-pill { display:inline-flex; align-items:center; gap:7px; padding:8px 12px; border:1px solid rgba(96,165,250,.22); border-radius:999px; background:rgba(37,99,235,.08); color:#9bc4ff; font-size:11px; white-space:nowrap; }
+  .profile-overview-grid { display:grid; grid-template-columns:320px minmax(0,1fr); gap:18px; align-items:stretch; }
+  .profile-card { position:relative; overflow:hidden; border:1px solid rgba(148,163,184,.15); border-radius:20px; background:rgba(15,23,42,.78); box-shadow:0 18px 55px rgba(0,0,0,.22); }
+  .identity-card { display:flex; min-height:325px; flex-direction:column; align-items:center; padding:30px 24px 22px; text-align:center; }
+  .identity-orbit { position:absolute; border:1px solid rgba(96,165,250,.12); border-radius:50%; pointer-events:none; }
+  .orbit-one { width:270px; height:270px; top:-90px; right:-115px; }
+  .orbit-two { width:220px; height:220px; bottom:-112px; left:-118px; }
+  .avatar-wrap { position:relative; z-index:1; margin:4px 0 16px; }
+  .avatar-frame { position:relative; display:grid; width:116px; height:116px; place-items:center; overflow:visible; border:3px solid #3b82f6; border-radius:50%; background:linear-gradient(145deg,#1d4ed8,#312e81); box-shadow:0 0 0 7px rgba(59,130,246,.10), 0 0 36px rgba(37,99,235,.34); }
+  .avatar-frame img { width:100%; height:100%; border-radius:50%; object-fit:cover; }
+  .avatar-frame > span { color:white; font-size:34px; font-weight:800; }
+  .avatar-upload { position:absolute; right:-2px; bottom:2px; display:grid; width:30px; height:30px; place-items:center; border:2px solid #071225; border-radius:50%; background:#2563eb; color:white; cursor:pointer; box-shadow:0 5px 16px rgba(37,99,235,.45); }
+  .avatar-upload:disabled { cursor:wait; opacity:.7; }
+  .mini-spinner { width:13px; height:13px; border:2px solid rgba(255,255,255,.3); border-top-color:white; border-radius:50%; animation:profile-spin .7s linear infinite; }
+  .identity-copy { position:relative; z-index:1; }
+  .identity-copy h2 { margin:0; color:#f8fbff; font-size:19px; font-weight:800; }
+  .identity-copy p { margin:4px 0 12px; color:#7690b2; font-size:13px; }
+  .profile-status { display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:999px; font-size:11px; font-weight:700; }
+  .profile-status.success { border:1px solid rgba(52,211,153,.23); background:rgba(16,185,129,.10); color:#6ee7b7; }
+  .profile-status.pending { border:1px solid rgba(251,146,60,.22); background:rgba(251,146,60,.10); color:#fdba74; }
+  .identity-divider { width:100%; margin:24px 0 14px; border-top:1px solid rgba(148,163,184,.12); }
+  .identity-meta { display:flex; width:100%; justify-content:space-between; color:#6f85a3; font-size:11px; }
+  .identity-meta strong { color:#bfdbfe; font-weight:700; }
+  .upload-feedback { width:100%; box-sizing:border-box; margin-top:16px; padding:9px 11px; border-radius:9px; font-size:11px; text-align:left; }
+  .upload-feedback.success { border:1px solid rgba(52,211,153,.2); background:rgba(16,185,129,.1); color:#6ee7b7; }
+  .upload-feedback.error { border:1px solid rgba(248,113,113,.25); background:rgba(239,68,68,.1); color:#fca5a5; }
+  .upload-help { margin:16px 0 0; color:#526987; font-size:10px; }
+  .membership-card { position:relative; display:flex; min-height:325px; flex-direction:column; justify-content:space-between; overflow:hidden; border:1px solid rgba(147,197,253,.30); border-radius:20px; padding:25px 28px; background:linear-gradient(132deg,#081a42 0%,#0e3b85 47%,#30236e 100%); box-shadow:0 22px 65px rgba(15,66,160,.25); }
+  .membership-card:before { position:absolute; width:340px; height:340px; right:-130px; top:-145px; border:1px solid rgba(191,219,254,.16); border-radius:50%; content:""; }
+  .membership-card:after { position:absolute; width:280px; height:280px; right:-85px; top:-115px; border:1px solid rgba(191,219,254,.12); border-radius:50%; content:""; }
+  .membership-stars { position:absolute; inset:0; opacity:.55; background-image:radial-gradient(circle at 14% 30%, rgba(255,255,255,.8) 0 1px, transparent 1.5px),radial-gradient(circle at 32% 78%, rgba(191,219,254,.8) 0 1px, transparent 1.5px),radial-gradient(circle at 71% 58%, rgba(255,255,255,.75) 0 1px, transparent 1.5px),radial-gradient(circle at 88% 28%, rgba(191,219,254,.8) 0 1px, transparent 1.5px); background-size:150px 130px,190px 170px,230px 180px,180px 150px; }
+  .membership-card > *:not(.membership-stars) { position:relative; z-index:1; }
+  .membership-card-top, .membership-card-bottom, .membership-tier-row { display:flex; align-items:center; justify-content:space-between; gap:14px; }
+  .membership-brand { display:inline-flex; align-items:center; gap:8px; color:#dbeafe; font-size:12px; letter-spacing:.15em; font-weight:800; }
+  .brand-mark { display:grid; width:23px; height:23px; place-items:center; border:1px solid rgba(191,219,254,.5); border-radius:50%; color:#bfdbfe; font-size:12px; }
+  .membership-chip { display:inline-flex; align-items:center; gap:6px; border:1px solid rgba(191,219,254,.22); border-radius:999px; padding:5px 9px; color:#bfdbfe; font-size:9px; letter-spacing:.08em; font-weight:700; }
+  .membership-caption { margin:0; color:#a9c7ef; font-size:10px; letter-spacing:.15em; font-weight:700; }
+  .membership-card-content { margin-top:34px; }
+  .membership-tier-row { justify-content:flex-start; margin-top:7px; }
+  .membership-tier-row h2 { margin:0; color:#f8fbff; font-size:37px; letter-spacing:.08em; font-weight:850; }
+  .membership-tier-dot { width:9px; height:9px; border-radius:50%; background:#bfdbfe; box-shadow:0 0 16px rgba(191,219,254,.85); }
+  .membership-spend { margin:11px 0 0; color:#a8c2e4; font-size:12px; }
+  .membership-spend strong { margin-left:5px; color:white; font-weight:700; }
+  .membership-card-bottom { align-items:flex-end; margin-top:30px; }
+  .membership-points { display:block; margin-top:5px; color:white; font-size:27px; letter-spacing:-.03em; }
+  .membership-card-bottom small { display:block; margin-top:3px; color:#a8c2e4; font-size:10px; }
+  .membership-next { width:190px; color:#dbeafe; font-size:10px; text-align:right; }
+  .membership-progress { height:6px; margin-top:8px; overflow:hidden; border-radius:99px; background:rgba(255,255,255,.16); }
+  .membership-progress span { display:block; height:100%; border-radius:inherit; background:#bfdbfe; box-shadow:0 0 13px rgba(191,219,254,.6); }
+  .membership-max { display:inline-flex; align-items:center; gap:6px; color:#dbeafe; font-size:11px; }
+  .membership-arrow { position:absolute; right:25px; bottom:22px; color:rgba(219,234,254,.58); }
+  .tier-silver { background:linear-gradient(132deg,#172b49 0%,#42688e 50%,#34436b 100%); }
+  .tier-gold { background:linear-gradient(132deg,#3b270c 0%,#926d22 49%,#4d3278 100%); border-color:rgba(253,230,138,.35); }
+  .tier-platinum { background:linear-gradient(132deg,#18253d 0%,#596b9e 50%,#70458d 100%); border-color:rgba(224,231,255,.4); }
+  .membership-skeleton { border-color:rgba(148,163,184,.15); background:#0f172a; }
+  .skeleton-line { position:relative; overflow:hidden; border-radius:7px; background:rgba(148,163,184,.15); }
+  .skeleton-line:after { position:absolute; inset:0; background:linear-gradient(90deg,transparent,rgba(255,255,255,.08),transparent); content:""; animation:profile-shimmer 1.5s infinite; }
+  .skeleton-short { width:130px; height:12px; }
+  .skeleton-title { width:180px; height:40px; margin-top:42px; }
+  .skeleton-points { width:120px; height:28px; margin-top:48px; }
+  .skeleton-progress { width:55%; height:6px; margin-top:18px; }
+  .membership-unavailable { align-items:flex-start; justify-content:center; gap:11px; color:#8fa6c4; }
+  .membership-unavailable h2 { margin:0; color:#e5efff; font-size:20px; }
+  .membership-unavailable p { max-width:360px; margin:0; color:#8fa6c4; font-size:13px; line-height:1.6; }
+  .profile-details-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:18px; }
+  .detail-card { padding:24px 25px 8px; }
+  .detail-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:15px; padding-bottom:17px; border-bottom:1px solid rgba(148,163,184,.12); color:#60a5fa; }
+  .detail-heading h2 { margin:6px 0 0; color:#eff6ff; font-size:17px; }
+  .detail-list { display:grid; grid-template-columns:1fr; }
+  .profile-info-item { display:flex; align-items:center; gap:12px; min-width:0; padding:14px 0; border-bottom:1px solid rgba(148,163,184,.10); }
+  .profile-info-icon { display:grid; width:34px; height:34px; flex:0 0 auto; place-items:center; border:1px solid rgba(96,165,250,.18); border-radius:9px; background:rgba(37,99,235,.1); color:#60a5fa; }
+  .profile-info-copy { display:flex; min-width:0; flex-direction:column; gap:3px; }
+  .profile-info-label { color:#6f85a3; font-size:10px; letter-spacing:.1em; font-weight:700; text-transform:uppercase; }
+  .profile-info-value { overflow:hidden; color:#e5efff; font-size:13px; text-overflow:ellipsis; white-space:nowrap; }
+  .profile-info-empty { color:#526987; font-style:italic; }
+  .profile-loading { min-height:100vh; display:grid; place-items:center; background:#030712; }
+  .profile-spinner { width:34px; height:34px; border:3px solid rgba(96,165,250,.18); border-top-color:#60a5fa; border-radius:50%; animation:profile-spin .8s linear infinite; }
+  @media (max-width: 820px) { .profile-page { padding:78px 16px 50px; } .profile-page-header { align-items:flex-start; flex-direction:column; } .profile-overview-grid, .profile-details-grid { grid-template-columns:1fr; } .identity-card { min-height:0; } .membership-card { min-height:300px; } }
+  @media (max-width: 480px) { .profile-page-header h1 { font-size:27px; } .membership-card { padding:22px 19px; } .membership-card-bottom { align-items:flex-start; flex-direction:column; } .membership-next { width:100%; text-align:left; } .membership-arrow { display:none; } }
+`;
