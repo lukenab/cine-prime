@@ -64,13 +64,15 @@ const employeeNavItems: NavItem[] = [
  */
 const programmingNavItems: NavItem[] = [
   { icon: LayoutDashboard, label: "Overview", id: "programming-overview", path: "/admin/programming", group: "main", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
-  { icon: Film, label: "Movie Catalogue", id: "programming-movies", path: "/admin/movies", group: "main", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
-  { icon: Calendar, label: "Release Planning", id: "programming-release", path: "/admin/release-plans", group: "main", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
-  { icon: Languages, label: "Screening Versions", id: "programming-versions", path: "/admin/screening-versions", group: "main", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
-  { icon: Monitor, label: "Screening Formats", id: "programming-formats", path: "/admin/formats", group: "reference", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
-  { icon: Tags, label: "Genres", id: "programming-genres", path: "/admin/genres", group: "reference", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
-  { icon: ShieldCheck, label: "Age Ratings", id: "programming-ratings", path: "/admin/age-ratings", group: "reference", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
-  { icon: Clapperboard, label: "Automatic Scheduling", id: "programming-schedule", path: "/admin/showtimes/auto", group: "scheduling", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
+  // Follow the actual programming lifecycle instead of splitting scheduling
+  // into an isolated one-item section.
+  { icon: Film, label: "Movie Catalogue", id: "programming-movies", path: "/admin/movies", group: "programming-workflow", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
+  { icon: Languages, label: "Screening Versions", id: "programming-versions", path: "/admin/screening-versions", group: "programming-workflow", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
+  { icon: Calendar, label: "Release Planning", id: "programming-release", path: "/admin/release-plans", group: "programming-workflow", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
+  { icon: Clapperboard, label: "Automatic Scheduling", id: "programming-schedule", path: "/admin/showtimes/auto", group: "programming-workflow", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
+  { icon: Monitor, label: "Screening Formats", id: "programming-formats", path: "/admin/formats", group: "programming-reference", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
+  { icon: Tags, label: "Genres", id: "programming-genres", path: "/admin/genres", group: "programming-reference", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
+  { icon: ShieldCheck, label: "Age Ratings", id: "programming-ratings", path: "/admin/age-ratings", group: "programming-reference", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
 ];
 
 interface SidebarProps {
@@ -119,6 +121,8 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
     administration: { label: "Administration", icon: Shield },
     scheduling: { label: "Scheduling", icon: Calendar },
     reference: { label: "Reference Data", icon: SlidersHorizontal },
+    "programming-workflow": { label: "Film Programming", icon: Clapperboard },
+    "programming-reference": { label: "Reference Data", icon: SlidersHorizontal },
   };
 
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());

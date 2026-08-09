@@ -1095,8 +1095,11 @@ export const movieApi = {
   uploadImage: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
+    // Explicit "multipart/form-data" (no boundary) stops the browser from
+    // appending its own boundary. Clearing Content-Type lets it set the
+    // correct "multipart/form-data; boundary=..." header itself.
     return axiosClient.post('/api/movies/images', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      headers: { 'Content-Type': undefined },
     }) as Promise<ApiWrapper<ImageUploadResponse>>;
   },
 

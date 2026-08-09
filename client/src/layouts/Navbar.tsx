@@ -6,6 +6,7 @@ import { userApi } from "../api/userApi";
 import { movieApi } from "../api/movieApi";
 import { defaultPathForRole } from "../utils/roleRoutes";
 import { useBookingFlow } from "../context/BookingFlowContext";
+import { PROFILE_UPDATED_EVENT, type ProfileUpdatedDetail } from "../utils/profileEvents";
 
 const ACCENT = "#3b82f6";
 // A soft aurora glow blooming from the left (behind the logo) over the
@@ -63,6 +64,16 @@ export function Navbar() {
         setAvatarUrl(p?.avatarUrl ?? null);
       })
       .catch(() => setAvatarUrl(null));
+  }, [user?.accountId]);
+
+  useEffect(() => {
+    const handleProfileUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<ProfileUpdatedDetail>).detail;
+      if (!detail || detail.accountId !== user?.accountId) return;
+      setAvatarUrl(detail.avatarUrl);
+    };
+    window.addEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdated);
+    return () => window.removeEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdated);
   }, [user?.accountId]);
 
   // Load danh sách chi nhánh rạp đang hoạt động cho dropdown "Cinemas"
@@ -238,9 +249,12 @@ export function Navbar() {
             <button
               type="button"
               onClick={cancelAction.onClick}
-              className="flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-semibold text-rose-300/80 transition-colors hover:bg-rose-400/10 hover:text-rose-300"
+              className="group flex min-h-9 items-center gap-2 rounded-xl border border-rose-400/20 bg-rose-400/[0.06] px-3.5 py-2 text-sm font-semibold text-rose-200 transition-all hover:-translate-y-px hover:border-rose-300/35 hover:bg-rose-400/[0.12] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300/35"
             >
-              <X size={15} /> {cancelAction.label}
+              <span className="grid h-5 w-5 place-items-center rounded-md bg-rose-400/10 text-rose-300 transition-colors group-hover:bg-rose-400/20">
+                <X size={13} strokeWidth={2.2} />
+              </span>
+              <span>{cancelAction.label}</span>
             </button>
           </div>
         </div>
@@ -363,77 +377,95 @@ export function Navbar() {
             <div style={{ position: "relative" }} ref={dropdownRef}>
               {/* Avatar trigger */}
               <button
+                type="button"
+                className="navbar-avatar-trigger"
                 onClick={() => setDropdownOpen(o => !o)}
+                aria-label={`Open account menu for ${username}`}
+                aria-haspopup="menu"
+                aria-expanded={dropdownOpen}
+                title={username}
                 style={{
-                  display: "flex", alignItems: "center", gap: 8,
-                  background: "rgba(59,130,246,0.08)", border: `1px solid ${dropdownOpen ? ACCENT : "rgba(59,130,246,0.3)"}`,
-                  borderRadius: 99, padding: "5px 12px 5px 5px",
-                  cursor: "pointer", transition: "all 0.2s",
+                  width: 38, height: 38, display: "grid", placeItems: "center",
+                  background: dropdownOpen ? "rgba(37,99,235,0.16)" : "transparent",
+                  border: 0, borderRadius: "50%", padding: 2,
+                  cursor: "pointer",
                 }}
               >
-                {/* Avatar circle */}
-                <div style={{ width: 28, height: 28, borderRadius: "50%", overflow: "hidden", flexShrink: 0, border: `1.5px solid ${ACCENT}` }}>
+                <div
+                  className="navbar-avatar"
+                  style={{
+                    width: 34, height: 34, borderRadius: "50%", overflow: "hidden", flexShrink: 0,
+                    boxShadow: dropdownOpen
+                      ? "0 8px 24px rgba(37,99,235,0.42)"
+                      : "0 6px 18px rgba(37,99,235,0.24)",
+                  }}
+                >
                   {avatarUrl ? (
-                    <img src={avatarUrl} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <img src={avatarUrl} alt="avatar" style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }} />
                   ) : (
-                    <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#1e3a8a,#2563eb)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <span style={{ color: "#fff", fontWeight: 700, fontSize: 11 }}>{username.charAt(0).toUpperCase()}</span>
+                    <div style={{ width: "100%", height: "100%", background: "linear-gradient(145deg,#60a5fa 0%,#2563eb 48%,#1e40af 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <span style={{ color: "#fff", fontWeight: 800, fontSize: 13 }}>{username.charAt(0).toUpperCase()}</span>
                     </div>
                   )}
                 </div>
-                <span style={{ color: "rgba(255,255,255,0.8)", fontSize: "0.85rem", fontWeight: 500 }}>{username}</span>
-                <ChevronDown size={14} style={{ color: "rgba(255,255,255,0.4)", transform: dropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }} />
               </button>
 
               {/* Dropdown */}
               {dropdownOpen && (
-                <div style={{
-                  position: "absolute", top: "calc(100% + 10px)", right: 0, width: 200,
-                  background: "#0f1117", border: "1px solid rgba(255,255,255,0.09)",
-                  borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
-                  padding: 6, zIndex: 100,
+                <div className="nav-account-menu" role="menu" style={{
+                  position: "absolute", top: "calc(100% + 10px)", right: 0, width: 232,
+                  borderRadius: 16, padding: 7, zIndex: 100,
                   animation: "navDropdown 0.18s cubic-bezier(0.16,1,0.3,1) both",
                 }}>
-                  <div style={{ padding: "10px 12px 10px", borderBottom: "1px solid rgba(255,255,255,0.07)", marginBottom: 4 }}>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#f1f5f9" }}>{username}</p>
-                    <p style={{ margin: "2px 0 0", fontSize: 11, color: "rgba(255,255,255,0.3)" }}>{roleLabels[user?.role ?? ""] ?? "Member"}</p>
+                  <div className="nav-account-header">
+                    <div className="nav-account-header-avatar">
+                      {avatarUrl ? (
+                        <img src={avatarUrl} alt="" />
+                      ) : (
+                        <span>{username.charAt(0).toUpperCase()}</span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="nav-account-name">{username}</p>
+                      <p className="nav-account-role">{roleLabels[user?.role ?? ""] ?? "Member"}</p>
+                    </div>
                   </div>
                   <button
                     onClick={() => { navigate("/profile"); setDropdownOpen(false); }}
-                    style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", border: "none", background: "transparent", cursor: "pointer", borderRadius: 8, color: "rgba(255,255,255,0.6)", fontSize: 13, transition: "all 0.15s" }}
-                    onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; e.currentTarget.style.color = "#fff"; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "rgba(255,255,255,0.6)"; }}
+                    className="nav-account-action"
+                    role="menuitem"
                   >
-                    <User size={15} /> My Profile
+                    <span className="nav-account-action-icon"><User size={15} /></span>
+                    <span>My Profile</span>
                   </button>
                   {!isStaff && (
                     <button
                       onClick={() => { navigate("/my-bookings"); setDropdownOpen(false); }}
-                      style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", border: "none", background: "transparent", cursor: "pointer", borderRadius: 8, color: "rgba(255,255,255,0.6)", fontSize: 13, transition: "all 0.15s" }}
-                      onMouseEnter={e => { e.currentTarget.style.background = "rgba(59,130,246,0.1)"; e.currentTarget.style.color = "#60a5fa"; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "rgba(255,255,255,0.6)"; }}
+                      className="nav-account-action"
+                      role="menuitem"
                     >
-                      <TicketCheck size={15} /> My Bookings
+                      <span className="nav-account-action-icon"><TicketCheck size={15} /></span>
+                      <span>My Bookings</span>
                     </button>
                   )}
                   {isStaff && (
                     <button
                       onClick={() => { navigate(staffWorkspacePath); setDropdownOpen(false); }}
-                      style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", border: "none", background: "transparent", cursor: "pointer", borderRadius: 8, color: "rgba(255,255,255,0.6)", fontSize: 13, transition: "all 0.15s" }}
-                      onMouseEnter={e => { e.currentTarget.style.background = "rgba(59,130,246,0.1)"; e.currentTarget.style.color = "#60a5fa"; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "rgba(255,255,255,0.6)"; }}
+                      className="nav-account-action"
+                      role="menuitem"
                     >
-                      <LayoutDashboard size={15} /> Back to workspace
+                      <span className="nav-account-action-icon"><LayoutDashboard size={15} /></span>
+                      <span>Back to workspace</span>
                     </button>
                   )}
-                  <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "4px 0" }} />
+                  <div className="nav-account-divider" />
                   <button
                     onClick={handleLogout}
-                    style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", border: "none", background: "transparent", cursor: "pointer", borderRadius: 8, color: "#ef4444", fontSize: 13, fontWeight: 500, transition: "all 0.15s" }}
-                    onMouseEnter={e => { e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                    className="nav-account-action nav-account-signout"
+                    role="menuitem"
                   >
-                    <LogOut size={15} /> Sign Out
+                    <span className="nav-account-action-icon"><LogOut size={15} /></span>
+                    <span>Sign Out</span>
                   </button>
                 </div>
               )}
@@ -597,6 +629,135 @@ export function Navbar() {
         @keyframes navDropdown {
           from { opacity: 0; transform: translateY(-8px) scale(0.97); }
           to   { opacity: 1; transform: translateY(0)    scale(1); }
+        }
+        .navbar-avatar-trigger:hover {
+          background: rgba(37,99,235,0.14) !important;
+          transform: translateY(-1px);
+        }
+        .navbar-avatar-trigger {
+          transition: background-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+        }
+        .navbar-avatar-trigger:focus {
+          outline: none;
+        }
+        .navbar-avatar-trigger:focus-visible {
+          box-shadow: 0 0 0 3px rgba(59,130,246,0.28);
+        }
+        .navbar-avatar-trigger:hover .navbar-avatar {
+          box-shadow: 0 9px 26px rgba(37,99,235,0.42) !important;
+        }
+        .nav-account-menu {
+          overflow: hidden;
+          background:
+            radial-gradient(90% 75% at 100% 0%, rgba(59,130,246,0.22), transparent 68%),
+            radial-gradient(55% 70% at 0% 100%, rgba(30,64,175,0.18), transparent 72%),
+            linear-gradient(150deg, rgba(15,30,62,0.985), rgba(8,15,32,0.99) 58%, rgba(6,10,22,0.995));
+          border: 1px solid rgba(96,165,250,0.2);
+          box-shadow: 0 24px 68px rgba(0,0,0,0.58), 0 10px 32px rgba(30,64,175,0.16), inset 0 1px 0 rgba(255,255,255,0.05);
+          backdrop-filter: blur(22px);
+        }
+        .nav-account-header {
+          display: flex;
+          align-items: center;
+          gap: 11px;
+          padding: 12px 11px 13px;
+          margin-bottom: 5px;
+          border-bottom: 1px solid rgba(148,163,184,0.13);
+        }
+        .nav-account-header-avatar {
+          display: grid;
+          width: 38px;
+          height: 38px;
+          flex: 0 0 38px;
+          place-items: center;
+          overflow: hidden;
+          border-radius: 999px;
+          background: linear-gradient(145deg,#60a5fa 0%,#2563eb 48%,#1e40af 100%);
+          box-shadow: 0 8px 22px rgba(37,99,235,0.3);
+          color: white;
+          font-size: 13px;
+          font-weight: 800;
+        }
+        .nav-account-header-avatar img {
+          display: block;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        .nav-account-name {
+          overflow: hidden;
+          margin: 0;
+          color: #f8fafc;
+          font-size: 13px;
+          font-weight: 750;
+          line-height: 1.35;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .nav-account-role {
+          overflow: hidden;
+          margin: 2px 0 0;
+          color: rgba(147,197,253,0.62);
+          font-size: 11px;
+          line-height: 1.35;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .nav-account-action {
+          display: flex;
+          align-items: center;
+          gap: 11px;
+          width: 100%;
+          padding: 9px 10px;
+          border: 0;
+          border-radius: 10px;
+          background: transparent;
+          color: rgba(226,232,240,0.76);
+          cursor: pointer;
+          font-size: 13px;
+          font-weight: 600;
+          text-align: left;
+          transition: color 0.16s ease, background-color 0.16s ease, transform 0.16s ease;
+        }
+        .nav-account-action:hover {
+          color: #fff;
+          background: rgba(59,130,246,0.13);
+          transform: translateX(2px);
+        }
+        .nav-account-action-icon {
+          display: grid;
+          width: 30px;
+          height: 30px;
+          flex: 0 0 30px;
+          place-items: center;
+          border-radius: 9px;
+          background: rgba(59,130,246,0.1);
+          color: #60a5fa;
+          transition: color 0.16s ease, background-color 0.16s ease;
+        }
+        .nav-account-action:hover .nav-account-action-icon {
+          color: #bfdbfe;
+          background: rgba(59,130,246,0.2);
+        }
+        .nav-account-divider {
+          height: 1px;
+          margin: 5px 7px;
+          background: rgba(148,163,184,0.13);
+        }
+        .nav-account-signout {
+          color: #fca5a5;
+        }
+        .nav-account-signout .nav-account-action-icon {
+          color: #fb7185;
+          background: rgba(244,63,94,0.09);
+        }
+        .nav-account-signout:hover {
+          color: #fecdd3;
+          background: rgba(244,63,94,0.1);
+        }
+        .nav-account-signout:hover .nav-account-action-icon {
+          color: #fda4af;
+          background: rgba(244,63,94,0.16);
         }
         .nav-dropdown-scroll {
           scrollbar-width: thin;

@@ -165,7 +165,7 @@ export default function BookingSummaryCard({
           </span>
         )}
         <div className="min-w-0 pt-0.5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-400">Booking details</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-400">Order summary</p>
           <h2 className="mt-1 line-clamp-2 font-bold leading-snug">{movieName || "Your movie"}</h2>
           {(ageRatingCode || durationMinutes) && (
             <div className="mt-2 flex flex-wrap gap-1.5">

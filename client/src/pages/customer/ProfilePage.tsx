@@ -10,13 +10,14 @@ import {
   Mail,
   MapPin,
   Phone,
-  Shield,
   Sparkles,
   User,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { userApi } from "../../api/userApi";
 import { loyaltyApi, MembershipSummary } from "../../api/loyaltyApi";
 import { useAuth } from "../../context/AuthContext";
+import { publishProfileUpdated } from "../../utils/profileEvents";
 
 interface Profile {
   accountId: string;
@@ -63,6 +64,7 @@ function MembershipSkeleton() {
 
 export default function ProfilePage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [membership, setMembership] = useState<MembershipSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -91,6 +93,18 @@ export default function ProfilePage() {
       .finally(() => setMembershipLoading(false));
   }, [user?.accountId]);
 
+  useEffect(() => {
+    if (!uploadSuccess) return;
+    const timeoutId = window.setTimeout(() => setUploadSuccess(false), 3600);
+    return () => window.clearTimeout(timeoutId);
+  }, [uploadSuccess]);
+
+  useEffect(() => {
+    if (!uploadError) return;
+    const timeoutId = window.setTimeout(() => setUploadError(null), 5200);
+    return () => window.clearTimeout(timeoutId);
+  }, [uploadError]);
+
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !user?.accountId) return;
@@ -111,14 +125,26 @@ export default function ProfilePage() {
     try {
       const response: any = await userApi.uploadAvatar(user.accountId, file);
       const updated = response?.result ?? response?.data?.result ?? response?.data ?? response;
-      if (updated?.avatarUrl) setPreview(updated.avatarUrl);
-      setProfile((previous) => previous ? { ...previous, avatarUrl: updated?.avatarUrl } : previous);
+      let nextProfile = updated;
+      if (!nextProfile?.avatarUrl) {
+        const refreshedResponse: any = await userApi.getUserById(user.accountId);
+        nextProfile = refreshedResponse?.result
+          ?? refreshedResponse?.data?.result
+          ?? refreshedResponse?.data
+          ?? refreshedResponse;
+      }
+      const nextAvatarUrl = nextProfile?.avatarUrl ?? profile?.avatarUrl ?? null;
+      if (nextAvatarUrl) setPreview(nextAvatarUrl);
+      setProfile((previous) => previous
+        ? { ...previous, ...nextProfile, avatarUrl: nextAvatarUrl ?? undefined }
+        : nextProfile);
+      publishProfileUpdated({ accountId: user.accountId, avatarUrl: nextAvatarUrl });
       setUploadSuccess(true);
-      window.setTimeout(() => setUploadSuccess(false), 3000);
     } catch (error: any) {
       setUploadError(error?.response?.data?.message || "Upload failed. Please try again.");
       setPreview(profile?.avatarUrl ?? null);
     } finally {
+      URL.revokeObjectURL(objectUrl);
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
@@ -141,11 +167,9 @@ export default function ProfilePage() {
       <div className="profile-shell">
         <header className="profile-page-header">
           <div>
-            <p className="profile-eyebrow"><Sparkles size={14} /> ACCOUNT CENTER</p>
             <h1>My profile</h1>
             <p className="profile-page-subtitle">Your CinePrime identity, membership and rewards in one place.</p>
           </div>
-          <span className="profile-security-pill"><Shield size={14} /> Private account</span>
         </header>
 
         <section className="profile-overview-grid">
@@ -159,17 +183,19 @@ export default function ProfilePage() {
                   {uploading ? <span className="mini-spinner" /> : <Camera size={14} />}
                 </button>
               </div>
-              <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleFileChange} />
+              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={handleFileChange} />
             </div>
             <div className="identity-copy">
               <h2>{displayName}</h2>
               <p>@{user?.username || "member"}</p>
-              {profile?.profileCompleted ? <span className="profile-status success"><CheckCircle size={13} /> Profile complete</span> : <span className="profile-status pending"><Clock3 size={13} /> Profile incomplete</span>}
+              {!profile?.profileCompleted && (
+                <button type="button" className="profile-completion-action" onClick={() => navigate("/profile-setup")}>
+                  <Clock3 size={13} /> Complete your profile <ArrowUpRight size={13} />
+                </button>
+              )}
             </div>
             <div className="identity-divider" />
             <div className="identity-meta"><span>Member since</span><strong>{membership?.joinedAt ? formatDate(membership.joinedAt) : "CinePrime"}</strong></div>
-            {uploadSuccess && <div className="upload-feedback success"><CheckCircle size={14} /> Avatar updated successfully</div>}
-            {uploadError && <div className="upload-feedback error">{uploadError}</div>}
             <p className="upload-help">JPG, PNG or WEBP · Maximum 5 MB</p>
           </article>
 
@@ -193,17 +219,25 @@ export default function ProfilePage() {
           )}
         </section>
 
-        <section className="profile-details-grid">
-          <article className="profile-card detail-card">
-            <div className="detail-heading"><div><p className="profile-eyebrow">CONTACT</p><h2>Contact details</h2></div><Mail size={19} /></div>
-            <div className="detail-list"><InfoItem icon={Mail} label="Email" value={profile?.email} /><InfoItem icon={Phone} label="Phone number" value={profile?.phoneNumber} /><InfoItem icon={MapPin} label="Address" value={profile?.address} /></div>
-          </article>
-          <article className="profile-card detail-card">
-            <div className="detail-heading"><div><p className="profile-eyebrow">PERSONAL</p><h2>Personal details</h2></div><User size={19} /></div>
-            <div className="detail-list"><InfoItem icon={User} label="Full name" value={profile?.fullName} /><InfoItem icon={Calendar} label="Date of birth" value={formatDate(profile?.dateOfBirth)} /><InfoItem icon={User} label="Gender" value={profile?.gender} /><InfoItem icon={CreditCard} label="National ID" value={maskIdentityCard(profile?.identityCard)} /></div>
-          </article>
+        <section className="profile-card profile-information-card">
+          <div className="profile-information-heading">
+            <div><h2>Profile information</h2><p>Contact and personal details linked to your CinePrime account.</p></div>
+            <User size={19} />
+          </div>
+          <div className="profile-information-groups">
+            <section className="profile-information-group" aria-labelledby="contact-information-title">
+              <div className="profile-group-title"><Mail size={16} /><h3 id="contact-information-title">Contact</h3></div>
+              <div className="detail-list"><InfoItem icon={Mail} label="Email" value={profile?.email} /><InfoItem icon={Phone} label="Phone number" value={profile?.phoneNumber} /><InfoItem icon={MapPin} label="Address" value={profile?.address} /></div>
+            </section>
+            <section className="profile-information-group" aria-labelledby="personal-information-title">
+              <div className="profile-group-title"><User size={16} /><h3 id="personal-information-title">Personal</h3></div>
+              <div className="detail-list"><InfoItem icon={User} label="Full name" value={profile?.fullName} /><InfoItem icon={Calendar} label="Date of birth" value={formatDate(profile?.dateOfBirth)} /><InfoItem icon={User} label="Gender" value={profile?.gender} /><InfoItem icon={CreditCard} label="National ID" value={maskIdentityCard(profile?.identityCard)} /></div>
+            </section>
+          </div>
         </section>
       </div>
+      {uploadSuccess && <div className="profile-toast profile-toast-success" role="status" aria-live="polite"><CheckCircle size={18} /><div><strong>Profile photo updated</strong><span>Your new photo is now visible across CinePrime.</span></div></div>}
+      {uploadError && <div className="profile-toast profile-toast-error" role="alert"><div><strong>Photo upload failed</strong><span>{uploadError}</span></div></div>}
     </main>
   );
 }
@@ -213,20 +247,19 @@ const profileStyles = `
   @keyframes profile-shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
   .profile-page { min-height:100vh; padding:92px 24px 72px; color:#eaf2ff; font-family:Inter, sans-serif; background:radial-gradient(circle at 78% 12%, rgba(37,99,235,.22), transparent 28%), radial-gradient(circle at 12% 28%, rgba(79,70,229,.12), transparent 30%), #030712; }
   .profile-shell { max-width:1080px; margin:0 auto; }
-  .profile-page-header { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; margin-bottom:26px; }
-  .profile-page-header h1 { margin:8px 0 5px; font-size:32px; letter-spacing:-.04em; font-weight:800; color:#f8fbff; }
+  .profile-page-header { margin-bottom:26px; }
+  .profile-page-header h1 { margin:0 0 5px; font-size:32px; letter-spacing:-.04em; font-weight:800; color:#f8fbff; }
   .profile-page-subtitle { margin:0; color:#7e91ad; font-size:14px; }
   .profile-eyebrow { display:flex; align-items:center; gap:7px; margin:0; color:#60a5fa; font-size:10px; letter-spacing:.16em; font-weight:800; }
-  .profile-security-pill { display:inline-flex; align-items:center; gap:7px; padding:8px 12px; border:1px solid rgba(96,165,250,.22); border-radius:999px; background:rgba(37,99,235,.08); color:#9bc4ff; font-size:11px; white-space:nowrap; }
   .profile-overview-grid { display:grid; grid-template-columns:320px minmax(0,1fr); gap:18px; align-items:stretch; }
   .profile-card { position:relative; overflow:hidden; border:1px solid rgba(148,163,184,.15); border-radius:20px; background:rgba(15,23,42,.78); box-shadow:0 18px 55px rgba(0,0,0,.22); }
   .identity-card { display:flex; min-height:325px; flex-direction:column; align-items:center; padding:30px 24px 22px; text-align:center; }
   .identity-orbit { position:absolute; border:1px solid rgba(96,165,250,.12); border-radius:50%; pointer-events:none; }
   .orbit-one { width:270px; height:270px; top:-90px; right:-115px; }
   .orbit-two { width:220px; height:220px; bottom:-112px; left:-118px; }
-  .avatar-wrap { position:relative; z-index:1; margin:4px 0 16px; }
-  .avatar-frame { position:relative; display:grid; width:116px; height:116px; place-items:center; overflow:visible; border:3px solid #3b82f6; border-radius:50%; background:linear-gradient(145deg,#1d4ed8,#312e81); box-shadow:0 0 0 7px rgba(59,130,246,.10), 0 0 36px rgba(37,99,235,.34); }
-  .avatar-frame img { width:100%; height:100%; border-radius:50%; object-fit:cover; }
+  .avatar-wrap { position:relative; z-index:1; flex:0 0 auto; margin:4px 0 16px; }
+  .avatar-frame { position:relative; display:grid; width:116px; min-width:116px; height:116px; min-height:116px; aspect-ratio:1 / 1; flex:0 0 116px; box-sizing:border-box; place-items:center; overflow:visible; border:0; border-radius:999px; background:linear-gradient(145deg,#1d4ed8,#312e81); box-shadow:0 0 0 4px rgba(59,130,246,.72), 0 0 0 10px rgba(59,130,246,.09), 0 14px 38px rgba(37,99,235,.30); }
+  .avatar-frame img { display:block; width:100%; min-width:100%; height:100%; min-height:100%; aspect-ratio:1 / 1; border-radius:999px; object-fit:cover; object-position:center; }
   .avatar-frame > span { color:white; font-size:34px; font-weight:800; }
   .avatar-upload { position:absolute; right:-2px; bottom:2px; display:grid; width:30px; height:30px; place-items:center; border:2px solid #071225; border-radius:50%; background:#2563eb; color:white; cursor:pointer; box-shadow:0 5px 16px rgba(37,99,235,.45); }
   .avatar-upload:disabled { cursor:wait; opacity:.7; }
@@ -234,15 +267,11 @@ const profileStyles = `
   .identity-copy { position:relative; z-index:1; }
   .identity-copy h2 { margin:0; color:#f8fbff; font-size:19px; font-weight:800; }
   .identity-copy p { margin:4px 0 12px; color:#7690b2; font-size:13px; }
-  .profile-status { display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:999px; font-size:11px; font-weight:700; }
-  .profile-status.success { border:1px solid rgba(52,211,153,.23); background:rgba(16,185,129,.10); color:#6ee7b7; }
-  .profile-status.pending { border:1px solid rgba(251,146,60,.22); background:rgba(251,146,60,.10); color:#fdba74; }
+  .profile-completion-action { display:inline-flex; align-items:center; gap:6px; margin-top:2px; padding:0; border:0; background:transparent; color:#93c5fd; font:inherit; font-size:11px; font-weight:700; cursor:pointer; transition:color .16s ease; }
+  .profile-completion-action:hover { color:#dbeafe; }
   .identity-divider { width:100%; margin:24px 0 14px; border-top:1px solid rgba(148,163,184,.12); }
   .identity-meta { display:flex; width:100%; justify-content:space-between; color:#6f85a3; font-size:11px; }
   .identity-meta strong { color:#bfdbfe; font-weight:700; }
-  .upload-feedback { width:100%; box-sizing:border-box; margin-top:16px; padding:9px 11px; border-radius:9px; font-size:11px; text-align:left; }
-  .upload-feedback.success { border:1px solid rgba(52,211,153,.2); background:rgba(16,185,129,.1); color:#6ee7b7; }
-  .upload-feedback.error { border:1px solid rgba(248,113,113,.25); background:rgba(239,68,68,.1); color:#fca5a5; }
   .upload-help { margin:16px 0 0; color:#526987; font-size:10px; }
   .membership-card { position:relative; display:flex; min-height:325px; flex-direction:column; justify-content:space-between; overflow:hidden; border:1px solid rgba(147,197,253,.30); border-radius:20px; padding:25px 28px; background:linear-gradient(132deg,#081a42 0%,#0e3b85 47%,#30236e 100%); box-shadow:0 22px 65px rgba(15,66,160,.25); }
   .membership-card:before { position:absolute; width:340px; height:340px; right:-130px; top:-145px; border:1px solid rgba(191,219,254,.16); border-radius:50%; content:""; }
@@ -281,10 +310,15 @@ const profileStyles = `
   .membership-unavailable { align-items:flex-start; justify-content:center; gap:11px; color:#8fa6c4; }
   .membership-unavailable h2 { margin:0; color:#e5efff; font-size:20px; }
   .membership-unavailable p { max-width:360px; margin:0; color:#8fa6c4; font-size:13px; line-height:1.6; }
-  .profile-details-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:18px; }
-  .detail-card { padding:24px 25px 8px; }
-  .detail-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:15px; padding-bottom:17px; border-bottom:1px solid rgba(148,163,184,.12); color:#60a5fa; }
-  .detail-heading h2 { margin:6px 0 0; color:#eff6ff; font-size:17px; }
+  .profile-information-card { margin-top:18px; padding:24px 25px 8px; }
+  .profile-information-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:15px; padding-bottom:18px; border-bottom:1px solid rgba(148,163,184,.12); color:#60a5fa; }
+  .profile-information-heading h2 { margin:0; color:#eff6ff; font-size:18px; }
+  .profile-information-heading p { margin:6px 0 0; color:#6f85a3; font-size:12px; }
+  .profile-information-groups { display:grid; grid-template-columns:1fr 1fr; gap:0; }
+  .profile-information-group { min-width:0; padding:20px 24px 0 0; }
+  .profile-information-group + .profile-information-group { padding-right:0; padding-left:24px; border-left:1px solid rgba(148,163,184,.12); }
+  .profile-group-title { display:flex; align-items:center; gap:8px; margin-bottom:4px; color:#60a5fa; }
+  .profile-group-title h3 { margin:0; color:#bfdbfe; font-size:12px; letter-spacing:.1em; text-transform:uppercase; }
   .detail-list { display:grid; grid-template-columns:1fr; }
   .profile-info-item { display:flex; align-items:center; gap:12px; min-width:0; padding:14px 0; border-bottom:1px solid rgba(148,163,184,.10); }
   .profile-info-icon { display:grid; width:34px; height:34px; flex:0 0 auto; place-items:center; border:1px solid rgba(96,165,250,.18); border-radius:9px; background:rgba(37,99,235,.1); color:#60a5fa; }
@@ -292,8 +326,14 @@ const profileStyles = `
   .profile-info-label { color:#6f85a3; font-size:10px; letter-spacing:.1em; font-weight:700; text-transform:uppercase; }
   .profile-info-value { overflow:hidden; color:#e5efff; font-size:13px; text-overflow:ellipsis; white-space:nowrap; }
   .profile-info-empty { color:#526987; font-style:italic; }
+  .profile-toast { position:fixed; z-index:100; right:24px; bottom:24px; display:flex; width:min(360px,calc(100vw - 32px)); box-sizing:border-box; align-items:flex-start; gap:11px; padding:14px 16px; border:1px solid rgba(96,165,250,.28); border-radius:14px; background:rgba(7,18,37,.96); box-shadow:0 18px 55px rgba(0,0,0,.4); backdrop-filter:blur(18px); }
+  .profile-toast strong, .profile-toast span { display:block; }
+  .profile-toast strong { color:#eff6ff; font-size:13px; }
+  .profile-toast span { margin-top:3px; color:#8fa6c4; font-size:11px; line-height:1.45; }
+  .profile-toast-success { color:#34d399; }
+  .profile-toast-error { border-color:rgba(248,113,113,.28); color:#f87171; }
   .profile-loading { min-height:100vh; display:grid; place-items:center; background:#030712; }
   .profile-spinner { width:34px; height:34px; border:3px solid rgba(96,165,250,.18); border-top-color:#60a5fa; border-radius:50%; animation:profile-spin .8s linear infinite; }
-  @media (max-width: 820px) { .profile-page { padding:78px 16px 50px; } .profile-page-header { align-items:flex-start; flex-direction:column; } .profile-overview-grid, .profile-details-grid { grid-template-columns:1fr; } .identity-card { min-height:0; } .membership-card { min-height:300px; } }
+  @media (max-width: 820px) { .profile-page { padding:78px 16px 50px; } .profile-overview-grid, .profile-information-groups { grid-template-columns:1fr; } .profile-information-group { padding-right:0; } .profile-information-group + .profile-information-group { padding-left:0; border-left:0; border-top:1px solid rgba(148,163,184,.12); } .identity-card { min-height:0; } .membership-card { min-height:300px; } }
   @media (max-width: 480px) { .profile-page-header h1 { font-size:27px; } .membership-card { padding:22px 19px; } .membership-card-bottom { align-items:flex-start; flex-direction:column; } .membership-next { width:100%; text-align:left; } .membership-arrow { display:none; } }
 `;

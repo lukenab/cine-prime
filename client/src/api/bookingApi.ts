@@ -137,6 +137,7 @@ export interface BookingDetail {
   total: number;
   currency: string;
   promotionCode?: string;
+  promotionBenefitScope?: "TICKETS" | "CONCESSIONS" | "ORDER";
   promotionDiscountAmount?: number;
   expiresAt?: string;
   paidAt?: string;

@@ -1,60 +1,84 @@
-import { Film, PlayCircle, CalendarX, Layers } from "lucide-react";
-import type { MovieApiResponse } from "../api/movieApi";
-import { toDateStr } from "../api/movieApi";
+import { CircleCheck, Clock3, Film, TriangleAlert } from "lucide-react";
+import type {
+  MovieApiResponse,
+  MovieScreeningVersionCatalogResponse,
+} from "../api/movieApi";
+import { toMovieContentStatus } from "../utils/movieContentStatus";
 
 type Props = {
   movies: MovieApiResponse[];
+  screeningVersions: MovieScreeningVersionCatalogResponse[] | null;
   loading?: boolean;
 };
 
-function hasFutureShowtime(movie: MovieApiResponse): boolean {
-  if (!movie.showTimes?.length) return false;
-  const today = new Date().toISOString().split("T")[0];
-  return movie.showTimes.some((st) => toDateStr(st.showDate) >= today);
-}
+export function MovieStatsCards({ movies, screeningVersions, loading }: Props) {
+  const activeCatalog = movies.filter(
+    (movie) => toMovieContentStatus(movie.movieStatus) !== "ARCHIVED",
+  );
+  const awaitingReview = activeCatalog.filter(
+    (movie) => toMovieContentStatus(movie.movieStatus) === "PENDING_REVIEW",
+  ).length;
 
-export function MovieStatsCards({ movies, loading }: Props) {
-  const total = movies.length;
-  const showing = movies.filter(hasFutureShowtime).length;
-  const noUpcoming = total - showing;
-  const genreSet = new Set(movies.flatMap((m) => m.movieType ?? []));
+  const usableVersionMovieIds = new Set(
+    (screeningVersions ?? [])
+      .filter(
+        (version) =>
+          version.status === "ACTIVE"
+          && !version.requiresAttention
+          && version.compatibleRoomCount > 0,
+      )
+      .map((version) => version.movieId),
+  );
 
+  const approvedMovies = activeCatalog.filter(
+    (movie) => toMovieContentStatus(movie.movieStatus) === "APPROVED",
+  );
+  const readyForPlanning = approvedMovies.filter((movie) =>
+    usableVersionMovieIds.has(movie.movieId),
+  ).length;
+  const needsAttention = activeCatalog.filter((movie) => {
+    const status = toMovieContentStatus(movie.movieStatus);
+    return status === "CHANGES_REQUESTED"
+      || (status === "APPROVED" && !usableVersionMovieIds.has(movie.movieId));
+  }).length;
+
+  const operationalStatsUnavailable = screeningVersions === null;
   const stats = [
     {
-      label: "Total Movies",
-      value: loading ? "—" : String(total),
-      sub: "in catalog",
+      label: "Total Catalogue",
+      value: loading ? "—" : String(activeCatalog.length),
+      sub: "active catalogue titles",
       icon: Film,
       color: "blue",
     },
     {
-      label: "Now Showing",
-      value: loading ? "—" : String(showing),
-      sub: "with upcoming showtimes",
-      icon: PlayCircle,
+      label: "Awaiting Review",
+      value: loading ? "—" : String(awaitingReview),
+      sub: "submitted for admin decision",
+      icon: Clock3,
+      color: "amber",
+    },
+    {
+      label: "Ready for Planning",
+      value: loading || operationalStatsUnavailable ? "—" : String(readyForPlanning),
+      sub: "approved with a schedulable version",
+      icon: CircleCheck,
       color: "emerald",
     },
     {
-      label: "No Upcoming",
-      value: loading ? "—" : String(noUpcoming),
-      sub: "no scheduled showtimes",
-      icon: CalendarX,
+      label: "Needs Attention",
+      value: loading || operationalStatsUnavailable ? "—" : String(needsAttention),
+      sub: "revision or version blocker",
+      icon: TriangleAlert,
       color: "rose",
-    },
-    {
-      label: "Genres",
-      value: loading ? "—" : String(genreSet.size),
-      sub: "distinct genres",
-      icon: Layers,
-      color: "violet",
     },
   ];
 
   const colorMap: Record<string, { bg: string; icon: string }> = {
-    blue:   { bg: "bg-blue-50",   icon: "text-blue-600"   },
-    emerald:{ bg: "bg-emerald-50",icon: "text-emerald-600"},
-    rose:   { bg: "bg-rose-50",   icon: "text-rose-500"   },
-    violet: { bg: "bg-violet-50", icon: "text-violet-600" },
+    blue: { bg: "bg-blue-50", icon: "text-blue-600" },
+    amber: { bg: "bg-amber-50", icon: "text-amber-600" },
+    emerald: { bg: "bg-emerald-50", icon: "text-emerald-600" },
+    rose: { bg: "bg-rose-50", icon: "text-rose-500" },
   };
 
   return (

@@ -57,6 +57,7 @@ import PromotionDetailPage from "../pages/admin/PromotionDetailPage";
 import ReportPage from "../pages/admin/ReportPage";
 import RefundReconciliationPage from "../pages/admin/RefundReconciliationPage";
 import SettingsPage from "../pages/admin/SettingsPage";
+import AdminProfilePage from "../pages/admin/AdminProfilePage";
 import TicketSalePage from "../pages/admin/TicketSalePage";
 import ConcessionFulfillmentPage from "../pages/admin/ConcessionFulfillmentPage";
 import ConcessionCatalogPage from "../pages/admin/ConcessionCatalogPage";
@@ -109,6 +110,7 @@ export default function AppRoutes() {
       {/* Administrative workspace */}
       <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_BRANCH_MANAGER", "ROLE_PROGRAMMING_OPERATOR"]} />}>
         <Route path="/admin" element={<AdminLayout />}>
+          <Route path="profile" element={<AdminProfilePage />} />
           <Route element={<ProtectedRoute allowedRoles={["ROLE_PROGRAMMING_OPERATOR"]} />}>
             <Route path="programming" element={<ProgrammingOperatorDashboardPage />} />
           </Route>
@@ -175,6 +177,7 @@ export default function AppRoutes() {
       <Route element={<ProtectedRoute allowedRoles={["ROLE_EMPLOYEE"]} />}>
         <Route path="/employee" element={<AdminLayout />}>
           <Route index element={<EmployeeDashboardPage />} />
+          <Route path="profile" element={<AdminProfilePage />} />
           <Route path="sell" element={<TicketSalePage />} />
           <Route path="bookings" element={<ManageBookingPage />} />
           <Route path="concessions/fulfillment" element={<ConcessionFulfillmentPage />} />
