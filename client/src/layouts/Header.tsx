@@ -42,7 +42,9 @@ const pageTitles: Record<string, string> = {
   promotions: "Promotions",
   reports:    "Reports",
   settings:   "Settings",
+  profile:    "My Profile",
   concessions: "Concession Fulfillment",
+  programming: "Programming",
 };
 
 export function Header({ activePage, isDarkMode = true, onToggleTheme }: HeaderProps) {
@@ -109,19 +111,40 @@ export function Header({ activePage, isDarkMode = true, onToggleTheme }: HeaderP
           type="button"
           onClick={() => setIsCommandPaletteOpen(true)}
           aria-label="Open command palette"
-          style={{ display: "flex", alignItems: "center", gap: "8px", background: "var(--bg-main)", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "7px 10px 7px 12px", minWidth: "228px", cursor: "pointer", color: "var(--text-sub)", fontFamily: "Inter, sans-serif", fontSize: "12.5px", textAlign: "left", transition: "all 0.2s ease" }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "9px",
+            minWidth: "228px",
+            padding: "8px 9px 8px 12px",
+            border: `1px solid ${isDarkMode ? "rgba(148, 163, 184, 0.18)" : "rgba(15, 23, 42, 0.12)"}`,
+            borderRadius: "9px",
+            background: isDarkMode ? "#0d1117" : "#f8fafc",
+            color: isDarkMode ? "#cbd5e1" : "#475569",
+            cursor: "pointer",
+            fontFamily: "Inter, sans-serif",
+            fontSize: "12.5px",
+            fontWeight: 500,
+            textAlign: "left",
+            boxShadow: isDarkMode ? "inset 0 1px 0 rgba(255,255,255,0.025)" : "0 1px 2px rgba(15,23,42,0.03)",
+            transition: "border-color 0.18s ease, background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease",
+          }}
           onMouseEnter={(event) => {
-            event.currentTarget.style.borderColor = isDarkMode ? "rgba(59,130,246,0.6)" : "#2563eb";
-            event.currentTarget.style.color = "var(--text-main)";
+            event.currentTarget.style.borderColor = isDarkMode ? "rgba(96,165,250,0.55)" : "rgba(37,99,235,0.55)";
+            event.currentTarget.style.background = isDarkMode ? "#111827" : "#ffffff";
+            event.currentTarget.style.color = isDarkMode ? "#f8fafc" : "#0f172a";
+            event.currentTarget.style.boxShadow = isDarkMode ? "0 0 0 3px rgba(37,99,235,0.10)" : "0 0 0 3px rgba(37,99,235,0.08)";
           }}
           onMouseLeave={(event) => {
-            event.currentTarget.style.borderColor = "var(--border-color)";
-            event.currentTarget.style.color = "";
+            event.currentTarget.style.borderColor = isDarkMode ? "rgba(148, 163, 184, 0.18)" : "rgba(15, 23, 42, 0.12)";
+            event.currentTarget.style.background = isDarkMode ? "#0d1117" : "#f8fafc";
+            event.currentTarget.style.color = isDarkMode ? "#cbd5e1" : "#475569";
+            event.currentTarget.style.boxShadow = isDarkMode ? "inset 0 1px 0 rgba(255,255,255,0.025)" : "0 1px 2px rgba(15,23,42,0.03)";
           }}
         >
-          <Search size={14} />
-          <span style={{ flex: 1 }}>Search or jump to…</span>
-          <kbd style={{ border: "1px solid var(--border-color)", borderRadius: "5px", padding: "2px 5px", color: "var(--text-sub)", fontSize: "10px", lineHeight: 1.2 }}>Ctrl K</kbd>
+          <Search size={14} style={{ color: isDarkMode ? "#60a5fa" : "#2563eb", flexShrink: 0 }} />
+          <span style={{ flex: 1, whiteSpace: "nowrap" }}>Search or jump to...</span>
+          <kbd style={{ border: `1px solid ${isDarkMode ? "rgba(148,163,184,0.22)" : "rgba(15,23,42,0.12)"}`, borderRadius: "5px", padding: "2px 5px", background: isDarkMode ? "rgba(255,255,255,0.035)" : "#ffffff", color: isDarkMode ? "#94a3b8" : "#64748b", fontSize: "10px", lineHeight: 1.2 }}>Ctrl K</kbd>
         </button>
 
         {/* Date pill */}
@@ -220,6 +243,10 @@ export function Header({ activePage, isDarkMode = true, onToggleTheme }: HeaderP
               <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
                 <button
                   className="dropdown-item"
+                  onClick={() => {
+                    navigate(user?.role === "ROLE_EMPLOYEE" ? "/employee/profile" : "/admin/profile");
+                    setIsProfileOpen(false);
+                  }}
                   style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "10px 12px", border: "none", background: "transparent", cursor: "pointer", borderRadius: "6px", color: "var(--text-muted)", fontSize: "13px", transition: "all 0.2s ease" }}
                 >
                   <User size={15} />

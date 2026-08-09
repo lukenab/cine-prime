@@ -137,6 +137,10 @@ export const authApi = {
         return axiosClient.get(`/api/accounts/${accountId}`);
     },
 
+    getMyAccount: () => {
+        return axiosClient.get('/api/accounts/my-info');
+    },
+
     updateAccount: (accountId: string | undefined, payload: any) => {
         return axiosClient.put(`/api/accounts/${accountId}`, payload);
     },

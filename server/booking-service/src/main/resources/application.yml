@@ -82,6 +82,7 @@ concession-service:
   internal-key: ${INTERNAL_SERVICE_KEY:local-dev-internal-key-change-before-deploy}
 
 promotion-service:
+  url: ${PROMOTION_SERVICE_URL:http://localhost:8086}
   internal-key: ${INTERNAL_SERVICE_KEY:local-dev-internal-key-change-before-deploy}
 
 management:

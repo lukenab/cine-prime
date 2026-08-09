@@ -289,7 +289,7 @@ export const concessionApi = {
       return unwrap(await axiosClient.post(
         "/api/admin/concession-media/images",
         data,
-        { headers: { "Content-Type": "multipart/form-data" } },
+        { headers: { "Content-Type": undefined } },
       ));
     },
     getInventory: async (clusterId: number): Promise<ClusterInventory[]> =>

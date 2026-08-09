@@ -20,8 +20,11 @@ export const userApi = {
   uploadAvatar: (id: string, file: File) => {
     const form = new FormData();
     form.append("file", file);
+    // axiosClient sets a default "Content-Type: application/json" header that
+    // persists even for FormData bodies. Clear it here so the browser can set
+    // the correct "multipart/form-data; boundary=..." header itself.
     return axiosClient.post(`/api/users/${id}/avatar`, form, {
-      headers: { "Content-Type": "multipart/form-data" },
+      headers: { "Content-Type": undefined },
     });
   },
 

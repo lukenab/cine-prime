@@ -138,7 +138,7 @@ export default function LoginPage() {
     focusedField === field ? "0 0 0 3px rgba(59,130,246,0.12)" : "0 0 0 0 rgba(59,130,246,0)";
 
   const inputBaseStyle: React.CSSProperties = {
-    background: "#141414",
+    background: "rgba(2, 8, 20, 0.72)",
     borderRadius: "12px",
     color: "#ffffff",
     fontSize: "14px",
@@ -149,7 +149,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{ animation: "loginFadeIn 0.5s ease both" }}>
+    <div className="cosmic-login-card" style={{ animation: "loginFadeIn 0.5s ease both" }}>
       <style>{`
         @keyframes loginFadeIn {
           0% { opacity: 0; transform: translateY(12px); }
@@ -159,7 +159,14 @@ export default function LoginPage() {
       `}</style>
 
       {/* Heading */}
-      <div className="mb-9">
+      <div className="mb-8">
+        <div
+          className="mb-4 inline-flex items-center gap-2"
+          style={{ color: "#60a5fa", fontSize: "10px", fontWeight: 750, letterSpacing: "0.16em", textTransform: "uppercase" }}
+        >
+          <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#3b82f6", boxShadow: "0 0 12px rgba(59,130,246,0.9)" }} />
+          CinePrime account access
+        </div>
         <h2 className="mb-2" style={{ color: "#ffffff", fontSize: "30px", fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.2 }}>
           Welcome back
         </h2>
@@ -195,7 +202,7 @@ export default function LoginPage() {
         {/* Username field */}
         <div className="flex flex-col gap-2">
           <label htmlFor="username" style={{ color: "rgba(255,255,255,0.6)", fontSize: "12px", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            Work email or username
+            Email address
           </label>
           <div style={{ position: "relative" }}>
             <User
@@ -215,7 +222,7 @@ export default function LoginPage() {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter your work email or username"
+              placeholder="Enter your email address"
               autoComplete="username"
               style={{
                 ...inputBaseStyle,
@@ -334,7 +341,7 @@ export default function LoginPage() {
           type="submit"
           disabled={isLoading}
           style={{
-            background: "#3b82f6",
+            background: "linear-gradient(110deg, #2563eb 0%, #3b82f6 52%, #60a5fa 100%)",
             color: "#ffffff",
             borderRadius: "9999px",
             border: "none",
@@ -383,15 +390,17 @@ export default function LoginPage() {
           )}
         </button>
 
-        {/* Divider & Register link */}
-        <div className="flex items-center gap-3 my-1">
-          <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.08)" }} />
-          <span style={{ color: "rgba(255,255,255,0.25)", fontSize: "12px" }}>or</span>
-          <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.08)" }} />
-        </div>
-
-        <p style={{ textAlign: "center", color: "rgba(255,255,255,0.4)", fontSize: "14px" }}>
-          Don't have an account?{" "}
+        <p
+          style={{
+            textAlign: "center",
+            color: "rgba(255,255,255,0.48)",
+            fontSize: "13px",
+            borderTop: "1px solid rgba(255,255,255,0.08)",
+            paddingTop: "20px",
+            marginTop: "2px",
+          }}
+        >
+          Don&apos;t have an account?{" "}
           <Link
             to="/register"
             style={{ color: "#3b82f6", fontWeight: 600, textDecoration: "none" }}
@@ -403,7 +412,7 @@ export default function LoginPage() {
         </p>
       </form>
 
-      <p className="mt-12" style={{ textAlign: "center", color: "rgba(255,255,255,0.18)", fontSize: "11px", lineHeight: 1.6 }}>
+      <p className="mt-7" style={{ textAlign: "center", color: "rgba(255,255,255,0.22)", fontSize: "10px", lineHeight: 1.6 }}>
         By signing in, you agree to CinePrime's{" "}
         <Link to="/register" style={{ color: "rgba(255,255,255,0.35)", textDecoration: "underline" }}>
           Terms of Service

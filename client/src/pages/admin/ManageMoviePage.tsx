@@ -13,6 +13,7 @@ import {
   type MovieApiResponse,
   type GenreResponse,
   type MovieResponse,
+  type MovieScreeningVersionCatalogResponse,
 } from "../../api/movieApi";
 import {
   MOVIE_CONTENT_STATUS_META,
@@ -30,6 +31,9 @@ export default function ManageMoviePage() {
   const navigate = useNavigate();
 
   const [movies, setMovies] = useState<MovieApiResponse[]>([]);
+  const [screeningVersions, setScreeningVersions] = useState<
+    MovieScreeningVersionCatalogResponse[] | null
+  >(null);
 
   // Genre names for the filter panel (Add/Edit now happens on a dedicated page - see MovieEditorPage).
   const [genres, setGenres] = useState<GenreResponse[]>([]);
@@ -52,8 +56,18 @@ export default function ManageMoviePage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await movieApi.getAllMovies();
-      setMovies(res.result ?? []);
+      const [moviesResult, versionsResult] = await Promise.allSettled([
+        movieApi.getAllMovies(),
+        movieApi.searchMovieScreeningVersions(),
+      ]);
+
+      if (moviesResult.status === "rejected") throw moviesResult.reason;
+      setMovies(moviesResult.value.result ?? []);
+      setScreeningVersions(
+        versionsResult.status === "fulfilled"
+          ? (versionsResult.value.result ?? [])
+          : null,
+      );
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? "Failed to load movies. Is movie-service running?";
       setError(msg);
@@ -187,7 +201,11 @@ export default function ManageMoviePage() {
         </p>
       </div>
 
-      <MovieStatsCards movies={movies} loading={loading} />
+      <MovieStatsCards
+        movies={movies}
+        screeningVersions={screeningVersions}
+        loading={loading}
+      />
 
       {/* Error banner */}
       {error && (

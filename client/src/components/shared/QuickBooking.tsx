@@ -291,7 +291,7 @@ export function QuickBooking() {
   }
 
   return (
-    <section className="px-4 py-5 sm:px-6" aria-labelledby="quick-booking-title">
+    <section className="relative z-30 px-4 py-5 sm:px-6" aria-labelledby="quick-booking-title">
       <div className="mx-auto max-w-6xl rounded-2xl border border-blue-400/25 bg-white/[0.03] p-4 shadow-[0_18px_55px_rgba(0,0,0,0.32)] backdrop-blur-sm sm:p-5">
         <div className="mb-4 flex items-center gap-3 text-left">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-[0_8px_22px_rgba(37,99,235,0.3)]">

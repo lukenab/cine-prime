@@ -13,7 +13,10 @@ import org.springframework.web.bind.annotation.RequestHeader;
 
 import java.util.UUID;
 
-@FeignClient(name = "promotion-service", path = "/api/internal/promotions")
+@FeignClient(
+        name = "promotion-client",
+        url = "${promotion-service.url}",
+        path = "/api/internal/promotions")
 public interface PromotionClient {
     @PostMapping("/quote")
     ApiResponse<PromotionQuoteResponse> quote(
