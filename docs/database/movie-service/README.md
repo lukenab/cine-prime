@@ -1,7 +1,6 @@
 # movie-service database migrations
 
-**Source of truth as of the Flyway adoption (see `docs/issues/` — "[Database] Enable
-versioned runtime migrations for movie-service") is:**
+**Source of truth for runtime migrations is:**
 
 ```
 server/movie-service/src/main/resources/db/migration/

@@ -37,9 +37,8 @@ full tech stack and service/port map.
 
 ### 1.4 References
 - API contracts: [`../api-specs/`](../api-specs/)
-- System design: [`../architecture/system-level/SYSTEM_DESIGN_SPRINT_1.md`](../architecture/system-level/SYSTEM_DESIGN_SPRINT_1.md)
 - Kafka contract: [`../architecture/kafka/kafka-user-service-contract.md`](../architecture/kafka/kafka-user-service-contract.md)
-- ERDs: [`../architecture/database-erd/`](../architecture/database-erd/)
+- Database design and ERDs: [`../DB_DESIGN.md`](../DB_DESIGN.md)
 
 ---
 

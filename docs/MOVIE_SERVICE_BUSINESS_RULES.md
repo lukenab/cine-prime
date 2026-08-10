@@ -713,5 +713,5 @@ For Sprint 3, prioritize these movie-service rules first:
 - `server/movie-service/src/main/java/movieservice/enums/MovieStatus.java`
 - `server/movie-service/src/main/java/movieservice/enums/ShowTimeStatus.java`
 - `server/movie-service/src/main/java/movieservice/exception/MovieErrorCode.java`
-- `docs/db/movie_db_v2.dbml`
+- `docs/DB_DESIGN.md`
 - `docs/api-specs/movie-service/API_CONTRACT.md`

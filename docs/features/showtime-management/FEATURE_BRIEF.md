@@ -183,4 +183,4 @@ Chọn planning window, cinema, movie, thuật toán và kịch bản
 - `server/movie-service/src/main/java/movieservice/service/autoshowtime/optimizer/` (LEGACY/CP_SAT/SHADOW_COMPARE, mới)
 - `client/src/pages/admin/AutoScheduleShowtimePage.tsx`
 - `client/src/pages/admin/autoSchedule/AutoScheduleResultsWorkspace.tsx`
-- Xem thêm `TECHNICAL_SPECIFICATION.md`, `CONSTRAINT_OPTIMIZER_DESIGN.md`, `CONSTRAINT_OPTIMIZER_AUDIT.md` trong cùng thư mục.
+- Xem thêm `TECHNICAL_SPECIFICATION.md` và `ALGORITHM_AND_GAP_ANALYSIS.md` trong cùng thư mục.

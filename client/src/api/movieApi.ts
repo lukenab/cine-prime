@@ -92,7 +92,8 @@ export type RoomApiResponse = {
 };
 
 // ── Cinema Room creation wizard (layout versioning / approval workflow) ────────
-// See docs/CINEMA_ROOM_CREATION_FLOW.md. Room creation always goes through this
+// See docs/api-specs/movie-service/CINEMA_CLUSTER_ROOM_LIFECYCLE_CONTRACT.md.
+// Room creation always goes through this
 // flow — the old flat quick-create endpoint (no review, straight to ACTIVE) was
 // removed so rooms are governed the same way as cinema clusters (draft -> submit
 // -> admin approve -> activate).
