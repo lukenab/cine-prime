@@ -72,7 +72,7 @@ unaffected):
 (`OPTIMAL`/`FEASIBLE`/`INFEASIBLE`/`MODEL_INVALID`/`UNKNOWN`, null until the run finishes),
 `solveDurationMillis`, `objectiveScore`, and three JSON-string fields for the frontend to parse:
 `objectiveBreakdown`, `solverDiagnostics`, `shadowComparison` (the last is only non-null for
-`SHADOW_COMPARE` runs). See `CONSTRAINT_OPTIMIZER_DESIGN.md` for what each JSON payload contains.
+`SHADOW_COMPARE` runs). See `TECHNICAL_SPECIFICATION.md` for what each JSON payload contains.
 
 ### 3.3. Schedule Plan Workflow
 

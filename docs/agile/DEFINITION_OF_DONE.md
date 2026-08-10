@@ -28,7 +28,7 @@ not "code written". This is the canonical DoD; the MR template in
 - [ ] Responsive and consistent with the existing design system (shadcn/ui).
 
 ## Database / Infra
-- [ ] Schema changes reflected in `postgres-init/` and the ERD ([`../architecture/database-erd/`](../architecture/database-erd/)).
+- [ ] Schema changes are reflected in runtime migrations and the [database design](../DB_DESIGN.md).
 - [ ] Config is environment-driven (no hardcoded values that belong in `application.yml`).
 
 ## Evidence (attached to the MR)

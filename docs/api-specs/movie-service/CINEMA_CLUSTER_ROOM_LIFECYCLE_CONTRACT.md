@@ -4,8 +4,6 @@
 **Module:** `movie-service`  
 **Status:** Proposed canonical contract  
 **Last updated:** 2026-07-18  
-**Related issue pack:** `docs/issues/cinema-cluster-room-retirement-issue-pack.md`
-
 ---
 
 ## 1. Mục tiêu
@@ -750,8 +748,6 @@ Các nguồn trên không quy định trực tiếp endpoint delete cho dự án
 
 ## 21. Tài liệu liên quan
 
-- `docs/issues/cinema-cluster-room-retirement-issue-pack.md`
-- `docs/issues/movie-service-industry-readiness-checklist.md`
 - `docs/api-specs/movie-service/API_CONTRACT.md`
 - `docs/api-specs/movie-service/MOVIE_LIFECYCLE_CONTRACT.md`
 - `docs/database/movie-service/`

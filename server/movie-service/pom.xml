@@ -96,7 +96,7 @@
 			every platform's native runtime jar (win32/linux/darwin, x86-64/aarch64) transitively
 			at runtime scope, so no OS-specific profile is needed - Maven just resolves the one
 			matching the running platform's classpath entry via the native loader baked into
-			ortools-java itself. See docs/features/showtime-management/CONSTRAINT_OPTIMIZER_DESIGN.md
+			ortools-java itself. See docs/features/showtime-management/TECHNICAL_SPECIFICATION.md
 			for native-library requirements.
 		-->
 		<dependency>

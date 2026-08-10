@@ -223,7 +223,7 @@ layout ACTIVE, hoặc layout mới nhất nếu chưa có bản ACTIVE nào).
 | `GET` | `/api/cinema-room-master-data` | Aggregate read-only: 4 danh sách master data, database-managed `roomTemplates`, và các danh sách enum-backed, gồm `presentationSystems = [STANDARD, IMAX, DOLBY_CINEMA, SCREENX]`. `roomTemplates` cung cấp quick-start mặc định cho service tier, projection, resolution, audio, grid và layout rule; không chứa Room Code/Name, kích thước phòng hoặc kích thước màn hình. | Public |
 
 Không có CRUD endpoint riêng cho 4 master table này ở sprint này (seed qua
-migration `V18`) — xem [`CINEMA_ROOM_BUSINESS_RULES.md`](../../CINEMA_ROOM_BUSINESS_RULES.md#layout-p1-002--master-data-not-enums-for-configurable-dimensions).
+migration `V18`) — xem [`CINEMA_CLUSTER_ROOM_LIFECYCLE_CONTRACT.md`](CINEMA_CLUSTER_ROOM_LIFECYCLE_CONTRACT.md).
 
 ---
 
@@ -264,7 +264,7 @@ form/rule set và không được dùng thay thế cho dữ liệu layout đã l
 
 **`personCapacity`/`sellableUnitCount`** trong response luôn do backend tính
 lại — client gửi gì cũng bị bỏ qua (xem
-[`CINEMA_ROOM_BUSINESS_RULES.md`](../../CINEMA_ROOM_BUSINESS_RULES.md#layout-p0-004--capacity-is-always-backend-derived)).
+[`CINEMA_CLUSTER_ROOM_LIFECYCLE_CONTRACT.md`](CINEMA_CLUSTER_ROOM_LIFECYCLE_CONTRACT.md)).
 
 ---
 

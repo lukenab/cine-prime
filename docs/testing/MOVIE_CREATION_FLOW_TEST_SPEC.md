@@ -2020,6 +2020,6 @@ Xem bảng chính ở Mục 4 (đã cập nhật). Điểm bất đối xứng �
 
 **Database (bổ sung cho v3.0):** `movie_availability` (đọc trực tiếp qua `psql \d movie_availability` — không qua file migration riêng, bảng này nằm trong `V1__baseline_schema.sql`), dữ liệu thật trong DB dev (`movie`, `movie_availability`) để đối chiếu ví dụ cụ thể.
 
-**Docs:** `docs/api-specs/movie-service/MOVIE_LIFECYCLE_CONTRACT.md`, `docs/api-specs/movie-service/AUTHORIZATION_MATRIX.md`, `docs/issues/ISSUE_TEMPLATE.md`, `docs/issues/mr-movie-rejection-note-visibility.md`, `docs/issues/mr-tmdb-import-ui.md`, `docs/issues/mr-movie-editor-media-section.md`.
+**Docs:** `docs/api-specs/movie-service/MOVIE_LIFECYCLE_CONTRACT.md`, `docs/api-specs/movie-service/AUTHORIZATION_MATRIX.md`, `docs/issues/ISSUE_TEMPLATE.md`.
 
 **Chưa đọc / cần kiểm tra thêm nếu cần độ chính xác tuyệt đối:** `MovieEditorWorkflow.tsx` (điều hướng section — có đọc ở phiên làm Media section nhưng không lặp lại chi tiết ở đây), `utils/tmdbWarnings.ts`, `GenreController`/`GenreService.java` (còn dùng cho case genre tạo thủ công ngoài luồng TMDB), `SecurityConfig` gốc, backend/frontend test files đầy đủ (`MovieServiceTest.java`, `MovieReadinessValidatorTest.java`, `TmdbServiceTest.java`, v.v. — đã tham chiếu gián tiếp qua tên test case nhưng chưa đọc toàn bộ nội dung từng test). `MovieAvailabilityHistoryRepository`/entity `MovieAvailabilityHistory` mới xác nhận tồn tại, chưa đọc toàn bộ field. **Chưa có QA trình duyệt thật cho bất kỳ thay đổi nào trong v2.0/v3.0** (môi trường không có Playwright/chromium-cli) — xem Mục 2.

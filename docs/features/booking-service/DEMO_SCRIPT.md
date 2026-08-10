@@ -299,4 +299,3 @@ Chưa nên trình bày hệ thống là production-ready cho đến khi hoàn th
 - [Booking business rules](BUSINESS_RULES.md)
 - [Booking API list](API_LIST.md)
 - [Booking technical specification](TECHNICAL_SPECIFICATION.md)
-- [P0/P1 implementation status](P0_P1_IMPLEMENTATION_STATUS.md)
