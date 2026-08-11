@@ -207,7 +207,7 @@ export default function AuthLayout() {
         }
         .cosmic-login-card {
           position: relative;
-          padding: 34px;
+          padding: 28px 32px;
           border: 1px solid rgba(96,165,250,0.16);
           border-radius: 24px;
           background: linear-gradient(145deg, rgba(13,25,48,0.82), rgba(5,10,22,0.92));
@@ -228,7 +228,7 @@ export default function AuthLayout() {
           pointer-events: none;
         }
         @media (max-width: 767px) {
-          .cosmic-login-card { padding: 26px 22px; border-radius: 20px; }
+          .cosmic-login-card { padding: 24px 22px; border-radius: 20px; }
         }
       `}</style>
 

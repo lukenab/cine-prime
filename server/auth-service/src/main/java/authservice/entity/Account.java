@@ -32,6 +32,11 @@ public class Account {
     @Column(name = "password_hash", nullable = false, length = 255)
     String passwordHash;
 
+    @Column(name = "local_login_enabled", nullable = false)
+    @ColumnDefault("true")
+    @Builder.Default
+    boolean localLoginEnabled = true;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
     @Builder.Default

@@ -38,7 +38,12 @@ public enum AuthErrorCode implements BaseErrorCode {
     RATE_LIMIT_EXCEEDED(1031, "Too many requests. Please wait and try again.", HttpStatus.TOO_MANY_REQUESTS),
     INVALID_PAGE_REQUEST(1032, "Page must be at least 1 and size must be between 1 and 100.", HttpStatus.BAD_REQUEST),
     PASSWORD_RESET_TOKEN_INVALID(1033, "Password reset link is invalid or has already been used.", HttpStatus.BAD_REQUEST),
-    PASSWORD_RESET_TOKEN_EXPIRED(1034, "Password reset link has expired.", HttpStatus.BAD_REQUEST);
+    PASSWORD_RESET_TOKEN_EXPIRED(1034, "Password reset link has expired.", HttpStatus.BAD_REQUEST),
+    GOOGLE_AUTH_NOT_CONFIGURED(1035, "Google sign-in is not configured.", HttpStatus.SERVICE_UNAVAILABLE),
+    GOOGLE_TOKEN_INVALID(1036, "Google sign-in could not be verified. Please try again.", HttpStatus.UNAUTHORIZED),
+    GOOGLE_EMAIL_NOT_VERIFIED(1037, "Your Google email address must be verified.", HttpStatus.FORBIDDEN),
+    GOOGLE_ACCOUNT_LINK_REQUIRED(1038, "An account already uses this email. Sign in with your password before linking Google.", HttpStatus.CONFLICT),
+    LOCAL_LOGIN_DISABLED(1039, "This account uses Google sign-in. Continue with Google.", HttpStatus.UNAUTHORIZED);
 
     int code;
     String message;

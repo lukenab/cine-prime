@@ -3,6 +3,7 @@ import { Eye, EyeOff, User, Lock, Loader2 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { defaultPathForRole, EMPLOYEE_HOME_PATH } from "../../utils/roleRoutes";
+import GoogleSignInButton from "../../components/auth/GoogleSignInButton";
 
 const MOCK_EMPLOYEE_USERNAME = "employee";
 const MOCK_EMPLOYEE_EMAIL = "employee@cineprime.com";
@@ -64,7 +65,7 @@ export default function LoginPage() {
 
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, login } = useAuth();
+  const { user, login, loginWithGoogle } = useAuth();
   const loginNavigationState = location.state as PostLoginNavigationState | null;
 
   const navigateAfterLogin = useCallback((role: string) => {
@@ -131,6 +132,30 @@ export default function LoginPage() {
     }
   };
 
+  const handleGoogleCredential = async (credential: string) => {
+    setError(null);
+    setIsLoading(true);
+    try {
+      const { role, needsSetup } = await loginWithGoogle(credential);
+      if (needsSetup) {
+        navigate("/profile-setup", { replace: true });
+        return;
+      }
+      navigateAfterLogin(role);
+    } catch (err: any) {
+      const code = err?.response?.data?.code;
+      if (code === 1038) {
+        setError("An account already uses this email. Sign in with your password to link Google later.");
+      } else if (code === 1035) {
+        setError("Google sign-in is not configured yet.");
+      } else {
+        setError("Google sign-in could not be verified. Please try again.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Shared input wrapper styling driven by focus state
   const fieldBorder = (field: string) =>
     focusedField === field ? "rgba(59,130,246,0.55)" : "rgba(255,255,255,0.1)";
@@ -159,9 +184,9 @@ export default function LoginPage() {
       `}</style>
 
       {/* Heading */}
-      <div className="mb-8">
+      <div className="mb-6">
         <div
-          className="mb-4 inline-flex items-center gap-2"
+          className="mb-3 inline-flex items-center gap-2"
           style={{ color: "#60a5fa", fontSize: "10px", fontWeight: 750, letterSpacing: "0.16em", textTransform: "uppercase" }}
         >
           <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#3b82f6", boxShadow: "0 0 12px rgba(59,130,246,0.9)" }} />
@@ -173,7 +198,7 @@ export default function LoginPage() {
         <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px" }}>Sign in to continue to your account</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {error && (
           <div
             style={{
@@ -390,14 +415,32 @@ export default function LoginPage() {
           )}
         </button>
 
+        <div style={{ display: "flex", alignItems: "center", gap: 14, margin: "2px 0 0" }}>
+          <div style={{ flex: 1, height: 1, background: "rgba(148,163,184,0.14)" }} />
+          <span
+            style={{
+              color: "rgba(148,163,184,0.62)",
+              fontSize: 10,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.14em",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Or
+          </span>
+          <div style={{ flex: 1, height: 1, background: "rgba(148,163,184,0.14)" }} />
+        </div>
+
+        <GoogleSignInButton onCredential={handleGoogleCredential} iconOnly disabled={isLoading} />
+
         <p
           style={{
             textAlign: "center",
             color: "rgba(255,255,255,0.48)",
             fontSize: "13px",
-            borderTop: "1px solid rgba(255,255,255,0.08)",
-            paddingTop: "20px",
-            marginTop: "2px",
+            paddingTop: "2px",
+            marginTop: 0,
           }}
         >
           Don&apos;t have an account?{" "}
@@ -412,7 +455,7 @@ export default function LoginPage() {
         </p>
       </form>
 
-      <p className="mt-7" style={{ textAlign: "center", color: "rgba(255,255,255,0.22)", fontSize: "10px", lineHeight: 1.6 }}>
+      <p className="mt-4" style={{ textAlign: "center", color: "rgba(255,255,255,0.22)", fontSize: "10px", lineHeight: 1.5 }}>
         By signing in, you agree to CinePrime's{" "}
         <Link to="/register" style={{ color: "rgba(255,255,255,0.35)", textDecoration: "underline" }}>
           Terms of Service

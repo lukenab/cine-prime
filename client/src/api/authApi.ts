@@ -5,6 +5,10 @@ export interface LoginPayLoad {
     password: string;
 }
 
+export interface GoogleLoginPayload {
+    credential: string;
+}
+
 /** Admin creates an account — Issue #161/#162: no username/password anymore.
  *  The backend auto-generates the username and sends an activation-link email. */
 export interface CreateAccountPayload {
@@ -73,6 +77,10 @@ export const authApi = {
         }
 
         return axiosClient.post('api/auth/login', data);
+    },
+
+    loginWithGoogle: (data: GoogleLoginPayload) => {
+        return axiosClient.post('/api/auth/google', data);
     },
 
     checkAvailability: (params: { username?: string; email?: string }) => {

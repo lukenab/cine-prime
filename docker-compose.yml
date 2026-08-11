@@ -103,6 +103,7 @@ services:
       PAYMENT_SERVICE_URL: http://payment-service:8083
       INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
       JWT_SIGNER_KEY: ${JWT_SIGNER_KEY:?Set JWT_SIGNER_KEY in .env}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       # Local demo flow: open the invitation email on the same machine that
       # runs the CinePrime client. Override only when a public environment exists.
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
@@ -442,6 +443,7 @@ services:
       - "3000:3000"
     environment:
       VITE_API_URL: http://localhost:8080
+      VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     volumes:
       - ./client/src:/app/src
       - ./client/public:/app/public

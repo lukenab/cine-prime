@@ -82,3 +82,8 @@ auth:
     ttl-hours: 24
   password-reset:
     ttl-minutes: 30
+
+google:
+  auth:
+    client-id: ${GOOGLE_CLIENT_ID:}
+    jwk-set-uri: ${GOOGLE_JWK_SET_URI:https://www.googleapis.com/oauth2/v3/certs}
