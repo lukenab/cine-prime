@@ -50,6 +50,7 @@ interface AuthContextType {
     profileCheckPending: boolean;
     setNeedsProfileSetup: (v: boolean) => void;
     login: (credentials: any) => Promise<{ role: string; needsSetup: boolean }>;
+    loginWithGoogle: (credential: string) => Promise<{ role: string; needsSetup: boolean }>;
     logout: () => void;
 }
 
@@ -93,8 +94,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }, []);
 
-    const login = async (credentials: any): Promise<{ role: string; needsSetup: boolean }> => {
-        const response: any = await authApi.login(credentials);
+    const establishSession = async (response: any): Promise<{ role: string; needsSetup: boolean }> => {
         const resBody = response?.data ?? response;
         const token = resBody?.result?.token || resBody?.token || response?.result?.token;
 
@@ -128,6 +128,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { role: primaryRole, needsSetup };
     };
 
+    const login = async (credentials: any): Promise<{ role: string; needsSetup: boolean }> => {
+        return establishSession(await authApi.login(credentials));
+    };
+
+    const loginWithGoogle = async (credential: string): Promise<{ role: string; needsSetup: boolean }> => {
+        return establishSession(await authApi.loginWithGoogle({ credential }));
+    };
+
     const logout = () => {
         const token = localStorage.getItem("accessToken");
         authApi.logout(token).catch(() => {});
@@ -141,7 +149,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, needsProfileSetup, profileCheckPending, setNeedsProfileSetup, login, logout }}>
+        <AuthContext.Provider value={{ user, needsProfileSetup, profileCheckPending, setNeedsProfileSetup, login, loginWithGoogle, logout }}>
             {children}
         </AuthContext.Provider>
     );

@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS account (
     username                VARCHAR(50)  NOT NULL UNIQUE,
     email                   VARCHAR(100) NOT NULL UNIQUE,
     password_hash           VARCHAR(255) NOT NULL,
+    local_login_enabled     BOOLEAN      NOT NULL DEFAULT TRUE,
 
     -- [FIX] varchar(30) thay vì varchar(10) để chứa được PENDING_VERIFICATION
     status                  VARCHAR(30)  NOT NULL DEFAULT 'ACTIVE',
@@ -50,6 +51,22 @@ CREATE TABLE IF NOT EXISTS account_role (
     role_name  VARCHAR(50) NOT NULL REFERENCES roles(role_name)    ON DELETE CASCADE,
     PRIMARY KEY (account_id, role_name)
 );
+
+-- External identities are stored separately from the CinePrime account so a
+-- provider subject can never be confused with an email or an internal role.
+CREATE TABLE IF NOT EXISTS account_identity (
+    identity_id      VARCHAR(36)  PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    account_id       VARCHAR(36)  NOT NULL REFERENCES account(account_id) ON DELETE CASCADE,
+    provider         VARCHAR(30)  NOT NULL,
+    provider_subject VARCHAR(255) NOT NULL,
+    provider_email   VARCHAR(100) NOT NULL,
+    created_at       TIMESTAMP    NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMP    NULL,
+    CONSTRAINT uk_account_identity_provider_subject UNIQUE (provider, provider_subject),
+    CONSTRAINT uk_account_identity_account_provider UNIQUE (account_id, provider)
+);
+
+CREATE INDEX IF NOT EXISTS idx_account_identity_account_id ON account_identity (account_id);
 
 -- ── 6. AUTH_TOKEN ─────────────────────────────────────────
 -- Dùng để blacklist JWT khi logout

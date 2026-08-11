@@ -3,6 +3,9 @@ import { Eye, EyeOff, ArrowLeft, Mail, CheckCircle, Check } from "lucide-react";
 
 import { Link, useNavigate } from "react-router-dom";
 import { useRegister } from "../../hooks/useRegister.ts";
+import GoogleSignInButton from "../../components/auth/GoogleSignInButton";
+import { useAuth } from "../../context/AuthContext";
+import { defaultPathForRole } from "../../utils/roleRoutes";
 
 function FormLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -115,7 +118,10 @@ const submitButtonBase: React.CSSProperties = {
 
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
+  const [googleError, setGoogleError] = useState<string | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const navigate = useNavigate();
+  const { loginWithGoogle } = useAuth();
 
   const {
     step,
@@ -134,6 +140,22 @@ export default function RegisterPage() {
     handleVerifyOtp,
     handleResendOtp,
   } = useRegister();
+
+  const handleGoogleCredential = async (credential: string) => {
+    setGoogleError(null);
+    setGoogleLoading(true);
+    try {
+      const { role, needsSetup } = await loginWithGoogle(credential);
+      navigate(needsSetup ? "/profile-setup" : defaultPathForRole(role), { replace: true });
+    } catch (err: any) {
+      const code = err?.response?.data?.code;
+      setGoogleError(code === 1038
+        ? "An account already uses this email. Sign in with your password first."
+        : "Google registration could not be completed. Please try again.");
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   return (
     <>
@@ -309,7 +331,14 @@ export default function RegisterPage() {
               <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.08)" }} />
             </div>
 
-            <p style={{ textAlign: "center", fontSize: "14px", color: "rgba(255,255,255,0.4)" }}>
+            {googleError && (
+              <div style={{ color: "#ff6b6b", fontSize: 12, lineHeight: 1.5, marginBottom: 12, textAlign: "center" }}>
+                {googleError}
+              </div>
+            )}
+            <GoogleSignInButton onCredential={handleGoogleCredential} text="signup_with" disabled={loading || googleLoading} />
+
+            <p style={{ textAlign: "center", fontSize: "14px", color: "rgba(255,255,255,0.4)", marginTop: 20 }}>
               Already have an account?{" "}
               <Link
                 to="/login"

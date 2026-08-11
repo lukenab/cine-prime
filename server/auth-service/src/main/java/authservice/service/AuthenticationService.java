@@ -94,6 +94,12 @@ public class AuthenticationService {
             throw new AppException(AuthErrorCode.ACCOUNT_INACTIVE);
         }
 
+        if (!account.isLocalLoginEnabled()) {
+            auditLogService.failed("LOGIN_FAILED", account.getAccountId(), "Local login disabled",
+                    auditLogService.metadata("identifier", identifier));
+            throw new AppException(AuthErrorCode.LOCAL_LOGIN_DISABLED);
+        }
+
         // 3. Validate password — increment failed counter and lock if threshold reached
         if (!passwordEncoder.matches(request.getPassword(), account.getPasswordHash())) {
             int attempts = account.getFailedLoginAttempts() + 1;
@@ -124,6 +130,28 @@ public class AuthenticationService {
         auditLogService.success("LOGIN_SUCCESS", account.getAccountId(), "Logged in successfully",
                 auditLogService.metadata("username", account.getUsername()));
 
+        return LoginResponse.builder().authenticated(true).token(token).build();
+    }
+
+    @Transactional
+    public LoginResponse completeFederatedAuthentication(Account account, String provider) {
+        if (account.getLockedUntil() != null && account.getLockedUntil().isAfter(LocalDateTime.now())) {
+            throw new AppException(AuthErrorCode.ACCOUNT_LOCKED);
+        }
+        if (account.getStatus() != AccountStatus.ACTIVE) {
+            throw new AppException(AuthErrorCode.ACCOUNT_INACTIVE);
+        }
+
+        account.setFailedLoginAttempts(0);
+        account.setLockedUntil(null);
+        account.setLastLoginAt(LocalDateTime.now());
+        accountRepository.save(account);
+
+        String token = jwtService.generateToken(account);
+        saveAuthToken(account, token);
+        auditLogService.success("FEDERATED_LOGIN_SUCCESS", account.getAccountId(),
+                "Logged in with " + provider,
+                auditLogService.metadata("provider", provider, "username", account.getUsername()));
         return LoginResponse.builder().authenticated(true).token(token).build();
     }
 

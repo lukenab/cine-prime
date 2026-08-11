@@ -3,9 +3,11 @@ package authservice.controller;
 import authservice.dto.request.LoginRequest;
 import authservice.dto.request.IntrospectTokenRequest;
 import authservice.dto.request.RefreshTokenRequest;
+import authservice.dto.request.GoogleLoginRequest;
 import authservice.dto.response.LoginResponse;
 import authservice.dto.response.IntrospectResponse;
 import authservice.service.AuthenticationService;
+import authservice.service.GoogleAuthenticationService;
 import com.nimbusds.jose.JOSEException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -26,11 +28,19 @@ import java.text.ParseException;
 public class AuthenticationController {
 
     AuthenticationService authenticationService;
+    GoogleAuthenticationService googleAuthenticationService;
 
     @PostMapping("/login")
     ApiResponse<LoginResponse> authenticate(@RequestBody LoginRequest request) {
         return ApiResponse.<LoginResponse>builder()
                 .result(authenticationService.authenticate(request))
+                .build();
+    }
+
+    @PostMapping("/google")
+    ApiResponse<LoginResponse> authenticateWithGoogle(@Valid @RequestBody GoogleLoginRequest request) {
+        return ApiResponse.<LoginResponse>builder()
+                .result(googleAuthenticationService.authenticate(request.getCredential()))
                 .build();
     }
 
