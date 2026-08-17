@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Building2, Lock, ShieldAlert, Info, Save, Eye, EyeOff, CheckCircle2, AlertCircle } from "lucide-react";
+import { Building2, Lock, ShieldAlert, Info, Save, Eye, EyeOff } from "lucide-react";
+import { Toast as SharedToast } from "../../components/shared/Toast";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface CinemaInfo {
@@ -78,14 +79,7 @@ const inputBase = (hasError?: boolean): React.CSSProperties => ({
 });
 
 function Toast({ type, message, onClose }: { type: "success" | "error"; message: string; onClose: () => void }) {
-  return (
-    <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-xl"
-      style={{ background: type === "success" ? "#059669" : "#ef4444", color: "#fff", minWidth: "280px" }}>
-      {type === "success" ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
-      <span style={{ fontSize: "14px", fontWeight: 500 }}>{message}</span>
-      <button onClick={onClose} className="ml-auto opacity-75 hover:opacity-100" style={{ fontSize: "18px", lineHeight: 1 }}>×</button>
-    </div>
-  );
+  return <SharedToast type={type} message={message} onClose={onClose} />;
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────

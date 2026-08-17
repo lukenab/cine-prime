@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Plus, Search, RefreshCw, AlertCircle, Factory, Pencil, Trash2, X, Globe, Building } from "lucide-react";
 import { useOutletContext } from "react-router-dom";
 import { movieApi, type ProductionCompanyResponse, type ProductionCompanyRequest } from "../../api/movieApi";
+import { getApiErrorMessage, notify } from "../../lib/notifications";
 
 // ── Modal ──────────────────────────────────────────────────────────────────────
 
@@ -199,8 +200,9 @@ export default function ManageCompaniesPage() {
         setCompanies((prev) => [...prev, res.result]);
       }
       setModalOpen(false);
+      notify.success(id != null ? "Company updated" : "Company created");
     } catch (err: any) {
-      alert(`Error: ${err?.response?.data?.message ?? "Save failed."}`);
+      notify.error("Company could not be saved", getApiErrorMessage(err, "Review the values and try again."));
     } finally {
       setSubmitting(false);
     }
@@ -213,8 +215,9 @@ export default function ManageCompaniesPage() {
       await movieApi.deleteCompany(deleteTarget.companyId);
       setCompanies((prev) => prev.filter((c) => c.companyId !== deleteTarget.companyId));
       setDeleteTarget(null);
+      notify.success("Company removed");
     } catch (err: any) {
-      alert(`Error: ${err?.response?.data?.message ?? "Delete failed."}`);
+      notify.error("Company could not be removed", getApiErrorMessage(err));
     } finally {
       setDeleting(false);
     }

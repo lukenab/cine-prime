@@ -1,14 +1,14 @@
 import { BrowserRouter } from "react-router-dom";
-import { Toaster } from "sonner";
 import AppRoutes from "./routes/AppRoutes";
 import { AuthProvider } from "./context/AuthContext";
+import { NotificationCenter } from "./components/shared/NotificationCenter";
 
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <AppRoutes />
-        <Toaster richColors position="top-right" theme="system" />
+        <NotificationCenter />
       </BrowserRouter>
     </AuthProvider>
   );

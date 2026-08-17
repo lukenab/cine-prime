@@ -3,6 +3,7 @@ import { Plus, Search, RefreshCw, AlertCircle, Tags, Film, Hash, X, ShieldCheck,
 import { useOutletContext } from "react-router-dom";
 import { movieApi, type GenreResponse, type MovieApiResponse, type CreateGenrePayload } from "../../api/movieApi";
 import { useRole } from "../../hooks/useRole";
+import { getApiErrorMessage, notify } from "../../lib/notifications";
 
 type StatusFilter = "ALL" | "ACTIVE" | "PENDING_REVIEW";
 
@@ -152,8 +153,9 @@ export default function ManageGenresPage() {
       const res = await movieApi.createGenre(data);
       setTypes((prev) => [...prev, res.result]);
       setModalOpen(false);
+      notify.success("Genre created", "The genre is ready for the configured approval workflow.");
     } catch (err: any) {
-      alert(`Error: ${err?.response?.data?.message ?? "Create failed."}`);
+      notify.error("Genre could not be created", getApiErrorMessage(err, "Review the values and try again."));
     } finally {
       setSubmitting(false);
     }
@@ -164,8 +166,9 @@ export default function ManageGenresPage() {
     try {
       const res = await movieApi.approveGenre(id);
       setTypes((prev) => prev.map((t) => (t.genreId === id ? res.result : t)));
+      notify.success("Genre approved");
     } catch (err: any) {
-      alert(`Error: ${err?.response?.data?.message ?? "Approve failed."}`);
+      notify.error("Genre could not be approved", getApiErrorMessage(err));
     } finally {
       setApprovingId(null);
     }

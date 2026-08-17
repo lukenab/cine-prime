@@ -17,6 +17,7 @@ import { RoomCreationMethodDialog } from "./cinemaRoomEditor/RoomCreationMethodD
 import { ClusterWizardModal } from "./ClusterWizardModal";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog";
 import { ClusterDemandProfilePanel } from "./ClusterDemandProfilePanel";
+import { Toast as SharedToast } from "../../components/shared/Toast";
 
 // ── Status config (small local copy — kept in sync with ManageCinemaClusterPage.tsx) ──
 
@@ -138,14 +139,7 @@ function toResourceError(error: unknown, fallbackMessage: string): ResourceError
 // ── Toast (matches the pattern used in SettingsPage.tsx / CreateEmployeePage.tsx) ──
 
 function Toast({ type, message, onClose }: { type: "success" | "error"; message: string; onClose: () => void }) {
-  return (
-    <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-xl"
-      style={{ background: type === "success" ? "#059669" : "#ef4444", color: "#fff", minWidth: "280px" }}>
-      {type === "success" ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
-      <span style={{ fontSize: "14px", fontWeight: 500 }}>{message}</span>
-      <button onClick={onClose} className="ml-auto opacity-75 hover:opacity-100" style={{ fontSize: "18px", lineHeight: 1 }}>×</button>
-    </div>
-  );
+  return <SharedToast type={type} message={message} onClose={onClose} />;
 }
 
 // ── Small reject-reason modal ─────────────────────────────────────────────────
