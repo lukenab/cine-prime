@@ -4,7 +4,6 @@ import {
   Award,
   Calendar,
   Camera,
-  CheckCircle,
   Clock3,
   CreditCard,
   Mail,
@@ -18,6 +17,7 @@ import { userApi } from "../../api/userApi";
 import { loyaltyApi, MembershipSummary } from "../../api/loyaltyApi";
 import { useAuth } from "../../context/AuthContext";
 import { publishProfileUpdated } from "../../utils/profileEvents";
+import { getApiErrorMessage, notify } from "../../lib/notifications";
 
 interface Profile {
   accountId: string;
@@ -70,8 +70,6 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [membershipLoading, setMembershipLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploadSuccess, setUploadSuccess] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -93,34 +91,20 @@ export default function ProfilePage() {
       .finally(() => setMembershipLoading(false));
   }, [user?.accountId]);
 
-  useEffect(() => {
-    if (!uploadSuccess) return;
-    const timeoutId = window.setTimeout(() => setUploadSuccess(false), 3600);
-    return () => window.clearTimeout(timeoutId);
-  }, [uploadSuccess]);
-
-  useEffect(() => {
-    if (!uploadError) return;
-    const timeoutId = window.setTimeout(() => setUploadError(null), 5200);
-    return () => window.clearTimeout(timeoutId);
-  }, [uploadError]);
-
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !user?.accountId) return;
     if (!file.type.startsWith("image/")) {
-      setUploadError("Only image files are accepted (JPG, PNG, WEBP).");
+      notify.warning("Unsupported file type", "Choose a JPG, PNG or WEBP image.");
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setUploadError("File too large. Maximum size is 5 MB.");
+      notify.warning("Image is too large", "Choose an image smaller than 5 MB.");
       return;
     }
 
     const objectUrl = URL.createObjectURL(file);
     setPreview(objectUrl);
-    setUploadError(null);
-    setUploadSuccess(false);
     setUploading(true);
     try {
       const response: any = await userApi.uploadAvatar(user.accountId, file);
@@ -139,9 +123,9 @@ export default function ProfilePage() {
         ? { ...previous, ...nextProfile, avatarUrl: nextAvatarUrl ?? undefined }
         : nextProfile);
       publishProfileUpdated({ accountId: user.accountId, avatarUrl: nextAvatarUrl });
-      setUploadSuccess(true);
-    } catch (error: any) {
-      setUploadError(error?.response?.data?.message || "Upload failed. Please try again.");
+      notify.success("Profile photo updated", "Your new photo is now visible across CinePrime.");
+    } catch (error: unknown) {
+      notify.error("Photo upload failed", getApiErrorMessage(error, "We could not upload this image. Please try again."));
       setPreview(profile?.avatarUrl ?? null);
     } finally {
       URL.revokeObjectURL(objectUrl);
@@ -236,8 +220,6 @@ export default function ProfilePage() {
           </div>
         </section>
       </div>
-      {uploadSuccess && <div className="profile-toast profile-toast-success" role="status" aria-live="polite"><CheckCircle size={18} /><div><strong>Profile photo updated</strong><span>Your new photo is now visible across CinePrime.</span></div></div>}
-      {uploadError && <div className="profile-toast profile-toast-error" role="alert"><div><strong>Photo upload failed</strong><span>{uploadError}</span></div></div>}
     </main>
   );
 }
@@ -326,12 +308,6 @@ const profileStyles = `
   .profile-info-label { color:#6f85a3; font-size:10px; letter-spacing:.1em; font-weight:700; text-transform:uppercase; }
   .profile-info-value { overflow:hidden; color:#e5efff; font-size:13px; text-overflow:ellipsis; white-space:nowrap; }
   .profile-info-empty { color:#526987; font-style:italic; }
-  .profile-toast { position:fixed; z-index:100; right:24px; bottom:24px; display:flex; width:min(360px,calc(100vw - 32px)); box-sizing:border-box; align-items:flex-start; gap:11px; padding:14px 16px; border:1px solid rgba(96,165,250,.28); border-radius:14px; background:rgba(7,18,37,.96); box-shadow:0 18px 55px rgba(0,0,0,.4); backdrop-filter:blur(18px); }
-  .profile-toast strong, .profile-toast span { display:block; }
-  .profile-toast strong { color:#eff6ff; font-size:13px; }
-  .profile-toast span { margin-top:3px; color:#8fa6c4; font-size:11px; line-height:1.45; }
-  .profile-toast-success { color:#34d399; }
-  .profile-toast-error { border-color:rgba(248,113,113,.28); color:#f87171; }
   .profile-loading { min-height:100vh; display:grid; place-items:center; background:#030712; }
   .profile-spinner { width:34px; height:34px; border:3px solid rgba(96,165,250,.18); border-top-color:#60a5fa; border-radius:50%; animation:profile-spin .8s linear infinite; }
   @media (max-width: 820px) { .profile-page { padding:78px 16px 50px; } .profile-overview-grid, .profile-information-groups { grid-template-columns:1fr; } .profile-information-group { padding-right:0; } .profile-information-group + .profile-information-group { padding-left:0; border-left:0; border-top:1px solid rgba(148,163,184,.12); } .identity-card { min-height:0; } .membership-card { min-height:300px; } }

@@ -16,6 +16,7 @@ import type { AuditoriumVisualizationConfig } from "../admin/cinemaRoomEditor/ci
 import CheckoutProgress from "../../components/booking/CheckoutProgress";
 import BookingSummaryCard from "../../components/booking/BookingSummaryCard";
 import { formatBookingDate } from "../../components/booking/bookingUi";
+import { notify } from "../../lib/notifications";
 
 // "Screen-glow deep space" — the same cosmic wash used on the movie-detail
 // page, applied page-wide here too (including the loading/error states) so
@@ -250,10 +251,9 @@ export default function SeatBookingPage() {
     loadSeats();
   }, [loadSeats]);
 
-  // Toast-style errors auto-dismiss so they don't linger and block the seat
-  // map; the manual close button still lets the customer dismiss early.
   useEffect(() => {
     if (!errorMsg) return;
+    notify.error("Seats could not be reserved", errorMsg, { id: "seat-reservation-error" });
     const timer = setTimeout(() => setErrorMsg(null), 5000);
     return () => clearTimeout(timer);
   }, [errorMsg]);
@@ -615,33 +615,6 @@ export default function SeatBookingPage() {
           the "light beaming from the screen into space" idea from Option B. */}
       <div className="pointer-events-none fixed left-1/2 top-0 h-[900px] w-[900px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/[0.05]" aria-hidden="true" />
       <div className="pointer-events-none fixed left-1/2 top-0 h-[1200px] w-[1200px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/[0.035]" aria-hidden="true" />
-
-      {/* Error toast */}
-      {errorMsg && (
-        <div className="pointer-events-none fixed right-4 top-20 z-[60] w-[min(360px,calc(100vw-2rem))] sm:right-6">
-          <style>{`
-            @keyframes seatToastIn {
-              from { opacity: 0; transform: translateY(-10px) scale(0.98); }
-              to { opacity: 1; transform: translateY(0) scale(1); }
-            }
-          `}</style>
-          <div
-            className="pointer-events-auto flex items-start gap-3 rounded-xl border border-[#e84545]/40 bg-[#2a1515]/95 p-4 text-sm text-[#f87171] shadow-[0_12px_32px_rgba(0,0,0,0.45)] backdrop-blur"
-            style={{ animation: "seatToastIn 0.25s ease-out" }}
-            role="alert"
-          >
-            <AlertTriangle size={15} className="shrink-0 mt-0.5" />
-            <span className="flex-1">{errorMsg}</span>
-            <button
-              onClick={() => setErrorMsg(null)}
-              className="text-[#f87171]/50 transition-colors hover:text-[#f87171] cursor-pointer"
-              aria-label="Dismiss"
-            >
-              <X size={13} />
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Header — a soft cosmic glow bleeding in from the left edge (instead
           of a flat near-black bar) plus a small "Now booking" eyebrow, so

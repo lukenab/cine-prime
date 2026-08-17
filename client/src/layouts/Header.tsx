@@ -183,9 +183,8 @@ export function Header({ activePage, isDarkMode = true, onToggleTheme }: HeaderP
             e.currentTarget.style.borderColor = "var(--border-color)";
             e.currentTarget.style.color = "var(--text-sub)";
           }}
-        >
-          <Bell size={15} />
-          <span style={{ position: "absolute", top: "8px", right: "8px", width: "6px", height: "6px", background: isDarkMode ? "#3b82f6" : "#2563eb", borderRadius: "50%", boxShadow: isDarkMode ? "0 0 6px rgba(59, 130, 246, 0.9)" : "none" }} />
+          >
+            <Bell size={15} />
         </button>
 
         {/* 🚀 AVATAR & DROPDOWN MENU */}

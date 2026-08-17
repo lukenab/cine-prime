@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Plus, Search, RefreshCw, AlertCircle, ShieldCheck, Pencil, Trash2, X } from "lucide-react";
 import { movieApi, type AgeRatingResponse, type AgeRatingRequest } from "../../api/movieApi";
 import { useRole } from "../../hooks/useRole";
+import { getApiErrorMessage, notify } from "../../lib/notifications";
 
 // ── Rating badge color map ─────────────────────────────────────────────────────
 
@@ -183,8 +184,9 @@ export default function ManageAgeRatingsPage() {
         setRatings((prev) => [...prev, res.result]);
       }
       setModalOpen(false);
+      notify.success(id != null ? "Age rating updated" : "Age rating created");
     } catch (err: any) {
-      alert(`Error: ${err?.response?.data?.message ?? "Save failed."}`);
+      notify.error("Age rating could not be saved", getApiErrorMessage(err, "Review the values and try again."));
     } finally {
       setSubmitting(false);
     }
@@ -197,8 +199,9 @@ export default function ManageAgeRatingsPage() {
       await movieApi.deleteAgeRating(deleteTarget.ratingId);
       setRatings((prev) => prev.filter((r) => r.ratingId !== deleteTarget.ratingId));
       setDeleteTarget(null);
+      notify.success("Age rating removed");
     } catch (err: any) {
-      alert(`Error: ${err?.response?.data?.message ?? "Delete failed."}`);
+      notify.error("Age rating could not be removed", getApiErrorMessage(err));
     } finally {
       setDeleting(false);
     }

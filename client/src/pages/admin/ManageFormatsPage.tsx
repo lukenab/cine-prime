@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Plus, Search, RefreshCw, AlertCircle, Monitor, Pencil, Trash2, X } from "lucide-react";
 import { movieApi, type ScreeningFormatResponse, type ScreeningFormatRequest } from "../../api/movieApi";
 import { useRole } from "../../hooks/useRole";
+import { getApiErrorMessage, notify } from "../../lib/notifications";
 
 // ── Format code palette ────────────────────────────────────────────────────────
 
@@ -171,8 +172,9 @@ export default function ManageFormatsPage() {
         setFormats((prev) => [...prev, res.result]);
       }
       setModalOpen(false);
+      notify.success(id != null ? "Screening format updated" : "Screening format created");
     } catch (err: any) {
-      alert(`Error: ${err?.response?.data?.message ?? "Save failed."}`);
+      notify.error("Screening format could not be saved", getApiErrorMessage(err, "Review the values and try again."));
     } finally {
       setSubmitting(false);
     }
@@ -185,8 +187,9 @@ export default function ManageFormatsPage() {
       await movieApi.deleteScreeningFormat(deleteTarget.formatId);
       setFormats((prev) => prev.filter((f) => f.formatId !== deleteTarget.formatId));
       setDeleteTarget(null);
+      notify.success("Screening format removed");
     } catch (err: any) {
-      alert(`Error: ${err?.response?.data?.message ?? "Delete failed."}`);
+      notify.error("Screening format could not be removed", getApiErrorMessage(err));
     } finally {
       setDeleting(false);
     }

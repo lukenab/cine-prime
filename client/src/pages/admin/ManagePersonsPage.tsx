@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Plus, Search, RefreshCw, AlertCircle, Users, Film, X, Edit2, Trash2 } from "lucide-react";
 import { useOutletContext } from "react-router-dom";
 import { movieApi, type PersonResponse, type PersonRequest } from "../../api/movieApi";
+import { getApiErrorMessage, notify } from "../../lib/notifications";
 
 // ── Person Modal (create / edit) ──────────────────────────────────────────────
 
@@ -177,8 +178,9 @@ export default function ManagePersonsPage() {
       }
       setModalOpen(false);
       setEditPerson(null);
+      notify.success(editPerson ? "Person updated" : "Person created");
     } catch (err: any) {
-      alert(`Error: ${err?.response?.data?.message ?? "Save failed."}`);
+      notify.error("Person could not be saved", getApiErrorMessage(err, "Review the values and try again."));
     } finally {
       setSubmitting(false);
     }
@@ -189,8 +191,9 @@ export default function ManagePersonsPage() {
       await movieApi.deletePerson(person.personId);
       setPersons((prev) => prev.filter((p) => p.personId !== person.personId));
       setDeleteConfirm(null);
+      notify.success("Person removed");
     } catch (err: any) {
-      alert(`Error: ${err?.response?.data?.message ?? "Delete failed."}`);
+      notify.error("Person could not be removed", getApiErrorMessage(err));
     }
   };
 

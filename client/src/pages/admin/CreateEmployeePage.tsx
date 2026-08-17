@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { ArrowLeft, AlertCircle, X, CheckCircle2, ShieldCheck, UserRoundPlus } from "lucide-react";
+import { ArrowLeft, AlertCircle, X, ShieldCheck, UserRoundPlus } from "lucide-react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { authApi } from "../../api/authApi";
 import { employeeApi, type EmployeeDepartment, type EmployeePosition, type EmploymentType } from "../../api/employeeApi";
 import { userApi } from "../../api/userApi";
+import { Toast as SharedToast } from "../../components/shared/Toast";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface EmployeeFormData {
@@ -70,14 +71,7 @@ function FormField({
 
 // Issue #161/#162: local toast, matches the pattern already used in SettingsPage.tsx
 function Toast({ type, message, onClose }: { type: "success" | "error"; message: string; onClose: () => void }) {
-  return (
-    <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-xl"
-      style={{ background: type === "success" ? "#059669" : "#ef4444", color: "#fff", minWidth: "280px" }}>
-      {type === "success" ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
-      <span style={{ fontSize: "14px", fontWeight: 500 }}>{message}</span>
-      <button onClick={onClose} className="ml-auto opacity-75 hover:opacity-100" style={{ fontSize: "18px", lineHeight: 1 }}>×</button>
-    </div>
-  );
+  return <SharedToast type={type} message={message} onClose={onClose} />;
 }
 
 const inputCls   = "px-3.5 py-2.5 text-sm rounded-xl border outline-none focus:ring-2 focus:ring-blue-500/50 transition-all";
