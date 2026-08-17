@@ -1,4 +1,0 @@
--- seed.sql
--- File này chỉ dùng để seed data test cho dev environment.
--- Lookup tables (genre, age_rating, screening_format) đã được seed sẵn trong movie_db.sql.
--- Thêm data test tại đây nếu cần — phải dùng schema v2.
