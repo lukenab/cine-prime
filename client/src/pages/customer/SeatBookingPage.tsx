@@ -240,6 +240,7 @@ export default function SeatBookingPage() {
   const resumeAfterLoginRef = useRef(
     location.state?.resumeAfterLogin === true || persistedHoldRef.current?.resumeAfterLogin === true
   );
+  const autoResumeSubmissionStartedRef = useRef(false);
   const idempotencyKeyRef = useRef(
     persistedHoldRef.current?.idempotencyKey
       ?? globalThis.crypto?.randomUUID?.()
@@ -275,14 +276,14 @@ export default function SeatBookingPage() {
           .filter((seat) => seat.status === "AVAILABLE" || (seat.status === "LOCKED" && seat.reservedByMe))
           .map((seat) => seat.seatId)
       );
-      setSelected((previous) => {
-        const restoredIds = pendingSeatRestoreRef.current;
-        const requestedIds = restoredIds.length > 0 ? restoredIds : Array.from(previous);
+      const restoredIds = pendingSeatRestoreRef.current;
+      if (restoredIds.length > 0) {
         pendingSeatRestoreRef.current = [];
         restorePendingRef.current = false;
 
-        const next = new Set(requestedIds.filter((seatId) => availableIds.has(seatId)));
-        const rejectedIds = requestedIds.filter((seatId) => !availableIds.has(seatId));
+        const next = new Set(restoredIds.filter((seatId) => availableIds.has(seatId)));
+        const rejectedIds = restoredIds.filter((seatId) => !availableIds.has(seatId));
+        setSelected(next);
         if (rejectedIds.length > 0) {
           resumeAfterLoginRef.current = false;
           setConflicts(new Set(rejectedIds));
@@ -295,8 +296,11 @@ export default function SeatBookingPage() {
           resumeAfterLoginRef.current = false;
           setAutoResumeReady(true);
         }
-        return next;
-      });
+      } else {
+        setSelected((previous) => new Set(
+          Array.from(previous).filter((seatId) => availableIds.has(seatId))
+        ));
+      }
     } catch (err: any) {
       if (!silent) {
         setSeatMap(null);
@@ -600,6 +604,8 @@ export default function SeatBookingPage() {
 
   useEffect(() => {
     if (!autoResumeReady || !user || selected.size === 0 || !showtimeId) return;
+    if (autoResumeSubmissionStartedRef.current) return;
+    autoResumeSubmissionStartedRef.current = true;
 
     setAutoResumeReady(false);
     persistSeatDraft(showtimeId, {

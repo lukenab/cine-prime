@@ -1,4 +1,5 @@
 import { render, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import SeatBookingPage from "./SeatBookingPage";
@@ -129,7 +130,7 @@ describe("SeatBookingPage login resume", () => {
       },
     );
 
-    render(<RouterProvider router={router} />);
+    render(<StrictMode><RouterProvider router={router} /></StrictMode>);
 
     await waitFor(() => {
       expect(mocks.createBooking).toHaveBeenCalledTimes(1);
@@ -182,7 +183,7 @@ describe("SeatBookingPage login resume", () => {
       },
     );
 
-    render(<RouterProvider router={router} />);
+    render(<StrictMode><RouterProvider router={router} /></StrictMode>);
 
     await waitFor(() => {
       expect(mocks.notifyError).toHaveBeenCalledWith(
