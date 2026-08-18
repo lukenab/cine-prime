@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Check, ArrowRight, ArrowLeft, X, Clapperboard, ShieldCheck, Info } from "lucide-react";
+import { X, Clapperboard, ShieldCheck, Info } from "lucide-react";
 import { userApi } from "../../api/userApi";
 import { useAuth } from "../../context/AuthContext";
-import { useIdentityCardAutofill } from "../../hooks/useIdentityCardAutofill";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -14,8 +13,6 @@ interface FormState {
   dobMonth: string;
   dobYear: string;
   gender: string;
-  identityCard: string;
-  address: string;
 }
 
 interface CompleteProfilePageProps {
@@ -158,13 +155,6 @@ const dayOptions = Array.from({ length: 31 }, (_, i) => ({ value: String(i + 1),
 const monthOptions = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map((m, i) => ({ value: String(i + 1), label: m }));
 const yearOptions = Array.from({ length: new Date().getFullYear() - 1929 }, (_, i) => { const y = String(new Date().getFullYear() - i); return { value: y, label: y }; });
 
-// ── Step config ───────────────────────────────────────────────────────────────
-
-const STEPS = [
-  { label: "Personal",     desc: "Name, gender & date of birth" },
-  { label: "Verification", desc: "Phone & identity card" },
-];
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function CompleteProfilePage({ onClose, onDone }: CompleteProfilePageProps = {}) {
@@ -172,11 +162,10 @@ export default function CompleteProfilePage({ onClose, onDone }: CompleteProfile
   const location = useLocation();
   const { user, setNeedsProfileSetup } = useAuth();
 
-  const [step, setStep] = useState(1);
   const [visible, setVisible] = useState(false);
   const [form, setForm] = useState<FormState>({
     fullName: "", phoneNumber: "", dobDay: "", dobMonth: "", dobYear: "",
-    gender: "", identityCard: "", address: "",
+    gender: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -189,17 +178,34 @@ export default function CompleteProfilePage({ onClose, onDone }: CompleteProfile
     return () => { clearTimeout(t); window.removeEventListener("keydown", onKey); };
   }, []);
 
+  useEffect(() => {
+    if (!user?.accountId) return;
+    let active = true;
+    userApi.getUserById(user.accountId).then((response: any) => {
+      if (!active) return;
+      const profile = response?.result ?? response?.data?.result ?? response?.data ?? response;
+      const dob = typeof profile?.dateOfBirth === "string"
+        ? profile.dateOfBirth.split("-")
+        : [];
+      setForm({
+        fullName: profile?.fullName ?? "",
+        phoneNumber: profile?.phoneNumber ?? "",
+        dobYear: dob[0] ?? "",
+        dobMonth: dob[1] ? String(Number(dob[1])) : "",
+        dobDay: dob[2] ? String(Number(dob[2])) : "",
+        gender: profile?.gender ?? "",
+      });
+    }).catch(() => {
+      // A skeleton profile may still be arriving through Kafka. The empty
+      // form remains usable and saving will retry against user-service.
+    });
+    return () => { active = false; };
+  }, [user?.accountId]);
+
   const handleClose = () => {
     setVisible(false);
     setTimeout(() => (onClose ? onClose() : navigate(-1)), 200);
   };
-
-  const { identityCardHint, parsedIdentityCard } = useIdentityCardAutofill(
-    form.identityCard,
-    setForm
-  );
-
-  const birthYearMismatch = parsedIdentityCard && form.dobYear && form.dobYear !== String(parsedIdentityCard.birthYear);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -220,33 +226,23 @@ export default function CompleteProfilePage({ onClose, onDone }: CompleteProfile
     return `${form.dobYear}-${form.dobMonth.padStart(2, "0")}-${form.dobDay.padStart(2, "0")}`;
   };
 
-  const validateStep1 = () => {
+  const validate = () => {
     const e: Record<string, string> = {};
     if (!form.fullName.trim()) e.fullName = "Full name is required";
     else if (form.fullName.trim().length > 50) e.fullName = "Maximum 50 characters";
     if (!form.gender) e.gender = "Please select a gender";
     if (!form.dobDay || !form.dobMonth || !form.dobYear) e.dob = "Date of birth is required";
     else if (!buildDob()) e.dob = "Invalid date";
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const validateStep2 = () => {
-    const e: Record<string, string> = {};
     if (!form.phoneNumber.trim()) e.phoneNumber = "Phone number is required";
     else if (!/^(0|\+84)[0-9]{9,10}$/.test(form.phoneNumber.trim())) e.phoneNumber = "Invalid Vietnamese phone number (e.g. 0901 234 567)";
-    if (!form.identityCard.trim()) e.identityCard = "Identity card number is required";
-    else if (!/^[0-9]{12}$/.test(form.identityCard.trim())) e.identityCard = "Must be exactly 12 digits";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
-
-  const handleNext = () => { if (validateStep1()) setStep(2); };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setGeneralError(null);
-    if (!validateStep2()) return;
+    if (!validate()) return;
     if (!user?.accountId) { setGeneralError("Session expired. Please log in again."); return; }
     setLoading(true);
     try {
@@ -255,8 +251,6 @@ export default function CompleteProfilePage({ onClose, onDone }: CompleteProfile
         phoneNumber: form.phoneNumber.trim(),
         dateOfBirth: buildDob(),
         gender: form.gender,
-        identityCard: form.identityCard.trim(),
-        address: form.address.trim() || undefined,
       });
       setNeedsProfileSetup(false);
       if (onDone) onDone();
@@ -271,7 +265,6 @@ export default function CompleteProfilePage({ onClose, onDone }: CompleteProfile
       const msg = err.response?.data?.message || "Failed to save profile. Please try again.";
       const low = msg.toLowerCase();
       if (low.includes("phone")) setErrors(prev => ({ ...prev, phoneNumber: msg }));
-      else if (low.includes("identity")) setErrors(prev => ({ ...prev, identityCard: msg }));
       else setGeneralError(msg);
     } finally {
       setLoading(false);
@@ -379,206 +372,90 @@ export default function CompleteProfilePage({ onClose, onDone }: CompleteProfile
               <ShieldCheck size={16} color="#60a5fa" style={{ flexShrink: 0, marginTop: 1 }} />
               <div>
                 <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#bfdbfe", lineHeight: 1.4 }}>
-                  One-time setup — you won't be asked again
+                  Complete once for faster checkout
                 </p>
                 <p style={{ margin: "3px 0 0", fontSize: 12, color: "rgba(147,197,253,0.55)", lineHeight: 1.4 }}>
-                  Required by law to issue physical tickets at the counter. Your data is encrypted and used only for ticketing purposes.
+                  These details are used for booking contact and age-appropriate ticketing. No identity-card number is required.
                 </p>
               </div>
             </div>
 
-            {/* ── Step indicator ── */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 22 }}>
-              {STEPS.map((s, i) => {
-                const n = i + 1;
-                const active = step === n;
-                const done   = step > n;
-                return (
-                  <div key={n} style={{ flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
-                      {/* Circle */}
-                      <div style={{
-                        width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 11, fontWeight: 700, transition: "all 0.25s",
-                        background: done ? "#2563eb" : active ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.06)",
-                        border: `1.5px solid ${done ? "#2563eb" : active ? "rgba(59,130,246,0.6)" : "rgba(255,255,255,0.12)"}`,
-                        color: done ? "#fff" : active ? "#93c5fd" : "rgba(255,255,255,0.3)",
-                      }}>
-                        {done ? <Check size={12} strokeWidth={3} /> : n}
-                      </div>
-                      {/* Label */}
-                      <span style={{
-                        fontSize: 12, fontWeight: active ? 700 : 500, transition: "color 0.25s",
-                        color: active ? "#dbeafe" : done ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.25)",
-                      }}>
-                        {s.label}
-                      </span>
-                    </div>
-                    {/* Progress bar */}
-                    <div style={{ height: 2, borderRadius: 99, background: "rgba(255,255,255,0.07)" }}>
-                      <div style={{
-                        height: "100%", borderRadius: 99,
-                        background: done || active ? "#3b82f6" : "transparent",
-                        width: done ? "100%" : active ? "50%" : "0%",
-                        transition: "width 0.4s cubic-bezier(0.16,1,0.3,1)",
-                      }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* ── Step heading ── */}
+            {/* Form heading */}
             <div style={{ marginBottom: 20 }}>
               <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#fff", letterSpacing: "-0.02em" }}>
-                {step === 1 ? "Personal information" : "Contact & identity"}
+                Complete your booking profile
               </h2>
               <p style={{ margin: 0, fontSize: 13, color: "rgba(255,255,255,0.35)", lineHeight: 1.5 }}>
-                {step === 1 ? STEPS[0].desc : STEPS[1].desc}
+                Add the contact and personal details used for your tickets.
               </p>
             </div>
 
-            {/* ════ STEP 1 ════ */}
-            {step === 1 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-
-                <div>
-                  <FieldLabel required>Full name</FieldLabel>
-                  <TextInput name="fullName" value={form.fullName} onChange={handleChange}
-                    placeholder="e.g. Nguyen Van An" hasError={!!errors.fullName} />
-                  <FieldHelper>As shown on your government-issued ID</FieldHelper>
-                  <FieldError msg={errors.fullName} />
+            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {generalError && (
+                <div style={{
+                  background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.22)",
+                  borderRadius: 12, padding: "12px 14px", color: "#f87171", fontSize: 13, lineHeight: 1.5,
+                }}>
+                  {generalError}
                 </div>
+              )}
 
-                <div>
-                  <FieldLabel required>Gender</FieldLabel>
-                  <GenderSelector value={form.gender} hasError={!!errors.gender}
-                    onChange={v => { setForm(prev => ({ ...prev, gender: v })); setErrors(prev => { const n = { ...prev }; delete n.gender; return n; }); }} />
-                  <FieldError msg={errors.gender} />
-                </div>
-
-                <div>
-                  <FieldLabel required>Date of birth</FieldLabel>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1.25fr 1.4fr", gap: 8 }}>
-                    <SelectInput name="dobDay"   value={form.dobDay}   onChange={handleChange} placeholder="Day"   hasError={!!errors.dob} options={dayOptions} />
-                    <SelectInput name="dobMonth" value={form.dobMonth} onChange={handleChange} placeholder="Month" hasError={!!errors.dob} options={monthOptions} />
-                    <SelectInput name="dobYear"  value={form.dobYear}  onChange={handleChange} placeholder="Year"  hasError={!!errors.dob} options={yearOptions} />
-                  </div>
-                  <FieldError msg={errors.dob} />
-                </div>
-
-                <button type="button" onClick={handleNext}
-                  style={{ ...primaryBtn, marginTop: 8 }}
-                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 8px 28px rgba(59,130,246,0.42)"; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)";    e.currentTarget.style.boxShadow = "0 4px 20px rgba(99,102,241,0.3)"; }}
-                >
-                  Continue <ArrowRight size={16} />
-                </button>
+              <div>
+                <FieldLabel required>Full name</FieldLabel>
+                <TextInput name="fullName" value={form.fullName} onChange={handleChange}
+                  placeholder="e.g. Nguyen Van An" hasError={!!errors.fullName} />
+                <FieldHelper>Used as the ticket holder name.</FieldHelper>
+                <FieldError msg={errors.fullName} />
               </div>
-            )}
 
-            {/* ════ STEP 2 ════ */}
-            {step === 2 && (
-              <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <FieldLabel required>Phone number</FieldLabel>
+                <TextInput name="phoneNumber" type="tel" value={form.phoneNumber}
+                  onChange={handleChange} placeholder="0901234567" hasError={!!errors.phoneNumber} />
+                <FieldHelper>For booking confirmation and ticket pickup notifications.</FieldHelper>
+                <FieldError msg={errors.phoneNumber} />
+              </div>
 
-                {generalError && (
-                  <div style={{
-                    background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.22)",
-                    borderRadius: 12, padding: "12px 14px", color: "#f87171", fontSize: 13, lineHeight: 1.5,
-                  }}>
-                    {generalError}
-                  </div>
-                )}
+              <div>
+                <FieldLabel required>Gender</FieldLabel>
+                <GenderSelector value={form.gender} hasError={!!errors.gender}
+                  onChange={v => { setForm(prev => ({ ...prev, gender: v })); setErrors(prev => { const n = { ...prev }; delete n.gender; return n; }); }} />
+                <FieldError msg={errors.gender} />
+              </div>
 
-                <div>
-                  <FieldLabel required>Phone number</FieldLabel>
-                  <TextInput name="phoneNumber" type="tel" value={form.phoneNumber}
-                    onChange={handleChange} placeholder="0901 234 567" hasError={!!errors.phoneNumber} />
-                  <FieldHelper>For booking confirmation and ticket pickup notifications</FieldHelper>
-                  <FieldError msg={errors.phoneNumber} />
+              <div>
+                <FieldLabel required>Date of birth</FieldLabel>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1.25fr 1.4fr", gap: 8 }}>
+                  <SelectInput name="dobDay" value={form.dobDay} onChange={handleChange} placeholder="Day" hasError={!!errors.dob} options={dayOptions} />
+                  <SelectInput name="dobMonth" value={form.dobMonth} onChange={handleChange} placeholder="Month" hasError={!!errors.dob} options={monthOptions} />
+                  <SelectInput name="dobYear" value={form.dobYear} onChange={handleChange} placeholder="Year" hasError={!!errors.dob} options={yearOptions} />
                 </div>
+                <FieldError msg={errors.dob} />
+              </div>
 
-                <div>
-                  <FieldLabel required>National ID (CCCD)</FieldLabel>
-                  <TextInput
-                    name="identityCard" value={form.identityCard}
-                    onChange={handleChange} placeholder="12-digit number"
-                    hasError={!!errors.identityCard}
-                    rightElement={
-                      parsedIdentityCard ? (
-                        <div style={{ width: 20, height: 20, borderRadius: "50%", background: "rgba(34,197,94,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <Check size={12} color="#22c55e" strokeWidth={2.5} />
-                        </div>
-                      ) : undefined
-                    }
-                  />
-                  {parsedIdentityCard
-                    ? <span style={{ display: "block", color: "#4ade80", fontSize: 12, marginTop: 6, fontWeight: 500 }}>✓ Valid ID detected</span>
-                    : <FieldHelper>Required by law to issue a physical ticket at the cinema counter</FieldHelper>
-                  }
-                  {identityCardHint && !parsedIdentityCard && <FieldError msg={identityCardHint} />}
-                  {birthYearMismatch && (
-                    <span style={{ display: "block", color: "#fb923c", fontSize: 12, marginTop: 5, fontWeight: 500 }}>
-                      ⚠ Birth year doesn't match ID — please double-check.
-                    </span>
-                  )}
-                  <FieldError msg={errors.identityCard} />
-                </div>
-
-                <div>
-                  <FieldLabel>
-                    Address{" "}
-                    <span style={{ fontWeight: 400, textTransform: "none" as const, letterSpacing: 0, color: "rgba(255,255,255,0.2)", fontSize: 10 }}>
-                      (optional)
-                    </span>
-                  </FieldLabel>
-                  <TextInput name="address" value={form.address} onChange={handleChange} placeholder="City, Province" />
-                </div>
-
-                <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-                  <button
-                    type="button"
-                    onClick={() => { setStep(1); setErrors({}); setGeneralError(null); }}
-                    aria-label="Back to step 1"
-                    style={{
-                      width: 50, height: 50, flexShrink: 0, borderRadius: 13,
-                      background: "rgba(255,255,255,0.05)",
-                      border: "1.5px solid rgba(255,255,255,0.1)",
-                      cursor: "pointer", color: "rgba(255,255,255,0.4)",
-                      display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s",
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.09)"; e.currentTarget.style.color = "rgba(255,255,255,0.75)"; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.color = "rgba(255,255,255,0.4)"; }}
-                  >
-                    <ArrowLeft size={18} />
-                  </button>
-
-                  <button
-                    type="submit" disabled={loading}
-                    style={{
-                      ...primaryBtn, flex: 1, width: "auto", height: 50, padding: 0,
-                      background: loading ? "rgba(59,130,246,0.35)" : "linear-gradient(135deg, #2563eb, #3b82f6)",
-                      color: loading ? "rgba(255,255,255,0.45)" : "#fff",
-                      boxShadow: loading ? "none" : "0 4px 20px rgba(59,130,246,0.3)",
-                      cursor: loading ? "not-allowed" : "pointer",
-                    }}
-                    onMouseEnter={e => { if (!loading) { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 8px 28px rgba(59,130,246,0.42)"; } }}
-                    onMouseLeave={e => { if (!loading) { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(99,102,241,0.3)"; } }}
-                  >
-                    {loading ? (
-                      <>
-                        <svg style={{ animation: "spin 0.75s linear infinite", width: 16, height: 16, flexShrink: 0 }} viewBox="0 0 24 24" fill="none">
-                          <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.2)" strokeWidth="3" />
-                          <path d="M12 2 A10 10 0 0 1 22 12" stroke="rgba(255,255,255,0.7)" strokeWidth="3" strokeLinecap="round" />
-                        </svg>
-                        Saving…
-                      </>
-                    ) : "Save & complete setup"}
-                  </button>
-                </div>
-              </form>
-            )}
+              <button
+                type="submit" disabled={loading}
+                style={{
+                  ...primaryBtn, height: 50, padding: 0, marginTop: 8,
+                  background: loading ? "rgba(59,130,246,0.35)" : "linear-gradient(135deg, #2563eb, #3b82f6)",
+                  color: loading ? "rgba(255,255,255,0.45)" : "#fff",
+                  boxShadow: loading ? "none" : "0 4px 20px rgba(59,130,246,0.3)",
+                  cursor: loading ? "not-allowed" : "pointer",
+                }}
+                onMouseEnter={e => { if (!loading) { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 8px 28px rgba(59,130,246,0.42)"; } }}
+                onMouseLeave={e => { if (!loading) { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(99,102,241,0.3)"; } }}
+              >
+                {loading ? (
+                  <>
+                    <svg style={{ animation: "spin 0.75s linear infinite", width: 16, height: 16, flexShrink: 0 }} viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.2)" strokeWidth="3" />
+                      <path d="M12 2 A10 10 0 0 1 22 12" stroke="rgba(255,255,255,0.7)" strokeWidth="3" strokeLinecap="round" />
+                    </svg>
+                    Saving…
+                  </>
+                ) : "Save & continue checkout"}
+              </button>
+            </form>
 
             {/* ── Dismiss hint ── */}
             <p style={{ textAlign: "center", margin: "18px 0 0", fontSize: 11.5, color: "rgba(255,255,255,0.18)", lineHeight: 1.5 }}>

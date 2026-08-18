@@ -49,8 +49,8 @@ interface AuthContextType {
     needsProfileSetup: boolean;
     profileCheckPending: boolean;
     setNeedsProfileSetup: (v: boolean) => void;
-    login: (credentials: any) => Promise<{ role: string; needsSetup: boolean }>;
-    loginWithGoogle: (credential: string) => Promise<{ role: string; needsSetup: boolean }>;
+    login: (credentials: any) => Promise<{ role: string }>;
+    loginWithGoogle: (credential: string) => Promise<{ role: string }>;
     logout: () => void;
 }
 
@@ -94,7 +94,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }, []);
 
-    const establishSession = async (response: any): Promise<{ role: string; needsSetup: boolean }> => {
+    const establishSession = async (response: any): Promise<{ role: string }> => {
         const resBody = response?.data ?? response;
         const token = resBody?.result?.token || resBody?.token || response?.result?.token;
 
@@ -109,30 +109,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         localStorage.setItem("role", primaryRole);
         setUser({ username: decoded.sub, role: primaryRole, accountId });
 
-        let needsSetup = false;
         if (requiresProfile(primaryRole) && accountId) {
             setProfileCheckPending(true);
             if (localStorage.getItem("__dev_forceProfileSetup") === "1") {
-                needsSetup = true;
+                setNeedsProfileSetup(true);
+                setProfileCheckPending(false);
             } else {
-                const complete = await checkProfileComplete(accountId);
-                needsSetup = !complete;
+                // Profile completeness is progressive metadata, not a login
+                // prerequisite. Resolve it without making authentication wait
+                // for user-service availability.
+                void checkProfileComplete(accountId).then((complete) => {
+                    setNeedsProfileSetup(!complete);
+                    setProfileCheckPending(false);
+                });
             }
-            setNeedsProfileSetup(needsSetup);
-            setProfileCheckPending(false);
         } else {
             setNeedsProfileSetup(false);
             setProfileCheckPending(false);
         }
 
-        return { role: primaryRole, needsSetup };
+        return { role: primaryRole };
     };
 
-    const login = async (credentials: any): Promise<{ role: string; needsSetup: boolean }> => {
+    const login = async (credentials: any): Promise<{ role: string }> => {
         return establishSession(await authApi.login(credentials));
     };
 
-    const loginWithGoogle = async (credential: string): Promise<{ role: string; needsSetup: boolean }> => {
+    const loginWithGoogle = async (credential: string): Promise<{ role: string }> => {
         return establishSession(await authApi.loginWithGoogle({ credential }));
     };
 

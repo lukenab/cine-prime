@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Base64;
+import java.util.HashSet;
 import java.util.Set;
 
 @Service
@@ -63,7 +64,7 @@ public class GoogleAuthenticationService {
                 .localLoginEnabled(false)
                 .status(AccountStatus.ACTIVE)
                 .emailVerifiedAt(LocalDateTime.now())
-                .roles(Set.of(memberRole))
+                .roles(new HashSet<>(Set.of(memberRole)))
                 .build());
 
         identityRepository.save(AccountIdentity.builder()

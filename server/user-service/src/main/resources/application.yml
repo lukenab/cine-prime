@@ -59,6 +59,11 @@ jwt:
 
 app:
   internal-service-key: ${INTERNAL_SERVICE_KEY:local-dev-internal-key-change-before-deploy}
+  # Compatibility bridge for assignments created before staff-access.events.v1.
+  # Remove after 2026-09-30 once every deployed environment has completed a replay.
+  staff-access-bootstrap-enabled: ${STAFF_ACCESS_BOOTSTRAP_ENABLED:true}
+  kafka:
+    staff-access-topic: ${STAFF_ACCESS_TOPIC:staff-access.events.v1}
 
 eureka:
   instance:

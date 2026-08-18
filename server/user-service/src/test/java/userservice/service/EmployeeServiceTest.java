@@ -20,6 +20,7 @@ import userservice.enums.EmployeePosition;
 import userservice.enums.EmploymentType;
 import userservice.enums.StaffAccessRole;
 import userservice.mapper.EmployeeMapper;
+import userservice.messaging.StaffAccessEventPublisher;
 import userservice.repository.EmployeeRepository;
 import userservice.repository.UserRepository;
 
@@ -65,7 +66,8 @@ class EmployeeServiceTest {
                 .thenThrow(FeignException.errorStatus("inviteStaff", response));
 
         EmployeeService service = new EmployeeService(
-                employees, users, mapper, mock(AuditLogService.class), auth);
+                employees, users, mapper, mock(AuditLogService.class), auth,
+                mock(StaffAccessEventPublisher.class));
         ReflectionTestUtils.setField(service, "internalServiceKey", "test-key");
 
         assertThatThrownBy(() -> service.inviteEmployee(EmployeeInvitationRequest.builder()
@@ -111,7 +113,8 @@ class EmployeeServiceTest {
         });
 
         EmployeeService service = new EmployeeService(
-                employees, users, mapper, mock(AuditLogService.class), auth);
+                employees, users, mapper, mock(AuditLogService.class), auth,
+                mock(StaffAccessEventPublisher.class));
         ReflectionTestUtils.setField(service, "internalServiceKey", "test-key");
 
         EmployeeResponse response = service.inviteEmployee(EmployeeInvitationRequest.builder()
@@ -152,7 +155,8 @@ class EmployeeServiceTest {
         when(mapper.toEmployeeResponse(existing)).thenReturn(expected);
 
         EmployeeService service = new EmployeeService(
-                employees, users, mapper, mock(AuditLogService.class), auth);
+                employees, users, mapper, mock(AuditLogService.class), auth,
+                mock(StaffAccessEventPublisher.class));
         ReflectionTestUtils.setField(service, "internalServiceKey", "test-key");
 
         EmployeeResponse actual = service.createEmployee(
@@ -181,7 +185,8 @@ class EmployeeServiceTest {
         when(mapper.toEmployeeResponse(existing)).thenReturn(expected);
 
         EmployeeService service = new EmployeeService(
-                employees, users, mapper, mock(AuditLogService.class), auth);
+                employees, users, mapper, mock(AuditLogService.class), auth,
+                mock(StaffAccessEventPublisher.class));
         ReflectionTestUtils.setField(service, "internalServiceKey", "test-key");
 
         assertThat(service.createEmployee(EmployeeCreateRequest.builder()

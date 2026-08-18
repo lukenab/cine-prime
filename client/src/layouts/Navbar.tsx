@@ -43,6 +43,7 @@ export function Navbar() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [fullName, setFullName] = useState<string | null>(null);
   const [cinemaClusters, setCinemaClusters] = useState<{ label: string; to: string }[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -52,18 +53,20 @@ export function Navbar() {
   const token = localStorage.getItem("accessToken");
   const isLogged = !!token;
   const username = user?.username || "User";
+  const displayName = fullName?.trim() || username;
   const isStaff = ["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_PROGRAMMING_OPERATOR", "ROLE_BRANCH_MANAGER", "ROLE_EMPLOYEE"].includes(user?.role ?? "");
   const staffWorkspacePath = defaultPathForRole(user?.role ?? "");
 
   // Fetch avatar khi user đăng nhập
   useEffect(() => {
-    if (!user?.accountId) { setAvatarUrl(null); return; }
+    if (!user?.accountId) { setAvatarUrl(null); setFullName(null); return; }
     userApi.getUserById(user.accountId)
       .then((res: any) => {
         const p = res?.result ?? res?.data?.result ?? res?.data ?? res;
         setAvatarUrl(p?.avatarUrl ?? null);
+        setFullName(p?.fullName ?? null);
       })
-      .catch(() => setAvatarUrl(null));
+      .catch(() => { setAvatarUrl(null); setFullName(null); });
   }, [user?.accountId]);
 
   useEffect(() => {
@@ -380,10 +383,10 @@ export function Navbar() {
                 type="button"
                 className="navbar-avatar-trigger"
                 onClick={() => setDropdownOpen(o => !o)}
-                aria-label={`Open account menu for ${username}`}
+                aria-label={`Open account menu for ${displayName}`}
                 aria-haspopup="menu"
                 aria-expanded={dropdownOpen}
-                title={username}
+                title={displayName}
                 style={{
                   width: 38, height: 38, display: "grid", placeItems: "center",
                   background: dropdownOpen ? "rgba(37,99,235,0.16)" : "transparent",
@@ -404,7 +407,7 @@ export function Navbar() {
                     <img src={avatarUrl} alt="avatar" style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }} />
                   ) : (
                     <div style={{ width: "100%", height: "100%", background: "linear-gradient(145deg,#60a5fa 0%,#2563eb 48%,#1e40af 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <span style={{ color: "#fff", fontWeight: 800, fontSize: 13 }}>{username.charAt(0).toUpperCase()}</span>
+                      <span style={{ color: "#fff", fontWeight: 800, fontSize: 13 }}>{displayName.charAt(0).toUpperCase()}</span>
                     </div>
                   )}
                 </div>
@@ -422,11 +425,11 @@ export function Navbar() {
                       {avatarUrl ? (
                         <img src={avatarUrl} alt="" />
                       ) : (
-                        <span>{username.charAt(0).toUpperCase()}</span>
+                        <span>{displayName.charAt(0).toUpperCase()}</span>
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="nav-account-name">{username}</p>
+                      <p className="nav-account-name">{displayName}</p>
                       <p className="nav-account-role">{roleLabels[user?.role ?? ""] ?? "Member"}</p>
                     </div>
                   </div>
@@ -515,10 +518,10 @@ export function Navbar() {
                    style={{ backgroundColor: "rgba(59,130,246,0.15)", border: `1px solid ${ACCENT}` }}
                  >
                    <span style={{ color: ACCENT, fontWeight: 700 }}>
-                     {username.charAt(0).toUpperCase()}
+                     {displayName.charAt(0).toUpperCase()}
                    </span>
                  </div>
-                 <span className="text-white font-medium">{username}</span>
+                 <span className="text-white font-medium">{displayName}</span>
                </div>
                <button onClick={handleLogout} className="text-white/50 hover:text-white">
                  <LogOut size={20} />

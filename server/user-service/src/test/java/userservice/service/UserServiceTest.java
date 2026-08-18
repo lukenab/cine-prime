@@ -6,6 +6,7 @@ import userservice.dto.StaffProfileCompletionRequest;
 import userservice.dto.UserResponse;
 import userservice.entity.Employee;
 import userservice.entity.User;
+import userservice.event.UserRegisteredEvent;
 import userservice.mapper.UserMapper;
 import userservice.repository.UserRepository;
 
@@ -18,6 +19,36 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class UserServiceTest {
+
+    @Test
+    void completesMemberProfileWithoutIdentityCard() {
+        UserRepository users = mock(UserRepository.class);
+        UserMapper mapper = mock(UserMapper.class);
+        when(users.findById("member-1")).thenReturn(Optional.empty());
+        when(users.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UserService service = new UserService(
+                users,
+                mapper,
+                mock(AuditLogService.class),
+                mock(IdentityCardService.class),
+                mock(ImageStorageService.class),
+                mock(AuthAccountClient.class));
+
+        service.createUserProfile(UserRegisteredEvent.builder()
+                .accountId("member-1")
+                .email("member@cineprime.vn")
+                .fullName("Nguyen Van A")
+                .phoneNumber("0901234567")
+                .dateOfBirth(java.time.LocalDate.of(2000, 1, 2))
+                .gender("Male")
+                .build());
+
+        var captor = org.mockito.ArgumentCaptor.forClass(User.class);
+        verify(users).save(captor.capture());
+        assertThat(captor.getValue().getProfileCompleted()).isTrue();
+        assertThat(captor.getValue().getIdentityCard()).isNull();
+    }
 
     @Test
     void completesStaffProfileWithoutCustomerIdentityFields() {

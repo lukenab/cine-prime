@@ -3,6 +3,7 @@ import { AlertTriangle, Loader2, X } from "lucide-react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import {
   bookingApi,
+  BookingConfirmation,
   Seat,
   ShowtimeSeatMap,
   SeatMapPosition,
@@ -155,8 +156,24 @@ export default function SeatBookingPage() {
   const { showtimeId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, needsProfileSetup } = useAuth();
+  const { user, needsProfileSetup, profileCheckPending } = useAuth();
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [pendingBooking, setPendingBooking] = useState<BookingConfirmation | null>(null);
+
+  const continueToCheckout = useCallback((booking: BookingConfirmation) => {
+    navigate(`/checkout/${booking.bookingId}/concessions`, {
+      state: booking.promotionRejectionReason
+        ? { promotionRejectionReason: booking.promotionRejectionReason }
+        : undefined,
+    });
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!pendingBooking || profileCheckPending || needsProfileSetup) return;
+    const booking = pendingBooking;
+    setPendingBooking(null);
+    continueToCheckout(booking);
+  }, [continueToCheckout, needsProfileSetup, pendingBooking, profileCheckPending]);
 
   const showtimeDetails = location.state?.showtime || {
     movieTitle: "Movie Booking",
@@ -461,9 +478,9 @@ export default function SeatBookingPage() {
       return;
     }
 
-    // Gate 2: chưa hoàn tất profile → hiện modal ngay trên trang booking
-    if (needsProfileSetup) {
-      setShowProfileModal(true);
+    // A previous hold is still active; resume its checkout profile step.
+    if (pendingBooking) {
+      if (!profileCheckPending && needsProfileSetup) setShowProfileModal(true);
       return;
     }
 
@@ -478,6 +495,15 @@ export default function SeatBookingPage() {
       const result = await bookingApi.createBooking(payload);
 
       clearPersistedSeatHold(showtimeId);
+      if (needsProfileSetup || profileCheckPending) {
+        // Hold scarce inventory before collecting profile details so the
+        // selected seats cannot be taken while the customer fills the form.
+        setPendingBooking(result);
+        setScreen("map");
+        if (needsProfileSetup) setShowProfileModal(true);
+        return;
+      }
+
       // The checkout page (BookingCheckoutPage) re-fetches and displays the
       // same booking summary plus the actual payment step, so landing on an
       // interstitial "seats reserved" screen first was a redundant extra
@@ -485,11 +511,7 @@ export default function SeatBookingPage() {
       // also a real bug: releasing the hold directly against movie-service
       // left the booking stuck at PENDING_PAYMENT until BookingExpiryScheduler
       // caught up, instead of going through POST /api/bookings/{id}/cancellations.
-      navigate(`/checkout/${result.bookingId}/concessions`, {
-        state: result.promotionRejectionReason
-          ? { promotionRejectionReason: result.promotionRejectionReason }
-          : undefined,
-      });
+      continueToCheckout(result);
     } catch (err: any) {
       setScreen("map");
       const errResponse = err.response?.data;
@@ -800,10 +822,16 @@ export default function SeatBookingPage() {
           headerAction={pickedSeats.length > 0 ? { label: "Clear all", onClick: clearAll } : undefined}
           backAction={{ label: "Back", onClick: () => navigate(-1) }}
           primaryAction={pickedSeats.length > 0 ? {
-            label: screen === "confirming" ? "Reserving seats..." : "Continue",
+            label: screen === "confirming"
+              ? "Reserving seats..."
+              : pendingBooking && profileCheckPending
+                ? "Checking profile..."
+              : pendingBooking
+                ? "Complete profile to checkout"
+                : "Continue",
             onClick: handleConfirm,
-            disabled: screen === "confirming",
-            loading: screen === "confirming",
+            disabled: screen === "confirming" || Boolean(pendingBooking && profileCheckPending),
+            loading: screen === "confirming" || Boolean(pendingBooking && profileCheckPending),
           } : undefined}
         />
       </div>
@@ -812,7 +840,13 @@ export default function SeatBookingPage() {
       {showProfileModal && (
         <CompleteProfilePage
           onClose={() => setShowProfileModal(false)}
-          onDone={() => setShowProfileModal(false)}
+          onDone={() => {
+            setShowProfileModal(false);
+            if (!pendingBooking) return;
+            const booking = pendingBooking;
+            setPendingBooking(null);
+            continueToCheckout(booking);
+          }}
         />
       )}
     </div>

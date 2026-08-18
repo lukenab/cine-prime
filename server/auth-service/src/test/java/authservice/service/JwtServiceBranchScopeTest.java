@@ -1,12 +1,10 @@
 package authservice.service;
 
-import authservice.client.UserBranchScopeClient;
-import authservice.dto.InternalBranchScopeResponse;
 import authservice.entity.Account;
 import authservice.entity.Role;
 import authservice.repository.AuthTokenRepository;
 import com.nimbusds.jwt.SignedJWT;
-import movie.theater.common.dto.ApiResponse;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -18,31 +16,22 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class JwtServiceBranchScopeTest {
+    private final StaffAccessProjectionService projections = mock(StaffAccessProjectionService.class);
+    private JwtService service;
 
-    @Test
-    void branchManagerTokenContainsAuthoritativeUserServiceAssignments() throws Exception {
-        AuthTokenRepository tokenRepository = mock(AuthTokenRepository.class);
-        UserBranchScopeClient scopeClient = mock(UserBranchScopeClient.class);
-        JwtService service = new JwtService(tokenRepository, scopeClient);
+    @BeforeEach
+    void setUp() {
+        service = new JwtService(mock(AuthTokenRepository.class), projections);
         ReflectionTestUtils.setField(service, "SIGNER_KEY", "a".repeat(64));
         ReflectionTestUtils.setField(service, "VALID_DURATION", 1800L);
         ReflectionTestUtils.setField(service, "REFRESHABLE_DURATION", 36000L);
-        ReflectionTestUtils.setField(service, "internalServiceKey", "test-internal-key");
+    }
 
-        Account manager = Account.builder()
-                .accountId("ACC-MANAGER")
-                .username("manager")
-                .email("manager@example.test")
-                .passwordHash("not-used")
-                .roles(Set.of(Role.builder()
-                        .roleName("BRANCH_MANAGER")
-                        .permissions(Set.of())
-                        .build()))
-                .build();
-        when(scopeClient.getBranchScope("ACC-MANAGER", "test-internal-key"))
-                .thenReturn(ApiResponse.<InternalBranchScopeResponse>builder()
-                        .result(new InternalBranchScopeResponse(List.of("81", "81")))
-                        .build());
+    @Test
+    void loginUsesLocalProjectionWhenUserServiceIsUnavailable() throws Exception {
+        Account manager = account("ACC-MANAGER", "BRANCH_MANAGER");
+        when(projections.resolve(manager)).thenReturn(new StaffAccessProjectionService.StaffAuthorization(
+                true, true, "BRANCH_MANAGER", List.of("81")));
 
         SignedJWT token = SignedJWT.parse(service.generateToken(manager));
 
@@ -50,5 +39,43 @@ class JwtServiceBranchScopeTest {
                 .containsExactly("81");
         assertThat(token.getJWTClaimsSet().getStringClaim("scope"))
                 .contains("ROLE_BRANCH_MANAGER");
+        assertThat(token.getJWTClaimsSet().getBooleanClaim("staffAssignmentActive")).isTrue();
+    }
+
+    @Test
+    void missingOrDisabledAssignmentFailsClosed() throws Exception {
+        Account employee = account("ACC-EMPLOYEE", "EMPLOYEE");
+        when(projections.resolve(employee)).thenReturn(
+                new StaffAccessProjectionService.StaffAuthorization(true, false, null, List.of()));
+
+        SignedJWT token = SignedJWT.parse(service.generateToken(employee));
+
+        assertThat(token.getJWTClaimsSet().getStringClaim("scope"))
+                .doesNotContain("ROLE_EMPLOYEE");
+        assertThat(token.getJWTClaimsSet().getStringListClaim("cinemaClusterIds")).isEmpty();
+        assertThat(token.getJWTClaimsSet().getBooleanClaim("staffAssignmentActive")).isFalse();
+    }
+
+    @Test
+    void memberTokenIsUnaffectedByStaffProjection() throws Exception {
+        Account member = account("ACC-MEMBER", "MEMBER");
+        when(projections.resolve(member)).thenReturn(
+                new StaffAccessProjectionService.StaffAuthorization(false, true, null, List.of()));
+
+        SignedJWT token = SignedJWT.parse(service.generateToken(member));
+
+        assertThat(token.getJWTClaimsSet().getStringClaim("scope")).contains("ROLE_MEMBER");
+        assertThat(token.getJWTClaimsSet().getClaim("staffAssignmentActive")).isNull();
+        assertThat(token.getJWTClaimsSet().getClaim("cinemaClusterIds")).isNull();
+    }
+
+    private Account account(String id, String role) {
+        return Account.builder()
+                .accountId(id)
+                .username(id.toLowerCase())
+                .email(id.toLowerCase() + "@example.test")
+                .passwordHash("not-used")
+                .roles(Set.of(Role.builder().roleName(role).permissions(Set.of()).build()))
+                .build();
     }
 }
