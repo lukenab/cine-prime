@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { X, Clapperboard, ShieldCheck, Info } from "lucide-react";
+import { X } from "lucide-react";
 import { userApi } from "../../api/userApi";
 import { useAuth } from "../../context/AuthContext";
+import CinePrimeBrand from "../../components/shared/CinePrimeBrand";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -18,6 +19,7 @@ interface FormState {
 interface CompleteProfilePageProps {
   onClose?: () => void;
   onDone?:  () => void;
+  checkoutMode?: boolean;
 }
 
 // ── Primitives ────────────────────────────────────────────────────────────────
@@ -32,19 +34,6 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
       {children}
       {required && <span style={{ color: "#ef4444", marginLeft: 3 }}>*</span>}
     </label>
-  );
-}
-
-function FieldHelper({ children }: { children: React.ReactNode }) {
-  return (
-    <span style={{
-      display: "flex", alignItems: "flex-start", gap: 5,
-      fontSize: 11.5, color: "rgba(255,255,255,0.25)",
-      marginTop: 5, lineHeight: 1.45,
-    }}>
-      <Info size={11} style={{ flexShrink: 0, marginTop: 1.5, opacity: 0.6 }} />
-      {children}
-    </span>
   );
 }
 
@@ -74,8 +63,8 @@ function TextInput({
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
         style={{
           width: "100%", boxSizing: "border-box",
-          background: focused ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.04)",
-          border: `1.5px solid ${hasError ? "rgba(239,68,68,0.55)" : focused ? "rgba(59,130,246,0.65)" : "rgba(255,255,255,0.1)"}`,
+          background: focused ? "rgba(18,42,76,0.9)" : "rgba(11,27,50,0.78)",
+          border: `1.5px solid ${hasError ? "rgba(239,68,68,0.55)" : focused ? "rgba(59,130,246,0.65)" : "rgba(148,163,184,0.16)"}`,
           borderRadius: 12, padding: `12px ${rightElement ? "44px" : "14px"} 12px 14px`,
           color: "#fff", fontSize: 14, outline: "none",
           boxShadow: focused ? `0 0 0 3px ${hasError ? "rgba(239,68,68,0.1)" : "rgba(59,130,246,0.1)"}` : "none",
@@ -107,8 +96,8 @@ function SelectInput({
       onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
       style={{
         width: "100%", boxSizing: "border-box",
-        background: focused ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.04)",
-        border: `1.5px solid ${hasError ? "rgba(239,68,68,0.55)" : focused ? "rgba(59,130,246,0.65)" : "rgba(255,255,255,0.1)"}`,
+        background: focused ? "rgba(18,42,76,0.9)" : "rgba(11,27,50,0.78)",
+        border: `1.5px solid ${hasError ? "rgba(239,68,68,0.55)" : focused ? "rgba(59,130,246,0.65)" : "rgba(148,163,184,0.16)"}`,
         borderRadius: 12, padding: "12px 32px 12px 14px",
         color: value ? "#fff" : "rgba(255,255,255,0.25)",
         fontSize: 14, outline: "none", cursor: "pointer",
@@ -119,9 +108,9 @@ function SelectInput({
         transition: "all 0.2s",
       }}
     >
-      {placeholder && <option value="" disabled style={{ background: "#1c1c1e" }}>{placeholder}</option>}
+      {placeholder && <option value="" disabled style={{ background: "#071225" }}>{placeholder}</option>}
       {options.map(o => (
-        <option key={o.value} value={o.value} style={{ background: "#1c1c1e", color: "#fff" }}>{o.label}</option>
+        <option key={o.value} value={o.value} style={{ background: "#071225", color: "#fff" }}>{o.label}</option>
       ))}
     </select>
   );
@@ -136,8 +125,8 @@ function GenderSelector({ value, onChange, hasError }: { value: string; onChange
           <button key={opt.value} type="button" onClick={() => onChange(opt.value)} style={{
             flex: 1, padding: "11px 0", borderRadius: 12, fontSize: 13, fontWeight: active ? 600 : 500,
             cursor: "pointer", transition: "all 0.15s",
-            border: `1.5px solid ${active ? "rgba(59,130,246,0.65)" : hasError ? "rgba(239,68,68,0.45)" : "rgba(255,255,255,0.1)"}`,
-            background: active ? "rgba(59,130,246,0.14)" : "rgba(255,255,255,0.04)",
+            border: `1.5px solid ${active ? "rgba(59,130,246,0.65)" : hasError ? "rgba(239,68,68,0.45)" : "rgba(148,163,184,0.16)"}`,
+            background: active ? "rgba(37,99,235,0.22)" : "rgba(11,27,50,0.78)",
             color: active ? "#93c5fd" : "rgba(255,255,255,0.4)",
             boxShadow: active ? "0 0 0 3px rgba(59,130,246,0.1)" : "none",
           }}>
@@ -157,7 +146,7 @@ const yearOptions = Array.from({ length: new Date().getFullYear() - 1929 }, (_, 
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function CompleteProfilePage({ onClose, onDone }: CompleteProfilePageProps = {}) {
+export default function CompleteProfilePage({ onClose, onDone, checkoutMode = false }: CompleteProfilePageProps = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, setNeedsProfileSetup } = useAuth();
@@ -294,8 +283,8 @@ export default function CompleteProfilePage({ onClose, onDone }: CompleteProfile
         onClick={handleClose}
         style={{
           position: "fixed", inset: 0, zIndex: 50,
-          background: "rgba(0,0,0,0.72)",
-          backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+          background: "rgba(1,5,14,0.7)",
+          backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)",
           display: "flex", alignItems: "center", justifyContent: "center",
           padding: "20px 16px",
           animation: "cpFadeIn 0.18s ease both",
@@ -306,10 +295,10 @@ export default function CompleteProfilePage({ onClose, onDone }: CompleteProfile
           onClick={e => e.stopPropagation()}
           style={{
             width: "100%", maxWidth: 500,
-            background: "#131316",
+            background: "radial-gradient(circle at 88% 0%, rgba(37,99,235,0.14), transparent 34%), linear-gradient(155deg, #081426 0%, #050d1c 58%, #030814 100%)",
             borderRadius: 22,
-            border: "1px solid rgba(255,255,255,0.09)",
-            boxShadow: "0 48px 120px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.03) inset",
+            border: "1px solid rgba(96,165,250,0.18)",
+            boxShadow: "0 48px 120px rgba(0,0,0,0.82), 0 20px 60px rgba(30,64,175,0.1), 0 1px 0 rgba(255,255,255,0.04) inset",
             overflow: "hidden",
             animation: "cpSlideUp 0.24s cubic-bezier(0.16,1,0.3,1) both",
             maxHeight: "calc(100svh - 40px)",
@@ -327,19 +316,7 @@ export default function CompleteProfilePage({ onClose, onDone }: CompleteProfile
             display: "flex", alignItems: "center", justifyContent: "space-between",
           }}>
             {/* Brand */}
-            <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-              <div style={{
-                width: 30, height: 30, borderRadius: 9,
-                background: "rgba(59,130,246,0.14)",
-                border: "1px solid rgba(59,130,246,0.22)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <Clapperboard size={15} color="#60a5fa" />
-              </div>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.8)", letterSpacing: "-0.01em" }}>
-                CinePrime
-              </span>
-            </div>
+            <CinePrimeBrand markSize={32} wordmarkSize={13} letterSpacing="0.08em" glow={false} />
 
             {/* Close */}
             <button
@@ -362,31 +339,13 @@ export default function CompleteProfilePage({ onClose, onDone }: CompleteProfile
           {/* ── Body ── */}
           <div style={{ padding: "24px 24px 28px" }}>
 
-            {/* ── One-time setup notice ── */}
-            <div style={{
-              display: "flex", alignItems: "flex-start", gap: 10,
-              background: "rgba(59,130,246,0.08)",
-              border: "1px solid rgba(59,130,246,0.2)",
-              borderRadius: 12, padding: "11px 14px", marginBottom: 24,
-            }}>
-              <ShieldCheck size={16} color="#60a5fa" style={{ flexShrink: 0, marginTop: 1 }} />
-              <div>
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#bfdbfe", lineHeight: 1.4 }}>
-                  Complete once for faster checkout
-                </p>
-                <p style={{ margin: "3px 0 0", fontSize: 12, color: "rgba(147,197,253,0.55)", lineHeight: 1.4 }}>
-                  These details are used for booking contact and age-appropriate ticketing. No identity-card number is required.
-                </p>
-              </div>
-            </div>
-
             {/* Form heading */}
             <div style={{ marginBottom: 20 }}>
               <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#fff", letterSpacing: "-0.02em" }}>
-                Complete your booking profile
+                Complete your member profile
               </h2>
               <p style={{ margin: 0, fontSize: 13, color: "rgba(255,255,255,0.35)", lineHeight: 1.5 }}>
-                Add the contact and personal details used for your tickets.
+                {checkoutMode ? "Enter your details once, then continue to checkout." : "Add the details needed to finish setting up your account."}
               </p>
             </div>
 
@@ -404,7 +363,6 @@ export default function CompleteProfilePage({ onClose, onDone }: CompleteProfile
                 <FieldLabel required>Full name</FieldLabel>
                 <TextInput name="fullName" value={form.fullName} onChange={handleChange}
                   placeholder="e.g. Nguyen Van An" hasError={!!errors.fullName} />
-                <FieldHelper>Used as the ticket holder name.</FieldHelper>
                 <FieldError msg={errors.fullName} />
               </div>
 
@@ -412,7 +370,6 @@ export default function CompleteProfilePage({ onClose, onDone }: CompleteProfile
                 <FieldLabel required>Phone number</FieldLabel>
                 <TextInput name="phoneNumber" type="tel" value={form.phoneNumber}
                   onChange={handleChange} placeholder="0901234567" hasError={!!errors.phoneNumber} />
-                <FieldHelper>For booking confirmation and ticket pickup notifications.</FieldHelper>
                 <FieldError msg={errors.phoneNumber} />
               </div>
 
@@ -453,7 +410,7 @@ export default function CompleteProfilePage({ onClose, onDone }: CompleteProfile
                     </svg>
                     Saving…
                   </>
-                ) : "Save & continue checkout"}
+                ) : checkoutMode ? "Save" : "Save profile"}
               </button>
             </form>
 
