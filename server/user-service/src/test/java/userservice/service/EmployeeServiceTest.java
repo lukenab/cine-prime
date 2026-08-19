@@ -6,6 +6,9 @@ import feign.Response;
 import movie.theater.common.exception.AppException;
 import movie.theater.common.dto.ApiResponse;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 import userservice.client.AuthAccountClient;
 import userservice.dto.AuthAccountSummary;
@@ -41,6 +44,40 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 
 class EmployeeServiceTest {
+
+    @ParameterizedTest
+    @EnumSource(StaffAccessRole.class)
+    void invitationContractForwardsEveryStaffRoleToAuth(StaffAccessRole role) {
+        EmployeeRepository employees = mock(EmployeeRepository.class);
+        UserRepository users = mock(UserRepository.class);
+        EmployeeMapper mapper = mock(EmployeeMapper.class);
+        AuthAccountClient auth = mock(AuthAccountClient.class);
+        String accountId = "account-" + role.name().toLowerCase();
+        User user = User.builder().accountId(accountId).email(role.name().toLowerCase() + "@cineprime.test").build();
+        Employee existing = Employee.builder().employeeId("employee-" + role.name()).user(user).accessRole(role).build();
+        EmployeeResponse response = EmployeeResponse.builder().employeeId(existing.getEmployeeId()).build();
+        AuthAccountSummary account = new AuthAccountSummary();
+        account.setAccountId(accountId); account.setEmail(user.getEmail()); account.setStatus("PENDING");
+        account.setRoles(Set.of(role.name()));
+        when(auth.inviteStaff(anyString(), any(AuthAccountInvitationRequest.class)))
+                .thenReturn(ApiResponse.<AuthAccountSummary>builder().result(account).build());
+        when(auth.getAccount(accountId, "test-key"))
+                .thenReturn(ApiResponse.<AuthAccountSummary>builder().result(account).build());
+        when(employees.findByUser_AccountId(accountId)).thenReturn(Optional.of(existing));
+        when(employees.findById(existing.getEmployeeId())).thenReturn(Optional.of(existing));
+        when(users.findById(accountId)).thenReturn(Optional.of(user));
+        when(mapper.toEmployeeResponse(existing)).thenReturn(response);
+        EmployeeService service = new EmployeeService(employees, users, mapper,
+                mock(AuditLogService.class), auth, mock(StaffAccessEventPublisher.class));
+        ReflectionTestUtils.setField(service, "internalServiceKey", "test-key");
+
+        service.inviteEmployee(EmployeeInvitationRequest.builder()
+                .fullName("Role contract " + role.name()).email(user.getEmail()).accessRole(role).build());
+
+        ArgumentCaptor<AuthAccountInvitationRequest> payload = ArgumentCaptor.forClass(AuthAccountInvitationRequest.class);
+        verify(auth).inviteStaff(org.mockito.ArgumentMatchers.eq("test-key"), payload.capture());
+        assertThat(payload.getValue().getRole()).isEqualTo(role.name());
+    }
 
     @Test
     void duplicateAuthEmailIsReturnedAsBusinessErrorInsteadOfInternalServerError() {

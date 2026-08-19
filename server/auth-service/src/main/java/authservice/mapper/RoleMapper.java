@@ -8,10 +8,11 @@ import org.mapstruct.Mapping;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", uses = PermissionMapper.class)
 public interface RoleMapper {
     @Mapping(target = "permissions", ignore = true)
     Role toRole(CreateRoleRequest createRoleRequest);
+    @Mapping(target = "permissions", source = "permissions")
     RoleResponse toRoleResponse(Role role);
     List<RoleResponse> toRoleResponseList(List<Role> roles);
 }

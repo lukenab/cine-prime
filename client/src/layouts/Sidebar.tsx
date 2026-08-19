@@ -1,6 +1,6 @@
 import { useAuth } from "../context/AuthContext";
 import { useState, useEffect } from "react";
-import { LayoutDashboard, Film, Tags, Calendar, Ticket, UserCog, BarChart2, Settings, Clapperboard, Gift, ShoppingCart, MapPin, ChevronDown, ShieldCheck, Monitor, Armchair, Layers3, BookOpen, ReceiptText, Popcorn, SlidersHorizontal } from "lucide-react";
+import { LayoutDashboard, Film, Tags, Calendar, Ticket, UserCog, BarChart2, Settings, Clapperboard, Gift, ShoppingCart, MapPin, ChevronDown, ShieldCheck, Monitor, Armchair, Layers3, BookOpen, ReceiptText, Popcorn, SlidersHorizontal, ScrollText, KeyRound } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { OrbitaLogo } from "../components/shared/OrbitaLogo";
 import { movieApi } from "../api/movieApi";
@@ -37,6 +37,8 @@ const adminNavItems: NavItem[] = [
   { icon: ReceiptText, label: "Refunds & Reconciliation", id: "refunds-reconciliation", path: "/admin/refunds-reconciliation", group: "business-operations", permissions: ["REFUND_READ", "RECONCILIATION_READ"] },
 
   { icon: UserCog, label: "People & Access", id: "people", path: "/admin/people", group: "administration", permissions: ["EMPLOYEE_READ", "USER_READ", "ROLE_MANAGE"] },
+  { icon: KeyRound, label: "Access Matrix", id: "access-matrix", path: "/admin/access-matrix", group: "administration", permissions: ["ROLE_MANAGE"] },
+  { icon: ScrollText, label: "Audit Trail", id: "audit", path: "/admin/audit", group: "administration", permissions: ["AUDIT_READ"] },
   { icon: BarChart2, label: "Reports", id: "reports", path: "/admin/reports", group: "administration", permissions: ["REPORT_READ", "AUDIT_READ"] },
 
   {

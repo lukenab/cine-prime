@@ -17,6 +17,13 @@ export interface EmployeeUpdatePayload {
   hireDate?: string;
 }
 
+export interface EmployeeAccessAssignmentPayload {
+  cinemaId?: string;
+  position: EmployeePosition;
+  department: EmployeeDepartment;
+  accessRole: EmployeeInvitationPayload["accessRole"];
+}
+
 export interface EmployeeInvitationPayload {
   fullName: string;
   email: string;
@@ -86,6 +93,7 @@ export interface EmployeeResponse {
   employmentType: EmploymentType | null;
   hireDate: string;
   status: 'ACTIVE' | 'DISABLED';
+  accessRole: EmployeeInvitationPayload["accessRole"];
   createdAt: string;
   updatedAt: string;
   // User profile fields (from linked User entity)
@@ -117,6 +125,9 @@ export const employeeApi = {
 
   update: (id: string, payload: EmployeeUpdatePayload) =>
     axiosClient.put<any>(`/api/employees/${id}`, payload),
+
+  changeAccessAssignment: (id: string, payload: EmployeeAccessAssignmentPayload) =>
+    axiosClient.put<any>(`/api/employees/${id}/access-assignment`, payload),
 
   disable: (id: string) =>
     axiosClient.delete<any>(`/api/employees/${id}`),

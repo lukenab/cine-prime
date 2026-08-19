@@ -2,6 +2,7 @@ package authservice.controller;
 
 import authservice.dto.request.InternalAccountStatusRequest;
 import authservice.dto.request.InternalStaffInvitationRequest;
+import authservice.dto.request.InternalStaffRoleUpdateRequest;
 import authservice.dto.response.AccountResponse;
 import authservice.dto.response.InternalAccountResponse;
 import authservice.service.AccountService;
@@ -62,5 +63,15 @@ public class InternalAccountController {
         authenticator.verify(internalKey);
         accountService.updateInternalStatus(accountId, request.getStatus());
         return ApiResponse.<Void>builder().message("Account status updated").build();
+    }
+
+    @PatchMapping("/{accountId}/staff-role")
+    ApiResponse<Void> updateStaffRole(
+            @PathVariable String accountId,
+            @RequestHeader(value = "X-Internal-Service-Key", required = false) String internalKey,
+            @Valid @RequestBody InternalStaffRoleUpdateRequest request) {
+        authenticator.verify(internalKey);
+        accountService.updateInternalStaffRole(accountId, request.getRole());
+        return ApiResponse.<Void>builder().message("Staff role updated").build();
     }
 }

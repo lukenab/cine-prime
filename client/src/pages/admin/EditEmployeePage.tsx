@@ -11,6 +11,13 @@ const POSITIONS: { value: EmployeePosition; label: string }[] = [
   { value: "SUPERVISOR", label: "Supervisor" },
   { value: "ASSISTANT_MANAGER", label: "Assistant manager" },
   { value: "CINEMA_MANAGER", label: "Cinema manager" },
+  { value: "PROGRAMMING_OPERATOR", label: "Programming operator" },
+  { value: "PROGRAMMING_APPROVER", label: "Programming approver" },
+  { value: "FINANCE_OFFICER", label: "Finance officer" },
+  { value: "FINANCE_APPROVER", label: "Finance approver" },
+  { value: "COMMERCIAL_MANAGER", label: "Commercial manager" },
+  { value: "SYSTEM_ADMINISTRATOR", label: "System administrator" },
+  { value: "SECURITY_AUDITOR", label: "Security auditor" },
   { value: "STAFF", label: "Staff (legacy)" },
   { value: "MANAGER", label: "Manager (legacy)" },
 ];
@@ -22,6 +29,11 @@ const DEPARTMENTS: { value: EmployeeDepartment; label: string }[] = [
   { value: "FLOOR_GUEST_SERVICES", label: "Floor & guest services" },
   { value: "PROJECTION_TECHNICAL", label: "Projection & technical" },
   { value: "FACILITIES_MAINTENANCE", label: "Facilities & maintenance" },
+  { value: "CONTENT_PROGRAMMING", label: "Content programming" },
+  { value: "FINANCE", label: "Finance" },
+  { value: "COMMERCIAL", label: "Commercial" },
+  { value: "INFORMATION_TECHNOLOGY", label: "Information technology" },
+  { value: "RISK_COMPLIANCE", label: "Risk & compliance" },
   { value: "CONCESSION", label: "Concession (legacy)" },
   { value: "FLOOR", label: "Floor (legacy)" },
   { value: "PROJECTION", label: "Projection (legacy)" },
@@ -95,6 +107,7 @@ export default function EditEmployeePage() {
 
   // Store accountId separately (needed for user profile update)
   const [accountId, setAccountId]   = useState<string>("");
+  const [accessRole, setAccessRole] = useState<EmployeeResponse["accessRole"]>("EMPLOYEE");
   const [errors, setErrors]         = useState<Partial<Record<keyof EmployeeFormData, string>>>({});
   const [fetching, setFetching]     = useState(true);
   const [loading, setLoading]       = useState(false);
@@ -110,6 +123,7 @@ export default function EditEmployeePage() {
         const res = await employeeApi.getById(id);
         const emp: EmployeeResponse = (res as any)?.result;
         setAccountId(emp.accountId);
+        setAccessRole(emp.accessRole ?? "EMPLOYEE");
         setFormData({
           email:        "",
           fullName:     emp.fullName     ?? "",
@@ -167,11 +181,15 @@ export default function EditEmployeePage() {
     setLoading(true);
     setApiError(null);
     try {
-      // Update employee fields (position + hireDate)
-      await employeeApi.update(id, {
+      // Authorization-relevant fields are one user-service command. It updates
+      // Auth through the internal provisioning boundary and emits projection v+1.
+      await employeeApi.changeAccessAssignment(id, {
         cinemaId: formData.cinemaId.trim() || undefined,
-        position: (formData.position as EmployeePosition) || undefined,
-        department: (formData.department as EmployeeDepartment) || undefined,
+        position: formData.position as EmployeePosition,
+        department: formData.department as EmployeeDepartment,
+        accessRole,
+      });
+      await employeeApi.update(id, {
         employmentType: (formData.employmentType as EmploymentType) || undefined,
         hireDate: formData.hireDate,
       });
@@ -282,6 +300,11 @@ export default function EditEmployeePage() {
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <FormField label="System access role" required>
+              <select value={accessRole} onChange={(event) => setAccessRole(event.target.value as EmployeeResponse["accessRole"])} className={inputCls} style={{ ...inputStyle, background: "var(--bg-card)" }}>
+                {["EMPLOYEE", "BRANCH_MANAGER", "PROGRAMMING_OPERATOR", "PROGRAMMING_APPROVER", "FINANCE_OFFICER", "FINANCE_APPROVER", "COMMERCIAL_MANAGER", "SECURITY_AUDITOR", "SYSTEM_ADMIN"].map(role => <option key={role} value={role} style={{ background: "var(--bg-card)" }}>{role.replaceAll("_", " ")}</option>)}
+              </select>
+            </FormField>
             <FormField label="Cinema ID" error={errors.cinemaId}>
               <input name="cinemaId" type="text" value={formData.cinemaId} onChange={handleChange}
                 className={`${inputCls} ${errors.cinemaId ? "border-red-400" : ""}`} style={inputStyle} />

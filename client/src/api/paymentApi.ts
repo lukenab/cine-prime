@@ -60,6 +60,24 @@ export interface ReconciliationCase {
   resolutionNote?: string;
 }
 
+export type RefundApprovalStatus = "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "EXECUTED";
+export interface RefundApproval {
+  requestId: string;
+  refundId: string;
+  bookingId: string;
+  status: RefundApprovalStatus;
+  requestedBy: string;
+  reviewedBy?: string;
+  executedBy?: string;
+  requestNote?: string;
+  decisionNote?: string;
+  submittedAt?: string;
+  reviewedAt?: string;
+  executedAt?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface AdminPage<T> {
   content: T[];
   totalElements: number;
@@ -129,6 +147,28 @@ export const paymentApi = {
     );
     return unwrap(response);
   },
+
+  getRefundApprovals: async (params: { status?: string; page?: number; size?: number } = {}): Promise<AdminPage<RefundApproval>> => {
+    const response = await axiosClient.get<unknown, AdminPage<RefundApproval> | { result: AdminPage<RefundApproval> }>(
+      "/api/payments/admin/refund-approval-requests", { params },
+    );
+    return unwrap(response);
+  },
+  createRefundApprovalDraft: async (refundId: string, note?: string): Promise<RefundApproval> => unwrap(
+    await axiosClient.post(`/api/payments/admin/refunds/${encodeURIComponent(refundId)}/approval-requests`, { note }),
+  ),
+  submitRefundApproval: async (requestId: string): Promise<RefundApproval> => unwrap(
+    await axiosClient.post(`/api/payments/admin/refund-approval-requests/${encodeURIComponent(requestId)}/submit`),
+  ),
+  approveRefundApproval: async (requestId: string, note?: string): Promise<RefundApproval> => unwrap(
+    await axiosClient.post(`/api/payments/admin/refund-approval-requests/${encodeURIComponent(requestId)}/approve`, { note }),
+  ),
+  rejectRefundApproval: async (requestId: string, note?: string): Promise<RefundApproval> => unwrap(
+    await axiosClient.post(`/api/payments/admin/refund-approval-requests/${encodeURIComponent(requestId)}/reject`, { note }),
+  ),
+  executeRefundApproval: async (requestId: string): Promise<RefundApproval> => unwrap(
+    await axiosClient.post(`/api/payments/admin/refund-approval-requests/${encodeURIComponent(requestId)}/execute`),
+  ),
 
   getAdminReconciliation: async (params: {
     status?: string;

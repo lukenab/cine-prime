@@ -13,6 +13,7 @@ import authservice.entity.PasswordReset;
 import authservice.entity.Role;
 import authservice.enums.AccountStatus;
 import authservice.enums.PasswordResetPurpose;
+import authservice.enums.StaffProvisioningRole;
 import authservice.event.AccountActivationRequestedEvent;
 import authservice.event.UserRegisteredEvent;
 import authservice.event.AccountStatusChangedEvent;
@@ -66,6 +67,8 @@ public class AccountService {
 
     private static final Pattern DIACRITICS = Pattern.compile("\\p{InCombiningDiacriticalMarks}+");
     private static final Pattern NON_ALPHANUMERIC = Pattern.compile("[^a-z0-9]+");
+    private static final Set<String> STAFF_ROLES = java.util.Arrays.stream(StaffProvisioningRole.values())
+            .map(Enum::name).collect(java.util.stream.Collectors.toUnmodifiableSet());
 
     @NonFinal
     @Value("${auth.activation.ttl-hours}")
@@ -161,6 +164,17 @@ public class AccountService {
         }
 
         if (!CollectionUtils.isEmpty(request.getRoles())) {
+            Account actor = accountRepository.findByUsername(
+                            SecurityContextHolder.getContext().getAuthentication().getName())
+                    .orElseThrow(() -> new AppException(AuthErrorCode.ACCOUNT_NOT_FOUND));
+            if (accountId.equals(actor.getAccountId())) {
+                throw new AppException(AuthErrorCode.SELF_ROLE_CHANGE_FORBIDDEN);
+            }
+            Set<String> currentRoles = account.getRoles().stream().map(Role::getRoleName).collect(java.util.stream.Collectors.toSet());
+            if (currentRoles.stream().anyMatch(STAFF_ROLES::contains)
+                    || request.getRoles().stream().anyMatch(STAFF_ROLES::contains)) {
+                throw new AppException(AuthErrorCode.STAFF_ROLE_UPDATE_REQUIRES_ASSIGNMENT);
+            }
             List<Role> roles = roleRepository.findAllById(request.getRoles());
             if (roles.size() != request.getRoles().stream().distinct().count()) {
                 throw new AppException(AuthErrorCode.ROLE_NOT_FOUND);
@@ -215,6 +229,22 @@ public class AccountService {
                 request.getGender(),
                 request.getIdentityCard(),
                 request.getAddress());
+    }
+
+    @Transactional
+    public void updateInternalStaffRole(String accountId, StaffProvisioningRole requestedRole) {
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new AppException(AuthErrorCode.ACCOUNT_NOT_FOUND));
+        Role role = roleRepository.findById(requestedRole.name())
+                .orElseThrow(() -> new AppException(AuthErrorCode.ROLE_NOT_FOUND));
+        Set<String> oldRoles = account.getRoles().stream().map(Role::getRoleName)
+                .collect(java.util.stream.Collectors.toSet());
+        account.setRoles(new HashSet<>(Set.of(role)));
+        accountRepository.saveAndFlush(account);
+        int revoked = authTokenRepository.revokeAllByAccountId(accountId, OffsetDateTime.now());
+        auditLogService.success("STAFF_ROLE_UPDATED", accountId,
+                "Staff role synchronized from employee assignment",
+                auditLogService.metadata("oldRoles", oldRoles, "newRole", requestedRole.name(), "revokedTokens", revoked));
     }
 
     private AccountResponse createPendingAccount(

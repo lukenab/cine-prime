@@ -19,6 +19,7 @@ import userservice.dto.EmployeeCreateRequest;
 import userservice.dto.EmployeeInvitationRequest;
 import userservice.dto.EmployeeResponse;
 import userservice.dto.EmployeeUpdateRequest;
+import userservice.dto.EmployeeAccessAssignmentRequest;
 import userservice.dto.PageResponse;
 import userservice.service.EmployeeService;
 
@@ -83,6 +84,17 @@ public class EmployeeController {
     ) {
         return ApiResponse.<EmployeeResponse>builder()
                 .result(employeeService.updateEmployee(id, request))
+                .build();
+    }
+
+    @PutMapping("/{id}/access-assignment")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_SYSTEM_ADMIN', 'ROLE_MANAGE')")
+    public ApiResponse<EmployeeResponse> changeAccessAssignment(
+            @PathVariable String id,
+            @Valid @RequestBody EmployeeAccessAssignmentRequest request) {
+        return ApiResponse.<EmployeeResponse>builder()
+                .message("Staff assignment and access role updated")
+                .result(employeeService.changeAccessAssignment(id, request))
                 .build();
     }
 

@@ -27,6 +27,9 @@ export interface ActivateAccountPayload {
     newPassword: string;
 }
 
+export interface PermissionRecord { permissionName: string; description?: string }
+export interface RoleRecord { roleName: string; description?: string; permissions: PermissionRecord[] }
+
 const MOCK_EMPLOYEE_USERNAME = "employee";
 const MOCK_EMPLOYEE_EMAIL = "employee@cineprime.com";
 const MOCK_EMPLOYEE_PASSWORD = "employee";
@@ -152,6 +155,11 @@ export const authApi = {
     updateAccount: (accountId: string | undefined, payload: any) => {
         return axiosClient.put(`/api/accounts/${accountId}`, payload);
     },
+
+    getRoles: () => axiosClient.get('/api/roles'),
+    getPermissions: () => axiosClient.get('/api/permissions'),
+    updateRolePermissions: (roleName: string, permissions: string[]) =>
+        axiosClient.put(`/api/roles/${encodeURIComponent(roleName)}/permissions`, { permissions }),
 
     logout: (token?: string | null) => {
         return axiosClient.post('/api/auth/logout', undefined, token ? {

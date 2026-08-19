@@ -16,6 +16,8 @@ import paymentservice.dto.InternalRefundRequest;
 import paymentservice.dto.PaymentRefundResponse;
 import paymentservice.dto.PaymentSessionResponse;
 import paymentservice.dto.ReconciliationCaseResponse;
+import paymentservice.dto.RefundApprovalCommandRequest;
+import paymentservice.dto.RefundApprovalResponse;
 import paymentservice.service.PaymentApplicationService;
 
 import java.net.URI;
@@ -123,12 +125,77 @@ public class PaymentController {
     }
 
     @PostMapping("/admin/refunds/{refundId}/retry")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','REFUND_APPROVE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN')")
     public ApiResponse<PaymentRefundResponse> retryRefund(@PathVariable String refundId) {
         return ApiResponse.<PaymentRefundResponse>builder()
                 .message("Refund retry submitted.")
                 .result(paymentService.retryRefund(refundId))
                 .build();
+    }
+
+    @GetMapping("/admin/refund-approval-requests")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','REFUND_READ')")
+    public ApiResponse<Page<RefundApprovalResponse>> refundApprovalRequests(
+            @RequestParam(required = false) String status, Pageable pageable) {
+        return ApiResponse.<Page<RefundApprovalResponse>>builder()
+                .result(paymentService.listRefundApprovals(status, pageable)).build();
+    }
+
+    @GetMapping("/admin/refund-approval-requests/{requestId}")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','REFUND_READ')")
+    public ApiResponse<RefundApprovalResponse> refundApprovalRequest(@PathVariable String requestId) {
+        return ApiResponse.<RefundApprovalResponse>builder()
+                .result(paymentService.getRefundApproval(requestId)).build();
+    }
+
+    @GetMapping("/admin/refunds/{refundId}/approval-request")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','REFUND_READ')")
+    public ApiResponse<RefundApprovalResponse> latestRefundApproval(@PathVariable String refundId) {
+        return ApiResponse.<RefundApprovalResponse>builder()
+                .result(paymentService.getLatestRefundApproval(refundId)).build();
+    }
+
+    @PostMapping("/admin/refunds/{refundId}/approval-requests")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','REFUND_REVIEW')")
+    public ApiResponse<RefundApprovalResponse> createRefundApproval(
+            @PathVariable String refundId,
+            @Valid @RequestBody(required = false) RefundApprovalCommandRequest request) {
+        return ApiResponse.<RefundApprovalResponse>builder()
+                .message("Refund approval draft created.")
+                .result(paymentService.createRefundApprovalDraft(refundId, request == null ? null : request.getNote()))
+                .build();
+    }
+
+    @PostMapping("/admin/refund-approval-requests/{requestId}/submit")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','REFUND_REVIEW')")
+    public ApiResponse<RefundApprovalResponse> submitRefundApproval(@PathVariable String requestId) {
+        return ApiResponse.<RefundApprovalResponse>builder().message("Refund approval submitted.")
+                .result(paymentService.submitRefundApproval(requestId)).build();
+    }
+
+    @PostMapping("/admin/refund-approval-requests/{requestId}/approve")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','REFUND_APPROVE')")
+    public ApiResponse<RefundApprovalResponse> approveRefundApproval(
+            @PathVariable String requestId,
+            @Valid @RequestBody(required = false) RefundApprovalCommandRequest request) {
+        return ApiResponse.<RefundApprovalResponse>builder().message("Refund approval approved.")
+                .result(paymentService.approveRefundApproval(requestId, request == null ? null : request.getNote())).build();
+    }
+
+    @PostMapping("/admin/refund-approval-requests/{requestId}/reject")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','REFUND_APPROVE')")
+    public ApiResponse<RefundApprovalResponse> rejectRefundApproval(
+            @PathVariable String requestId,
+            @Valid @RequestBody(required = false) RefundApprovalCommandRequest request) {
+        return ApiResponse.<RefundApprovalResponse>builder().message("Refund approval rejected.")
+                .result(paymentService.rejectRefundApproval(requestId, request == null ? null : request.getNote())).build();
+    }
+
+    @PostMapping("/admin/refund-approval-requests/{requestId}/execute")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','REFUND_REVIEW')")
+    public ApiResponse<RefundApprovalResponse> executeRefundApproval(@PathVariable String requestId) {
+        return ApiResponse.<RefundApprovalResponse>builder().message("Approved refund execution submitted.")
+                .result(paymentService.executeRefundApproval(requestId)).build();
     }
 
     @PostMapping("/admin/reconciliation/{caseId}/sync")

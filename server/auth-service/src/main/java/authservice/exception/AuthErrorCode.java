@@ -43,7 +43,11 @@ public enum AuthErrorCode implements BaseErrorCode {
     GOOGLE_TOKEN_INVALID(1036, "Google sign-in could not be verified. Please try again.", HttpStatus.UNAUTHORIZED),
     GOOGLE_EMAIL_NOT_VERIFIED(1037, "Your Google email address must be verified.", HttpStatus.FORBIDDEN),
     GOOGLE_ACCOUNT_LINK_REQUIRED(1038, "An account already uses this email. Sign in with your password before linking Google.", HttpStatus.CONFLICT),
-    LOCAL_LOGIN_DISABLED(1039, "This account uses Google sign-in. Continue with Google.", HttpStatus.UNAUTHORIZED);
+    LOCAL_LOGIN_DISABLED(1039, "This account uses Google sign-in. Continue with Google.", HttpStatus.UNAUTHORIZED),
+    STAFF_ROLE_UPDATE_REQUIRES_ASSIGNMENT(1040, "Staff roles must be changed through the employee assignment workflow.", HttpStatus.CONFLICT),
+    SELF_ROLE_CHANGE_FORBIDDEN(1041, "You cannot change your own access roles.", HttpStatus.FORBIDDEN),
+    PROTECTED_ROLE_CHANGE_FORBIDDEN(1042, "This protected role cannot be changed through the role management API.", HttpStatus.FORBIDDEN),
+    AUDIT_EVENT_NOT_FOUND(1043, "Audit event was not found.", HttpStatus.NOT_FOUND);
 
     int code;
     String message;

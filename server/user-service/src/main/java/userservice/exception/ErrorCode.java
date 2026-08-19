@@ -26,6 +26,7 @@ public enum ErrorCode implements BaseErrorCode {
     ACCOUNT_ALREADY_EMPLOYEE(2022, "This account is already linked to an employee!", HttpStatus.CONFLICT),
     INVALID_EMPLOYEE_ACCOUNT(2023, "Account must exist and have the EMPLOYEE role.", HttpStatus.BAD_REQUEST),
     STAFF_INVITATION_REJECTED(2024, "Auth service rejected the staff invitation.", HttpStatus.BAD_REQUEST),
+    STAFF_ASSIGNMENT_UPDATE_FAILED(2025, "The staff assignment could not be synchronized with Auth.", HttpStatus.BAD_GATEWAY),
     INVALID_FILE(2030, "Invalid file. Only image files are accepted!", HttpStatus.BAD_REQUEST),
     UPLOAD_FAILED(2031, "Failed to upload image. Please try again!", HttpStatus.INTERNAL_SERVER_ERROR)
     ;

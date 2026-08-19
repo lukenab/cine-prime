@@ -24,6 +24,10 @@ public enum PaymentErrorCode implements BaseErrorCode {
     REFUND_NOT_FOUND(5115, "Refund record was not found.", HttpStatus.NOT_FOUND),
     RECONCILIATION_CASE_NOT_FOUND(5116, "Reconciliation case was not found.", HttpStatus.NOT_FOUND),
     RECONCILIATION_CASE_INVALID_STATE(5117, "This reconciliation case cannot be changed in its current state.", HttpStatus.CONFLICT),
+    REFUND_APPROVAL_NOT_FOUND(5118, "Refund approval request was not found.", HttpStatus.NOT_FOUND),
+    REFUND_APPROVAL_INVALID_STATE(5119, "This refund approval request cannot be changed in its current state.", HttpStatus.CONFLICT),
+    REFUND_SELF_APPROVAL_FORBIDDEN(5120, "The requester cannot approve their own refund request.", HttpStatus.FORBIDDEN),
+    REFUND_APPROVAL_ALREADY_ACTIVE(5121, "This refund already has an active approval request.", HttpStatus.CONFLICT),
     BOOKING_SERVICE_UNAVAILABLE(5198, "Booking service is temporarily unavailable.", HttpStatus.SERVICE_UNAVAILABLE),
     OUTCOME_DELIVERY_FAILED(5199, "Payment was recorded but booking confirmation is pending reconciliation.", HttpStatus.ACCEPTED);
 

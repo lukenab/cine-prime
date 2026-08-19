@@ -19,6 +19,8 @@ import userservice.dto.AuthAccountSummary;
 import userservice.dto.AuthAccountInvitationRequest;
 import userservice.dto.EmployeeCreateRequest;
 import userservice.dto.EmployeeInvitationRequest;
+import userservice.dto.EmployeeAccessAssignmentRequest;
+import userservice.dto.AuthStaffRoleRequest;
 import userservice.dto.EmployeeResponse;
 import userservice.dto.EmployeeUpdateRequest;
 import userservice.dto.PageResponse;
@@ -283,6 +285,53 @@ public class EmployeeService {
             employeeCode = "EMP" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
         } while (employeeRepository.existsByEmployeeCode(employeeCode));
         return employeeCode;
+    }
+
+    /**
+     * Changes authorization-relevant employment data as one user-service command.
+     * Auth is updated through its internal provisioning boundary; callers cannot
+     * mutate a staff role through the public account API.
+     */
+    @Transactional
+    public EmployeeResponse changeAccessAssignment(String id, EmployeeAccessAssignmentRequest request) {
+        Employee employee = findEmployee(id);
+        String accountId = employee.getUser().getAccountId();
+        StaffAccessRole previousRole = employee.getAccessRole();
+
+        try {
+            authAccountClient.updateStaffRole(accountId, internalServiceKey,
+                    new AuthStaffRoleRequest(request.getAccessRole().name()));
+        } catch (FeignException exception) {
+            log.warn("Auth role synchronization rejected for account {}: {}", accountId, exception.contentUTF8());
+            throw new AppException(ErrorCode.STAFF_ASSIGNMENT_UPDATE_FAILED);
+        }
+
+        EmployeeResponse oldData = employeeMapper.toEmployeeResponse(employee);
+        employee.setCinemaId(normalizeCinemaId(request.getCinemaId()));
+        employee.setDepartment(request.getDepartment());
+        employee.setPosition(request.getPosition());
+        employee.setAccessRole(request.getAccessRole());
+        try {
+            Employee saved = employeeRepository.saveAndFlush(employee);
+            auditLogService.log("Employee", saved.getEmployeeId(), "ACCESS_ASSIGNMENT_CHANGED",
+                    oldData, saved, getCurrentAccountId());
+            staffAccessEventPublisher.assignmentUpdated(saved);
+            return employeeMapper.toEmployeeResponse(saved);
+        } catch (RuntimeException failure) {
+            if (previousRole != null) {
+                try {
+                    authAccountClient.updateStaffRole(accountId, internalServiceKey,
+                            new AuthStaffRoleRequest(previousRole.name()));
+                } catch (RuntimeException compensationFailure) {
+                    log.error("Failed to compensate Auth role for account {}", accountId, compensationFailure);
+                }
+            }
+            throw failure;
+        }
+    }
+
+    private String normalizeCinemaId(String cinemaId) {
+        return cinemaId == null || cinemaId.isBlank() ? null : cinemaId.trim();
     }
 
     private StaffAccessRole resolveAccessRole(AuthAccountSummary account) {

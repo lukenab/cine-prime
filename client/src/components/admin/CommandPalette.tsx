@@ -18,6 +18,8 @@ import {
   UserCog,
   Armchair,
   ReceiptText,
+  ScrollText,
+  KeyRound,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
@@ -50,6 +52,8 @@ const entries: PaletteEntry[] = [
   { label: "Promotions", description: "Manage promotion codes and eligibility", path: "/admin/promotions", group: "Business operations", keywords: "promotion voucher discount offer", icon: Tags, permissions: ["PROMOTION_READ"] },
   { label: "Refunds & reconciliation", description: "Resolve refunds and payment exceptions", path: "/admin/refunds-reconciliation", group: "Business operations", keywords: "refund reconciliation payment finance", icon: ReceiptText, permissions: ["REFUND_READ", "RECONCILIATION_READ"] },
   { label: "People & access", description: "Manage customers, staff and invitations", path: "/admin/people", group: "Administration", keywords: "people users employees staff access rbac", icon: UserCog, permissions: ["EMPLOYEE_READ", "USER_READ", "ROLE_MANAGE"] },
+  { label: "Access matrix", description: "Manage role permissions", path: "/admin/access-matrix", group: "Administration", keywords: "role permission rbac matrix", icon: KeyRound, permissions: ["ROLE_MANAGE"] },
+  { label: "Audit trail", description: "Review security and access events", path: "/admin/audit", group: "Administration", keywords: "audit security compliance event", icon: ScrollText, permissions: ["AUDIT_READ"] },
   { label: "Reports", description: "Review operational and financial reports", path: "/admin/reports", group: "Administration", keywords: "report analytics dashboard", icon: BarChart3, permissions: ["REPORT_READ", "AUDIT_READ"] },
   { label: "Settings", description: "Configure workspace preferences", path: "/admin/settings", group: "Administration", keywords: "settings configuration", icon: Settings2, permissions: ["SYSTEM_CONFIG_MANAGE"] },
 ];
