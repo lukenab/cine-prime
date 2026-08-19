@@ -1,4 +1,4 @@
-param([string]$ContainerName = "postgres")
+    param([string]$ContainerName = "postgres")
 
 $ErrorActionPreference = "Stop"
 $scriptPath = Join-Path $PSScriptRoot "seed-payment-operations.sql"

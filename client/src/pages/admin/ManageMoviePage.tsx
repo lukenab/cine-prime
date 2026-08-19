@@ -4,6 +4,7 @@ import { useRole } from "../../hooks/useRole";
 import { Outlet, useOutletContext, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { subscribeLifecycleEvents } from "../../api/lifecycleSocket";
+import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
 
 import { MovieStatsCards } from "../../layouts/MovieStatsCards";
 import { MovieTable } from "../../layouts/MovieTable";
@@ -192,14 +193,11 @@ export default function ManageMoviePage() {
 
   return (
     <>
-      <div style={{ marginBottom: "28px" }}>
-        <h1 style={{ color: "var(--text-main)", fontWeight: 600, fontSize: "22px", letterSpacing: "-0.01em", marginBottom: "5px", transition: "color 0.2s ease" }}>
-          Movie Management
-        </h1>
-        <p style={{ color: "var(--text-sub)", fontSize: "13px", transition: "color 0.2s ease" }}>
-          Manage movie catalog content and its approval workflow
-        </p>
-      </div>
+      <AdminPageHeader
+        eyebrow="Movie catalogue"
+        title="Movie Management"
+        description="Manage movie catalog content and its approval workflow."
+      />
 
       <MovieStatsCards
         movies={movies}

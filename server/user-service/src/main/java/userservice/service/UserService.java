@@ -209,13 +209,13 @@ public class UserService {
     }
 
     /**
-     * Single source of truth for "profile hoàn tất".
-     * Tất cả 5 required fields phải có giá trị hợp lệ.
+     * Single source of truth for a completed member booking profile.
+     * National identity data is intentionally not required for ordinary
+     * online ticket purchases.
      */
     private boolean isProfileComplete(User user) {
         return user.getFullName() != null && !user.getFullName().isBlank()
                 && user.getPhoneNumber() != null && !user.getPhoneNumber().isBlank()
-                && user.getIdentityCard() != null && !user.getIdentityCard().isBlank()
                 && user.getDateOfBirth() != null
                 && user.getGender() != null && !user.getGender().isBlank();
     }

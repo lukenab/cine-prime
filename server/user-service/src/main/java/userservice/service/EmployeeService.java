@@ -25,8 +25,10 @@ import userservice.dto.PageResponse;
 import userservice.entity.Employee;
 import userservice.entity.User;
 import userservice.enums.EmployeeStatus;
+import userservice.enums.StaffAccessRole;
 import userservice.exception.ErrorCode;
 import userservice.mapper.EmployeeMapper;
+import userservice.messaging.StaffAccessEventPublisher;
 import userservice.repository.EmployeeRepository;
 import userservice.repository.UserRepository;
 
@@ -42,6 +44,7 @@ public class EmployeeService {
     private final EmployeeMapper employeeMapper;
     private final AuditLogService auditLogService;
     private final AuthAccountClient authAccountClient;
+    private final StaffAccessEventPublisher staffAccessEventPublisher;
 
     @Value("${app.internal-service-key}")
     private String internalServiceKey;
@@ -87,6 +90,7 @@ public class EmployeeService {
                 .employmentType(request.getEmploymentType())
                 .hireDate(request.getHireDate())
                 .status(EmployeeStatus.ACTIVE)
+                .accessRole(resolveAccessRole(account))
                 .build();
 
         Employee saved;
@@ -98,6 +102,7 @@ public class EmployeeService {
                     .orElseThrow(() -> new AppException(ErrorCode.ACCOUNT_ALREADY_EMPLOYEE));
         }
         auditLogService.log("Employee", saved.getEmployeeId(), "CREATE", null, saved, getCurrentAccountId());
+        staffAccessEventPublisher.assignmentCreated(saved);
         return employeeMapper.toEmployeeResponse(saved);
     }
 
@@ -196,8 +201,9 @@ public class EmployeeService {
         Employee employee = findEmployee(id);
         EmployeeResponse oldData = employeeMapper.toEmployeeResponse(employee);
         employeeMapper.updateEmployee(request, employee);
-        Employee saved = employeeRepository.save(employee);
+        Employee saved = employeeRepository.saveAndFlush(employee);
         auditLogService.log("Employee", saved.getEmployeeId(), "UPDATE", oldData, saved, getCurrentAccountId());
+        staffAccessEventPublisher.assignmentUpdated(saved);
         return employeeMapper.toEmployeeResponse(saved);
     }
 
@@ -216,8 +222,9 @@ public class EmployeeService {
         EmployeeResponse oldData = employeeMapper.toEmployeeResponse(employee);
         employee.setStatus(EmployeeStatus.DISABLED);
         employee.getUser().setIsActive(false);
-        Employee saved = employeeRepository.save(employee);
+        Employee saved = employeeRepository.saveAndFlush(employee);
         auditLogService.log("Employee", saved.getEmployeeId(), "DELETE", oldData, saved, getCurrentAccountId());
+        staffAccessEventPublisher.assignmentSuspended(saved);
         log.info("Disabled employee {} and revoked its auth sessions", id);
     }
 
@@ -232,8 +239,9 @@ public class EmployeeService {
         EmployeeResponse oldData = employeeMapper.toEmployeeResponse(employee);
         employee.setStatus(EmployeeStatus.ACTIVE);
         employee.getUser().setIsActive(true);
-        Employee saved = employeeRepository.save(employee);
+        Employee saved = employeeRepository.saveAndFlush(employee);
         auditLogService.log("Employee", saved.getEmployeeId(), "REACTIVATE", oldData, saved, getCurrentAccountId());
+        staffAccessEventPublisher.assignmentReactivated(saved);
         return employeeMapper.toEmployeeResponse(saved);
     }
 
@@ -268,5 +276,15 @@ public class EmployeeService {
             employeeCode = "EMP" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
         } while (employeeRepository.existsByEmployeeCode(employeeCode));
         return employeeCode;
+    }
+
+    private StaffAccessRole resolveAccessRole(AuthAccountSummary account) {
+        if (account.getRoles().contains("BRANCH_MANAGER")) {
+            return StaffAccessRole.BRANCH_MANAGER;
+        }
+        if (account.getRoles().contains("PROGRAMMING_OPERATOR")) {
+            return StaffAccessRole.PROGRAMMING_OPERATOR;
+        }
+        return StaffAccessRole.EMPLOYEE;
     }
 }

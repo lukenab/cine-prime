@@ -5,7 +5,6 @@ import {
   Calendar,
   Camera,
   Clock3,
-  CreditCard,
   Mail,
   MapPin,
   Phone,
@@ -27,14 +26,8 @@ interface Profile {
   dateOfBirth?: string;
   gender?: string;
   address?: string;
-  identityCard?: string;
   avatarUrl?: string;
   profileCompleted?: boolean;
-}
-
-function maskIdentityCard(raw?: string): string {
-  if (!raw || raw.length < 4) return raw ?? "—";
-  return `${raw.slice(0, 4)}••••${raw.slice(-4)}`;
 }
 
 function formatDate(value?: string): string {
@@ -215,7 +208,7 @@ export default function ProfilePage() {
             </section>
             <section className="profile-information-group" aria-labelledby="personal-information-title">
               <div className="profile-group-title"><User size={16} /><h3 id="personal-information-title">Personal</h3></div>
-              <div className="detail-list"><InfoItem icon={User} label="Full name" value={profile?.fullName} /><InfoItem icon={Calendar} label="Date of birth" value={formatDate(profile?.dateOfBirth)} /><InfoItem icon={User} label="Gender" value={profile?.gender} /><InfoItem icon={CreditCard} label="National ID" value={maskIdentityCard(profile?.identityCard)} /></div>
+              <div className="detail-list"><InfoItem icon={User} label="Full name" value={profile?.fullName} /><InfoItem icon={Calendar} label="Date of birth" value={formatDate(profile?.dateOfBirth)} /><InfoItem icon={User} label="Gender" value={profile?.gender} /></div>
             </section>
           </div>
         </section>

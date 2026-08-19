@@ -18,6 +18,7 @@ import {
   type ScreeningFormatResponse,
   type ScreeningVersionStatus,
 } from "../../api/movieApi";
+import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
 
 type ReadinessFilter = "ALL" | "READY" | "ATTENTION" | "INACTIVE";
 
@@ -209,17 +210,12 @@ export default function ManageScreeningVersionsPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-blue-600">
-            <MonitorPlay size={14} /> Movie catalogue
-          </div>
-          <h1 className="text-2xl font-bold" style={{ color: "var(--text-main)" }}>Screening Versions</h1>
-          <p className="mt-1 text-sm" style={{ color: "var(--text-sub)" }}>
-            Review the presentation, language and audio packages available for scheduling.
-          </p>
-        </div>
-      </div>
+      <AdminPageHeader
+        eyebrow="Film programming"
+        title="Screening Versions"
+        description="Review the presentation, language and audio packages available for scheduling."
+        className="!mb-0"
+      />
 
       <section
         className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4"

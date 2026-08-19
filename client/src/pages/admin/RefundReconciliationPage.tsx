@@ -17,6 +17,7 @@ import {
   type AdminRefund,
   type ReconciliationCase,
 } from "../../api/paymentApi";
+import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
 import "./RefundReconciliationPage.css";
 
 type Tab = "refunds" | "cases";
@@ -97,16 +98,16 @@ export default function RefundReconciliationPage() {
 
   return (
     <main className={`rr-page ${isDarkMode ? "rr-page--dark" : ""}`}>
-      <header className="rr-heading">
-        <div>
-          <span className="rr-eyebrow">PAYMENTS OPERATIONS</span>
-          <h1>Refunds &amp; reconciliation</h1>
-          <p>Monitor customer refunds and resolve payment outcomes that need an operational decision.</p>
-        </div>
-        <button className="rr-button rr-button--secondary" onClick={() => void load(true)} disabled={refreshing}>
-          {refreshing ? <LoaderCircle className="rr-spin" size={16} /> : <RefreshCw size={16} />} Refresh
-        </button>
-      </header>
+      <AdminPageHeader
+        eyebrow="Payment operations"
+        title="Refunds & Reconciliation"
+        description="Monitor customer refunds and resolve payment outcomes that need an operational decision."
+        actions={(
+          <button className="rr-button rr-button--secondary" onClick={() => void load(true)} disabled={refreshing}>
+            {refreshing ? <LoaderCircle className="rr-spin" size={16} /> : <RefreshCw size={16} />} Refresh
+          </button>
+        )}
+      />
 
       <section className="rr-stats">
         <div><span>Pending refunds</span><strong>{stats.pending}</strong><small>Provider confirmation required</small></div>

@@ -1,6 +1,6 @@
 import { Ticket, Play } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import trailerVideo from "../../assets/SpiderMan.mp4";
+import trailerVideo from "../../assets/GattoTeaser.mp4";
 
 export function HeroSection() {
   const navigate = useNavigate();

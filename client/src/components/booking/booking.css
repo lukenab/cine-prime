@@ -41,8 +41,8 @@
 .booking-button:disabled { opacity: .48; cursor: not-allowed; }
 .booking-button--primary { color: white; background: linear-gradient(135deg,#60a5fa,#2563eb); }
 .booking-button--pay { min-width: 220px; }
-.booking-button--secondary { color: #e5e7eb; background: #11151d; border-color: rgba(148,163,184,.22); }
-.booking-button--danger { color: #fecaca; background: rgba(239,68,68,.13); border-color: rgba(239,68,68,.36); }
+.booking-button--secondary { color: #e5e7eb; background: rgba(11,27,50,.82); border-color: rgba(148,163,184,.22); }
+.booking-button--danger { color: white; background: linear-gradient(135deg,#c92534,#991b1b); border-color: rgba(248,113,113,.28); box-shadow: 0 8px 22px rgba(153,27,27,.28); }
 .booking-message { display: flex; align-items: flex-start; gap: 13px; padding: 16px; border: 1px solid rgba(96,165,250,.24); background: rgba(59,130,246,.08); border-radius: 13px; color: #dbeafe; }
 .booking-message p { margin: 4px 0 0; color: #94a3b8; font-size: 12px; line-height: 1.55; }
 .booking-message--warning { border-color: rgba(245,158,11,.28); background: rgba(245,158,11,.08); color: #fde68a; }
@@ -58,16 +58,20 @@
 @keyframes booking-spin { to { transform: rotate(360deg); } }
 
 .booking-modal-backdrop { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 20px; background: rgba(2,6,13,.78); backdrop-filter: blur(10px); }
-.booking-modal { width: min(520px, 100%); color: #f8fafc; background: #10131a; border: 1px solid rgba(148,163,184,.2); border-radius: 18px; box-shadow: 0 30px 90px rgba(0,0,0,.6); overflow: hidden; }
+.booking-modal { width: min(520px, 100%); color: #f8fafc; background: radial-gradient(circle at 88% 0%, rgba(37,99,235,.13), transparent 36%), linear-gradient(155deg,#081426 0%,#050d1c 58%,#030814 100%); border: 1px solid rgba(96,165,250,.18); border-radius: 20px; box-shadow: 0 38px 100px rgba(0,0,0,.68), 0 18px 55px rgba(30,64,175,.1); overflow: hidden; }
 .booking-modal__header { display: grid; grid-template-columns: 42px 1fr 36px; align-items: center; gap: 12px; padding: 19px 20px; border-bottom: 1px solid rgba(148,163,184,.13); }
 .booking-modal__header h2 { margin: 0; font-size: 18px; }
 .booking-modal__header p { margin: 4px 0 0; color: #7f8998; font-size: 12px; }
-.booking-modal__icon { display: grid; place-items: center; width: 42px; height: 42px; color: #f87171; background: rgba(239,68,68,.12); border-radius: 12px; }
+.booking-modal__icon { display: grid; place-items: center; width: 42px; height: 42px; color: #f87171; background: rgba(239,68,68,.1); border: 1px solid rgba(248,113,113,.16); border-radius: 12px; }
 .booking-icon-button { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid rgba(148,163,184,.15); border-radius: 10px; color: #94a3b8; background: transparent; cursor: pointer; }
 .booking-modal__body { padding: 20px; }
 .booking-modal__footer { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 20px; border-top: 1px solid rgba(148,163,184,.12); }
 .booking-cancel-notice { display: flex; gap: 12px; padding: 14px; margin-bottom: 18px; color: #fde68a; background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.22); border-radius: 12px; }
 .booking-cancel-notice p { color: #a6adba; margin: 4px 0 0; font-size: 12px; line-height: 1.5; }
+.booking-cancel-summary { display: grid; gap: 6px; padding: 16px; border: 1px solid rgba(96,165,250,.16); border-radius: 13px; background: rgba(11,27,50,.72); }
+.booking-cancel-summary strong { color: #f8fafc; font-size: 15px; line-height: 1.4; }
+.booking-cancel-summary span { color: #8394ad; font-size: 12px; line-height: 1.45; }
+.booking-cancel-consequence { margin: 15px 2px 0; color: #c4cfdd; font-size: 13px; line-height: 1.55; }
 .booking-field { display: grid; gap: 7px; margin-top: 14px; color: #d8dee8; font-size: 12px; font-weight: 650; }
 .booking-field small { color: #6f7886; font-weight: 500; }
 .booking-field select, .booking-field textarea { width: 100%; box-sizing: border-box; border: 1px solid rgba(148,163,184,.18); border-radius: 10px; color: #f8fafc; background: #090b10; padding: 11px 12px; outline: none; font: inherit; }

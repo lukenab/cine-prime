@@ -51,11 +51,40 @@ matrix when introduced; a missing endpoint is not treated as completed security.
 ## JWT and gateway contract
 
 `auth-service` emits roles/permissions in the signed `scope` claim and resolves
-active employee assignments from the internal user-service scope endpoint when
-issuing an EMPLOYEE/BRANCH_MANAGER token. Assignments are stored in
-`cinemaClusterIds`; a missing/disabled assignment fails closed. API Gateway does
-not route `/api/internal/employees/**`, and must continue to strip externally
-supplied identity/branch headers.
+staff authorization exclusively from its local `staff_access_projection` table.
+Token issuance never calls `user-service`. Active branch assignments are stored
+in `cinemaClusterIds`. If a staff projection is missing, disabled, has a role
+mismatch, or has no branch for an `EMPLOYEE`/`BRANCH_MANAGER`, Auth removes the
+staff role and its permissions from the token and emits an empty branch list.
+This makes privileged endpoints fail closed while leaving the MEMBER token flow
+unchanged. API Gateway must continue to strip externally supplied
+identity/branch headers.
+
+## Staff access projection contract
+
+`user-service` publishes canonical envelopes to `staff-access.events.v1`, keyed
+by `accountId`. Event schema version `1` supports:
+
+- `STAFF_ACCESS_ASSIGNED`;
+- `STAFF_ACCESS_UPDATED`;
+- `STAFF_ACCESS_SUSPENDED`;
+- `STAFF_ACCESS_REACTIVATED`.
+
+The payload is intentionally limited to `accountId`, `accountRole`,
+`assignmentStatus`, `cinemaClusterIds`, and the monotonic `assignmentVersion`.
+No employee profile or PII is copied into Auth. Auth stores the last event ID,
+schema version, and assignment version. A repeated event ID is a duplicate; any
+event whose assignment version is not newer than the stored version is ignored.
+
+For pre-existing employee rows, `user-service` replays an update snapshot on
+startup. This compatibility bootstrap is controlled by
+`STAFF_ACCESS_BOOTSTRAP_ENABLED` and must be removed on **2026-09-30**, after all
+environments have run the replay. The legacy internal branch-scope endpoint is
+not a login fallback and may be removed on the same date.
+
+Deployment order: deploy User first with Kafka available, wait for the bootstrap
+replay to be consumed, then deploy Auth. During rollout, missing projections deny
+staff privileges rather than granting stale access.
 
 ## Verification checklist for each new endpoint
 

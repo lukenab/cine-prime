@@ -168,6 +168,7 @@ All requests go through `http://localhost:8080`.
 |---|---|---|---|
 | `user-register-topic` | auth-service | user-service | New account registered via OTP |
 | `user-update-topic` | auth-service | user-service | Account profile updated by admin |
+| `staff-access.events.v1` | user-service | auth-service | Versioned staff assignment projection updates |
 
 ---
 

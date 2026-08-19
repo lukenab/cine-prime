@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, LoaderCircle, RotateCcw, X } from "lucide-react";
+import { AlertTriangle, LoaderCircle, RotateCcw, TicketX, X } from "lucide-react";
 import { bookingApi, type BookingDetail, type CancellationResult } from "../../api/bookingApi";
-import { formatBookingMoney, getApiErrorMessage } from "./bookingUi";
+import { formatBookingDate, formatBookingMoney, getApiErrorMessage } from "./bookingUi";
 
 interface Props {
   open: boolean;
@@ -53,7 +53,10 @@ export default function CancelBookingModal({ open, booking, onClose, onCompleted
     try {
       const result = await bookingApi.cancelBooking(
         booking.bookingId,
-        { reasonCode, reason: reason.trim() || undefined },
+        {
+          reasonCode: confirmed ? reasonCode : "CANCELLED_BEFORE_PAYMENT",
+          reason: confirmed ? reason.trim() || undefined : undefined,
+        },
         crypto.randomUUID(),
       );
       onCompleted(result);
@@ -74,10 +77,12 @@ export default function CancelBookingModal({ open, booking, onClose, onCompleted
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="booking-modal__header">
-          <div className="booking-modal__icon"><RotateCcw size={20} /></div>
+          <div className="booking-modal__icon">
+            {confirmed ? <RotateCcw size={20} /> : <TicketX size={20} />}
+          </div>
           <div>
-            <h2 id="cancel-booking-title">{confirmed ? "Request a refund" : "Cancel booking"}</h2>
-            <p>{booking.bookingCode} · {booking.movieName}</p>
+            <h2 id="cancel-booking-title">{confirmed ? "Request a refund" : "Cancel this booking?"}</h2>
+            <p>{confirmed ? `${booking.bookingCode} · ${booking.movieName}` : booking.bookingCode}</p>
           </div>
           <button className="booking-icon-button" onClick={onClose} aria-label="Close">
             <X size={18} />
@@ -85,46 +90,61 @@ export default function CancelBookingModal({ open, booking, onClose, onCompleted
         </header>
 
         <div className="booking-modal__body">
-          <div className="booking-cancel-notice">
-            <AlertTriangle size={18} />
-            <div>
-              <strong>{confirmed ? "A refund may be required" : "Your held seats will be released"}</strong>
-              <p>
-                {confirmed
-                  ? `The system will calculate the eligible refund for ${formatBookingMoney(booking.total, booking.currency)} using the cinema cancellation policy.`
-                  : "Cancelling before payment releases the seat hold immediately. No charge will be made."}
+          {confirmed ? (
+            <>
+              <div className="booking-cancel-notice">
+                <AlertTriangle size={18} />
+                <div>
+                  <strong>A refund may be required</strong>
+                  <p>
+                    The system will calculate the eligible refund for {formatBookingMoney(booking.total, booking.currency)} using the cinema cancellation policy.
+                  </p>
+                </div>
+              </div>
+
+              <label className="booking-field">
+                <span>Reason</span>
+                <select value={reasonCode} onChange={(event) => setReasonCode(event.target.value)}>
+                  {reasons.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                </select>
+              </label>
+
+              <label className="booking-field">
+                <span>Additional details <small>Optional</small></span>
+                <textarea
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                  maxLength={500}
+                  rows={3}
+                  placeholder="Tell us anything that may help process this request."
+                />
+              </label>
+            </>
+          ) : (
+            <>
+              <div className="booking-cancel-summary">
+                <strong>{booking.movieName}</strong>
+                <span>{booking.cinemaClusterName} · {booking.cinemaRoomName}</span>
+                <span>
+                  {formatBookingDate(booking.showDate)} · {booking.startTime?.slice(0, 5) || "—"} · Seat{booking.seats.length === 1 ? "" : "s"} {booking.seats.map((seat) => seat.seatCode).join(", ")}
+                </span>
+              </div>
+              <p className="booking-cancel-consequence">
+                Your selected seats will be released immediately. You won't be charged.
               </p>
-            </div>
-          </div>
-
-          <label className="booking-field">
-            <span>Reason</span>
-            <select value={reasonCode} onChange={(event) => setReasonCode(event.target.value)}>
-              {reasons.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-            </select>
-          </label>
-
-          <label className="booking-field">
-            <span>Additional details <small>Optional</small></span>
-            <textarea
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              maxLength={500}
-              rows={3}
-              placeholder="Tell us anything that may help process this request."
-            />
-          </label>
+            </>
+          )}
 
           {error && <p className="booking-inline-error">{error}</p>}
         </div>
 
         <footer className="booking-modal__footer">
-          <button className="booking-button booking-button--secondary" onClick={onClose} disabled={submitting}>
-            Keep booking
+          <button className="booking-button booking-button--secondary" onClick={onClose} disabled={submitting} autoFocus={!confirmed}>
+            {confirmed ? "Keep booking" : "Continue booking"}
           </button>
           <button className="booking-button booking-button--danger" onClick={submit} disabled={submitting}>
             {submitting ? <LoaderCircle size={17} className="booking-spin" /> : null}
-            {confirmed ? "Submit refund request" : "Confirm cancellation"}
+            {confirmed ? "Submit refund request" : "Cancel booking"}
           </button>
         </footer>
       </section>

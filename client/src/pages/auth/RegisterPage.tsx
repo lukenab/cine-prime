@@ -145,8 +145,8 @@ export default function RegisterPage() {
     setGoogleError(null);
     setGoogleLoading(true);
     try {
-      const { role, needsSetup } = await loginWithGoogle(credential);
-      navigate(needsSetup ? "/profile-setup" : defaultPathForRole(role), { replace: true });
+      const { role } = await loginWithGoogle(credential);
+      navigate(defaultPathForRole(role), { replace: true });
     } catch (err: any) {
       const code = err?.response?.data?.code;
       setGoogleError(code === 1038
@@ -309,25 +309,9 @@ export default function RegisterPage() {
               {loading ? "Sending OTP..." : "Continue"}
             </button>
 
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "12px",
-                margin: "22px 0",
-              }}
-            >
+            <div className="flex items-center gap-3" style={{ margin: "22px 0" }}>
               <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.08)" }} />
-              <span
-                style={{
-                  color: "rgba(255,255,255,0.3)",
-                  fontSize: "12px",
-                  fontWeight: 500,
-                  letterSpacing: "0.05em",
-                }}
-              >
-                or
-              </span>
+              <span style={{ color: "rgba(255,255,255,0.25)", fontSize: "12px" }}>or</span>
               <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.08)" }} />
             </div>
 
@@ -336,7 +320,11 @@ export default function RegisterPage() {
                 {googleError}
               </div>
             )}
-            <GoogleSignInButton onCredential={handleGoogleCredential} text="signup_with" disabled={loading || googleLoading} />
+            <GoogleSignInButton
+              onCredential={handleGoogleCredential}
+              iconOnly
+              disabled={loading || googleLoading}
+            />
 
             <p style={{ textAlign: "center", fontSize: "14px", color: "rgba(255,255,255,0.4)", marginTop: 20 }}>
               Already have an account?{" "}
@@ -474,19 +462,8 @@ export default function RegisterPage() {
                 boxShadow: loading ? "none" : "0 4px 24px rgba(59,130,246,0.35)",
               }}
             >
-              {loading ? "Verifying..." : "Verify Code"}
+              {loading ? "Verifying..." : "Verify & Create Account"}
             </button>
-
-            <p
-              style={{
-                marginTop: "10px",
-                textAlign: "center",
-                fontSize: "12px",
-                color: "rgba(255,255,255,0.35)",
-              }}
-            >
-              Your account will be created instantly once verified.
-            </p>
 
             <div
               style={{

@@ -105,11 +105,7 @@ export default function LoginPage() {
 
     setIsLoading(true);
     try {
-      const { role, needsSetup } = await login({ username, password });
-      if (needsSetup) {
-        navigate("/profile-setup", { replace: true });
-        return;
-      }
+      const { role } = await login({ username, password });
       navigateAfterLogin(role);
     } catch (err: any) {
       const code = err?.response?.data?.code;
@@ -136,11 +132,7 @@ export default function LoginPage() {
     setError(null);
     setIsLoading(true);
     try {
-      const { role, needsSetup } = await loginWithGoogle(credential);
-      if (needsSetup) {
-        navigate("/profile-setup", { replace: true });
-        return;
-      }
+      const { role } = await loginWithGoogle(credential);
       navigateAfterLogin(role);
     } catch (err: any) {
       const code = err?.response?.data?.code;
@@ -163,7 +155,7 @@ export default function LoginPage() {
     focusedField === field ? "0 0 0 3px rgba(59,130,246,0.12)" : "0 0 0 0 rgba(59,130,246,0)";
 
   const inputBaseStyle: React.CSSProperties = {
-    background: "rgba(2, 8, 20, 0.72)",
+    background: "#141414",
     borderRadius: "12px",
     color: "#ffffff",
     fontSize: "14px",
@@ -174,7 +166,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="cosmic-login-card" style={{ animation: "loginFadeIn 0.5s ease both" }}>
+    <div style={{ animation: "loginFadeIn 0.5s ease both" }}>
       <style>{`
         @keyframes loginFadeIn {
           0% { opacity: 0; transform: translateY(12px); }
@@ -184,21 +176,14 @@ export default function LoginPage() {
       `}</style>
 
       {/* Heading */}
-      <div className="mb-6">
-        <div
-          className="mb-3 inline-flex items-center gap-2"
-          style={{ color: "#60a5fa", fontSize: "10px", fontWeight: 750, letterSpacing: "0.16em", textTransform: "uppercase" }}
-        >
-          <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#3b82f6", boxShadow: "0 0 12px rgba(59,130,246,0.9)" }} />
-          CinePrime account access
-        </div>
+      <div className="mb-9">
         <h2 className="mb-2" style={{ color: "#ffffff", fontSize: "30px", fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.2 }}>
           Welcome back
         </h2>
         <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px" }}>Sign in to continue to your account</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         {error && (
           <div
             style={{
@@ -227,7 +212,7 @@ export default function LoginPage() {
         {/* Username field */}
         <div className="flex flex-col gap-2">
           <label htmlFor="username" style={{ color: "rgba(255,255,255,0.6)", fontSize: "12px", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            Email address
+            Account / Username
           </label>
           <div style={{ position: "relative" }}>
             <User
@@ -247,7 +232,7 @@ export default function LoginPage() {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter your email address"
+              placeholder="Enter your username or email"
               autoComplete="username"
               style={{
                 ...inputBaseStyle,
@@ -366,7 +351,7 @@ export default function LoginPage() {
           type="submit"
           disabled={isLoading}
           style={{
-            background: "linear-gradient(110deg, #2563eb 0%, #3b82f6 52%, #60a5fa 100%)",
+            background: "#3b82f6",
             color: "#ffffff",
             borderRadius: "9999px",
             border: "none",
@@ -415,34 +400,15 @@ export default function LoginPage() {
           )}
         </button>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 14, margin: "2px 0 0" }}>
-          <div style={{ flex: 1, height: 1, background: "rgba(148,163,184,0.14)" }} />
-          <span
-            style={{
-              color: "rgba(148,163,184,0.62)",
-              fontSize: 10,
-              fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: "0.14em",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Or
-          </span>
-          <div style={{ flex: 1, height: 1, background: "rgba(148,163,184,0.14)" }} />
+        <div className="flex items-center gap-3 my-1">
+          <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.08)" }} />
+          <span style={{ color: "rgba(255,255,255,0.25)", fontSize: "12px" }}>or</span>
+          <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.08)" }} />
         </div>
 
         <GoogleSignInButton onCredential={handleGoogleCredential} iconOnly disabled={isLoading} />
 
-        <p
-          style={{
-            textAlign: "center",
-            color: "rgba(255,255,255,0.48)",
-            fontSize: "13px",
-            paddingTop: "2px",
-            marginTop: 0,
-          }}
-        >
+        <p style={{ textAlign: "center", color: "rgba(255,255,255,0.4)", fontSize: "14px" }}>
           Don&apos;t have an account?{" "}
           <Link
             to="/register"
@@ -455,7 +421,7 @@ export default function LoginPage() {
         </p>
       </form>
 
-      <p className="mt-4" style={{ textAlign: "center", color: "rgba(255,255,255,0.22)", fontSize: "10px", lineHeight: 1.5 }}>
+      <p className="mt-12" style={{ textAlign: "center", color: "rgba(255,255,255,0.18)", fontSize: "11px", lineHeight: 1.6 }}>
         By signing in, you agree to CinePrime's{" "}
         <Link to="/register" style={{ color: "rgba(255,255,255,0.35)", textDecoration: "underline" }}>
           Terms of Service

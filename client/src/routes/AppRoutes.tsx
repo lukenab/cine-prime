@@ -102,7 +102,6 @@ export default function AppRoutes() {
       {/* Profile setup — standalone page, no layout wrapper */}
       <Route element={<ProtectedRoute
         allowedRoles={["ROLE_MEMBER", "ROLE_EMPLOYEE", "ROLE_BRANCH_MANAGER", "ROLE_PROGRAMMING_OPERATOR"]}
-        allowIncompleteProfile
       />}>
         <Route path="/profile-setup" element={<ProfileSetupPage />} />
       </Route>

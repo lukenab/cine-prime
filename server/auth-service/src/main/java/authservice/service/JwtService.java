@@ -1,7 +1,5 @@
 package authservice.service;
 
-import authservice.client.UserBranchScopeClient;
-import authservice.dto.InternalBranchScopeResponse;
 import authservice.entity.Account;
 import authservice.entity.AuthToken;
 import authservice.repository.AuthTokenRepository;
@@ -36,7 +34,7 @@ import java.util.UUID;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class JwtService {
     private final AuthTokenRepository authTokenRepository;
-    private final UserBranchScopeClient userBranchScopeClient;
+    private final StaffAccessProjectionService staffAccessProjectionService;
     @NonFinal
     @Value("${jwt.signerKey}")
     private String SIGNER_KEY;
@@ -49,12 +47,11 @@ public class JwtService {
     @Value("${jwt.refreshable-duration}")
     private long REFRESHABLE_DURATION;
 
-    @NonFinal
-    @Value("${app.internal-service-key}")
-    private String internalServiceKey;
-
     public String generateToken(Account account) {
         JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
+
+        StaffAccessProjectionService.StaffAuthorization staffAuthorization =
+                staffAccessProjectionService.resolve(account);
 
         JWTClaimsSet.Builder claimsBuilder = new JWTClaimsSet.Builder()
                 .subject(account.getUsername())
@@ -64,10 +61,15 @@ public class JwtService {
                 )
                 .issuer("cineprime.com")
                 .claim("accountId", account.getAccountId())
-                .claim("scope", buildScope(account))
+                .claim("scope", buildScope(account, staffAuthorization))
                 .jwtID(UUID.randomUUID().toString());
+        if (staffAuthorization.applicable()) {
+            claimsBuilder.claim("staffAssignmentActive", staffAuthorization.authorized());
+        }
         if (isBranchScopedStaff(account)) {
-            claimsBuilder.claim("cinemaClusterIds", resolveBranchScope(account));
+            claimsBuilder.claim("cinemaClusterIds", staffAuthorization.authorized()
+                    ? staffAuthorization.cinemaClusterIds()
+                    : List.of());
         }
         JWTClaimsSet claimsSet = claimsBuilder.build();
 
@@ -83,10 +85,17 @@ public class JwtService {
         }
     }
 
-    private String buildScope(Account account) {
+    private String buildScope(
+            Account account,
+            StaffAccessProjectionService.StaffAuthorization staffAuthorization) {
         StringJoiner stringJoiner = new StringJoiner(" ");
         if (!CollectionUtils.isEmpty(account.getRoles())) {
             account.getRoles().forEach(role -> {
+                if (StaffAccessProjectionService.STAFF_ROLES.contains(role.getRoleName())
+                        && (!staffAuthorization.authorized()
+                        || !role.getRoleName().equals(staffAuthorization.accountRole()))) {
+                    return;
+                }
                 stringJoiner.add("ROLE_" + role.getRoleName());
                 if (!CollectionUtils.isEmpty(role.getPermissions())) {
                     role.getPermissions().forEach(
@@ -102,24 +111,6 @@ public class JwtService {
                 && account.getRoles().stream()
                 .anyMatch(role -> "BRANCH_MANAGER".equals(role.getRoleName())
                         || "EMPLOYEE".equals(role.getRoleName()));
-    }
-
-    private List<String> resolveBranchScope(Account account) {
-        try {
-            var response = userBranchScopeClient.getBranchScope(
-                    account.getAccountId(), internalServiceKey);
-            InternalBranchScopeResponse scope = response == null ? null : response.getResult();
-            return scope == null || scope.cinemaClusterIds() == null
-                    ? List.of()
-                    : scope.cinemaClusterIds().stream()
-                    .filter(value -> value != null && !value.isBlank())
-                    .map(String::trim)
-                    .distinct()
-                    .toList();
-        } catch (RuntimeException exception) {
-            log.error("Cannot resolve branch assignments for account {}", account.getAccountId(), exception);
-            throw new AppException(GlobalErrorCode.UNCATEGORIZED_EXCEPTION);
-        }
     }
 
     public SignedJWT parseAndVerifySignature(String token) throws ParseException, JOSEException {

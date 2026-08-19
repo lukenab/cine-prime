@@ -12,6 +12,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -23,6 +24,7 @@ import userservice.enums.EmployeeDepartment;
 import userservice.enums.EmployeePosition;
 import userservice.enums.EmployeeStatus;
 import userservice.enums.EmploymentType;
+import userservice.enums.StaffAccessRole;
 
 @Entity
 @Table(
@@ -71,6 +73,15 @@ public class Employee {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 20)
     private EmployeeStatus status;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "access_role", length = 40)
+    private StaffAccessRole accessRole;
+
+    @Version
+    @Column(name = "assignment_version", nullable = false, columnDefinition = "bigint default 0")
+    @Builder.Default
+    private long assignmentVersion = 0L;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

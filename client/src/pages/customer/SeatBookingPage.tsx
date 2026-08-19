@@ -3,6 +3,7 @@ import { AlertTriangle, Loader2, X } from "lucide-react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import {
   bookingApi,
+  BookingConfirmation,
   Seat,
   ShowtimeSeatMap,
   SeatMapPosition,
@@ -119,9 +120,18 @@ function seatHoldStorageKey(showtimeId: string): string {
   return `seat-hold-draft:${showtimeId}`;
 }
 
+const SEAT_DRAFT_MAX_AGE_MS = 15 * 60 * 1000;
+
+interface PersistedSeatDraft {
+  idempotencyKey: string;
+  seatIds: number[];
+  savedAt: number;
+  resumeAfterLogin: boolean;
+}
+
 function readPersistedSeatHold(
   showtimeId: string | undefined
-): { idempotencyKey: string; seatIds: number[] } | null {
+): PersistedSeatDraft | null {
   if (!showtimeId) return null;
   try {
     const raw = sessionStorage.getItem(seatHoldStorageKey(showtimeId));
@@ -130,14 +140,36 @@ function readPersistedSeatHold(
     if (typeof parsed?.idempotencyKey !== "string" || !Array.isArray(parsed?.seatIds)) {
       return null;
     }
+    const savedAt = typeof parsed.savedAt === "number" ? parsed.savedAt : Date.now();
+    if (Date.now() - savedAt > SEAT_DRAFT_MAX_AGE_MS) {
+      sessionStorage.removeItem(seatHoldStorageKey(showtimeId));
+      return null;
+    }
     return {
       idempotencyKey: parsed.idempotencyKey,
       seatIds: parsed.seatIds.filter(
         (id: unknown): id is number => typeof id === "number" && Number.isFinite(id)
       ),
+      savedAt,
+      resumeAfterLogin: parsed.resumeAfterLogin === true,
     };
   } catch {
     return null;
+  }
+}
+
+function persistSeatDraft(
+  showtimeId: string | undefined,
+  draft: Omit<PersistedSeatDraft, "savedAt">
+): void {
+  if (!showtimeId) return;
+  try {
+    sessionStorage.setItem(
+      seatHoldStorageKey(showtimeId),
+      JSON.stringify({ ...draft, savedAt: Date.now() })
+    );
+  } catch {
+    // Navigation state still carries the same intent when storage is blocked.
   }
 }
 
@@ -155,8 +187,24 @@ export default function SeatBookingPage() {
   const { showtimeId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, needsProfileSetup } = useAuth();
+  const { user, needsProfileSetup, profileCheckPending } = useAuth();
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [pendingBooking, setPendingBooking] = useState<BookingConfirmation | null>(null);
+
+  const continueToCheckout = useCallback((booking: BookingConfirmation) => {
+    navigate(`/checkout/${booking.bookingId}/concessions`, {
+      state: booking.promotionRejectionReason
+        ? { promotionRejectionReason: booking.promotionRejectionReason }
+        : undefined,
+    });
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!pendingBooking || profileCheckPending || needsProfileSetup) return;
+    const booking = pendingBooking;
+    setPendingBooking(null);
+    continueToCheckout(booking);
+  }, [continueToCheckout, needsProfileSetup, pendingBooking, profileCheckPending]);
 
   const showtimeDetails = location.state?.showtime || {
     movieTitle: "Movie Booking",
@@ -177,6 +225,7 @@ export default function SeatBookingPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [holdPolicy, setHoldPolicy] = useState<SeatHoldPolicy>(DEFAULT_HOLD_POLICY);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const [autoResumeReady, setAutoResumeReady] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const persistedHoldRef = useRef(readPersistedSeatHold(showtimeId));
   const pendingSeatRestoreRef = useRef<number[]>(
@@ -187,6 +236,11 @@ export default function SeatBookingPage() {
         )
       : persistedHoldRef.current?.seatIds ?? []
   );
+  const restorePendingRef = useRef(pendingSeatRestoreRef.current.length > 0);
+  const resumeAfterLoginRef = useRef(
+    location.state?.resumeAfterLogin === true || persistedHoldRef.current?.resumeAfterLogin === true
+  );
+  const autoResumeSubmissionStartedRef = useRef(false);
   const idempotencyKeyRef = useRef(
     persistedHoldRef.current?.idempotencyKey
       ?? globalThis.crypto?.randomUUID?.()
@@ -222,20 +276,31 @@ export default function SeatBookingPage() {
           .filter((seat) => seat.status === "AVAILABLE" || (seat.status === "LOCKED" && seat.reservedByMe))
           .map((seat) => seat.seatId)
       );
-      setSelected((previous) => {
-        const restoredIds = pendingSeatRestoreRef.current;
-        const requestedIds = restoredIds.length > 0 ? restoredIds : Array.from(previous);
+      const restoredIds = pendingSeatRestoreRef.current;
+      if (restoredIds.length > 0) {
         pendingSeatRestoreRef.current = [];
+        restorePendingRef.current = false;
 
-        const next = new Set(requestedIds.filter((seatId) => availableIds.has(seatId)));
-        const rejectedIds = requestedIds.filter((seatId) => !availableIds.has(seatId));
+        const next = new Set(restoredIds.filter((seatId) => availableIds.has(seatId)));
+        const rejectedIds = restoredIds.filter((seatId) => !availableIds.has(seatId));
+        setSelected(next);
         if (rejectedIds.length > 0) {
+          resumeAfterLoginRef.current = false;
           setConflicts(new Set(rejectedIds));
           setErrorMsg("Seat availability changed. Please review the highlighted positions and select again.");
           renewIdempotencyKey();
+        } else if (resumeAfterLoginRef.current && next.size > 0) {
+          // The customer already pressed Continue before authentication. Once
+          // the fresh seat map confirms the complete selection, continue the
+          // same intent automatically instead of asking for a second click.
+          resumeAfterLoginRef.current = false;
+          setAutoResumeReady(true);
         }
-        return next;
-      });
+      } else {
+        setSelected((previous) => new Set(
+          Array.from(previous).filter((seatId) => availableIds.has(seatId))
+        ));
+      }
     } catch (err: any) {
       if (!silent) {
         setSeatMap(null);
@@ -263,21 +328,17 @@ export default function SeatBookingPage() {
   useEffect(() => {
     if (!showtimeId) return;
     if (selected.size === 0) {
+      // Do not erase a login-resume draft during the first render, before the
+      // asynchronous seat map has had a chance to validate and restore it.
+      if (restorePendingRef.current) return;
       clearPersistedSeatHold(showtimeId);
       return;
     }
-    try {
-      sessionStorage.setItem(
-        seatHoldStorageKey(showtimeId),
-        JSON.stringify({
-          idempotencyKey: idempotencyKeyRef.current,
-          seatIds: Array.from(selected),
-        })
-      );
-    } catch {
-      // Private-mode/storage-quota failures just mean the draft won't
-      // survive a reload; the booking flow itself is unaffected.
-    }
+    persistSeatDraft(showtimeId, {
+      idempotencyKey: idempotencyKeyRef.current,
+      seatIds: Array.from(selected),
+      resumeAfterLogin: resumeAfterLoginRef.current,
+    });
   }, [selected, showtimeId]);
 
   useEffect(() => {
@@ -439,7 +500,7 @@ export default function SeatBookingPage() {
     setErrorMsg(null);
   };
 
-  const handleConfirm = async () => {
+  const handleConfirm = useCallback(async () => {
     if (selected.size === 0 || !showtimeId) return;
 
     // Gate 1: chưa đăng nhập
@@ -448,22 +509,31 @@ export default function SeatBookingPage() {
         location.state && typeof location.state === "object"
           ? location.state
           : {};
+      const selectedSeatIds = Array.from(selected);
+
+      resumeAfterLoginRef.current = true;
+      persistSeatDraft(showtimeId, {
+        idempotencyKey: idempotencyKeyRef.current,
+        seatIds: selectedSeatIds,
+        resumeAfterLogin: true,
+      });
 
       navigate("/login", {
         state: {
           returnTo: `${location.pathname}${location.search}${location.hash}`,
           returnState: {
             ...currentState,
-            resumeSeatIds: Array.from(selected),
+            resumeSeatIds: selectedSeatIds,
+            resumeAfterLogin: true,
           },
         },
       });
       return;
     }
 
-    // Gate 2: chưa hoàn tất profile → hiện modal ngay trên trang booking
-    if (needsProfileSetup) {
-      setShowProfileModal(true);
+    // A previous hold is still active; resume its checkout profile step.
+    if (pendingBooking) {
+      if (!profileCheckPending && needsProfileSetup) setShowProfileModal(true);
       return;
     }
 
@@ -478,6 +548,15 @@ export default function SeatBookingPage() {
       const result = await bookingApi.createBooking(payload);
 
       clearPersistedSeatHold(showtimeId);
+      if (needsProfileSetup || profileCheckPending) {
+        // Hold scarce inventory before collecting profile details so the
+        // selected seats cannot be taken while the customer fills the form.
+        setPendingBooking(result);
+        setScreen("map");
+        if (needsProfileSetup) setShowProfileModal(true);
+        return;
+      }
+
       // The checkout page (BookingCheckoutPage) re-fetches and displays the
       // same booking summary plus the actual payment step, so landing on an
       // interstitial "seats reserved" screen first was a redundant extra
@@ -485,11 +564,7 @@ export default function SeatBookingPage() {
       // also a real bug: releasing the hold directly against movie-service
       // left the booking stuck at PENDING_PAYMENT until BookingExpiryScheduler
       // caught up, instead of going through POST /api/bookings/{id}/cancellations.
-      navigate(`/checkout/${result.bookingId}/concessions`, {
-        state: result.promotionRejectionReason
-          ? { promotionRejectionReason: result.promotionRejectionReason }
-          : undefined,
-      });
+      continueToCheckout(result);
     } catch (err: any) {
       setScreen("map");
       const errResponse = err.response?.data;
@@ -512,7 +587,60 @@ export default function SeatBookingPage() {
         );
       }
     }
-  };
+  }, [
+    continueToCheckout,
+    location.hash,
+    location.pathname,
+    location.search,
+    location.state,
+    navigate,
+    needsProfileSetup,
+    pendingBooking,
+    profileCheckPending,
+    selected,
+    showtimeId,
+    user,
+  ]);
+
+  useEffect(() => {
+    if (!autoResumeReady || !user || selected.size === 0 || !showtimeId) return;
+    if (autoResumeSubmissionStartedRef.current) return;
+    autoResumeSubmissionStartedRef.current = true;
+
+    setAutoResumeReady(false);
+    persistSeatDraft(showtimeId, {
+      idempotencyKey: idempotencyKeyRef.current,
+      seatIds: Array.from(selected),
+      resumeAfterLogin: false,
+    });
+
+    // Consume the one-shot resume intent before creating the booking. This
+    // prevents Back/refresh from automatically submitting the same checkout
+    // intent again; the persisted idempotency key still protects an in-flight
+    // request from duplication.
+    const cleanState = location.state && typeof location.state === "object"
+      ? { ...(location.state as Record<string, unknown>) }
+      : {};
+    delete cleanState.resumeSeatIds;
+    delete cleanState.resumeAfterLogin;
+    navigate(`${location.pathname}${location.search}${location.hash}`, {
+      replace: true,
+      state: cleanState,
+    });
+
+    void handleConfirm();
+  }, [
+    autoResumeReady,
+    handleConfirm,
+    location.hash,
+    location.pathname,
+    location.search,
+    location.state,
+    navigate,
+    selected,
+    showtimeId,
+    user,
+  ]);
 
   if (isLoadingSeats) {
     return (
@@ -800,10 +928,16 @@ export default function SeatBookingPage() {
           headerAction={pickedSeats.length > 0 ? { label: "Clear all", onClick: clearAll } : undefined}
           backAction={{ label: "Back", onClick: () => navigate(-1) }}
           primaryAction={pickedSeats.length > 0 ? {
-            label: screen === "confirming" ? "Reserving seats..." : "Continue",
+            label: screen === "confirming"
+              ? "Reserving seats..."
+              : pendingBooking && profileCheckPending
+                ? "Checking profile..."
+              : pendingBooking
+                ? "Continue"
+                : "Continue",
             onClick: handleConfirm,
-            disabled: screen === "confirming",
-            loading: screen === "confirming",
+            disabled: screen === "confirming" || Boolean(pendingBooking && profileCheckPending),
+            loading: screen === "confirming" || Boolean(pendingBooking && profileCheckPending),
           } : undefined}
         />
       </div>
@@ -811,8 +945,15 @@ export default function SeatBookingPage() {
       {/* Profile completion modal — overlays the booking page */}
       {showProfileModal && (
         <CompleteProfilePage
+          checkoutMode
           onClose={() => setShowProfileModal(false)}
-          onDone={() => setShowProfileModal(false)}
+          onDone={() => {
+            setShowProfileModal(false);
+            if (!pendingBooking) return;
+            const booking = pendingBooking;
+            setPendingBooking(null);
+            continueToCheckout(booking);
+          }}
         />
       )}
     </div>
