@@ -30,6 +30,7 @@ import {
   getApiErrorMessage,
   paymentStatusLabel,
 } from "../../components/booking/bookingUi";
+import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
 import "./ManageBookingPage.css";
 
 const STATUS_OPTIONS: Array<{ value: "" | BookingStatus; label: string }> = [
@@ -126,13 +127,11 @@ export default function ManageBookingPage() {
 
   return (
     <div className={`booking-admin ${isDarkMode ? "is-dark" : ""}`}>
-      <header className="booking-admin__heading">
-        <div>
-          <span>BOOKING OPERATIONS</span>
-          <h1>Ticket & Booking Management</h1>
-          <p>Monitor booking, payment and cancellation states within an authorized cinema cluster.</p>
-        </div>
-      </header>
+      <AdminPageHeader
+        eyebrow="Booking operations"
+        title="Ticket & Booking Management"
+        description="Monitor booking, payment and cancellation states within an authorized cinema cluster."
+      />
 
       <section className="booking-admin__stats" aria-label="Booking summary">
         <AdminStat label="Total bookings" value={result?.totalElements ?? 0} helper="Across the selected cinema" tone="blue" />

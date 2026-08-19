@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3,
@@ -121,7 +122,11 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   if (!open) return null;
 
   let lastGroup = "";
-  return (
+  const portalRoot = document.querySelector<HTMLElement>("#root > .theme-dark, #root > .theme-light")
+    ?? document.querySelector<HTMLElement>(".theme-dark, .theme-light")
+    ?? document.body;
+
+  return createPortal(
     <div
       role="presentation"
       onMouseDown={(event) => {
@@ -130,12 +135,12 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 200,
+        zIndex: 1000,
         display: "flex",
         alignItems: "flex-start",
         justifyContent: "center",
         padding: "82px 16px 24px",
-        background: "rgba(3, 7, 18, 0.58)",
+        background: "var(--modal-backdrop, rgba(15, 23, 42, 0.42))",
         backdropFilter: "blur(5px)",
       }}
     >
@@ -217,7 +222,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           <span>Quick navigation</span>
         </div>
       </section>
-    </div>
+    </div>,
+    portalRoot,
   );
 }
 

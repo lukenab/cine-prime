@@ -14,6 +14,7 @@ import { useRole } from "../../hooks/useRole";
 import { ClusterWizardModal } from "./ClusterWizardModal";
 import { ClusterReviewModal } from "../../layouts/ClusterReviewModal";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog";
+import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
 import { toast } from "sonner";
 
 // ── Status config ─────────────────────────────────────────────────────────────
@@ -180,15 +181,11 @@ export default function ManageCinemaClusterPage() {
 
   return (
     <>
-      {/* Header */}
-      <div style={{ marginBottom: "28px" }}>
-        <h1 style={{ color: "var(--text-main)", fontWeight: 600, fontSize: "22px", letterSpacing: "-0.01em", marginBottom: "5px" }}>
-          Cinema Clusters
-        </h1>
-        <p style={{ color: "var(--text-sub)", fontSize: "13px" }}>
-          Manage cinema locations and clusters across the country
-        </p>
-      </div>
+      <AdminPageHeader
+        eyebrow="Facility management"
+        title="Cinema Clusters"
+        description="Manage cinema locations and clusters across the country."
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4 mb-6">
