@@ -45,6 +45,12 @@ const roleLabels: Record<string, string> = {
   ROLE_ADMIN: "Administrator",
   ROLE_BRANCH_MANAGER: "Branch manager",
   ROLE_PROGRAMMING_OPERATOR: "Programming operator",
+  ROLE_PROGRAMMING_APPROVER: "Programming approver",
+  ROLE_FINANCE_OFFICER: "Finance officer",
+  ROLE_FINANCE_APPROVER: "Finance approver",
+  ROLE_COMMERCIAL_MANAGER: "Commercial manager",
+  ROLE_SYSTEM_ADMIN: "System administrator",
+  ROLE_SECURITY_AUDITOR: "Security auditor",
   ROLE_EMPLOYEE: "Employee",
 };
 
@@ -157,7 +163,8 @@ export default function AdminProfilePage() {
   const displayEmail = profile?.email || account?.email;
   const primaryRole = user?.role ?? roles[0] ?? "ROLE_ADMIN";
   const status = (account?.status || "ACTIVE").toUpperCase();
-  const canManageSettings = ["ROLE_SUPER_ADMIN", "ROLE_ADMIN"].includes(user?.role ?? "");
+  const canManageSettings = user?.permissions.includes("SYSTEM_CONFIG_MANAGE")
+    || user?.roles.some((role) => role === "ROLE_SUPER_ADMIN" || role === "ROLE_ADMIN");
 
   return (
     <section className="admin-profile-page">

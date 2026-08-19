@@ -30,7 +30,7 @@ public class MovieAvailabilityController {
 
     MovieAvailabilityService movieAvailabilityService;
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'RELEASE_PLAN_READ')")
     @GetMapping
     public ApiResponse<List<MovieAvailabilityResponse>> search(
             @RequestParam(required = false) Long movieId,
@@ -42,7 +42,7 @@ public class MovieAvailabilityController {
                 .build();
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'RELEASE_PLAN_EDIT')")
     @PostMapping
     public ApiResponse<MovieAvailabilityResponse> create(@Valid @RequestBody CreateMovieAvailabilityRequest request) {
         return ApiResponse.<MovieAvailabilityResponse>builder()
@@ -53,7 +53,7 @@ public class MovieAvailabilityController {
 
     /** "Wide release" — plan for many clusters (or every ACTIVE cluster) in one call. Same role
      *  as the single create() since it's still just scheduling metadata (MOV-LC-06). */
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'RELEASE_PLAN_EDIT')")
     @PostMapping("/bulk")
     public ApiResponse<BulkCreateMovieAvailabilityResponse> bulkCreate(
             @Valid @RequestBody BulkCreateMovieAvailabilityRequest request) {
@@ -63,7 +63,7 @@ public class MovieAvailabilityController {
                 .build();
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'RELEASE_PLAN_EDIT')")
     @PutMapping("/{id}")
     public ApiResponse<MovieAvailabilityResponse> update(@PathVariable Long id,
             @RequestBody UpdateMovieAvailabilityRequest request) {
@@ -73,7 +73,7 @@ public class MovieAvailabilityController {
                 .build();
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'RELEASE_PLAN_APPROVE')")
     @PostMapping("/{id}/request-changes")
     public ApiResponse<MovieAvailabilityResponse> requestChanges(
             @PathVariable Long id,
@@ -84,7 +84,7 @@ public class MovieAvailabilityController {
                 .build();
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'RELEASE_PLAN_SUBMIT')")
     @PostMapping("/{id}/submit-review")
     public ApiResponse<MovieAvailabilityResponse> submitReview(
             @PathVariable Long id,
@@ -96,7 +96,7 @@ public class MovieAvailabilityController {
                 .build();
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'RELEASE_PLAN_APPROVE')")
     @PostMapping("/{id}/approve")
     public ApiResponse<MovieAvailabilityResponse> approve(
             @PathVariable Long id,
@@ -108,7 +108,7 @@ public class MovieAvailabilityController {
                 .build();
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'RELEASE_PLAN_ACTIVATE')")
     @PostMapping("/{id}/open")
     public ApiResponse<MovieAvailabilityResponse> open(@PathVariable Long id) {
         return ApiResponse.<MovieAvailabilityResponse>builder()
@@ -117,7 +117,7 @@ public class MovieAvailabilityController {
                 .build();
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'RELEASE_PLAN_ACTIVATE')")
     @PostMapping("/{id}/suspend")
     public ApiResponse<MovieAvailabilityResponse> suspend(@PathVariable Long id,
             @Valid @RequestBody SuspendRequest request) {
@@ -127,7 +127,7 @@ public class MovieAvailabilityController {
                 .build();
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'RELEASE_PLAN_ACTIVATE')")
     @PostMapping("/{id}/resume")
     public ApiResponse<MovieAvailabilityResponse> resume(@PathVariable Long id) {
         return ApiResponse.<MovieAvailabilityResponse>builder()
@@ -136,7 +136,7 @@ public class MovieAvailabilityController {
                 .build();
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'RELEASE_PLAN_ACTIVATE')")
     @PostMapping("/{id}/close")
     public ApiResponse<MovieAvailabilityResponse> close(
             @PathVariable Long id,

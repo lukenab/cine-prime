@@ -1,28 +1,29 @@
 import { useAuth } from "../context/AuthContext";
 import { useState, useEffect } from "react";
-import { LayoutDashboard, Film, Tags, Calendar, Ticket, UserCog, BarChart2, Settings, Clapperboard, Gift, ShoppingCart, MapPin, ChevronDown, ShieldCheck, Monitor, Armchair, Languages, CircleDollarSign, Popcorn, SlidersHorizontal } from "lucide-react";
+import { LayoutDashboard, Film, Tags, Calendar, Ticket, UserCog, BarChart2, Settings, Clapperboard, Gift, ShoppingCart, MapPin, ChevronDown, ShieldCheck, Monitor, Armchair, Layers3, BookOpen, ReceiptText, Popcorn, SlidersHorizontal } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { OrbitaLogo } from "../components/shared/OrbitaLogo";
 import { movieApi } from "../api/movieApi";
 
-type NavChild = { icon: React.ElementType; label: string; path: string; roles?: string[] };
+type NavChild = { icon: React.ElementType; label: string; path: string; roles?: string[]; permissions?: string[] };
 type NavItem = {
   icon: React.ElementType; label: string; id: string;
   path: string; group: string; roles?: string[];
+  permissions?: string[];
   children?: NavChild[];
 };
 
 const adminNavItems: NavItem[] = [
-  { icon: LayoutDashboard, label: "DASHBOARD", id: "dashboard", path: "/admin", group: "main", roles: ["ROLE_ADMIN"] },
-  { icon: Film, label: "Movies", id: "movies", path: "/admin/movies", group: "content", roles: ["ROLE_ADMIN"] },
-  { icon: Calendar, label: "Release Planning", id: "release-planning", path: "/admin/release-plans", group: "content", roles: ["ROLE_ADMIN"] },
-  { icon: Languages, label: "Screening Versions", id: "screening-versions", path: "/admin/screening-versions", group: "content", roles: ["ROLE_ADMIN"] },
+  { icon: LayoutDashboard, label: "DASHBOARD", id: "dashboard", path: "/admin", group: "main", roles: ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"] },
+  { icon: Film, label: "Movies", id: "movies", path: "/admin/movies", group: "content", permissions: ["MOVIE_READ"] },
+  { icon: Calendar, label: "Release Planning", id: "release-planning", path: "/admin/release-plans", group: "content", permissions: ["RELEASE_PLAN_READ"] },
+  { icon: Layers3, label: "Screening Versions", id: "screening-versions", path: "/admin/screening-versions", group: "content", permissions: ["MOVIE_READ"] },
 
   { icon: MapPin, label: "Cinema Clusters", id: "cinema-clusters", path: "/admin/clusters", group: "facility-management", roles: ["ROLE_ADMIN"] },
   { icon: Armchair, label: "Screening Rooms", id: "screening-rooms", path: "/admin/rooms", group: "facility-management", roles: ["ROLE_ADMIN"] },
   { icon: Calendar, label: "Showtime Operations", id: "showtimes", path: "/admin/showtimes", group: "facility-management", roles: ["ROLE_ADMIN"] },
-  { icon: CircleDollarSign, label: "Price Books", id: "price-books", path: "/admin/price-books", group: "facility-management", roles: ["ROLE_ADMIN"] },
-  { icon: Ticket, label: "Bookings", id: "bookings", path: "/admin/bookings", group: "business-operations", roles: ["ROLE_ADMIN"] },
+  { icon: BookOpen, label: "Price Books", id: "price-books", path: "/admin/price-books", group: "facility-management", permissions: ["PRICE_BOOK_READ", "PRICE_BOOK_MANAGE"] },
+  { icon: Ticket, label: "Bookings", id: "bookings", path: "/admin/bookings", group: "business-operations", permissions: ["BOOKING_READ"] },
   {
     icon: Popcorn, label: "Concessions", id: "concessions", path: "/admin/concessions/fulfillment", group: "business-operations",
     roles: ["ROLE_ADMIN", "ROLE_BRANCH_MANAGER"],
@@ -32,11 +33,11 @@ const adminNavItems: NavItem[] = [
     ],
   },
 
-  { icon: Gift, label: "Promotions", id: "promotions", path: "/admin/promotions", group: "business-operations", roles: ["ROLE_ADMIN"] },
-  { icon: CircleDollarSign, label: "Refunds & Reconciliation", id: "refunds-reconciliation", path: "/admin/refunds-reconciliation", group: "business-operations", roles: ["ROLE_ADMIN"] },
+  { icon: Gift, label: "Promotions", id: "promotions", path: "/admin/promotions", group: "business-operations", permissions: ["PROMOTION_READ"] },
+  { icon: ReceiptText, label: "Refunds & Reconciliation", id: "refunds-reconciliation", path: "/admin/refunds-reconciliation", group: "business-operations", permissions: ["REFUND_READ", "RECONCILIATION_READ"] },
 
-  { icon: UserCog, label: "People & Access", id: "people", path: "/admin/people", group: "administration", roles: ["ROLE_ADMIN"] },
-  { icon: BarChart2, label: "Reports", id: "reports", path: "/admin/reports", group: "administration", roles: ["ROLE_ADMIN"] },
+  { icon: UserCog, label: "People & Access", id: "people", path: "/admin/people", group: "administration", permissions: ["EMPLOYEE_READ", "USER_READ", "ROLE_MANAGE"] },
+  { icon: BarChart2, label: "Reports", id: "reports", path: "/admin/reports", group: "administration", permissions: ["REPORT_READ", "AUDIT_READ"] },
 
   {
     icon: SlidersHorizontal, label: "Reference Data", id: "reference-data", path: "/admin/genres", group: "administration",
@@ -47,7 +48,7 @@ const adminNavItems: NavItem[] = [
       { icon: Monitor, label: "Screening Formats", path: "/admin/formats", roles: ["ROLE_ADMIN"] },
     ],
   },
-  { icon: Settings, label: "Settings", id: "settings", path: "/admin/settings", group: "administration", roles: ["ROLE_ADMIN"] },
+  { icon: Settings, label: "Settings", id: "settings", path: "/admin/settings", group: "administration", permissions: ["SYSTEM_CONFIG_MANAGE"] },
 ];
 
 const employeeNavItems: NavItem[] = [
@@ -63,16 +64,16 @@ const employeeNavItems: NavItem[] = [
  * usable children and made the sidebar look unfinished.
  */
 const programmingNavItems: NavItem[] = [
-  { icon: LayoutDashboard, label: "Overview", id: "programming-overview", path: "/admin/programming", group: "main", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
+  { icon: LayoutDashboard, label: "Overview", id: "programming-overview", path: "/admin/programming", group: "main", roles: ["ROLE_PROGRAMMING_OPERATOR", "ROLE_PROGRAMMING_APPROVER"] },
   // Follow the actual programming lifecycle instead of splitting scheduling
   // into an isolated one-item section.
-  { icon: Film, label: "Movie Catalogue", id: "programming-movies", path: "/admin/movies", group: "programming-workflow", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
-  { icon: Languages, label: "Screening Versions", id: "programming-versions", path: "/admin/screening-versions", group: "programming-workflow", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
-  { icon: Calendar, label: "Release Planning", id: "programming-release", path: "/admin/release-plans", group: "programming-workflow", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
-  { icon: Clapperboard, label: "Automatic Scheduling", id: "programming-schedule", path: "/admin/showtimes/auto", group: "programming-workflow", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
-  { icon: Monitor, label: "Screening Formats", id: "programming-formats", path: "/admin/formats", group: "programming-reference", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
-  { icon: Tags, label: "Genres", id: "programming-genres", path: "/admin/genres", group: "programming-reference", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
-  { icon: ShieldCheck, label: "Age Ratings", id: "programming-ratings", path: "/admin/age-ratings", group: "programming-reference", roles: ["ROLE_PROGRAMMING_OPERATOR"] },
+  { icon: Film, label: "Movie Catalogue", id: "programming-movies", path: "/admin/movies", group: "programming-workflow", roles: ["ROLE_PROGRAMMING_OPERATOR", "ROLE_PROGRAMMING_APPROVER"] },
+  { icon: Layers3, label: "Screening Versions", id: "programming-versions", path: "/admin/screening-versions", group: "programming-workflow", roles: ["ROLE_PROGRAMMING_OPERATOR", "ROLE_PROGRAMMING_APPROVER"] },
+  { icon: Calendar, label: "Release Planning", id: "programming-release", path: "/admin/release-plans", group: "programming-workflow", roles: ["ROLE_PROGRAMMING_OPERATOR", "ROLE_PROGRAMMING_APPROVER"] },
+  { icon: Clapperboard, label: "Automatic Scheduling", id: "programming-schedule", path: "/admin/showtimes/auto", group: "programming-workflow", roles: ["ROLE_PROGRAMMING_OPERATOR", "ROLE_PROGRAMMING_APPROVER"] },
+  { icon: Monitor, label: "Screening Formats", id: "programming-formats", path: "/admin/formats", group: "programming-reference", roles: ["ROLE_PROGRAMMING_OPERATOR", "ROLE_PROGRAMMING_APPROVER"] },
+  { icon: Tags, label: "Genres", id: "programming-genres", path: "/admin/genres", group: "programming-reference", roles: ["ROLE_PROGRAMMING_OPERATOR", "ROLE_PROGRAMMING_APPROVER"] },
+  { icon: ShieldCheck, label: "Age Ratings", id: "programming-ratings", path: "/admin/age-ratings", group: "programming-reference", roles: ["ROLE_PROGRAMMING_OPERATOR", "ROLE_PROGRAMMING_APPROVER"] },
 ];
 
 interface SidebarProps {
@@ -83,8 +84,10 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const role = user?.role === "ROLE_SUPER_ADMIN" ? "ROLE_ADMIN" : (user?.role ?? "");
-  const isProgrammingOperator = user?.role === "ROLE_PROGRAMMING_OPERATOR";
+  const userRoles = user?.roles ?? [];
+  const userPermissions = user?.permissions ?? [];
+  const isLegacyAdministrator = userRoles.some((item) => item === "ROLE_ADMIN" || item === "ROLE_SUPER_ADMIN");
+  const isProgrammingOperator = userRoles.some((item) => item === "ROLE_PROGRAMMING_OPERATOR" || item === "ROLE_PROGRAMMING_APPROVER");
   const visibleNavItems = user?.role === "ROLE_EMPLOYEE"
     ? employeeNavItems
     : isProgrammingOperator
@@ -103,14 +106,15 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
   // Badge: số phim đang PENDING_REVIEW (chỉ fetch cho ADMIN)
   const [pendingMovies, setPendingMovies] = useState(0);
   useEffect(() => {
-    if (user?.role !== "ROLE_ADMIN" && user?.role !== "ROLE_SUPER_ADMIN") return;
+    if (!user?.permissions.includes("MOVIE_APPROVE")
+      && !user?.roles.some((item) => item === "ROLE_ADMIN" || item === "ROLE_SUPER_ADMIN")) return;
     movieApi.getAllMovies()
       .then(res => {
         const count = (res.result ?? []).filter(m => m.movieStatus === "PENDING_REVIEW").length;
         setPendingMovies(count);
       })
       .catch(() => {});
-  }, [user?.role]);
+  }, [user?.permissions, user?.roles]);
 
   // Group destinations by business task instead of mixing content, cinema
   // infrastructure and low-frequency configuration under "Catalog".
@@ -135,7 +139,12 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
 
   // Preserve first occurrence order while ensuring that each group is rendered
   // once even when role-specific navigation items are interleaved.
-  const filteredNavItems = visibleNavItems.filter(({ roles }) => !roles || roles.includes(role));
+  const isAllowed = ({ roles, permissions }: { roles?: string[]; permissions?: string[] }) => {
+    const roleAllowed = !roles || roles.some((allowed) => userRoles.includes(allowed));
+    const permissionAllowed = !permissions || permissions.some((allowed) => userPermissions.includes(allowed));
+    return isLegacyAdministrator || (roleAllowed && permissionAllowed);
+  };
+  const filteredNavItems = visibleNavItems.filter(isAllowed);
   const sections: { group: string; items: NavItem[] }[] = [];
   const sectionIndexByGroup: Record<string, number> = {};
   filteredNavItems.forEach((item) => {
@@ -215,7 +224,7 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
         {hasChildren && (
           <div style={{ overflow: "hidden", maxHeight: isExpanded ? "400px" : "0", transition: "max-height 0.25s ease" }}>
             {children!
-              .filter(c => !c.roles || c.roles.includes(role))
+              .filter(isAllowed)
               .map(child => {
                 const ChildIcon = child.icon;
                 const childIsActive = location.pathname === child.path || (child.path !== "/admin/movies" && location.pathname.startsWith(child.path));

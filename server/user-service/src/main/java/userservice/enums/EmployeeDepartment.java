@@ -8,6 +8,10 @@ public enum EmployeeDepartment {
     PROJECTION_TECHNICAL,
     FACILITIES_MAINTENANCE,
     CONTENT_PROGRAMMING,
+    FINANCE,
+    COMMERCIAL,
+    INFORMATION_TECHNOLOGY,
+    RISK_COMPLIANCE,
 
     // Legacy values retained so existing employee rows remain readable.
     @Deprecated

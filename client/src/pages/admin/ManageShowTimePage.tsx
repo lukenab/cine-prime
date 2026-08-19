@@ -535,7 +535,8 @@ export default function ManageShowtimePage() {
 
       <ShowtimeCreateChoiceDialog
         open={createChoiceOpen}
-        canGenerate={user?.role === "ROLE_ADMIN" || user?.role === "ROLE_SUPER_ADMIN"}
+        canGenerate={user?.permissions.includes("SCHEDULE_PLAN_SUBMIT")
+          || user?.roles.some((role) => role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN")}
         onClose={() => setCreateChoiceOpen(false)}
         onManual={openManualCreate}
         onAutomatic={() => openAutomaticCreate()}

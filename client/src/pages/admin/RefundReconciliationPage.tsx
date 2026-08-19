@@ -18,6 +18,7 @@ import {
   type ReconciliationCase,
 } from "../../api/paymentApi";
 import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
+import { useAuth } from "../../context/AuthContext";
 import "./RefundReconciliationPage.css";
 
 type Tab = "refunds" | "cases";
@@ -40,6 +41,9 @@ function StatusPill({ status }: { status: string }) {
 
 export default function RefundReconciliationPage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
+  const { user } = useAuth();
+  const canApproveRefund = user?.permissions.includes("REFUND_APPROVE")
+    || user?.roles.some((role) => role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN");
   const [tab, setTab] = useState<Tab>("refunds");
   const [status, setStatus] = useState("");
   const [severity, setSeverity] = useState("");
@@ -168,7 +172,9 @@ export default function RefundReconciliationPage() {
           {detail.kind === "refund" ? <>
             <div className="rr-detail-grid"><div><span>Status</span><StatusPill status={detail.value.status} /></div><div><span>Amount</span><strong>{moneyValue(detail.value.amount, detail.value.currency)}</strong></div><div><span>Booking</span><strong>{detail.value.bookingId}</strong></div><div><span>Provider reference</span><strong>{detail.value.providerRefundReference ?? "Pending"}</strong></div></div>
             <dl className="rr-detail-list"><div><dt>Reason</dt><dd>{detail.value.reason ?? detail.value.reasonCode ?? "—"}</dd></div><div><dt>Failure</dt><dd>{detail.value.failureMessage ?? "No failure recorded"}</dd></div><div><dt>Requested</dt><dd>{when(detail.value.createdAt)}</dd></div><div><dt>Completed</dt><dd>{when(detail.value.completedAt)}</dd></div></dl>
-            {detail.value.status !== "SUCCEEDED" && <button className="rr-button rr-button--primary rr-full" disabled={actionId === detail.value.refundId} onClick={() => void action(detail.value.refundId, () => paymentApi.retryAdminRefund(detail.value.refundId))}><RotateCcw size={16} /> {actionId === detail.value.refundId ? "Retrying..." : "Retry refund"}</button>}
+            {detail.value.status !== "SUCCEEDED" && (canApproveRefund
+              ? <button className="rr-button rr-button--primary rr-full" disabled={actionId === detail.value.refundId} onClick={() => void action(detail.value.refundId, () => paymentApi.retryAdminRefund(detail.value.refundId))}><RotateCcw size={16} /> {actionId === detail.value.refundId ? "Retrying..." : "Approve & retry refund"}</button>
+              : <div className="rr-error"><ShieldAlert size={16} /> Finance approver action required.</div>)}
           </> : <>
             <div className="rr-detail-grid"><div><span>Status</span><StatusPill status={detail.value.status} /></div><div><span>Severity</span><strong>{human(detail.value.severity)}</strong></div><div><span>Booking</span><strong>{detail.value.bookingId}</strong></div><div><span>Attempts</span><strong>{detail.value.attemptCount}</strong></div></div>
             <dl className="rr-detail-list"><div><dt>Details</dt><dd>{detail.value.details}</dd></div><div><dt>Created</dt><dd>{when(detail.value.createdAt)}</dd></div><div><dt>Resolved by</dt><dd>{detail.value.resolvedBy ?? "Unassigned"}</dd></div><div><dt>Resolution note</dt><dd>{detail.value.resolutionNote ?? "No resolution yet"}</dd></div></dl>

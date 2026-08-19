@@ -38,7 +38,7 @@ public class MovieController {
 
     MovieService movieService;
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'MOVIE_CREATE')")
     @PostMapping
     public ApiResponse<MovieResponse> createMovie(@Valid @RequestBody CreateMovieRequest request) {
         String actor = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -51,7 +51,7 @@ public class MovieController {
     /** Internal catalog detail - exposes full workflow state (rejectionNote, audit fields via
      *  MovieResponse) so it must never be reachable by guessing an ID as a customer/anonymous
      *  caller. Public detail is the separate GET /api/movies/public/{id} below. */
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'MOVIE_READ')")
     @GetMapping("/{id}")
     public ApiResponse<MovieResponse> findById(
             @PathVariable Long id,
@@ -62,7 +62,7 @@ public class MovieController {
                 .build();
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'MOVIE_READ')")
     @GetMapping
     public ApiResponse<Page<MovieResponse>> getPage(
             @RequestParam(defaultValue = "1") int page,
@@ -77,7 +77,7 @@ public class MovieController {
                 .build();
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'MOVIE_READ')")
     @GetMapping("/all")
     public ApiResponse<List<MovieResponse>> getAll() {
         return ApiResponse.<List<MovieResponse>>builder()
@@ -108,7 +108,7 @@ public class MovieController {
                 .build();
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'MOVIE_UPDATE')")
     @PutMapping("/{id}")
     public ApiResponse<MovieResponse> updateMovie(@PathVariable Long id,
             @Valid @RequestBody UpdateMovieRequest request) {
@@ -120,7 +120,7 @@ public class MovieController {
     }
 
     /** DRAFT → PENDING_REVIEW */
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'MOVIE_SUBMIT')")
     @PostMapping("/{id}/submit")
     public ApiResponse<MovieResponse> submit(@PathVariable Long id) {
         String updatedBy = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -131,7 +131,7 @@ public class MovieController {
     }
 
     /** PENDING_REVIEW → APPROVED. Content-only — does not publish or open sales anywhere. */
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'MOVIE_APPROVE')")
     @PostMapping("/{id}/approve")
     public ApiResponse<MovieResponse> approve(@PathVariable Long id) {
         String updatedBy = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -142,7 +142,7 @@ public class MovieController {
     }
 
     /** PENDING_REVIEW → CHANGES_REQUESTED */
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'MOVIE_APPROVE')")
     @PostMapping("/{id}/request-changes")
     public ApiResponse<MovieResponse> requestChanges(@PathVariable Long id,
             @Valid @RequestBody RejectRequest request) {
@@ -154,7 +154,7 @@ public class MovieController {
     }
 
     /** CHANGES_REQUESTED → DRAFT */
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'MOVIE_UPDATE')")
     @PostMapping("/{id}/start-revision")
     public ApiResponse<MovieResponse> startRevision(@PathVariable Long id) {
         String updatedBy = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -165,7 +165,7 @@ public class MovieController {
     }
 
     /** APPROVED → ARCHIVED. Blocked while any availability window is PLANNED/OPEN. */
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'MOVIE_APPROVE')")
     @PostMapping("/{id}/archive")
     public ApiResponse<MovieResponse> archive(@PathVariable Long id) {
         String updatedBy = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -177,7 +177,7 @@ public class MovieController {
 
     // ── Image upload ──────────────────────────────────────────
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'MOVIE_UPDATE')")
     @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<ImageUploadResponse> uploadImage(@RequestParam("file") MultipartFile file) {
         return ApiResponse.<ImageUploadResponse>builder()

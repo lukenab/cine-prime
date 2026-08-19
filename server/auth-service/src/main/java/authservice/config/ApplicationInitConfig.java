@@ -96,6 +96,32 @@ public class ApplicationInitConfig {
             // Report
             new String[]{"REPORT_READ", "View revenue and statistics reports"},
 
+            // Administration and audit
+            new String[]{"ROLE_MANAGE", "Assign and revoke account roles"},
+            new String[]{"SYSTEM_CONFIG_MANAGE", "Manage system-wide configuration"},
+            new String[]{"AUDIT_READ", "View security and operational audit trails"},
+
+            // Programming workflow (maker-checker)
+            new String[]{"MOVIE_SUBMIT", "Submit movie content for approval"},
+            new String[]{"MOVIE_APPROVE", "Approve or return movie content"},
+            new String[]{"RELEASE_PLAN_READ", "View release plans"},
+            new String[]{"RELEASE_PLAN_EDIT", "Create and edit release-plan drafts"},
+            new String[]{"RELEASE_PLAN_SUBMIT", "Submit release plans for approval"},
+            new String[]{"RELEASE_PLAN_APPROVE", "Approve or return release plans"},
+            new String[]{"RELEASE_PLAN_ACTIVATE", "Open, suspend and close approved release plans"},
+            new String[]{"SCHEDULE_PLAN_SUBMIT", "Submit generated schedules for approval"},
+            new String[]{"SCHEDULE_PLAN_APPROVE", "Approve or return generated schedules"},
+
+            // Commercial and finance
+            new String[]{"PRICE_BOOK_READ", "View cinema price books"},
+            new String[]{"PRICE_BOOK_MANAGE", "Create and maintain price books"},
+            new String[]{"PAYMENT_READ", "View payment operations"},
+            new String[]{"REFUND_READ", "View refund requests"},
+            new String[]{"REFUND_REVIEW", "Investigate and prepare refund decisions"},
+            new String[]{"REFUND_APPROVE", "Approve or reject refunds"},
+            new String[]{"RECONCILIATION_READ", "View payment reconciliation cases"},
+            new String[]{"RECONCILIATION_RESOLVE", "Resolve payment reconciliation cases"},
+
             // Concession catalog workflow
             new String[]{"CONCESSION_CATALOG_DRAFT", "Create and edit concession product drafts"},
             new String[]{"CONCESSION_CATALOG_SUBMIT", "Submit concession products for approval"},
@@ -103,30 +129,60 @@ public class ApplicationInitConfig {
     );
 
     // ── Role → Permission mapping ─────────────────────────────────────────────
-    private static final Map<String, Set<String>> ROLE_PERMISSIONS = Map.of(
-            "MEMBER", Set.of(
+    private static final Map<String, Set<String>> ROLE_PERMISSIONS = Map.ofEntries(
+            Map.entry("MEMBER", Set.of(
                     "MOVIE_READ",
                     "SHOWTIME_READ",
                     "BOOKING_READ", "BOOKING_CANCEL",
                     "PROMOTION_READ"
-            ),
-            "EMPLOYEE", Set.of(
+            )),
+            Map.entry("EMPLOYEE", Set.of(
                     "MOVIE_READ",
                     "SHOWTIME_READ",
                     "BOOKING_READ", "BOOKING_CONFIRM", "BOOKING_CANCEL",
                     "TICKET_SELL"
-            ),
-            "BRANCH_MANAGER", Set.of(
+            )),
+            Map.entry("BRANCH_MANAGER", Set.of(
                     "CONCESSION_CATALOG_DRAFT",
                     "CONCESSION_CATALOG_SUBMIT"
-            ),
-            "PROGRAMMING_OPERATOR", Set.of(
+            )),
+            Map.entry("PROGRAMMING_OPERATOR", Set.of(
                     "MOVIE_READ", "MOVIE_CREATE", "MOVIE_UPDATE",
+                    "MOVIE_SUBMIT",
                     "SHOWTIME_READ", "SHOWTIME_CREATE", "SHOWTIME_UPDATE",
-                    "ROOM_READ", "GENRE_READ"
-            ),
-            "ADMIN", Set.of(
+                    "ROOM_READ", "GENRE_READ",
+                    "RELEASE_PLAN_READ", "RELEASE_PLAN_EDIT", "RELEASE_PLAN_SUBMIT",
+                    "SCHEDULE_PLAN_SUBMIT"
+            )),
+            Map.entry("PROGRAMMING_APPROVER", Set.of(
+                    "MOVIE_READ", "MOVIE_APPROVE", "SHOWTIME_READ", "ROOM_READ", "GENRE_READ",
+                    "RELEASE_PLAN_READ", "RELEASE_PLAN_APPROVE", "RELEASE_PLAN_ACTIVATE",
+                    "SCHEDULE_PLAN_APPROVE"
+            )),
+            Map.entry("FINANCE_OFFICER", Set.of(
+                    "BOOKING_READ", "PAYMENT_READ", "REFUND_READ", "REFUND_REVIEW",
+                    "RECONCILIATION_READ", "RECONCILIATION_RESOLVE", "REPORT_READ"
+            )),
+            Map.entry("FINANCE_APPROVER", Set.of(
+                    "BOOKING_READ", "PAYMENT_READ", "REFUND_READ", "REFUND_REVIEW", "REFUND_APPROVE",
+                    "RECONCILIATION_READ", "RECONCILIATION_RESOLVE", "REPORT_READ", "AUDIT_READ"
+            )),
+            Map.entry("COMMERCIAL_MANAGER", Set.of(
+                    "PRICE_BOOK_READ", "PRICE_BOOK_MANAGE",
+                    "PROMOTION_READ", "PROMOTION_CREATE", "PROMOTION_UPDATE", "PROMOTION_DELETE",
+                    "REPORT_READ"
+            )),
+            Map.entry("SECURITY_AUDITOR", Set.of("AUDIT_READ", "REPORT_READ")),
+            Map.entry("SYSTEM_ADMIN", Set.of(
+                    "EMPLOYEE_READ", "EMPLOYEE_CREATE", "EMPLOYEE_UPDATE", "EMPLOYEE_DELETE",
+                    "USER_READ", "USER_CREATE", "USER_UPDATE", "USER_DELETE",
+                    "ROLE_MANAGE", "SYSTEM_CONFIG_MANAGE", "AUDIT_READ"
+            )),
+            // Compatibility role. Stop assigning it immediately and remove it after 2026-10-01,
+            // once existing administrator accounts have been migrated to business roles.
+            Map.entry("ADMIN", Set.of(
                     "MOVIE_READ", "MOVIE_CREATE", "MOVIE_UPDATE", "MOVIE_DELETE",
+                    "MOVIE_SUBMIT", "MOVIE_APPROVE",
                     "SHOWTIME_READ", "SHOWTIME_CREATE", "SHOWTIME_UPDATE", "SHOWTIME_DELETE",
                     "BOOKING_READ", "BOOKING_CONFIRM", "BOOKING_CANCEL",
                     "TICKET_SELL",
@@ -135,10 +191,16 @@ public class ApplicationInitConfig {
                     "ROOM_READ", "ROOM_UPDATE",
                     "GENRE_READ", "GENRE_CREATE", "GENRE_UPDATE", "GENRE_DELETE",
                     "PROMOTION_READ", "PROMOTION_CREATE", "PROMOTION_UPDATE", "PROMOTION_DELETE",
-                    "REPORT_READ",
+                    "REPORT_READ", "ROLE_MANAGE", "SYSTEM_CONFIG_MANAGE", "AUDIT_READ",
+                    "RELEASE_PLAN_READ", "RELEASE_PLAN_EDIT", "RELEASE_PLAN_SUBMIT",
+                    "RELEASE_PLAN_APPROVE", "RELEASE_PLAN_ACTIVATE",
+                    "SCHEDULE_PLAN_SUBMIT", "SCHEDULE_PLAN_APPROVE",
+                    "PRICE_BOOK_READ", "PRICE_BOOK_MANAGE", "PAYMENT_READ",
+                    "REFUND_READ", "REFUND_REVIEW", "REFUND_APPROVE",
+                    "RECONCILIATION_READ", "RECONCILIATION_RESOLVE",
                     "CONCESSION_CATALOG_DRAFT", "CONCESSION_CATALOG_SUBMIT",
                     "CONCESSION_CATALOG_APPROVE"
-            )
+            ))
     );
 
     @Bean
@@ -169,12 +231,18 @@ public class ApplicationInitConfig {
 
     // ── Step 2: Seed roles with permissions ───────────────────────────────────
     private void seedRoles() {
-        Map<String, String> roleDescriptions = Map.of(
-                "MEMBER",   "Registered member — can book tickets and manage account",
-                "EMPLOYEE", "Cinema staff — ticket sales and booking management",
-                "BRANCH_MANAGER", "Cinema branch manager — can prepare concession product proposals",
-                "PROGRAMMING_OPERATOR", "Head-office programming staff — prepares movie, release and schedule drafts",
-                "ADMIN",    "System administrator — full access to all modules"
+        Map<String, String> roleDescriptions = Map.ofEntries(
+                Map.entry("MEMBER", "Registered member - can book tickets and manage account"),
+                Map.entry("EMPLOYEE", "Cinema staff - ticket sales and booking management"),
+                Map.entry("BRANCH_MANAGER", "Cinema branch manager - branch-scoped operations"),
+                Map.entry("PROGRAMMING_OPERATOR", "Programming maker - prepares content, release and schedule drafts"),
+                Map.entry("PROGRAMMING_APPROVER", "Programming checker - reviews and approves programming work"),
+                Map.entry("FINANCE_OFFICER", "Finance maker - investigates refunds and reconciliation cases"),
+                Map.entry("FINANCE_APPROVER", "Finance checker - approves financial exceptions and refunds"),
+                Map.entry("COMMERCIAL_MANAGER", "Commercial manager - owns pricing and promotion configuration"),
+                Map.entry("SECURITY_AUDITOR", "Read-only security and audit reviewer"),
+                Map.entry("SYSTEM_ADMIN", "Identity, access and system configuration administrator"),
+                Map.entry("ADMIN", "Legacy all-access administrator retained during role migration")
         );
 
         for (Map.Entry<String, Set<String>> entry : ROLE_PERMISSIONS.entrySet()) {

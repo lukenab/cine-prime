@@ -75,7 +75,8 @@ export default function PeopleAccessPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = validTab(searchParams.get("tab"));
   const inviteOpen = searchParams.get("invite") === "1";
-  const canInviteEmployee = user?.role === "ROLE_ADMIN" || user?.role === "ROLE_SUPER_ADMIN";
+  const canInviteEmployee = user?.permissions.includes("EMPLOYEE_CREATE")
+    || user?.roles.some((role) => role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN");
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -138,7 +139,10 @@ export default function PeopleAccessPage() {
     .map((account) => ({ account, profile: profileById.get(account.accountId) })), [accounts, profileById]);
 
   const staffRows = useMemo<StaffRow[]>(() => accounts
-    .filter((account) => roleNames(account).some((role) => role === "EMPLOYEE" || role === "BRANCH_MANAGER" || role === "PROGRAMMING_OPERATOR"))
+    .filter((account) => roleNames(account).some((role) => [
+      "EMPLOYEE", "BRANCH_MANAGER", "PROGRAMMING_OPERATOR", "PROGRAMMING_APPROVER",
+      "FINANCE_OFFICER", "FINANCE_APPROVER", "COMMERCIAL_MANAGER", "SECURITY_AUDITOR", "SYSTEM_ADMIN",
+    ].includes(role)))
     .map((account) => {
       const employee = employeeByAccount.get(account.accountId);
       return { account, employee, profile: profileById.get(account.accountId), cluster: employee?.cinemaId ? clusterById.get(employee.cinemaId) : undefined };
@@ -324,8 +328,8 @@ function FilterPanel({ tab, clusters, values, setters }: any) {
     {tab === "customers" ? <FilterSelect value={values.profileFilter} setValue={setters.setProfileFilter} placeholder="Profile status" items={[{ value: "ALL", label: "All profiles" }, { value: "COMPLETE", label: "Complete" }, { value: "INCOMPLETE", label: "Incomplete" }]} /> : <>
       <FilterSelect value={values.branchFilter} setValue={setters.setBranchFilter} placeholder="Branch" items={[{ value: "ALL", label: "All branches" }, ...clusters.map((cluster: ClusterResponse) => ({ value: String(cluster.clusterId), label: cluster.clusterName }))]} />
       {tab === "staff" && <>
-        <FilterSelect value={values.departmentFilter} setValue={setters.setDepartmentFilter} placeholder="Primary work area" items={["ALL", "GENERAL_OPERATIONS", "BOX_OFFICE", "FOOD_BEVERAGE", "FLOOR_GUEST_SERVICES", "PROJECTION_TECHNICAL", "FACILITIES_MAINTENANCE"].map((value) => ({ value, label: value === "ALL" ? "All work areas" : formatEnum(value) }))} />
-        <FilterSelect value={values.positionFilter} setValue={setters.setPositionFilter} placeholder="Position" items={["ALL", "TEAM_MEMBER", "SUPERVISOR", "ASSISTANT_MANAGER", "CINEMA_MANAGER"].map((value) => ({ value, label: value === "ALL" ? "All positions" : formatEnum(value) }))} />
+        <FilterSelect value={values.departmentFilter} setValue={setters.setDepartmentFilter} placeholder="Primary work area" items={["ALL", "GENERAL_OPERATIONS", "BOX_OFFICE", "FOOD_BEVERAGE", "FLOOR_GUEST_SERVICES", "PROJECTION_TECHNICAL", "FACILITIES_MAINTENANCE", "CONTENT_PROGRAMMING", "FINANCE", "COMMERCIAL", "INFORMATION_TECHNOLOGY", "RISK_COMPLIANCE"].map((value) => ({ value, label: value === "ALL" ? "All work areas" : formatEnum(value) }))} />
+        <FilterSelect value={values.positionFilter} setValue={setters.setPositionFilter} placeholder="Position" items={["ALL", "TEAM_MEMBER", "SUPERVISOR", "ASSISTANT_MANAGER", "CINEMA_MANAGER", "PROGRAMMING_OPERATOR", "PROGRAMMING_APPROVER", "FINANCE_OFFICER", "FINANCE_APPROVER", "COMMERCIAL_MANAGER", "SYSTEM_ADMINISTRATOR", "SECURITY_AUDITOR"].map((value) => ({ value, label: value === "ALL" ? "All positions" : formatEnum(value) }))} />
         <FilterSelect value={values.employmentFilter} setValue={setters.setEmploymentFilter} placeholder="Employment" items={["ALL", "FULL_TIME", "PART_TIME", "FIXED_TERM", "SEASONAL"].map((value) => ({ value, label: value === "ALL" ? "All employment types" : formatEnum(value) }))} />
       </>}
     </>}
@@ -455,7 +459,7 @@ function InvitationTable({ rows, loading, onResend, onCancel }: any) {
           <TableRow key={row.account.accountId} className={peopleTableRowClass}>
             <TableCell className={peopleTableCellClass}><Person name={row.profile?.fullName || row.account.username || "Invited employee"} email={row.account.email} /></TableCell>
             <TableCell className={`${peopleTableCellClass} text-sm text-[var(--text-main)]`}>
-              {roleNames(row.account).includes("PROGRAMMING_OPERATOR") ? "Programming Operator" : roleNames(row.account).includes("BRANCH_MANAGER") ? "Branch Manager" : "Employee"}
+              {formatEnum(roleNames(row.account).find((role) => role !== "MEMBER") ?? "EMPLOYEE")}
             </TableCell>
             <TableCell className={`${peopleTableCellClass} text-sm text-[var(--text-main)]`}>{row.cluster?.clusterName || "Unassigned"}</TableCell>
             <TableCell className={`${peopleTableCellClass} text-sm text-[var(--text-sub)]`}>{formatDate(row.account.createdAt)}</TableCell>

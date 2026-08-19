@@ -31,7 +31,7 @@ public class EmployeeController {
     EmployeeService employeeService;
 
     @PostMapping("/invitations")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'EMPLOYEE_CREATE')")
     public ApiResponse<EmployeeResponse> inviteEmployee(@Valid @RequestBody EmployeeInvitationRequest request) {
         return ApiResponse.<EmployeeResponse>builder()
                 .message("Staff invitation sent")
@@ -48,7 +48,9 @@ public class EmployeeController {
     }
 
     @GetMapping("/me")
-    @PreAuthorize("hasAnyAuthority('ROLE_EMPLOYEE', 'ROLE_BRANCH_MANAGER', 'ROLE_PROGRAMMING_OPERATOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_EMPLOYEE', 'ROLE_BRANCH_MANAGER', 'ROLE_PROGRAMMING_OPERATOR', " +
+            "'ROLE_PROGRAMMING_APPROVER', 'ROLE_FINANCE_OFFICER', 'ROLE_FINANCE_APPROVER', " +
+            "'ROLE_COMMERCIAL_MANAGER', 'ROLE_SECURITY_AUDITOR', 'ROLE_SYSTEM_ADMIN')")
     public ApiResponse<EmployeeResponse> getCurrentEmployee() {
         return ApiResponse.<EmployeeResponse>builder()
                 .result(employeeService.getCurrentEmployee())

@@ -86,6 +86,26 @@ class StaffAccessProjectionServiceTest {
         assertThat(service.resolve(employee).authorized()).isFalse();
     }
 
+    @Test
+    void activeHeadOfficeAssignmentDoesNotRequireCinemaScope() {
+        Account approver = Account.builder()
+                .accountId("account-2")
+                .roles(Set.of(Role.builder().roleName("FINANCE_APPROVER").build()))
+                .build();
+        StaffAccessProjection projection = StaffAccessProjection.builder()
+                .accountId("account-2")
+                .accountRole("FINANCE_APPROVER")
+                .assignmentActive(true)
+                .cinemaClusterIds("")
+                .build();
+        when(repository.findById("account-2")).thenReturn(Optional.of(projection));
+
+        var authorization = service.resolve(approver);
+
+        assertThat(authorization.authorized()).isTrue();
+        assertThat(authorization.cinemaClusterIds()).isEmpty();
+    }
+
     private String event(String eventId, String eventType, long assignmentVersion, String status, String... clusterIds) {
         try {
             return objectMapper.writeValueAsString(java.util.Map.of(

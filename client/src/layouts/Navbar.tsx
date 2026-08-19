@@ -35,6 +35,12 @@ const roleLabels: Record<string, string> = {
   ROLE_EMPLOYEE: "Employee",
   ROLE_BRANCH_MANAGER: "Branch Manager",
   ROLE_PROGRAMMING_OPERATOR: "Programming Operator",
+  ROLE_PROGRAMMING_APPROVER: "Programming Approver",
+  ROLE_FINANCE_OFFICER: "Finance Officer",
+  ROLE_FINANCE_APPROVER: "Finance Approver",
+  ROLE_COMMERCIAL_MANAGER: "Commercial Manager",
+  ROLE_SYSTEM_ADMIN: "System Administrator",
+  ROLE_SECURITY_AUDITOR: "Security Auditor",
   ROLE_MEMBER: "Member",
 };
 
@@ -54,7 +60,7 @@ export function Navbar() {
   const isLogged = !!token;
   const username = user?.username || "User";
   const displayName = fullName?.trim() || username;
-  const isStaff = ["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_PROGRAMMING_OPERATOR", "ROLE_BRANCH_MANAGER", "ROLE_EMPLOYEE"].includes(user?.role ?? "");
+  const isStaff = !!user && user.role !== "ROLE_MEMBER";
   const staffWorkspacePath = defaultPathForRole(user?.role ?? "");
 
   // Fetch avatar khi user đăng nhập

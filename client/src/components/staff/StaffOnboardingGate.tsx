@@ -20,6 +20,7 @@ export default function StaffOnboardingGate() {
   const [assignmentLoading, setAssignmentLoading] = useState(true);
   const [assignment, setAssignment] = useState({ branch: "Assigned cinema", workArea: "Operations", position: "Team member" });
   const [error, setError] = useState("");
+  const isHeadOffice = !!user && !["ROLE_EMPLOYEE", "ROLE_BRANCH_MANAGER"].includes(user.role);
 
   useEffect(() => {
     if (!user?.accountId) return;
@@ -47,7 +48,7 @@ export default function StaffOnboardingGate() {
         if (employeeResult.status === "fulfilled") {
           const response: any = employeeResult.value;
           const employee = (response?.result ?? response?.data?.result ?? response?.data ?? response) as EmployeeResponse;
-          let branch = user.role === "ROLE_PROGRAMMING_OPERATOR" ? "Head office · All cinema branches" : (employee?.cinemaId || "Not assigned");
+          let branch = isHeadOffice ? "Head office · All cinema branches" : (employee?.cinemaId || "Not assigned");
           if (employee?.cinemaId && /^\d+$/.test(employee.cinemaId)) {
             try {
               const clusterResponse = await movieApi.getClusterById(Number(employee.cinemaId));
@@ -57,8 +58,8 @@ export default function StaffOnboardingGate() {
             }
           }
           if (active) setAssignment({ branch, workArea: toLabel(employee?.department), position: toLabel(employee?.position) });
-        } else if (user.role === "ROLE_PROGRAMMING_OPERATOR") {
-          setAssignment({ branch: "Head office · All cinema branches", workArea: "Content Programming", position: "Programming Operator" });
+        } else if (isHeadOffice) {
+          setAssignment({ branch: "Head office · All cinema branches", workArea: "Head Office", position: toLabel(user.role.replace(/^ROLE_/, "")) });
         }
       } finally {
         if (active) setAssignmentLoading(false);
@@ -67,7 +68,7 @@ export default function StaffOnboardingGate() {
 
     void loadProfileAndAssignment();
     return () => { active = false; };
-  }, [user?.accountId, user?.role]);
+  }, [isHeadOffice, user?.accountId, user?.role]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();

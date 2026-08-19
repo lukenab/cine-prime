@@ -44,7 +44,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/internal/**").permitAll()
                         .requestMatchers("/api/accounts/my-info").authenticated()
                         .requestMatchers("/api/accounts/**", "/api/roles/**", "/api/permissions/**")
-                            .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
+                            .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_MANAGE")
                         .anyRequest().authenticated());
 
         http.oauth2ResourceServer(oauth2 -> oauth2

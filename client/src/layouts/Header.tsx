@@ -10,6 +10,12 @@ const roleLabels: Record<string, string> = {
   ROLE_EMPLOYEE: "Employee",
   ROLE_BRANCH_MANAGER: "Branch Manager",
   ROLE_PROGRAMMING_OPERATOR: "Programming Operator",
+  ROLE_PROGRAMMING_APPROVER: "Programming Approver",
+  ROLE_FINANCE_OFFICER: "Finance Officer",
+  ROLE_FINANCE_APPROVER: "Finance Approver",
+  ROLE_COMMERCIAL_MANAGER: "Commercial Manager",
+  ROLE_SYSTEM_ADMIN: "System Administrator",
+  ROLE_SECURITY_AUDITOR: "Security Auditor",
   ROLE_MEMBER: "Member",
 };
 
@@ -240,7 +246,7 @@ export function Header({ activePage, isDarkMode = true, onToggleTheme }: HeaderP
 
               {/* Các nút bấm */}
               <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                <button
+                {(user?.permissions.includes("SYSTEM_CONFIG_MANAGE") || user?.roles.some((role) => role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN")) && <button
                   className="dropdown-item"
                   onClick={() => {
                     navigate(user?.role === "ROLE_EMPLOYEE" ? "/employee/profile" : "/admin/profile");
@@ -250,7 +256,7 @@ export function Header({ activePage, isDarkMode = true, onToggleTheme }: HeaderP
                 >
                   <User size={15} />
                   My Profile
-                </button>
+                </button>}
 
                 <button
                   className="dropdown-item"

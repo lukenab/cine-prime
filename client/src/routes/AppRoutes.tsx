@@ -101,20 +101,24 @@ export default function AppRoutes() {
 
       {/* Profile setup — standalone page, no layout wrapper */}
       <Route element={<ProtectedRoute
-        allowedRoles={["ROLE_MEMBER", "ROLE_EMPLOYEE", "ROLE_BRANCH_MANAGER", "ROLE_PROGRAMMING_OPERATOR"]}
+        allowedRoles={["ROLE_MEMBER", "ROLE_EMPLOYEE", "ROLE_BRANCH_MANAGER", "ROLE_PROGRAMMING_OPERATOR",
+          "ROLE_PROGRAMMING_APPROVER", "ROLE_FINANCE_OFFICER", "ROLE_FINANCE_APPROVER",
+          "ROLE_COMMERCIAL_MANAGER", "ROLE_SECURITY_AUDITOR", "ROLE_SYSTEM_ADMIN"]}
       />}>
         <Route path="/profile-setup" element={<ProfileSetupPage />} />
       </Route>
 
       {/* Administrative workspace */}
-      <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_BRANCH_MANAGER", "ROLE_PROGRAMMING_OPERATOR"]} />}>
+      <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_BRANCH_MANAGER", "ROLE_PROGRAMMING_OPERATOR",
+        "ROLE_PROGRAMMING_APPROVER", "ROLE_FINANCE_OFFICER", "ROLE_FINANCE_APPROVER",
+        "ROLE_COMMERCIAL_MANAGER", "ROLE_SECURITY_AUDITOR", "ROLE_SYSTEM_ADMIN"]} />}>
         <Route path="/admin" element={<AdminLayout />}>
           <Route path="profile" element={<AdminProfilePage />} />
-          <Route element={<ProtectedRoute allowedRoles={["ROLE_PROGRAMMING_OPERATOR"]} />}>
+          <Route element={<ProtectedRoute allowedRoles={["ROLE_PROGRAMMING_OPERATOR", "ROLE_PROGRAMMING_APPROVER"]} />}>
             <Route path="programming" element={<ProgrammingOperatorDashboardPage />} />
           </Route>
 
-          <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_PROGRAMMING_OPERATOR"]} />}>
+          <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_PROGRAMMING_OPERATOR", "ROLE_PROGRAMMING_APPROVER"]} />}>
             <Route path="release-plans" element={<ReleasePlanningQueuePage />} />
             <Route path="movies" element={<ManageMoviePage />}>
               <Route path="new" element={<MovieCreationStartPage />} />
@@ -150,8 +154,15 @@ export default function AppRoutes() {
             <Route path="concessions/catalog" element={<ConcessionCatalogPage />} />
           </Route>
 
-          <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN"]} />}>
+          <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_COMMERCIAL_MANAGER"]} />}>
             <Route path="price-books"        element={<ManagePriceBooksPage />} />
+            <Route path="promotions"          element={<ManagePromotionPage />} />
+            <Route path="promotions/create"   element={<CreatePromotionPage />} />
+            <Route path="promotions/:id"      element={<PromotionDetailPage />} />
+            <Route path="promotions/edit/:id" element={<EditPromotionPage />} />
+          </Route>
+
+          <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_SYSTEM_ADMIN"]} />}>
             <Route path="people"             element={<PeopleAccessPage />} />
             <Route path="employees"          element={<Navigate to="/admin/people?tab=staff" replace />} />
             <Route path="employees/create"   element={<Navigate to="/admin/people?tab=staff&invite=1" replace />} />
@@ -161,13 +172,15 @@ export default function AppRoutes() {
             <Route path="users/create"       element={<Navigate to="/admin/people?tab=customers" replace />} />
             <Route path="users/edit/:id"     element={<EditUserPage />} />
             <Route path="users/:id"          element={<UserDetailPage />} />
-            <Route path="promotions"          element={<ManagePromotionPage />} />
-            <Route path="promotions/create"   element={<CreatePromotionPage />} />
-            <Route path="promotions/:id"      element={<PromotionDetailPage />} />
-            <Route path="promotions/edit/:id" element={<EditPromotionPage />} />
-            <Route path="refunds-reconciliation" element={<RefundReconciliationPage />} />
-            <Route path="reports"   element={<ReportPage />} />
             <Route path="settings"  element={<SettingsPage />} />
+          </Route>
+
+          <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_FINANCE_OFFICER", "ROLE_FINANCE_APPROVER"]} />}>
+            <Route path="refunds-reconciliation" element={<RefundReconciliationPage />} />
+          </Route>
+
+          <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_FINANCE_OFFICER", "ROLE_FINANCE_APPROVER", "ROLE_COMMERCIAL_MANAGER", "ROLE_SECURITY_AUDITOR", "ROLE_SYSTEM_ADMIN"]} />}>
+            <Route path="reports"   element={<ReportPage />} />
           </Route>
         </Route>
       </Route>

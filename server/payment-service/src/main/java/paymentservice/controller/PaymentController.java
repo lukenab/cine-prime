@@ -84,7 +84,7 @@ public class PaymentController {
     }
 
     @GetMapping("/admin/attempts")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','PAYMENT_READ')")
     public ApiResponse<Page<PaymentSessionResponse>> attempts(Pageable pageable) {
         return ApiResponse.<Page<PaymentSessionResponse>>builder()
                 .result(paymentService.listAttempts(pageable))
@@ -92,7 +92,7 @@ public class PaymentController {
     }
 
     @GetMapping("/admin/reconciliation")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','RECONCILIATION_READ')")
     public ApiResponse<Page<ReconciliationCaseResponse>> reconciliation(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String severity,
@@ -104,7 +104,7 @@ public class PaymentController {
     }
 
     @GetMapping("/admin/refunds")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','REFUND_READ')")
     public ApiResponse<Page<PaymentRefundResponse>> refunds(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String bookingId,
@@ -115,7 +115,7 @@ public class PaymentController {
     }
 
     @GetMapping("/admin/refunds/{refundId}")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','REFUND_READ')")
     public ApiResponse<PaymentRefundResponse> refundDetail(@PathVariable String refundId) {
         return ApiResponse.<PaymentRefundResponse>builder()
                 .result(paymentService.getAdminRefund(refundId))
@@ -123,7 +123,7 @@ public class PaymentController {
     }
 
     @PostMapping("/admin/refunds/{refundId}/retry")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','REFUND_APPROVE')")
     public ApiResponse<PaymentRefundResponse> retryRefund(@PathVariable String refundId) {
         return ApiResponse.<PaymentRefundResponse>builder()
                 .message("Refund retry submitted.")
@@ -132,7 +132,7 @@ public class PaymentController {
     }
 
     @PostMapping("/admin/reconciliation/{caseId}/sync")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','RECONCILIATION_RESOLVE')")
     public ApiResponse<ReconciliationCaseResponse> syncReconciliation(
             @PathVariable Long caseId) {
         return ApiResponse.<ReconciliationCaseResponse>builder()
@@ -142,7 +142,7 @@ public class PaymentController {
     }
 
     @PostMapping("/admin/reconciliation/{caseId}/resolve")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','RECONCILIATION_RESOLVE')")
     public ApiResponse<ReconciliationCaseResponse> resolveReconciliation(
             @PathVariable Long caseId,
             @Valid @RequestBody(required = false) paymentservice.dto.AdminResolutionRequest request) {
@@ -154,7 +154,7 @@ public class PaymentController {
     }
 
     @PostMapping("/admin/reconciliation/{caseId}/escalate")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','RECONCILIATION_RESOLVE')")
     public ApiResponse<ReconciliationCaseResponse> escalateReconciliation(
             @PathVariable Long caseId,
             @Valid @RequestBody(required = false) paymentservice.dto.AdminResolutionRequest request) {

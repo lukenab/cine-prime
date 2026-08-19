@@ -58,7 +58,8 @@ export default function InviteEmployeeModal({ open, clusters, onOpenChange, onIn
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  const canAssignElevatedAccess = user?.role === "ROLE_ADMIN" || user?.role === "ROLE_SUPER_ADMIN";
+  const canAssignElevatedAccess = user?.roles.some((role) =>
+    ["ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_SYSTEM_ADMIN"].includes(role)) ?? false;
   const selectedJobRole = getJobRolePreset(jobRoleId);
   const availableJobRoles = useMemo(
     () => canAssignElevatedAccess
@@ -255,14 +256,10 @@ export default function InviteEmployeeModal({ open, clusters, onOpenChange, onIn
                 <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--text-sub)]">Access automatically assigned</p>
                 <div className="mt-2 flex items-center gap-2 text-sm font-semibold">
                   <ShieldCheck size={17} className="text-blue-500" />
-                  {form.accessRole === "PROGRAMMING_OPERATOR" ? "Programming operator access" : form.accessRole === "BRANCH_MANAGER" ? "Branch manager access" : "Employee access"}
+                  {getJobRolePreset(jobRoleId).label} access
                 </div>
                 <p className="mt-1 text-xs leading-5 text-[var(--text-sub)]">
-                  {form.accessRole === "PROGRAMMING_OPERATOR"
-                    ? "Can prepare movie, release and automatic-schedule drafts. An administrator must approve and publish them."
-                    : form.accessRole === "BRANCH_MANAGER"
-                    ? "Can manage staff and branch-scoped operations for the assigned cinema."
-                    : "Standard operational access limited to the assigned cinema."}
+                  {selectedJobRole.description} Access is granted from the assigned role and remains subject to an active staff assignment.
                 </p>
               </div>
             </div>

@@ -57,4 +57,28 @@ class AuthServiceApplicationTests {
 				.doesNotContain("MOVIE_CREATE", "SHOWTIME_UPDATE", "USER_READ");
 	}
 
+	@Test
+	@Transactional
+	void seedsSeparatedBusinessRolesWithMakerCheckerPermissions() {
+		var programmingMaker = roleRepository.findById("PROGRAMMING_OPERATOR").orElseThrow();
+		var programmingChecker = roleRepository.findById("PROGRAMMING_APPROVER").orElseThrow();
+		var financeMaker = roleRepository.findById("FINANCE_OFFICER").orElseThrow();
+		var financeChecker = roleRepository.findById("FINANCE_APPROVER").orElseThrow();
+		var systemAdmin = roleRepository.findById("SYSTEM_ADMIN").orElseThrow();
+
+		assertThat(programmingMaker.getPermissions()).extracting("name")
+				.contains("RELEASE_PLAN_EDIT", "RELEASE_PLAN_SUBMIT")
+				.doesNotContain("RELEASE_PLAN_APPROVE", "MOVIE_APPROVE");
+		assertThat(programmingChecker.getPermissions()).extracting("name")
+				.contains("RELEASE_PLAN_APPROVE", "MOVIE_APPROVE")
+				.doesNotContain("RELEASE_PLAN_EDIT", "MOVIE_CREATE");
+		assertThat(financeMaker.getPermissions()).extracting("name")
+				.contains("REFUND_REVIEW").doesNotContain("REFUND_APPROVE");
+		assertThat(financeChecker.getPermissions()).extracting("name")
+				.contains("REFUND_APPROVE");
+		assertThat(systemAdmin.getPermissions()).extracting("name")
+				.contains("ROLE_MANAGE", "SYSTEM_CONFIG_MANAGE")
+				.doesNotContain("RELEASE_PLAN_APPROVE", "REFUND_APPROVE");
+	}
+
 }
