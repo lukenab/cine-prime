@@ -1,6 +1,6 @@
 import { useAuth } from "../context/AuthContext";
 import { useState, useEffect } from "react";
-import { LayoutDashboard, Film, Building2, Tags, Calendar, Ticket, UserCog, BarChart2, Settings, Clapperboard, Gift, ShoppingCart, MapPin, ChevronDown, ShieldCheck, Monitor, Armchair, Languages, CircleDollarSign, Popcorn, SlidersHorizontal, FolderOpen, Shield, BriefcaseBusiness } from "lucide-react";
+import { LayoutDashboard, Film, Tags, Calendar, Ticket, UserCog, BarChart2, Settings, Clapperboard, Gift, ShoppingCart, MapPin, ChevronDown, ShieldCheck, Monitor, Armchair, Languages, CircleDollarSign, Popcorn, SlidersHorizontal } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { OrbitaLogo } from "../components/shared/OrbitaLogo";
 import { movieApi } from "../api/movieApi";
@@ -114,15 +114,15 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
 
   // Group destinations by business task instead of mixing content, cinema
   // infrastructure and low-frequency configuration under "Catalog".
-  const groupMeta: Record<string, { label: string; icon: React.ElementType }> = {
-    content: { label: "Content", icon: FolderOpen },
-    "facility-management": { label: "Facility Management", icon: Building2 },
-    "business-operations": { label: "Business Operations", icon: BriefcaseBusiness },
-    administration: { label: "Administration", icon: Shield },
-    scheduling: { label: "Scheduling", icon: Calendar },
-    reference: { label: "Reference Data", icon: SlidersHorizontal },
-    "programming-workflow": { label: "Film Programming", icon: Clapperboard },
-    "programming-reference": { label: "Reference Data", icon: SlidersHorizontal },
+  const groupMeta: Record<string, { label: string }> = {
+    content: { label: "Content" },
+    "facility-management": { label: "Facility Management" },
+    "business-operations": { label: "Business Operations" },
+    administration: { label: "Administration" },
+    scheduling: { label: "Scheduling" },
+    reference: { label: "Reference Data" },
+    "programming-workflow": { label: "Film Programming" },
+    "programming-reference": { label: "Reference Data" },
   };
 
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -320,11 +320,10 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
       <nav style={{ padding: "10px 10px 14px", flex: 1, overflowY: "auto", minHeight: 0 }}>
         {sections.map(({ group, items }) => {
           const isRoot = group === "main";
-          const meta = groupMeta[group] ?? { label: group, icon: Settings };
-          const GroupIcon = meta.icon;
+          const meta = groupMeta[group] ?? { label: group };
           const isCollapsed = collapsedGroups.has(group);
           const headerStyle: React.CSSProperties = {
-            width: "100%", display: "flex", alignItems: "center", gap: "8px",
+            width: "100%", display: "flex", alignItems: "center",
             padding: "15px 12px 7px", border: "none", background: "transparent",
             color: isDarkMode ? "#7f8794" : "#64748b", cursor: "pointer", textAlign: "left",
             fontSize: "12.5px", fontWeight: 800, letterSpacing: "0.065em",
@@ -339,7 +338,6 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
                   onClick={() => toggleGroup(group)}
                   style={headerStyle}
                 >
-                  <GroupIcon size={14} style={{ flexShrink: 0, opacity: 0.72 }} />
                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{meta.label}</span>
                   <ChevronDown
                     size={13}
