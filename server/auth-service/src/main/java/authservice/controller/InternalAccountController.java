@@ -1,7 +1,7 @@
 package authservice.controller;
 
 import authservice.dto.request.InternalAccountStatusRequest;
-import authservice.dto.request.CreateAccountRequest;
+import authservice.dto.request.InternalStaffInvitationRequest;
 import authservice.dto.response.AccountResponse;
 import authservice.dto.response.InternalAccountResponse;
 import authservice.service.AccountService;
@@ -29,7 +29,7 @@ public class InternalAccountController {
     @PostMapping("/invitations")
     ApiResponse<InternalAccountResponse> inviteStaff(
             @RequestHeader(value = "X-Internal-Service-Key", required = false) String internalKey,
-            @Valid @RequestBody CreateAccountRequest request) {
+            @Valid @RequestBody InternalStaffInvitationRequest request) {
         authenticator.verify(internalKey);
         AccountResponse account = accountService.createOrResumeStaffInvitation(request);
         return ApiResponse.<InternalAccountResponse>builder()

@@ -81,6 +81,44 @@ class EmployeeServiceTest {
     }
 
     @Test
+    void rejectedAuthInvitationIsReturnedAsBadRequestInsteadOfInternalServerError() {
+        EmployeeRepository employees = mock(EmployeeRepository.class);
+        UserRepository users = mock(UserRepository.class);
+        EmployeeMapper mapper = mock(EmployeeMapper.class);
+        AuthAccountClient auth = mock(AuthAccountClient.class);
+        Request feignRequest = Request.create(
+                Request.HttpMethod.POST,
+                "/api/internal/accounts/invitations",
+                Map.of(),
+                null,
+                StandardCharsets.UTF_8,
+                null);
+        Response response = Response.builder()
+                .request(feignRequest)
+                .status(400)
+                .reason("Bad Request")
+                .body("{\"code\":1005,\"message\":\"Invalid staff role\"}", StandardCharsets.UTF_8)
+                .build();
+
+        when(auth.inviteStaff(org.mockito.ArgumentMatchers.eq("test-key"), any(AuthAccountInvitationRequest.class)))
+                .thenThrow(FeignException.errorStatus("inviteStaff", response));
+
+        EmployeeService service = new EmployeeService(
+                employees, users, mapper, mock(AuditLogService.class), auth,
+                mock(StaffAccessEventPublisher.class));
+        ReflectionTestUtils.setField(service, "internalServiceKey", "test-key");
+
+        assertThatThrownBy(() -> service.inviteEmployee(EmployeeInvitationRequest.builder()
+                .fullName("Finance Officer")
+                .email("finance@cineprime.vn")
+                .accessRole(StaffAccessRole.FINANCE_OFFICER)
+                .build()))
+                .isInstanceOf(AppException.class)
+                .satisfies(error -> assertThat(((AppException) error).getErrorCode())
+                        .isEqualTo(userservice.exception.ErrorCode.STAFF_INVITATION_REJECTED));
+    }
+
+    @Test
     void inviteEmployeeUsesSingleAuthInvitationAndCreatesAssignment() {
         EmployeeRepository employees = mock(EmployeeRepository.class);
         UserRepository users = mock(UserRepository.class);

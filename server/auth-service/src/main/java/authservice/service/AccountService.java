@@ -2,6 +2,7 @@ package authservice.service;
 
 import authservice.dto.request.ActivateAccountRequest;
 import authservice.dto.request.CreateAccountRequest;
+import authservice.dto.request.InternalStaffInvitationRequest;
 import authservice.dto.request.UpdateAccountRequest;
 import authservice.dto.response.AccountResponse;
 import authservice.dto.response.PageResponse;
@@ -205,18 +206,36 @@ public class AccountService {
      */
     @Transactional
     public AccountResponse createAccount(CreateAccountRequest request) {
-        String emailKey = request.getEmail().trim().toLowerCase();
+        return createPendingAccount(
+                request.getFullName(),
+                request.getEmail(),
+                request.getRole().name(),
+                request.getPhoneNumber(),
+                request.getDateOfBirth(),
+                request.getGender(),
+                request.getIdentityCard(),
+                request.getAddress());
+    }
+
+    private AccountResponse createPendingAccount(
+            String fullName,
+            String email,
+            String requestedRole,
+            String phoneNumber,
+            java.time.LocalDate dateOfBirth,
+            String gender,
+            String identityCard,
+            String address) {
+        String emailKey = email.trim().toLowerCase();
 
         if (accountRepository.existsByEmail(emailKey)) {
             throw new AppException(AuthErrorCode.EMAIL_EXISTED);
         }
 
-        String requestedRole = request.getRole().name();
-
         Role accountRole = roleRepository.findById(requestedRole)
                 .orElseThrow(() -> new AppException(AuthErrorCode.ROLE_NOT_FOUND));
 
-        String username = generateUniqueUsername(request.getFullName());
+        String username = generateUniqueUsername(fullName);
 
         // Unusable placeholder — nobody (including the admin) ever knows this value.
         // The real password is chosen by the employee via the activation link.
@@ -233,19 +252,19 @@ public class AccountService {
 
         account = accountRepository.saveAndFlush(account);
 
-        issueActivationToken(account, request.getFullName());
+        issueActivationToken(account, fullName);
 
         // Notify user-service to create a bare profile (unchanged — user-service fills in
         // the rest of the profile later; this event only ever carried accountId + email).
         authEventPublisher.sendRegisteredEvent(UserRegisteredEvent.builder()
                 .accountId(account.getAccountId())
                 .email(account.getEmail())
-                .fullName(request.getFullName())
-                .phoneNumber(request.getPhoneNumber())
-                .dateOfBirth(request.getDateOfBirth())
-                .gender(request.getGender())
-                .identityCard(request.getIdentityCard())
-                .address(request.getAddress())
+                .fullName(fullName)
+                .phoneNumber(phoneNumber)
+                .dateOfBirth(dateOfBirth)
+                .gender(gender)
+                .identityCard(identityCard)
+                .address(address)
                 .build());
 
         auditLogService.success("ACCOUNT_CREATED", account.getAccountId(),
@@ -266,13 +285,13 @@ public class AccountService {
      * Active/inactive accounts and role changes still use the normal duplicate-email guard.
      */
     @Transactional
-    public AccountResponse createOrResumeStaffInvitation(CreateAccountRequest request) {
+    public AccountResponse createOrResumeStaffInvitation(InternalStaffInvitationRequest request) {
         String emailKey = request.getEmail().trim().toLowerCase();
+        String requestedRole = request.getRole().name();
         var existing = accountRepository.findByEmail(emailKey);
 
         if (existing.isPresent()) {
             Account account = existing.get();
-            String requestedRole = request.getRole().name();
             boolean sameRole = account.getRoles() != null && account.getRoles().stream()
                     .anyMatch(role -> requestedRole.equals(role.getRoleName()));
 
@@ -284,7 +303,15 @@ public class AccountService {
             throw new AppException(AuthErrorCode.EMAIL_EXISTED);
         }
 
-        return createAccount(request);
+        return createPendingAccount(
+                request.getFullName(),
+                request.getEmail(),
+                requestedRole,
+                request.getPhoneNumber(),
+                null,
+                null,
+                null,
+                null);
     }
 
     /**

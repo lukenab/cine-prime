@@ -135,7 +135,9 @@ public class EmployeeService {
             if (exception.contentUTF8().contains("\"code\":1011")) {
                 throw new AppException(ErrorCode.EMAIL_EXISTED);
             }
-            throw exception;
+            log.warn("Auth service rejected staff invitation for role {}: {}",
+                    request.getAccessRole(), exception.contentUTF8());
+            throw new AppException(ErrorCode.STAFF_INVITATION_REJECTED);
         }
 
         if (account == null || account.getAccountId() == null) {
