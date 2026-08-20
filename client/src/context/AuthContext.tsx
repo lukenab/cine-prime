@@ -63,6 +63,13 @@ interface User {
     roles: string[];
     permissions: string[];
     accountId: string;
+    clusterIds: string[];
+}
+
+function extractClusterIds(claim: unknown): string[] {
+    if (Array.isArray(claim)) return claim.map(String).filter(Boolean);
+    if (claim == null) return [];
+    return String(claim).split(/[\s,]+/).filter(Boolean);
 }
 
 interface AuthContextType {
@@ -106,7 +113,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             localStorage.setItem("role", primaryRole);
             localStorage.setItem("roles", JSON.stringify(roles));
             localStorage.setItem("permissions", JSON.stringify(permissions));
-            setUser({ username: decoded.sub, role: primaryRole, roles, permissions, accountId });
+            setUser({ username: decoded.sub, role: primaryRole, roles, permissions, accountId, clusterIds: extractClusterIds(decoded.cinemaClusterIds) });
 
             if (requiresProfile(primaryRole) && accountId) {
                 setProfileCheckPending(true);
@@ -143,7 +150,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         localStorage.setItem("role", primaryRole);
         localStorage.setItem("roles", JSON.stringify(roles));
         localStorage.setItem("permissions", JSON.stringify(permissions));
-        setUser({ username: decoded.sub, role: primaryRole, roles, permissions, accountId });
+        setUser({ username: decoded.sub, role: primaryRole, roles, permissions, accountId, clusterIds: extractClusterIds(decoded.cinemaClusterIds) });
 
         if (requiresProfile(primaryRole) && accountId) {
             setProfileCheckPending(true);

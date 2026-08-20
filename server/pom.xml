@@ -37,6 +37,7 @@
         <module>auth-service</module>
         <module>analytics-service</module>
         <module>loyalty-service</module>
+        <module>workforce-service</module>
         <module>common</module>
     </modules>
 

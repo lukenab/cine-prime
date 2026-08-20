@@ -66,6 +66,8 @@ import ConcessionCatalogPage from "../pages/admin/ConcessionCatalogPage";
 import EmployeeDashboardPage from "../pages/employee/EmployeeDashboardPage";
 import ProgrammingOperatorDashboardPage from "../pages/operator/ProgrammingOperatorDashboardPage";
 import ReleasePlanningQueuePage from "../pages/operator/ReleasePlanningQueuePage";
+import MyWorkforcePage from "../pages/workforce/MyWorkforcePage";
+import WorkforceOperationsPage from "../pages/workforce/WorkforceOperationsPage";
 
 import RootRedirect from "./RootRedirect";
 import ProtectedRoute from "./ProtectedRoute";
@@ -204,6 +206,13 @@ export default function AppRoutes() {
             <Route path="refunds-reconciliation" element={<RefundReconciliationPage />} />
           </Route>
 
+          <Route element={<ProtectedRoute allowedPermissions={["WORKFORCE_PLAN", "TIMESHEET_REVIEW"]} />}>
+            <Route path="workforce" element={<WorkforceOperationsPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["WORKFORCE_SELF_READ"]} />}>
+            <Route path="my-workforce" element={<MyWorkforcePage />} />
+          </Route>
+
           <Route element={<ProtectedRoute allowedPermissions={["REPORT_READ"]} />}>
             <Route path="reports"   element={<ReportPage />} />
           </Route>
@@ -221,6 +230,7 @@ export default function AppRoutes() {
           <Route path="sell" element={<TicketSalePage />} />
           <Route path="bookings" element={<ManageBookingPage />} />
           <Route path="concessions/fulfillment" element={<ConcessionFulfillmentPage />} />
+          <Route path="workforce" element={<MyWorkforcePage />} />
         </Route>
       </Route>
     </Routes>

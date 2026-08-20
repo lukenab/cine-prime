@@ -69,6 +69,11 @@ spring:
           predicates:
             - Path=/api/membership/**, /api/admin/membership/**
 
+        - id: workforce-service
+          uri: lb://workforce-service
+          predicates:
+            - Path=/api/workforce/**
+
         - id: user-service
           uri: lb://user-service
           predicates:

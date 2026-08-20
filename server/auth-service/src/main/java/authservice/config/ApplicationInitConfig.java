@@ -125,7 +125,18 @@ public class ApplicationInitConfig {
             // Concession catalog workflow
             new String[]{"CONCESSION_CATALOG_DRAFT", "Create and edit concession product drafts"},
             new String[]{"CONCESSION_CATALOG_SUBMIT", "Submit concession products for approval"},
-            new String[]{"CONCESSION_CATALOG_APPROVE", "Approve or reject concession products"}
+            new String[]{"CONCESSION_CATALOG_APPROVE", "Approve or reject concession products"},
+
+            // Workforce planning and attendance
+            new String[]{"WORKFORCE_SELF_READ", "View own shifts, requests and timesheets"},
+            new String[]{"ATTENDANCE_CLOCK", "Record own clock-in and clock-out events"},
+            new String[]{"TIMESHEET_SUBMIT", "Submit own timesheets for review"},
+            new String[]{"WORKFORCE_REQUEST", "Request leave or a shift swap"},
+            new String[]{"WORKFORCE_PLAN", "Create rosters and assign cinema shifts"},
+            new String[]{"WORKFORCE_PUBLISH", "Publish a cinema roster"},
+            new String[]{"TIMESHEET_REVIEW", "Resolve exceptions and approve cinema timesheets"},
+            new String[]{"WORKFORCE_REQUEST_APPROVE", "Approve leave and shift swap requests"},
+            new String[]{"WORKFORCE_CONFIG", "Maintain workforce scheduling configuration"}
     );
 
     // ── Role → Permission mapping ─────────────────────────────────────────────
@@ -140,11 +151,15 @@ public class ApplicationInitConfig {
                     "MOVIE_READ",
                     "SHOWTIME_READ",
                     "BOOKING_READ", "BOOKING_CONFIRM", "BOOKING_CANCEL",
-                    "TICKET_SELL"
+                    "TICKET_SELL",
+                    "WORKFORCE_SELF_READ", "ATTENDANCE_CLOCK", "TIMESHEET_SUBMIT", "WORKFORCE_REQUEST"
             )),
             Map.entry("BRANCH_MANAGER", Set.of(
                     "CONCESSION_CATALOG_DRAFT",
-                    "CONCESSION_CATALOG_SUBMIT"
+                    "CONCESSION_CATALOG_SUBMIT",
+                    "WORKFORCE_SELF_READ", "ATTENDANCE_CLOCK", "TIMESHEET_SUBMIT", "WORKFORCE_REQUEST",
+                    "WORKFORCE_PLAN", "WORKFORCE_PUBLISH", "TIMESHEET_REVIEW",
+                    "WORKFORCE_REQUEST_APPROVE", "WORKFORCE_CONFIG"
             )),
             Map.entry("PROGRAMMING_OPERATOR", Set.of(
                     "MOVIE_READ", "MOVIE_CREATE", "MOVIE_UPDATE",
@@ -176,7 +191,7 @@ public class ApplicationInitConfig {
             Map.entry("SYSTEM_ADMIN", Set.of(
                     "EMPLOYEE_READ", "EMPLOYEE_CREATE", "EMPLOYEE_UPDATE", "EMPLOYEE_DELETE",
                     "USER_READ", "USER_CREATE", "USER_UPDATE", "USER_DELETE",
-                    "ROLE_MANAGE", "SYSTEM_CONFIG_MANAGE", "AUDIT_READ"
+                    "ROLE_MANAGE", "SYSTEM_CONFIG_MANAGE", "AUDIT_READ", "WORKFORCE_CONFIG"
             )),
             // Compatibility role. Stop assigning it immediately and remove it after 2026-10-01,
             // once existing administrator accounts have been migrated to business roles.
@@ -199,7 +214,10 @@ public class ApplicationInitConfig {
                     "REFUND_READ", "REFUND_REVIEW", "REFUND_APPROVE",
                     "RECONCILIATION_READ", "RECONCILIATION_RESOLVE",
                     "CONCESSION_CATALOG_DRAFT", "CONCESSION_CATALOG_SUBMIT",
-                    "CONCESSION_CATALOG_APPROVE"
+                    "CONCESSION_CATALOG_APPROVE",
+                    "WORKFORCE_SELF_READ", "ATTENDANCE_CLOCK", "TIMESHEET_SUBMIT", "WORKFORCE_REQUEST",
+                    "WORKFORCE_PLAN", "WORKFORCE_PUBLISH", "TIMESHEET_REVIEW",
+                    "WORKFORCE_REQUEST_APPROVE", "WORKFORCE_CONFIG"
             ))
     );
 

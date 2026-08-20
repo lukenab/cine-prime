@@ -103,6 +103,7 @@ hcm26_cpl_java_05_group1/
 | concession-service | 8085 | Concession catalog, reservation and fulfillment |
 | promotion-service | 8086 | Promotions *(WIP)* |
 | notification-service | 8087 | Email notifications via Kafka *(WIP)* |
+| workforce-service | 8091 | Rosters, attendance, timesheets, leave and shift-swap workflows |
 | PostgreSQL | 5433 | Mapped from container port 5432 |
 | Redis | 6379 | — |
 | Kafka | 9092 | External / host access |
@@ -169,6 +170,8 @@ All requests go through `http://localhost:8080`.
 | `user-register-topic` | auth-service | user-service | New account registered via OTP |
 | `user-update-topic` | auth-service | user-service | Account profile updated by admin |
 | `staff-access.events.v1` | user-service | auth-service | Versioned staff assignment projection updates |
+| `staff-access.events.v1` | user-service | workforce-service | Local employee and cinema-scope projection |
+| `workforce.timesheet.events.v1` | workforce-service | Payroll/analytics consumers | Approved payable-time snapshot (`TIMESHEET_APPROVED`, v1) |
 
 ---
 
@@ -185,6 +188,7 @@ Each service owns its own PostgreSQL database (DB-per-service pattern):
 | `payment_db` | payment-service |
 | `promotion_db` | promotion-service |
 | `concession_db` | concession-service |
+| `workforce_db` | workforce-service |
 
 Init scripts are in `postgres-init/` and run automatically on first container start.
 

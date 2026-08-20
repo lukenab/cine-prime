@@ -5,3 +5,4 @@ CREATE DATABASE payment_db;
 CREATE DATABASE user_db;
 CREATE DATABASE promotion_db;
 CREATE DATABASE loyalty_db;
+CREATE DATABASE workforce_db;

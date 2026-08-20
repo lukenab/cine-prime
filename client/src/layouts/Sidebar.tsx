@@ -1,6 +1,6 @@
 import { useAuth } from "../context/AuthContext";
 import { useState, useEffect } from "react";
-import { LayoutDashboard, Film, Tags, Calendar, Ticket, UserCog, BarChart2, Settings, Clapperboard, Gift, ShoppingCart, MapPin, ChevronDown, ShieldCheck, Monitor, Armchair, Layers3, BookOpen, ReceiptText, Popcorn, SlidersHorizontal, ScrollText, KeyRound } from "lucide-react";
+import { LayoutDashboard, Film, Tags, Calendar, CalendarClock, Ticket, UserCog, BarChart2, Settings, Clapperboard, Gift, ShoppingCart, MapPin, ChevronDown, ShieldCheck, Monitor, Armchair, Layers3, BookOpen, ReceiptText, Popcorn, SlidersHorizontal, ScrollText, KeyRound } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { OrbitaLogo } from "../components/shared/OrbitaLogo";
 import { movieApi } from "../api/movieApi";
@@ -15,6 +15,7 @@ type NavItem = {
 
 const adminNavItems: NavItem[] = [
   { icon: LayoutDashboard, label: "DASHBOARD", id: "dashboard", path: "/admin", group: "main", roles: ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"] },
+  { icon: CalendarClock, label: "My Schedule & Time", id: "my-workforce", path: "/admin/my-workforce", group: "main", permissions: ["WORKFORCE_SELF_READ"] },
   { icon: Film, label: "Movies", id: "movies", path: "/admin/movies", group: "content", permissions: ["MOVIE_READ"] },
   { icon: Calendar, label: "Release Planning", id: "release-planning", path: "/admin/release-plans", group: "content", permissions: ["RELEASE_PLAN_READ"] },
   { icon: Layers3, label: "Screening Versions", id: "screening-versions", path: "/admin/screening-versions", group: "content", permissions: ["MOVIE_READ"] },
@@ -35,6 +36,7 @@ const adminNavItems: NavItem[] = [
 
   { icon: Gift, label: "Promotions", id: "promotions", path: "/admin/promotions", group: "business-operations", permissions: ["PROMOTION_READ"] },
   { icon: ReceiptText, label: "Refunds & Reconciliation", id: "refunds-reconciliation", path: "/admin/refunds-reconciliation", group: "business-operations", permissions: ["REFUND_READ", "RECONCILIATION_READ"] },
+  { icon: CalendarClock, label: "Workforce Operations", id: "workforce", path: "/admin/workforce", group: "business-operations", permissions: ["WORKFORCE_PLAN", "TIMESHEET_REVIEW"] },
 
   { icon: UserCog, label: "People & Access", id: "people", path: "/admin/people", group: "administration", permissions: ["EMPLOYEE_READ", "USER_READ", "ROLE_MANAGE"] },
   { icon: KeyRound, label: "Access Matrix", id: "access-matrix", path: "/admin/access-matrix", group: "administration", permissions: ["ROLE_MANAGE"] },
@@ -55,6 +57,7 @@ const adminNavItems: NavItem[] = [
 
 const employeeNavItems: NavItem[] = [
   { icon: LayoutDashboard, label: "Workspace", id: "dashboard", path: "/employee", group: "main", roles: ["ROLE_EMPLOYEE"] },
+  { icon: CalendarClock, label: "My Schedule & Time", id: "workforce", path: "/employee/workforce", group: "ops", permissions: ["WORKFORCE_SELF_READ"] },
   { icon: ShoppingCart, label: "Sell Tickets", id: "sell", path: "/employee/sell", group: "ops", roles: ["ROLE_EMPLOYEE"] },
   { icon: Ticket, label: "Bookings", id: "bookings", path: "/employee/bookings", group: "ops", roles: ["ROLE_EMPLOYEE"] },
   { icon: Popcorn, label: "Concession Fulfillment", id: "concessions", path: "/employee/concessions/fulfillment", group: "ops", roles: ["ROLE_EMPLOYEE"] },
