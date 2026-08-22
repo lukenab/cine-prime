@@ -268,7 +268,7 @@ export default function EmployeeDetailPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-52">
-                  <DropdownMenuItem disabled={!account || working} onClick={revokeSessions}><KeyRound /> Revoke sessions</DropdownMenuItem>
+                  <DropdownMenuItem disabled={!account || working} onClick={revokeSessions}><KeyRound /> Sign out all devices</DropdownMenuItem>
                   {isPending && <DropdownMenuItem disabled={working} onClick={resendActivation}><MailPlus /> Resend activation</DropdownMenuItem>}
                   <DropdownMenuSeparator />
                   {isDisabled

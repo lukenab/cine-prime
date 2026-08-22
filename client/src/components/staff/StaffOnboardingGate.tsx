@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { BadgeCheck, BriefcaseBusiness, Building2, Loader2, LogOut, Phone, UserRound } from "lucide-react";
+import { Building2, Loader2, LogOut, Phone, UserRound } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { userApi } from "../../api/userApi";
@@ -18,7 +18,7 @@ export default function StaffOnboardingGate() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false);
   const [assignmentLoading, setAssignmentLoading] = useState(true);
-  const [assignment, setAssignment] = useState({ branch: "Assigned cinema", workArea: "Operations", position: "Team member" });
+  const [assignment, setAssignment] = useState({ branch: "Assigned cinema", position: "Team member" });
   const [error, setError] = useState("");
   const isHeadOffice = !!user && !["ROLE_EMPLOYEE", "ROLE_BRANCH_MANAGER"].includes(user.role);
 
@@ -57,9 +57,9 @@ export default function StaffOnboardingGate() {
               // Keep the stable assignment identifier when cluster lookup is unavailable.
             }
           }
-          if (active) setAssignment({ branch, workArea: toLabel(employee?.department), position: toLabel(employee?.position) });
+          if (active) setAssignment({ branch, position: toLabel(employee?.position) });
         } else if (isHeadOffice) {
-          setAssignment({ branch: "Head office · All cinema branches", workArea: "Head Office", position: toLabel(user.role.replace(/^ROLE_/, "")) });
+          setAssignment({ branch: "Head office · All cinema branches", position: toLabel(user.role.replace(/^ROLE_/, "")) });
         }
       } finally {
         if (active) setAssignmentLoading(false);
@@ -106,32 +106,31 @@ export default function StaffOnboardingGate() {
     <Dialog open onOpenChange={() => undefined}>
       <DialogContent
         aria-describedby="staff-onboarding-description"
-        className="w-[min(640px,calc(100vw-32px))] max-w-[640px] gap-0 overflow-hidden rounded-3xl border-[var(--modal-border)] bg-[var(--modal-surface)] p-0 text-[var(--text-main)] shadow-2xl [&_[data-slot=dialog-close]]:hidden"
+        className="w-[min(520px,calc(100vw-32px))] max-w-[520px] gap-0 overflow-hidden rounded-2xl border-[var(--border-color)] bg-[var(--modal-surface)] p-0 text-[var(--text-main)] shadow-[0_24px_72px_rgba(0,0,0,0.24)] [&_[data-slot=dialog-close]]:hidden"
         onEscapeKeyDown={(event) => event.preventDefault()}
         onPointerDownOutside={(event) => event.preventDefault()}
       >
-        <DialogHeader className="border-b border-[var(--border-color)] px-7 py-6 text-left">
-          <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-500">
-            <BadgeCheck size={21} />
-          </div>
-          <DialogTitle className="text-2xl">Welcome to CinePrime</DialogTitle>
+        <DialogHeader className="px-7 pb-4 pt-7 text-left">
+          <DialogTitle className="text-2xl">Confirm your details</DialogTitle>
           <DialogDescription id="staff-onboarding-description" className="pt-1 leading-6 text-[var(--modal-text-sub)]">
-            Confirm your contact details to enter the staff workspace. Your operational assignment is managed by CinePrime administration.
+            Review your contact information before continuing.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={submit} className="space-y-5 px-7 py-6">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" aria-label="Operational assignment">
-            {[
-              { label: "Work location", value: assignment.branch, icon: Building2 },
-              { label: "Work area", value: assignment.workArea, icon: BriefcaseBusiness },
-              { label: "Position", value: assignment.position, icon: BadgeCheck },
-            ].map(({ label, value, icon: Icon }) => (
-              <div key={label} className="min-w-0 rounded-xl border border-[var(--modal-border)] bg-[var(--modal-option)] px-3.5 py-3">
-                <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--modal-text-sub)]"><Icon size={13} /> {label}</div>
-                <div className="truncate text-sm font-semibold text-[var(--text-main)]" title={value}>{assignmentLoading ? "Loading…" : value}</div>
+        <form onSubmit={submit} className="space-y-5 px-7 pb-6 pt-2">
+          <div className="rounded-xl border border-[var(--border-color)] bg-[var(--modal-option)] p-4" aria-label="Operational assignment">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--modal-text-sub)]">Your assignment</p>
+            <div className="mt-3 flex items-start gap-3">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-500">
+                <Building2 size={17} />
               </div>
-            ))}
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-5 text-[var(--text-main)]">
+                  {assignmentLoading ? "Loading assignment…" : assignment.position}
+                </p>
+                {!assignmentLoading && <p className="mt-0.5 break-words text-sm leading-5 text-[var(--modal-text-sub)]">{assignment.branch}</p>}
+              </div>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -152,18 +151,13 @@ export default function StaffOnboardingGate() {
 
           {error && <div role="alert" className="rounded-xl border border-red-500/25 bg-red-500/5 px-4 py-3 text-sm text-red-500">{error}</div>}
 
-          <div className="border-t border-[var(--border-color)] pt-5">
-            <p className="mb-4 text-xs leading-5 text-[var(--modal-text-sub)]">
-              CinePrime uses these contact details for staff operations. Ask an administrator to correct your work location, area or position.
-            </p>
-            <div className="flex items-center justify-between">
-              <Button type="button" variant="ghost" onClick={signOut} disabled={loading} className="h-11 rounded-xl px-4 text-[var(--text-muted)]">
-                <LogOut size={16} /> Sign out
-              </Button>
-              <Button type="submit" disabled={loading || assignmentLoading} className="h-11 min-w-56 rounded-xl bg-blue-600 px-5 text-white hover:bg-blue-500">
-                {loading ? <><Loader2 className="animate-spin" size={16} /> Saving profile</> : "Complete profile & enter workspace"}
-              </Button>
-            </div>
+          <div className="flex items-center justify-between border-t border-[var(--border-color)] pt-5">
+            <Button type="button" variant="ghost" onClick={signOut} disabled={loading} className="h-11 rounded-xl px-3 text-[var(--text-muted)] hover:bg-[var(--modal-option)] hover:text-[var(--text-main)]">
+              <LogOut size={16} /> Sign out
+            </Button>
+            <Button type="submit" disabled={loading || assignmentLoading} className="h-11 min-w-40 rounded-xl bg-blue-600 px-5 text-white shadow-sm hover:bg-blue-500">
+              {loading ? <><Loader2 className="animate-spin" size={16} /> Saving…</> : "Save and continue"}
+            </Button>
           </div>
         </form>
       </DialogContent>

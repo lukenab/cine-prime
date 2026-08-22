@@ -1,5 +1,7 @@
 # Workforce P0/P1
 
+> Đặc tả đầy đủ về kiến trúc, contract, phân quyền và test case UI: [WORKFORCE_SERVICE_SPECIFICATION_P0_P1.md](WORKFORCE_SERVICE_SPECIFICATION_P0_P1.md).
+
 ## 1. Mục tiêu và ranh giới
 
 Module `workforce-service` chịu trách nhiệm lập lịch làm việc và xác nhận thời gian công có thể thanh toán. Module không sở hữu hồ sơ nhân viên, tài khoản đăng nhập hoặc bảng lương:

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { BriefcaseBusiness, Building2, ChevronLeft, MailPlus, ShieldCheck, UserRound } from "lucide-react";
+import { BriefcaseBusiness, Building2, ChevronLeft, MailPlus, UserRound } from "lucide-react";
 
 import { employeeApi, type EmployeeInvitationPayload, type EmploymentType } from "../../api/employeeApi";
 import type { ClusterResponse } from "../../api/movieApi";
@@ -26,6 +26,7 @@ const EMPLOYMENT_TYPES: Array<{ value: EmploymentType; label: string }> = [
 type InviteForm = EmployeeInvitationPayload;
 
 const fieldControlClass = "h-11 rounded-xl border-[var(--border-color)] bg-[var(--bg-main)] hover:border-blue-400/70 focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/15";
+const selectControlClass = "h-11 data-[size=default]:h-11 rounded-xl border-[var(--border-color)] bg-[var(--bg-main)] hover:border-blue-400/70 focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/15";
 
 const initialForm = (): InviteForm => {
   const preset = getJobRolePreset(DEFAULT_JOB_ROLE_ID);
@@ -191,21 +192,12 @@ export default function InviteEmployeeModal({ open, clusters, onOpenChange, onIn
         <div className="min-h-[360px] overflow-y-auto px-7 py-6">
           {step === 1 ? (
             <div className="space-y-5">
-              <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
-                <div className="flex gap-3">
-                  <MailPlus className="mt-0.5 shrink-0 text-blue-500" size={18} />
-                  <div>
-                    <p className="text-sm font-semibold">Password-free invitation</p>
-                    <p className="mt-1 text-xs leading-5 text-[var(--text-sub)]">The employee receives a secure email link and chooses their own password. Personal profile details can be confirmed after activation.</p>
-                  </div>
-                </div>
-              </div>
-
               <Field label="Full name" required error={errors.fullName}>
                 <Input value={form.fullName} onChange={(event) => setField("fullName", event.target.value)} placeholder="Employee's legal or preferred name" className={fieldControlClass} />
               </Field>
               <Field label="Work email" required error={errors.email}>
                 <Input type="email" value={form.email} onChange={(event) => setField("email", event.target.value)} placeholder="name@cineprime.vn" className={fieldControlClass} />
+                <p className="mt-2 text-xs leading-5 text-[var(--text-sub)]">The employee will receive an activation link to set their password.</p>
               </Field>
               <Field label="Phone" hint="Optional" error={errors.phoneNumber}>
                 <Input value={form.phoneNumber} onChange={(event) => setField("phoneNumber", event.target.value)} placeholder="0901234567" className={fieldControlClass} />
@@ -215,7 +207,7 @@ export default function InviteEmployeeModal({ open, clusters, onOpenChange, onIn
             <div className="space-y-5">
               <Field label="Job role" required>
                 <Select value={jobRoleId} onValueChange={selectJobRole}>
-                  <SelectTrigger className="h-11 rounded-xl border-[var(--border-color)] bg-[var(--bg-main)]"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className={selectControlClass}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {availableJobRoles.map((preset) => <SelectItem key={preset.id} value={preset.id}>{preset.label}</SelectItem>)}
                   </SelectContent>
@@ -232,7 +224,7 @@ export default function InviteEmployeeModal({ open, clusters, onOpenChange, onIn
               ) : (
                 <Field label="Cinema branch" required error={errors.cinemaId}>
                   <Select value={form.cinemaId ?? ""} onValueChange={(value) => setField("cinemaId", value)}>
-                    <SelectTrigger className="h-11 rounded-xl border-[var(--border-color)] bg-[var(--bg-main)]"><SelectValue placeholder="Select an active cinema branch" /></SelectTrigger>
+                    <SelectTrigger className={selectControlClass}><SelectValue placeholder="Select an active cinema branch" /></SelectTrigger>
                     <SelectContent>
                       {activeClusters.map((cluster) => <SelectItem key={cluster.clusterId} value={String(cluster.clusterId)}>{cluster.clusterName}</SelectItem>)}
                     </SelectContent>
@@ -243,7 +235,7 @@ export default function InviteEmployeeModal({ open, clusters, onOpenChange, onIn
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 <Field label="Employment type" required>
                   <Select value={form.employmentType} onValueChange={(value) => setField("employmentType", value as EmploymentType)}>
-                    <SelectTrigger className="h-11 rounded-xl border-[var(--border-color)] bg-[var(--bg-main)]"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className={selectControlClass}><SelectValue /></SelectTrigger>
                     <SelectContent>{EMPLOYMENT_TYPES.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </Field>
@@ -252,16 +244,6 @@ export default function InviteEmployeeModal({ open, clusters, onOpenChange, onIn
                 </Field>
               </div>
 
-              <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-main)] p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--text-sub)]">Access automatically assigned</p>
-                <div className="mt-2 flex items-center gap-2 text-sm font-semibold">
-                  <ShieldCheck size={17} className="text-blue-500" />
-                  {getJobRolePreset(jobRoleId).label} access
-                </div>
-                <p className="mt-1 text-xs leading-5 text-[var(--text-sub)]">
-                  {selectedJobRole.description} Access is granted from the assigned role and remains subject to an active staff assignment.
-                </p>
-              </div>
             </div>
           )}
 
@@ -271,7 +253,7 @@ export default function InviteEmployeeModal({ open, clusters, onOpenChange, onIn
         <div className="sticky bottom-0 flex items-center justify-between border-t border-[var(--border-color)] bg-[var(--bg-card)] px-7 py-4">
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting} className="h-10 rounded-xl px-4">Cancel</Button>
           <div className="flex gap-2">
-            {step === 2 && <Button type="button" variant="outline" onClick={() => setStep(1)} disabled={submitting} className="h-10 rounded-xl px-4"><ChevronLeft size={16} /> Back</Button>}
+            {step === 2 && <Button type="button" variant="ghost" onClick={() => setStep(1)} disabled={submitting} className="h-10 rounded-xl px-4 text-[var(--text-sub)] hover:bg-[var(--bg-main)] hover:text-[var(--text-main)]"><ChevronLeft size={16} /> Back</Button>}
             {step === 1 ? (
               <Button type="button" onClick={() => validateIdentity() && setStep(2)} className="h-10 rounded-xl bg-blue-600 px-5 text-white shadow-sm hover:bg-blue-500">Continue</Button>
             ) : (
