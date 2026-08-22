@@ -10,6 +10,7 @@ import userservice.enums.EmployeeDepartment;
 import userservice.enums.EmployeePosition;
 import userservice.enums.EmployeeStatus;
 import userservice.enums.EmploymentType;
+import userservice.enums.StaffAccessRole;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -29,6 +30,7 @@ public class EmployeeResponse {
     EmploymentType employmentType;
     LocalDate hireDate;
     EmployeeStatus status;
+    StaffAccessRole accessRole;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
 

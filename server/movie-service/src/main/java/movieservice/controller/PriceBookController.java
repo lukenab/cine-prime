@@ -23,7 +23,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/price-books")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'PRICE_BOOK_MANAGE')")
 public class PriceBookController {
 
     private final PriceBookService priceBookService;

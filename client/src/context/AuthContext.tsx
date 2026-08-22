@@ -3,7 +3,20 @@ import { userApi } from "../api/userApi";
 import { jwtDecode } from "jwt-decode";
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
-const ROLE_PRIORITY = ["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_PROGRAMMING_OPERATOR", "ROLE_BRANCH_MANAGER", "ROLE_EMPLOYEE", "ROLE_MEMBER"];
+const ROLE_PRIORITY = [
+    "ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_SYSTEM_ADMIN",
+    "ROLE_PROGRAMMING_APPROVER", "ROLE_PROGRAMMING_OPERATOR",
+    "ROLE_FINANCE_APPROVER", "ROLE_FINANCE_OFFICER", "ROLE_COMMERCIAL_MANAGER",
+    "ROLE_SECURITY_AUDITOR", "ROLE_BRANCH_MANAGER", "ROLE_EMPLOYEE", "ROLE_MEMBER",
+];
+
+function extractAuthorities(scopeClaim: string) {
+    const authorities = (scopeClaim || "").split(" ").filter(Boolean);
+    return {
+        roles: authorities.filter((authority) => authority.startsWith("ROLE_")),
+        permissions: authorities.filter((authority) => !authority.startsWith("ROLE_")),
+    };
+}
 
 function extractPrimaryRole(rolesClaim: string): string {
     const roles = (rolesClaim || "").split(" ").filter(r => r.startsWith("ROLE_"));
@@ -23,8 +36,14 @@ function isTokenExpired(token: string): boolean {
 }
 
 function requiresProfile(role: string): boolean {
-    return ["ROLE_MEMBER", "ROLE_EMPLOYEE", "ROLE_BRANCH_MANAGER", "ROLE_PROGRAMMING_OPERATOR"].includes(role);
+    return role === "ROLE_MEMBER" || STAFF_ROLES.includes(role);
 }
+
+const STAFF_ROLES = [
+    "ROLE_EMPLOYEE", "ROLE_BRANCH_MANAGER", "ROLE_PROGRAMMING_OPERATOR", "ROLE_PROGRAMMING_APPROVER",
+    "ROLE_FINANCE_OFFICER", "ROLE_FINANCE_APPROVER", "ROLE_COMMERCIAL_MANAGER",
+    "ROLE_SECURITY_AUDITOR", "ROLE_SYSTEM_ADMIN",
+];
 
 async function checkProfileComplete(accountId: string): Promise<boolean> {
     try {
@@ -41,7 +60,16 @@ async function checkProfileComplete(accountId: string): Promise<boolean> {
 interface User {
     username: string;
     role: string;
+    roles: string[];
+    permissions: string[];
     accountId: string;
+    clusterIds: string[];
+}
+
+function extractClusterIds(claim: unknown): string[] {
+    if (Array.isArray(claim)) return claim.map(String).filter(Boolean);
+    if (claim == null) return [];
+    return String(claim).split(/[\s,]+/).filter(Boolean);
 }
 
 interface AuthContextType {
@@ -52,6 +80,8 @@ interface AuthContextType {
     login: (credentials: any) => Promise<{ role: string }>;
     loginWithGoogle: (credential: string) => Promise<{ role: string }>;
     logout: () => void;
+    hasRole: (...roles: string[]) => boolean;
+    hasPermission: (...permissions: string[]) => boolean;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -68,15 +98,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (isTokenExpired(token)) {
             localStorage.removeItem("accessToken");
             localStorage.removeItem("role");
+            localStorage.removeItem("roles");
+            localStorage.removeItem("permissions");
             return;
         }
 
         try {
             const decoded: any = jwtDecode(token);
-            const primaryRole = extractPrimaryRole(decoded.scope ?? decoded.role ?? "");
+            const scope = decoded.scope ?? decoded.role ?? "";
+            const primaryRole = extractPrimaryRole(scope);
+            const { roles, permissions } = extractAuthorities(scope);
             const accountId = decoded.accountId ?? decoded.sub;
 
-            setUser({ username: decoded.sub, role: primaryRole, accountId });
+            localStorage.setItem("role", primaryRole);
+            localStorage.setItem("roles", JSON.stringify(roles));
+            localStorage.setItem("permissions", JSON.stringify(permissions));
+            setUser({ username: decoded.sub, role: primaryRole, roles, permissions, accountId, clusterIds: extractClusterIds(decoded.cinemaClusterIds) });
 
             if (requiresProfile(primaryRole) && accountId) {
                 setProfileCheckPending(true);
@@ -91,6 +128,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } catch {
             localStorage.removeItem("accessToken");
             localStorage.removeItem("role");
+            localStorage.removeItem("roles");
+            localStorage.removeItem("permissions");
         }
     }, []);
 
@@ -103,11 +142,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         localStorage.setItem("accessToken", token);
 
         const decoded: any = jwtDecode(token);
-        const primaryRole = extractPrimaryRole(decoded.scope ?? decoded.role ?? "");
+        const scope = decoded.scope ?? decoded.role ?? "";
+        const primaryRole = extractPrimaryRole(scope);
+        const { roles, permissions } = extractAuthorities(scope);
         const accountId = decoded.accountId ?? decoded.sub;
 
         localStorage.setItem("role", primaryRole);
-        setUser({ username: decoded.sub, role: primaryRole, accountId });
+        localStorage.setItem("roles", JSON.stringify(roles));
+        localStorage.setItem("permissions", JSON.stringify(permissions));
+        setUser({ username: decoded.sub, role: primaryRole, roles, permissions, accountId, clusterIds: extractClusterIds(decoded.cinemaClusterIds) });
 
         if (requiresProfile(primaryRole) && accountId) {
             setProfileCheckPending(true);
@@ -145,14 +188,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         localStorage.removeItem("accessToken");
         localStorage.removeItem("role");
+        localStorage.removeItem("roles");
+        localStorage.removeItem("permissions");
         localStorage.removeItem("jwt_token");
         setUser(null);
         setNeedsProfileSetup(false);
         setProfileCheckPending(false);
     };
 
+    const hasRole = (...roles: string[]) => !!user && roles.some((role) => user.roles.includes(role));
+    const hasPermission = (...permissions: string[]) => !!user
+        && permissions.some((permission) => user.permissions.includes(permission));
+
     return (
-        <AuthContext.Provider value={{ user, needsProfileSetup, profileCheckPending, setNeedsProfileSetup, login, loginWithGoogle, logout }}>
+        <AuthContext.Provider value={{ user, needsProfileSetup, profileCheckPending, setNeedsProfileSetup, login, loginWithGoogle, logout, hasRole, hasPermission }}>
             {children}
         </AuthContext.Provider>
     );

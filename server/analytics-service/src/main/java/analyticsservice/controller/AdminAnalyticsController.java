@@ -22,7 +22,7 @@ public class AdminAnalyticsController {
     private final AdminAnalyticsSummaryService summaryService;
 
     @GetMapping("/summary")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'BRANCH_MANAGER')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_BRANCH_MANAGER', 'REPORT_READ')")
     public AdminAnalyticsSummaryResponse summary(
             @RequestParam(required = false) Long clusterId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -31,7 +31,7 @@ public class AdminAnalyticsController {
     }
 
     @GetMapping("/daily")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'BRANCH_MANAGER')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_BRANCH_MANAGER', 'REPORT_READ')")
     public List<AdminAnalyticsDailyPointResponse> daily(
             @RequestParam(required = false) Long clusterId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -40,7 +40,7 @@ public class AdminAnalyticsController {
     }
 
     @GetMapping("/branch-ranking")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'BRANCH_MANAGER')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_BRANCH_MANAGER', 'REPORT_READ')")
     public List<AdminAnalyticsBranchRankingResponse> branchRanking(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {

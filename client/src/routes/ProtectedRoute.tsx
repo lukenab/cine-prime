@@ -2,11 +2,22 @@ import { Navigate, Outlet, useLocation, useOutletContext } from "react-router-do
 
 interface ProtectedRouteProps {
   allowedRoles?: string[];
+  allowedPermissions?: string[];
 }
 
-export default function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
+function storedAuthorities(key: "roles" | "permissions") {
+  try {
+    return JSON.parse(localStorage.getItem(key) || "[]") as string[];
+  } catch {
+    return [];
+  }
+}
+
+export default function ProtectedRoute({ allowedRoles, allowedPermissions }: ProtectedRouteProps) {
   const token = localStorage.getItem("accessToken");
   const role = localStorage.getItem("role");
+  const roles = storedAuthorities("roles");
+  const permissions = storedAuthorities("permissions");
   const context = useOutletContext();
   const location = useLocation();
 
@@ -23,7 +34,10 @@ export default function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
     );
   }
 
-  if (allowedRoles && (!role || !allowedRoles.includes(role))) {
+  const roleAllowed = !allowedRoles || allowedRoles.some((allowed) => roles.includes(allowed) || role === allowed);
+  const permissionAllowed = !allowedPermissions || allowedPermissions.some((allowed) => permissions.includes(allowed));
+  const legacyAdministrator = roles.some((item) => item === "ROLE_ADMIN" || item === "ROLE_SUPER_ADMIN");
+  if (!roleAllowed || (!legacyAdministrator && !permissionAllowed)) {
     return <Navigate to="/" replace />;
   }
 

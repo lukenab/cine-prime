@@ -21,9 +21,18 @@ describe("employee job-role presets", () => {
   });
 
   it("keeps ordinary cinema roles on employee access", () => {
-    const ordinaryRoles = JOB_ROLE_PRESETS.filter((preset) =>
-      preset.id !== "CINEMA_MANAGER" && preset.id !== "FILM_PROGRAMMING_OPERATOR");
+    const ordinaryRoles = JOB_ROLE_PRESETS.filter((preset) => preset.location === "BRANCH"
+      && preset.id !== "CINEMA_MANAGER");
     expect(ordinaryRoles).not.toHaveLength(0);
     expect(ordinaryRoles.every((preset) => preset.accessRole === "EMPLOYEE" && preset.location === "BRANCH")).toBe(true);
+  });
+
+  it("provides separate maker and checker roles for programming and finance", () => {
+    expect(JOB_ROLE_PRESETS.find((preset) => preset.id === "FILM_PROGRAMMING_APPROVER")?.accessRole)
+      .toBe("PROGRAMMING_APPROVER");
+    expect(JOB_ROLE_PRESETS.find((preset) => preset.id === "FINANCE_OFFICER")?.accessRole)
+      .toBe("FINANCE_OFFICER");
+    expect(JOB_ROLE_PRESETS.find((preset) => preset.id === "FINANCE_APPROVER")?.accessRole)
+      .toBe("FINANCE_APPROVER");
   });
 });

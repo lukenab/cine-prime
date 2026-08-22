@@ -40,7 +40,9 @@ public class EmployeeAccessPolicy {
     private boolean isAdministrator(Authentication authentication) {
         return authentication != null && authentication.getAuthorities().stream()
                 .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN")
-                        || authority.getAuthority().equals("ROLE_SUPER_ADMIN"));
+                        || authority.getAuthority().equals("ROLE_SUPER_ADMIN")
+                        || authority.getAuthority().equals("ROLE_SYSTEM_ADMIN")
+                        || authority.getAuthority().equals("EMPLOYEE_UPDATE"));
     }
 
     private String callerCinema(Authentication authentication) {

@@ -32,7 +32,7 @@ public class AutoShowtimeGenerationController {
     /// Request idempotent sẽ trả lại run cũ thay vì tạo một run trùng.
     @PostMapping
     @ResponseStatus(HttpStatus.ACCEPTED)
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SCHEDULE_PLAN_SUBMIT')")
     public ApiResponse<AutoShowtimeGenerationAcceptedResponse> submit(
             @Valid @RequestBody AutoShowtimeGenerationRequest request,
             Authentication authentication
@@ -61,7 +61,7 @@ public class AutoShowtimeGenerationController {
     /// Client gọi endpoint này để hiển thị khoảng ngày hợp lệ (D+start ~ D+end) ngay ở bước
     /// chọn Planning window, thay vì chỉ biết được sau khi submit bị INVALID_GENERATION_RANGE.
     @GetMapping("/policy")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SCHEDULE_PLAN_SUBMIT', 'SCHEDULE_PLAN_APPROVE')")
     public ApiResponse<AutoShowtimeGenerationPolicyResponse> getActivePolicy() {
         return ApiResponse.<AutoShowtimeGenerationPolicyResponse>builder()
                 .code(HttpStatus.OK.value())
@@ -71,7 +71,7 @@ public class AutoShowtimeGenerationController {
 
     /// Client dùng endpoint này để poll status/count sau POST submit hoặc execute.
     @GetMapping("/{generationRunId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SCHEDULE_PLAN_SUBMIT', 'SCHEDULE_PLAN_APPROVE')")
     public ApiResponse<AutoShowtimeGenerationRunResponse> getById(
             @PathVariable Long generationRunId,
             @RequestParam(defaultValue = "0") int page,

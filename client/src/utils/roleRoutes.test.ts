@@ -11,6 +11,12 @@ describe("defaultPathForRole", () => {
     expect(defaultPathForRole("ROLE_SUPER_ADMIN")).toBe("/admin");
     expect(defaultPathForRole("ROLE_BRANCH_MANAGER")).toBe("/admin/concessions/catalog");
     expect(defaultPathForRole("ROLE_PROGRAMMING_OPERATOR")).toBe("/admin/programming");
+    expect(defaultPathForRole("ROLE_PROGRAMMING_APPROVER")).toBe("/admin/release-plans");
+    expect(defaultPathForRole("ROLE_SYSTEM_ADMIN")).toBe("/admin/people");
+    expect(defaultPathForRole("ROLE_FINANCE_OFFICER")).toBe("/admin/refunds-reconciliation");
+    expect(defaultPathForRole("ROLE_FINANCE_APPROVER")).toBe("/admin/refunds-reconciliation");
+    expect(defaultPathForRole("ROLE_COMMERCIAL_MANAGER")).toBe("/admin/price-books");
+    expect(defaultPathForRole("ROLE_SECURITY_AUDITOR")).toBe("/admin/audit");
   });
 
   it("returns customer roles to the storefront", () => {

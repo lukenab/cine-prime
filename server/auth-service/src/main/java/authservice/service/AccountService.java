@@ -2,6 +2,7 @@ package authservice.service;
 
 import authservice.dto.request.ActivateAccountRequest;
 import authservice.dto.request.CreateAccountRequest;
+import authservice.dto.request.InternalStaffInvitationRequest;
 import authservice.dto.request.UpdateAccountRequest;
 import authservice.dto.response.AccountResponse;
 import authservice.dto.response.PageResponse;
@@ -12,6 +13,7 @@ import authservice.entity.PasswordReset;
 import authservice.entity.Role;
 import authservice.enums.AccountStatus;
 import authservice.enums.PasswordResetPurpose;
+import authservice.enums.StaffProvisioningRole;
 import authservice.event.AccountActivationRequestedEvent;
 import authservice.event.UserRegisteredEvent;
 import authservice.event.AccountStatusChangedEvent;
@@ -65,6 +67,8 @@ public class AccountService {
 
     private static final Pattern DIACRITICS = Pattern.compile("\\p{InCombiningDiacriticalMarks}+");
     private static final Pattern NON_ALPHANUMERIC = Pattern.compile("[^a-z0-9]+");
+    private static final Set<String> STAFF_ROLES = java.util.Arrays.stream(StaffProvisioningRole.values())
+            .map(Enum::name).collect(java.util.stream.Collectors.toUnmodifiableSet());
 
     @NonFinal
     @Value("${auth.activation.ttl-hours}")
@@ -160,6 +164,17 @@ public class AccountService {
         }
 
         if (!CollectionUtils.isEmpty(request.getRoles())) {
+            Account actor = accountRepository.findByUsername(
+                            SecurityContextHolder.getContext().getAuthentication().getName())
+                    .orElseThrow(() -> new AppException(AuthErrorCode.ACCOUNT_NOT_FOUND));
+            if (accountId.equals(actor.getAccountId())) {
+                throw new AppException(AuthErrorCode.SELF_ROLE_CHANGE_FORBIDDEN);
+            }
+            Set<String> currentRoles = account.getRoles().stream().map(Role::getRoleName).collect(java.util.stream.Collectors.toSet());
+            if (currentRoles.stream().anyMatch(STAFF_ROLES::contains)
+                    || request.getRoles().stream().anyMatch(STAFF_ROLES::contains)) {
+                throw new AppException(AuthErrorCode.STAFF_ROLE_UPDATE_REQUIRES_ASSIGNMENT);
+            }
             List<Role> roles = roleRepository.findAllById(request.getRoles());
             if (roles.size() != request.getRoles().stream().distinct().count()) {
                 throw new AppException(AuthErrorCode.ROLE_NOT_FOUND);
@@ -205,18 +220,52 @@ public class AccountService {
      */
     @Transactional
     public AccountResponse createAccount(CreateAccountRequest request) {
-        String emailKey = request.getEmail().trim().toLowerCase();
+        return createPendingAccount(
+                request.getFullName(),
+                request.getEmail(),
+                request.getRole().name(),
+                request.getPhoneNumber(),
+                request.getDateOfBirth(),
+                request.getGender(),
+                request.getIdentityCard(),
+                request.getAddress());
+    }
+
+    @Transactional
+    public void updateInternalStaffRole(String accountId, StaffProvisioningRole requestedRole) {
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new AppException(AuthErrorCode.ACCOUNT_NOT_FOUND));
+        Role role = roleRepository.findById(requestedRole.name())
+                .orElseThrow(() -> new AppException(AuthErrorCode.ROLE_NOT_FOUND));
+        Set<String> oldRoles = account.getRoles().stream().map(Role::getRoleName)
+                .collect(java.util.stream.Collectors.toSet());
+        account.setRoles(new HashSet<>(Set.of(role)));
+        accountRepository.saveAndFlush(account);
+        int revoked = authTokenRepository.revokeAllByAccountId(accountId, OffsetDateTime.now());
+        auditLogService.success("STAFF_ROLE_UPDATED", accountId,
+                "Staff role synchronized from employee assignment",
+                auditLogService.metadata("oldRoles", oldRoles, "newRole", requestedRole.name(), "revokedTokens", revoked));
+    }
+
+    private AccountResponse createPendingAccount(
+            String fullName,
+            String email,
+            String requestedRole,
+            String phoneNumber,
+            java.time.LocalDate dateOfBirth,
+            String gender,
+            String identityCard,
+            String address) {
+        String emailKey = email.trim().toLowerCase();
 
         if (accountRepository.existsByEmail(emailKey)) {
             throw new AppException(AuthErrorCode.EMAIL_EXISTED);
         }
 
-        String requestedRole = request.getRole().name();
-
         Role accountRole = roleRepository.findById(requestedRole)
                 .orElseThrow(() -> new AppException(AuthErrorCode.ROLE_NOT_FOUND));
 
-        String username = generateUniqueUsername(request.getFullName());
+        String username = generateUniqueUsername(fullName);
 
         // Unusable placeholder — nobody (including the admin) ever knows this value.
         // The real password is chosen by the employee via the activation link.
@@ -233,19 +282,19 @@ public class AccountService {
 
         account = accountRepository.saveAndFlush(account);
 
-        issueActivationToken(account, request.getFullName());
+        issueActivationToken(account, fullName);
 
         // Notify user-service to create a bare profile (unchanged — user-service fills in
         // the rest of the profile later; this event only ever carried accountId + email).
         authEventPublisher.sendRegisteredEvent(UserRegisteredEvent.builder()
                 .accountId(account.getAccountId())
                 .email(account.getEmail())
-                .fullName(request.getFullName())
-                .phoneNumber(request.getPhoneNumber())
-                .dateOfBirth(request.getDateOfBirth())
-                .gender(request.getGender())
-                .identityCard(request.getIdentityCard())
-                .address(request.getAddress())
+                .fullName(fullName)
+                .phoneNumber(phoneNumber)
+                .dateOfBirth(dateOfBirth)
+                .gender(gender)
+                .identityCard(identityCard)
+                .address(address)
                 .build());
 
         auditLogService.success("ACCOUNT_CREATED", account.getAccountId(),
@@ -266,13 +315,13 @@ public class AccountService {
      * Active/inactive accounts and role changes still use the normal duplicate-email guard.
      */
     @Transactional
-    public AccountResponse createOrResumeStaffInvitation(CreateAccountRequest request) {
+    public AccountResponse createOrResumeStaffInvitation(InternalStaffInvitationRequest request) {
         String emailKey = request.getEmail().trim().toLowerCase();
+        String requestedRole = request.getRole().name();
         var existing = accountRepository.findByEmail(emailKey);
 
         if (existing.isPresent()) {
             Account account = existing.get();
-            String requestedRole = request.getRole().name();
             boolean sameRole = account.getRoles() != null && account.getRoles().stream()
                     .anyMatch(role -> requestedRole.equals(role.getRoleName()));
 
@@ -284,7 +333,15 @@ public class AccountService {
             throw new AppException(AuthErrorCode.EMAIL_EXISTED);
         }
 
-        return createAccount(request);
+        return createPendingAccount(
+                request.getFullName(),
+                request.getEmail(),
+                requestedRole,
+                request.getPhoneNumber(),
+                null,
+                null,
+                null,
+                null);
     }
 
     /**

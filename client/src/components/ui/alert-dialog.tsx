@@ -21,10 +21,19 @@ function AlertDialogTrigger({
 }
 
 function AlertDialogPortal({
+  container,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Portal>) {
+  const themeContainer = typeof document !== "undefined"
+    ? document.querySelector<HTMLElement>(".theme-dark, .theme-light")
+    : null;
+
   return (
-    <AlertDialogPrimitive.Portal data-slot="alert-dialog-portal" {...props} />
+    <AlertDialogPrimitive.Portal
+      data-slot="alert-dialog-portal"
+      container={container ?? themeContainer ?? undefined}
+      {...props}
+    />
   );
 }
 

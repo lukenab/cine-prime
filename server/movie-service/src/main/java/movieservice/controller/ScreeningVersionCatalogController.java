@@ -27,7 +27,7 @@ public class ScreeningVersionCatalogController {
     private final MovieScreeningVersionService screeningVersionService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROGRAMMING_OPERATOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'MOVIE_READ')")
     public ApiResponse<List<MovieScreeningVersionCatalogResponse>> search(
             @RequestParam(required = false) String q,
             @RequestParam(required = false) ScreeningVersionStatus status,

@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import userservice.dto.AuthAccountSummary;
 import userservice.dto.AuthAccountStatusRequest;
 import userservice.dto.AuthAccountInvitationRequest;
+import userservice.dto.AuthStaffRoleRequest;
 
 @FeignClient(name = "auth-service", path = "/api/internal/accounts")
 public interface AuthAccountClient {
@@ -30,4 +31,10 @@ public interface AuthAccountClient {
             @PathVariable String accountId,
             @RequestHeader("X-Internal-Service-Key") String internalKey,
             @RequestBody AuthAccountStatusRequest request);
+
+    @PatchMapping("/{accountId}/staff-role")
+    ApiResponse<Void> updateStaffRole(
+            @PathVariable String accountId,
+            @RequestHeader("X-Internal-Service-Key") String internalKey,
+            @RequestBody AuthStaffRoleRequest request);
 }

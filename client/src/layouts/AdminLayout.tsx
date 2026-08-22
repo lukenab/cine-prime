@@ -21,6 +21,12 @@ export default function AdminLayout() {
     "ROLE_EMPLOYEE",
     "ROLE_BRANCH_MANAGER",
     "ROLE_PROGRAMMING_OPERATOR",
+    "ROLE_PROGRAMMING_APPROVER",
+    "ROLE_FINANCE_OFFICER",
+    "ROLE_FINANCE_APPROVER",
+    "ROLE_COMMERCIAL_MANAGER",
+    "ROLE_SECURITY_AUDITOR",
+    "ROLE_SYSTEM_ADMIN",
   ].includes(user?.role ?? "");
 
   useEffect(() => {

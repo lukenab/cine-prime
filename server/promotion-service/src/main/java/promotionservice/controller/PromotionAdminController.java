@@ -18,7 +18,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/promotions")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'PROMOTION_CREATE', 'PROMOTION_UPDATE')")
 public class PromotionAdminController {
     private final PromotionAdminService service;
 

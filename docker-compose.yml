@@ -368,6 +368,44 @@ services:
     networks:
       - cinema-network
 
+  workforce-service:
+    build:
+      context: ./server
+      dockerfile: workforce-service/Dockerfile
+    container_name: workforce-service
+    restart: unless-stopped
+    ports:
+      - "8091:8091"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/workforce_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      JWT_SIGNER_KEY: ${JWT_SIGNER_KEY:?Set JWT_SIGNER_KEY in .env}
+      STAFF_ACCESS_TOPIC: ${STAFF_ACCESS_TOPIC:-staff-access.events.v1}
+      WORKFORCE_TIMESHEET_TOPIC: ${WORKFORCE_TIMESHEET_TOPIC:-workforce.timesheet.events.v1}
+      WORKFORCE_TIME_ZONE: ${WORKFORCE_TIME_ZONE:-Asia/Ho_Chi_Minh}
+      WORKFORCE_MINIMUM_REST_HOURS: ${WORKFORCE_MINIMUM_REST_HOURS:-12}
+      WORKFORCE_CLOCK_TOLERANCE_MINUTES: ${WORKFORCE_CLOCK_TOLERANCE_MINUTES:-5}
+      WORKFORCE_OUTBOX_POLL_MS: ${WORKFORCE_OUTBOX_POLL_MS:-1000}
+      WORKFORCE_MISSING_PUNCH_DETECTION_MS: ${WORKFORCE_MISSING_PUNCH_DETECTION_MS:-60000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      discovery-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8091/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - cinema-network
+
   user-service:
     build:
       context: ./server

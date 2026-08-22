@@ -13,7 +13,13 @@ export type JobRolePresetId =
   | "OPERATIONS_SUPERVISOR"
   | "ASSISTANT_CINEMA_MANAGER"
   | "CINEMA_MANAGER"
-  | "FILM_PROGRAMMING_OPERATOR";
+  | "FILM_PROGRAMMING_OPERATOR"
+  | "FILM_PROGRAMMING_APPROVER"
+  | "FINANCE_OFFICER"
+  | "FINANCE_APPROVER"
+  | "COMMERCIAL_MANAGER"
+  | "SYSTEM_ADMINISTRATOR"
+  | "SECURITY_AUDITOR";
 
 export type JobRolePreset = {
   id: JobRolePresetId;
@@ -37,6 +43,12 @@ export const JOB_ROLE_PRESETS: JobRolePreset[] = [
   { id: "ASSISTANT_CINEMA_MANAGER", label: "Assistant cinema manager", description: "Supports branch leadership without account-provisioning authority.", department: "GENERAL_OPERATIONS", position: "ASSISTANT_MANAGER", accessRole: "EMPLOYEE", location: "BRANCH" },
   { id: "CINEMA_MANAGER", label: "Cinema manager", description: "Manages branch-scoped staff and operational workflows.", department: "GENERAL_OPERATIONS", position: "CINEMA_MANAGER", accessRole: "BRANCH_MANAGER", location: "BRANCH" },
   { id: "FILM_PROGRAMMING_OPERATOR", label: "Film programming & scheduling", description: "Prepares movie, release-plan and schedule drafts for administrator approval.", department: "CONTENT_PROGRAMMING", position: "PROGRAMMING_OPERATOR", accessRole: "PROGRAMMING_OPERATOR", location: "HEAD_OFFICE" },
+  { id: "FILM_PROGRAMMING_APPROVER", label: "Programming approver", description: "Reviews movie content, release plans and schedules created by programming operators.", department: "CONTENT_PROGRAMMING", position: "PROGRAMMING_APPROVER", accessRole: "PROGRAMMING_APPROVER", location: "HEAD_OFFICE" },
+  { id: "FINANCE_OFFICER", label: "Finance officer", description: "Investigates refunds, payment attempts and reconciliation exceptions.", department: "FINANCE", position: "FINANCE_OFFICER", accessRole: "FINANCE_OFFICER", location: "HEAD_OFFICE" },
+  { id: "FINANCE_APPROVER", label: "Finance approver", description: "Approves financial exceptions and high-risk refund decisions.", department: "FINANCE", position: "FINANCE_APPROVER", accessRole: "FINANCE_APPROVER", location: "HEAD_OFFICE" },
+  { id: "COMMERCIAL_MANAGER", label: "Commercial manager", description: "Owns price books, commercial offers and promotion configuration.", department: "COMMERCIAL", position: "COMMERCIAL_MANAGER", accessRole: "COMMERCIAL_MANAGER", location: "HEAD_OFFICE" },
+  { id: "SYSTEM_ADMINISTRATOR", label: "System administrator", description: "Manages identities, access and system configuration without business approval authority.", department: "INFORMATION_TECHNOLOGY", position: "SYSTEM_ADMINISTRATOR", accessRole: "SYSTEM_ADMIN", location: "HEAD_OFFICE" },
+  { id: "SECURITY_AUDITOR", label: "Security auditor", description: "Read-only access to audit evidence and compliance reports.", department: "RISK_COMPLIANCE", position: "SECURITY_AUDITOR", accessRole: "SECURITY_AUDITOR", location: "HEAD_OFFICE" },
 ];
 
 export const getJobRolePreset = (id: JobRolePresetId) =>

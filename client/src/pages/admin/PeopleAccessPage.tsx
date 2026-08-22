@@ -50,12 +50,13 @@ type ConfirmAction = {
   title: string;
   description: string;
   label: string;
+  successMessage?: string;
   destructive?: boolean;
   run: () => Promise<void>;
 };
 
 const tabCopy: Record<WorkspaceTab, { title: string; description: string }> = {
-  customers: { title: "Customers", description: "Manage membership access and profile readiness." },
+  customers: { title: "Customers", description: "Manage customer account access and booking details." },
   staff: { title: "Staff", description: "Manage cinema assignments, employment and operational access." },
   invitations: { title: "Invitations", description: "Track pending staff activation and resend secure invitations." },
 };
@@ -75,7 +76,8 @@ export default function PeopleAccessPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = validTab(searchParams.get("tab"));
   const inviteOpen = searchParams.get("invite") === "1";
-  const canInviteEmployee = user?.role === "ROLE_ADMIN" || user?.role === "ROLE_SUPER_ADMIN";
+  const canInviteEmployee = user?.permissions.includes("EMPLOYEE_CREATE")
+    || user?.roles.some((role) => role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN");
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -138,7 +140,10 @@ export default function PeopleAccessPage() {
     .map((account) => ({ account, profile: profileById.get(account.accountId) })), [accounts, profileById]);
 
   const staffRows = useMemo<StaffRow[]>(() => accounts
-    .filter((account) => roleNames(account).some((role) => role === "EMPLOYEE" || role === "BRANCH_MANAGER" || role === "PROGRAMMING_OPERATOR"))
+    .filter((account) => roleNames(account).some((role) => [
+      "EMPLOYEE", "BRANCH_MANAGER", "PROGRAMMING_OPERATOR", "PROGRAMMING_APPROVER",
+      "FINANCE_OFFICER", "FINANCE_APPROVER", "COMMERCIAL_MANAGER", "SECURITY_AUDITOR", "SYSTEM_ADMIN",
+    ].includes(role)))
     .map((account) => {
       const employee = employeeByAccount.get(account.accountId);
       return { account, employee, profile: profileById.get(account.accountId), cluster: employee?.cinemaId ? clusterById.get(employee.cinemaId) : undefined };
@@ -177,7 +182,7 @@ export default function PeopleAccessPage() {
     setActionLoading(true);
     try {
       await confirmAction.run();
-      setToast({ type: "success", message: `${confirmAction.label} completed.` });
+      setToast({ type: "success", message: confirmAction.successMessage ?? `${confirmAction.label} completed.` });
       setConfirmAction(null);
       await load();
     } catch (actionError: any) {
@@ -220,10 +225,12 @@ export default function PeopleAccessPage() {
   };
 
   const revokeSessions = (row: CustomerRow | StaffRow) => {
+    const name = row.profile?.fullName || row.account.email || "This account";
     setConfirmAction({
-      title: "Revoke all sessions?",
-      description: `${row.profile?.fullName || row.account.email || "This account"} will need to sign in again on every device.`,
-      label: "Revoke sessions",
+      title: "Sign out on all devices?",
+      description: `${name} will need to sign in again. The account and staff assignment will remain active.`,
+      label: "Sign out devices",
+      successMessage: `${name} was signed out on all devices.`,
       run: async () => { await authApi.revokeSessions(row.account.accountId); },
     });
   };
@@ -234,9 +241,9 @@ export default function PeopleAccessPage() {
 
   const stats = tab === "customers" ? [
     { label: "Total members", value: customerRows.length, icon: UsersRound, tone: "blue" },
-    { label: "Active", value: customerRows.filter((row) => row.account.status === "ACTIVE").length, icon: UserCheck, tone: "emerald" },
-    { label: "Incomplete profile", value: customerRows.filter((row) => !row.profile?.profileCompleted).length, icon: Clock3, tone: "amber" },
-    { label: "Suspended", value: customerRows.filter((row) => row.account.status === "INACTIVE").length, icon: UserRoundX, tone: "rose" },
+    { label: "Active accounts", value: customerRows.filter((row) => row.account.status === "ACTIVE").length, icon: UserCheck, tone: "emerald" },
+    { label: "Details required", value: customerRows.filter((row) => !row.profile?.profileCompleted).length, icon: Clock3, tone: "amber" },
+    { label: "Suspended accounts", value: customerRows.filter((row) => row.account.status === "INACTIVE").length, icon: UserRoundX, tone: "rose" },
   ] : [
     { label: "Active staff", value: staffRows.filter((row) => row.account.status === "ACTIVE" && row.employee?.status === "ACTIVE").length, icon: UserRoundCheck, tone: "emerald" },
     { label: "Pending invitations", value: pendingRows.length, icon: MailPlus, tone: "blue" },
@@ -301,11 +308,14 @@ export default function PeopleAccessPage() {
       </div>
 
       <AlertDialog open={!!confirmAction} onOpenChange={(open) => !open && !actionLoading && setConfirmAction(null)}>
-        <AlertDialogContent className="border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-main)]">
-          <AlertDialogHeader><AlertDialogTitle>{confirmAction?.title}</AlertDialogTitle><AlertDialogDescription className="text-[var(--text-sub)]">{confirmAction?.description}</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={actionLoading}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={(event) => { event.preventDefault(); runConfirmedAction(); }} disabled={actionLoading} className={confirmAction?.destructive ? "bg-red-600 text-white hover:bg-red-500" : "bg-blue-600 text-white hover:bg-blue-500"}>{actionLoading ? "Working…" : confirmAction?.label}</AlertDialogAction>
+        <AlertDialogContent className="w-[min(440px,calc(100vw-32px))] max-w-[440px] gap-0 overflow-hidden rounded-2xl border-[var(--border-color)] bg-[var(--bg-card)] p-0 text-[var(--text-main)] shadow-[0_24px_72px_rgba(0,0,0,0.24)]">
+          <AlertDialogHeader className="px-6 pb-5 pt-6">
+            <AlertDialogTitle className="text-lg">{confirmAction?.title}</AlertDialogTitle>
+            <AlertDialogDescription className="leading-6 text-[var(--text-sub)]">{confirmAction?.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="border-t border-[var(--border-color)] bg-[var(--bg-card)] px-6 py-4">
+            <AlertDialogCancel disabled={actionLoading} className="h-10 rounded-xl border-0 bg-transparent px-4 text-[var(--text-sub)] shadow-none hover:bg-[var(--bg-main)] hover:text-[var(--text-main)]">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={(event) => { event.preventDefault(); runConfirmedAction(); }} disabled={actionLoading} className={`h-10 rounded-xl px-4 shadow-sm ${confirmAction?.destructive ? "bg-red-600 text-white hover:bg-red-500" : "bg-blue-600 text-white hover:bg-blue-500"}`}>{actionLoading ? "Working…" : confirmAction?.label}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -321,11 +331,11 @@ function StatCard({ label, value, icon: Icon, tone, loading }: { label: string; 
 function FilterPanel({ tab, clusters, values, setters }: any) {
   return <div className="mb-4 grid grid-cols-1 gap-3 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4 sm:grid-cols-2 xl:grid-cols-5">
     {tab !== "invitations" && <FilterSelect value={values.statusFilter} setValue={setters.setStatusFilter} placeholder="Account status" items={[{ value: "ALL", label: "All statuses" }, { value: "ACTIVE", label: "Active" }, { value: "PENDING", label: "Pending" }, { value: "INACTIVE", label: "Suspended" }]} />}
-    {tab === "customers" ? <FilterSelect value={values.profileFilter} setValue={setters.setProfileFilter} placeholder="Profile status" items={[{ value: "ALL", label: "All profiles" }, { value: "COMPLETE", label: "Complete" }, { value: "INCOMPLETE", label: "Incomplete" }]} /> : <>
+    {tab === "customers" ? <FilterSelect value={values.profileFilter} setValue={setters.setProfileFilter} placeholder="Booking details" items={[{ value: "ALL", label: "All booking details" }, { value: "COMPLETE", label: "Ready" }, { value: "INCOMPLETE", label: "Details required" }]} /> : <>
       <FilterSelect value={values.branchFilter} setValue={setters.setBranchFilter} placeholder="Branch" items={[{ value: "ALL", label: "All branches" }, ...clusters.map((cluster: ClusterResponse) => ({ value: String(cluster.clusterId), label: cluster.clusterName }))]} />
       {tab === "staff" && <>
-        <FilterSelect value={values.departmentFilter} setValue={setters.setDepartmentFilter} placeholder="Primary work area" items={["ALL", "GENERAL_OPERATIONS", "BOX_OFFICE", "FOOD_BEVERAGE", "FLOOR_GUEST_SERVICES", "PROJECTION_TECHNICAL", "FACILITIES_MAINTENANCE"].map((value) => ({ value, label: value === "ALL" ? "All work areas" : formatEnum(value) }))} />
-        <FilterSelect value={values.positionFilter} setValue={setters.setPositionFilter} placeholder="Position" items={["ALL", "TEAM_MEMBER", "SUPERVISOR", "ASSISTANT_MANAGER", "CINEMA_MANAGER"].map((value) => ({ value, label: value === "ALL" ? "All positions" : formatEnum(value) }))} />
+        <FilterSelect value={values.departmentFilter} setValue={setters.setDepartmentFilter} placeholder="Primary work area" items={["ALL", "GENERAL_OPERATIONS", "BOX_OFFICE", "FOOD_BEVERAGE", "FLOOR_GUEST_SERVICES", "PROJECTION_TECHNICAL", "FACILITIES_MAINTENANCE", "CONTENT_PROGRAMMING", "FINANCE", "COMMERCIAL", "INFORMATION_TECHNOLOGY", "RISK_COMPLIANCE"].map((value) => ({ value, label: value === "ALL" ? "All work areas" : formatEnum(value) }))} />
+        <FilterSelect value={values.positionFilter} setValue={setters.setPositionFilter} placeholder="Position" items={["ALL", "TEAM_MEMBER", "SUPERVISOR", "ASSISTANT_MANAGER", "CINEMA_MANAGER", "PROGRAMMING_OPERATOR", "PROGRAMMING_APPROVER", "FINANCE_OFFICER", "FINANCE_APPROVER", "COMMERCIAL_MANAGER", "SYSTEM_ADMINISTRATOR", "SECURITY_AUDITOR"].map((value) => ({ value, label: value === "ALL" ? "All positions" : formatEnum(value) }))} />
         <FilterSelect value={values.employmentFilter} setValue={setters.setEmploymentFilter} placeholder="Employment" items={["ALL", "FULL_TIME", "PART_TIME", "FIXED_TERM", "SEASONAL"].map((value) => ({ value, label: value === "ALL" ? "All employment types" : formatEnum(value) }))} />
       </>}
     </>}
@@ -375,10 +385,10 @@ function CustomerTable({ rows, loading, navigate, onStatus, onResend, onRevoke }
       <TableHeader className="bg-[rgba(128,128,128,0.04)]">
         <TableRow className="border-[var(--border-color)] hover:bg-transparent">
           <TableHead className={peopleTableHeadClass}>Customer</TableHead>
-          <TableHead className={peopleTableHeadClass}>Membership</TableHead>
-          <TableHead className={peopleTableHeadClass}>Profile</TableHead>
-          <TableHead className={peopleTableHeadClass}>Joined</TableHead>
-          <TableHead className={peopleTableHeadClass}>Last active</TableHead>
+          <TableHead className={peopleTableHeadClass}>Account status</TableHead>
+          <TableHead className={peopleTableHeadClass}>Booking details</TableHead>
+          <TableHead className={peopleTableHeadClass}>Member since</TableHead>
+          <TableHead className={peopleTableHeadClass}>Last sign-in</TableHead>
           <TableHead className={`${peopleTableHeadClass} text-right`}>Actions</TableHead>
         </TableRow>
       </TableHeader>
@@ -387,7 +397,7 @@ function CustomerTable({ rows, loading, navigate, onStatus, onResend, onRevoke }
           <TableRow key={row.account.accountId} className={peopleTableRowClass}>
             <TableCell className={peopleTableCellClass}><Person name={row.profile?.fullName || row.account.username || "Unnamed member"} email={row.account.email} avatar={row.profile?.avatarUrl} /></TableCell>
             <TableCell className={peopleTableCellClass}><StatusBadge status={row.account.status} /></TableCell>
-            <TableCell className={peopleTableCellClass}>{row.profile?.profileCompleted ? <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-500"><CheckCircle2 size={14} /> Complete</span> : <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-500"><Clock3 size={14} /> Incomplete</span>}</TableCell>
+            <TableCell className={peopleTableCellClass}>{row.profile?.profileCompleted ? <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-500"><CheckCircle2 size={14} /> Ready</span> : <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-500"><Clock3 size={14} /> Details required</span>}</TableCell>
             <TableCell className={`${peopleTableCellClass} text-sm text-[var(--text-sub)]`}>{formatDate(row.account.createdAt || row.profile?.createdAt)}</TableCell>
             <TableCell className={`${peopleTableCellClass} text-sm text-[var(--text-sub)]`}>{formatDateTime(row.account.lastLoginAt)}</TableCell>
             <TableCell className={`${peopleTableCellClass} text-right`}>
@@ -455,7 +465,7 @@ function InvitationTable({ rows, loading, onResend, onCancel }: any) {
           <TableRow key={row.account.accountId} className={peopleTableRowClass}>
             <TableCell className={peopleTableCellClass}><Person name={row.profile?.fullName || row.account.username || "Invited employee"} email={row.account.email} /></TableCell>
             <TableCell className={`${peopleTableCellClass} text-sm text-[var(--text-main)]`}>
-              {roleNames(row.account).includes("PROGRAMMING_OPERATOR") ? "Programming Operator" : roleNames(row.account).includes("BRANCH_MANAGER") ? "Branch Manager" : "Employee"}
+              {formatEnum(roleNames(row.account).find((role) => role !== "MEMBER") ?? "EMPLOYEE")}
             </TableCell>
             <TableCell className={`${peopleTableCellClass} text-sm text-[var(--text-main)]`}>{row.cluster?.clusterName || "Unassigned"}</TableCell>
             <TableCell className={`${peopleTableCellClass} text-sm text-[var(--text-sub)]`}>{formatDate(row.account.createdAt)}</TableCell>
@@ -487,7 +497,7 @@ function CustomerPrimaryAction({ row, navigate, onStatus, onResend }: any) {
 }
 
 function CustomerActions({ row, onStatus, onRevoke }: any) {
-  return <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="size-8 rounded-lg text-[var(--text-sub)] hover:bg-black/5 hover:text-[var(--text-main)] dark:hover:bg-white/10" aria-label="More customer actions"><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => onRevoke(row)}><KeyRound /> Revoke sessions</DropdownMenuItem>{row.account.status !== "INACTIVE" && <><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onClick={() => onStatus(row, "INACTIVE")}><UserRoundX /> Suspend</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu>;
+  return <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="size-8 rounded-lg text-[var(--text-sub)] hover:bg-black/5 hover:text-[var(--text-main)] dark:hover:bg-white/10" aria-label="More customer actions"><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => onRevoke(row)}><KeyRound /> Sign out all devices</DropdownMenuItem>{row.account.status !== "INACTIVE" && <><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onClick={() => onStatus(row, "INACTIVE")}><UserRoundX /> Suspend</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu>;
 }
 
 function StaffPrimaryAction({ row, navigate, onStatus, onResend }: any) {
@@ -499,7 +509,7 @@ function StaffPrimaryAction({ row, navigate, onStatus, onResend }: any) {
 
 function StaffActions({ row, onStatus, onRevoke }: any) {
   const disabled = row.account.status === "INACTIVE" || row.employee?.status === "DISABLED";
-  return <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="size-8 rounded-lg text-[var(--text-sub)] hover:bg-black/5 hover:text-[var(--text-main)] dark:hover:bg-white/10" aria-label="More staff actions"><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => onRevoke(row)}><KeyRound /> Revoke sessions</DropdownMenuItem>{!disabled && <><DropdownMenuSeparator /><DropdownMenuItem disabled={!row.employee} variant="destructive" onClick={() => onStatus(row, false)}><UserRoundX /> Suspend</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu>;
+  return <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="size-8 rounded-lg text-[var(--text-sub)] hover:bg-black/5 hover:text-[var(--text-main)] dark:hover:bg-white/10" aria-label="More staff actions"><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => onRevoke(row)}><KeyRound /> Sign out all devices</DropdownMenuItem>{!disabled && <><DropdownMenuSeparator /><DropdownMenuItem disabled={!row.employee} variant="destructive" onClick={() => onStatus(row, false)}><UserRoundX /> Suspend</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu>;
 }
 
 function LoadingRows({ columns }: { columns: number }) {

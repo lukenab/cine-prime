@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { ArrowLeft, AlertCircle, X, ShieldCheck, UserRoundPlus } from "lucide-react";
 import { useNavigate, useOutletContext } from "react-router-dom";
-import { authApi } from "../../api/authApi";
 import { employeeApi, type EmployeeDepartment, type EmployeePosition, type EmploymentType } from "../../api/employeeApi";
 import { userApi } from "../../api/userApi";
 import { Toast as SharedToast } from "../../components/shared/Toast";
@@ -103,7 +102,6 @@ export default function CreateEmployeePage() {
   const [errorStep, setErrorStep] = useState<"account" | "employee" | null>(null);
   const [step, setStep]           = useState<"idle" | "account" | "employee">("idle");
   const [toast, setToast]         = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [provisionedAccountId, setProvisionedAccountId] = useState<string | null>(null);
 
   const accentColor = isDarkMode ? "#3b82f6" : "#2563eb";
 
@@ -125,6 +123,7 @@ export default function CreateEmployeePage() {
     if (!formData.dateOfBirth)                                  e.dateOfBirth    = "Date of birth is required";
     else if (formData.dateOfBirth > today)                      e.dateOfBirth    = "Date of birth cannot be in the future";
     if (!formData.address.trim())                               e.address        = "Address is required";
+    if (!formData.cinemaId.trim())                              e.cinemaId       = "Cinema ID is required for branch staff";
     if (!formData.position)                                     e.position       = "Position is required";
     if (!formData.department)                                   e.department     = "Primary work area is required";
     if (!formData.employmentType)                               e.employmentType = "Employment type is required";
@@ -142,44 +141,29 @@ export default function CreateEmployeePage() {
     setApiError(null);
     setErrorStep(null);
 
-    let currentStep: "account" | "employee" = provisionedAccountId ? "employee" : "account";
+    let currentStep: "account" | "employee" = "account";
 
     try {
-      // Step 1 — Create account (auth-service → Kafka → user-service creates User profile).
-      // Issue #161/#162: only fullName/email/role are sent now — no username/password.
-      // The account is created PENDING and an activation-link email is sent to the
-      // employee so they can set their own password (see /activate-account).
-      let accountId = provisionedAccountId;
-      if (!accountId) {
-        setStep("account");
-        const accountRes: any = await authApi.createAccount({
-          fullName: formData.fullName,
-          email:    formData.email,
-          role:     "EMPLOYEE",
-          phoneNumber: formData.phoneNumber,
-          dateOfBirth: formData.dateOfBirth,
-          gender: formData.gender,
-          identityCard: formData.identityCard,
-          address: formData.address,
-        });
+      // user-service owns the assignment and invokes Auth through its internal
+      // provisioning contract. Public /api/accounts remains MEMBER-only.
+      setStep("account");
+      const invitationResponse: any = await employeeApi.invite({
+        fullName: formData.fullName,
+        email: formData.email,
+        phoneNumber: formData.phoneNumber,
+        cinemaId: formData.cinemaId.trim() || undefined,
+        position: formData.position as EmployeePosition,
+        department: formData.department as EmployeeDepartment,
+        employmentType: formData.employmentType as EmploymentType,
+        hireDate: formData.hireDate,
+        accessRole: formData.position === "CINEMA_MANAGER" ? "BRANCH_MANAGER" : "EMPLOYEE",
+      });
+      const accountId = invitationResponse?.data?.result?.accountId ?? invitationResponse?.result?.accountId;
+      if (!accountId) throw new Error("Staff invitation completed but accountId was not returned.");
 
-        accountId = accountRes?.data?.result?.accountId ?? accountRes?.result?.accountId;
-        if (!accountId) throw new Error("Account created but accountId not returned.");
-        setProvisionedAccountId(accountId);
-      }
-
-      // Step 2 — Create employee record (user profile exists via Kafka by now)
+      // Complete the profile fields that are not authorization attributes.
       currentStep = "employee";
       setStep("employee");
-      await employeeApi.create({
-        accountId,
-        cinemaId:       formData.cinemaId.trim() || undefined,
-        position:       formData.position as EmployeePosition,
-        department:     formData.department as EmployeeDepartment,
-        employmentType: formData.employmentType as EmploymentType,
-        hireDate:       formData.hireDate,
-      });
-
       await userApi.updateUser(accountId, {
         fullName: formData.fullName,
         phoneNumber: formData.phoneNumber,
@@ -188,8 +172,6 @@ export default function CreateEmployeePage() {
         identityCard: formData.identityCard,
         address: formData.address,
       });
-      setProvisionedAccountId(null);
-
       setToast({
         type: "success",
         message: `Employee account created. Activation email sent to ${formData.email}.`,

@@ -26,7 +26,7 @@ public class UserController {
     UserService userService;
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN') or #id == authentication.principal.claims['accountId']")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'USER_READ') or #id == authentication.principal.claims['accountId']")
     public ApiResponse<UserResponse> getUserById(@PathVariable String id){
         return ApiResponse.<UserResponse>builder()
                 .result(userService.getUserById(id))
@@ -34,7 +34,7 @@ public class UserController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN') or #id == authentication.principal.claims['accountId']")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'USER_UPDATE') or #id == authentication.principal.claims['accountId']")
     public ApiResponse<UserResponse> updateUser(@PathVariable String id, @Valid @RequestBody UserUpdateRequest request){
         return ApiResponse.<UserResponse>builder()
                 .result(userService.updateUser(id, request))
@@ -42,7 +42,10 @@ public class UserController {
     }
 
     @PutMapping("/{id}/staff-profile")
-    @PreAuthorize("hasAnyAuthority('ROLE_EMPLOYEE', 'ROLE_BRANCH_MANAGER', 'ROLE_PROGRAMMING_OPERATOR') and #id == authentication.principal.claims['accountId']")
+    @PreAuthorize("hasAnyAuthority('ROLE_EMPLOYEE', 'ROLE_BRANCH_MANAGER', 'ROLE_PROGRAMMING_OPERATOR', " +
+            "'ROLE_PROGRAMMING_APPROVER', 'ROLE_FINANCE_OFFICER', 'ROLE_FINANCE_APPROVER', " +
+            "'ROLE_COMMERCIAL_MANAGER', 'ROLE_SECURITY_AUDITOR', 'ROLE_SYSTEM_ADMIN') " +
+            "and #id == authentication.principal.claims['accountId']")
     public ApiResponse<UserResponse> completeStaffProfile(
             @PathVariable String id,
             @Valid @RequestBody StaffProfileCompletionRequest request) {
@@ -73,7 +76,7 @@ public class UserController {
     }
 
     @PostMapping(value = "/{id}/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN') or #id == authentication.principal.claims['accountId']")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'USER_UPDATE') or #id == authentication.principal.claims['accountId']")
     public ApiResponse<UserResponse> uploadAvatar(
             @PathVariable String id,
             @RequestParam("file") MultipartFile file) {

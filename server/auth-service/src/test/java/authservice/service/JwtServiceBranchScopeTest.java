@@ -6,6 +6,9 @@ import authservice.repository.AuthTokenRepository;
 import com.nimbusds.jwt.SignedJWT;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import authservice.enums.StaffProvisioningRole;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
@@ -67,6 +70,19 @@ class JwtServiceBranchScopeTest {
         assertThat(token.getJWTClaimsSet().getStringClaim("scope")).contains("ROLE_MEMBER");
         assertThat(token.getJWTClaimsSet().getClaim("staffAssignmentActive")).isNull();
         assertThat(token.getJWTClaimsSet().getClaim("cinemaClusterIds")).isNull();
+    }
+
+    @ParameterizedTest
+    @EnumSource(StaffProvisioningRole.class)
+    void everyProvisionedStaffRoleCanIssueTokenFromLocalProjection(StaffProvisioningRole role) throws Exception {
+        Account staff = account("ACC-" + role.name(), role.name());
+        when(projections.resolve(staff)).thenReturn(new StaffAccessProjectionService.StaffAuthorization(
+                true, true, role.name(), List.of()));
+
+        SignedJWT token = SignedJWT.parse(service.generateToken(staff));
+
+        assertThat(token.getJWTClaimsSet().getStringClaim("scope")).contains("ROLE_" + role.name());
+        assertThat(token.getJWTClaimsSet().getBooleanClaim("staffAssignmentActive")).isTrue();
     }
 
     private Account account(String id, String role) {

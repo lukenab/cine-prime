@@ -17,6 +17,13 @@ export interface EmployeeUpdatePayload {
   hireDate?: string;
 }
 
+export interface EmployeeAccessAssignmentPayload {
+  cinemaId?: string;
+  position: EmployeePosition;
+  department: EmployeeDepartment;
+  accessRole: EmployeeInvitationPayload["accessRole"];
+}
+
 export interface EmployeeInvitationPayload {
   fullName: string;
   email: string;
@@ -26,7 +33,8 @@ export interface EmployeeInvitationPayload {
   department: EmployeeDepartment;
   employmentType: EmploymentType;
   hireDate: string;
-  accessRole: 'EMPLOYEE' | 'BRANCH_MANAGER' | 'PROGRAMMING_OPERATOR';
+  accessRole: 'EMPLOYEE' | 'BRANCH_MANAGER' | 'PROGRAMMING_OPERATOR' | 'PROGRAMMING_APPROVER'
+    | 'FINANCE_OFFICER' | 'FINANCE_APPROVER' | 'COMMERCIAL_MANAGER' | 'SECURITY_AUDITOR' | 'SYSTEM_ADMIN';
 }
 
 export type EmployeePosition =
@@ -34,6 +42,12 @@ export type EmployeePosition =
   | 'ASSISTANT_MANAGER'
   | 'CINEMA_MANAGER'
   | 'PROGRAMMING_OPERATOR'
+  | 'PROGRAMMING_APPROVER'
+  | 'FINANCE_OFFICER'
+  | 'FINANCE_APPROVER'
+  | 'COMMERCIAL_MANAGER'
+  | 'SYSTEM_ADMINISTRATOR'
+  | 'SECURITY_AUDITOR'
   // Legacy API values retained while existing records are migrated.
   | 'STAFF'
   | 'SUPERVISOR'
@@ -47,6 +61,10 @@ export type EmployeeDepartment =
   | 'PROJECTION_TECHNICAL'
   | 'FACILITIES_MAINTENANCE'
   | 'CONTENT_PROGRAMMING'
+  | 'FINANCE'
+  | 'COMMERCIAL'
+  | 'INFORMATION_TECHNOLOGY'
+  | 'RISK_COMPLIANCE'
   // Legacy API values retained while existing records are migrated.
   | 'CONCESSION'
   | 'FLOOR'
@@ -75,6 +93,7 @@ export interface EmployeeResponse {
   employmentType: EmploymentType | null;
   hireDate: string;
   status: 'ACTIVE' | 'DISABLED';
+  accessRole: EmployeeInvitationPayload["accessRole"];
   createdAt: string;
   updatedAt: string;
   // User profile fields (from linked User entity)
@@ -106,6 +125,9 @@ export const employeeApi = {
 
   update: (id: string, payload: EmployeeUpdatePayload) =>
     axiosClient.put<any>(`/api/employees/${id}`, payload),
+
+  changeAccessAssignment: (id: string, payload: EmployeeAccessAssignmentPayload) =>
+    axiosClient.put<any>(`/api/employees/${id}/access-assignment`, payload),
 
   disable: (id: string) =>
     axiosClient.delete<any>(`/api/employees/${id}`),

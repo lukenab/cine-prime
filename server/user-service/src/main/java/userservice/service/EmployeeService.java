@@ -19,6 +19,8 @@ import userservice.dto.AuthAccountSummary;
 import userservice.dto.AuthAccountInvitationRequest;
 import userservice.dto.EmployeeCreateRequest;
 import userservice.dto.EmployeeInvitationRequest;
+import userservice.dto.EmployeeAccessAssignmentRequest;
+import userservice.dto.AuthStaffRoleRequest;
 import userservice.dto.EmployeeResponse;
 import userservice.dto.EmployeeUpdateRequest;
 import userservice.dto.PageResponse;
@@ -32,12 +34,19 @@ import userservice.messaging.StaffAccessEventPublisher;
 import userservice.repository.EmployeeRepository;
 import userservice.repository.UserRepository;
 
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class EmployeeService {
+
+    private static final Set<String> EMPLOYMENT_ROLES = Set.of(
+            "EMPLOYEE", "BRANCH_MANAGER", "PROGRAMMING_OPERATOR", "PROGRAMMING_APPROVER",
+            "FINANCE_OFFICER", "FINANCE_APPROVER", "COMMERCIAL_MANAGER",
+            "SECURITY_AUDITOR", "SYSTEM_ADMIN");
 
     private final EmployeeRepository employeeRepository;
     private final UserRepository userRepository;
@@ -55,9 +64,7 @@ public class EmployeeService {
                 .getAccount(request.getAccountId(), internalServiceKey)
                 .getResult();
         boolean employmentRole = account != null && account.getRoles() != null
-                && (account.getRoles().contains("EMPLOYEE")
-                || account.getRoles().contains("BRANCH_MANAGER")
-                || account.getRoles().contains("PROGRAMMING_OPERATOR"));
+                && account.getRoles().stream().anyMatch(EMPLOYMENT_ROLES::contains);
         if (!employmentRole
                 || "INACTIVE".equals(account.getStatus())) {
             throw new AppException(ErrorCode.INVALID_EMPLOYEE_ACCOUNT);
@@ -130,7 +137,9 @@ public class EmployeeService {
             if (exception.contentUTF8().contains("\"code\":1011")) {
                 throw new AppException(ErrorCode.EMAIL_EXISTED);
             }
-            throw exception;
+            log.warn("Auth service rejected staff invitation for role {}: {}",
+                    request.getAccessRole(), exception.contentUTF8());
+            throw new AppException(ErrorCode.STAFF_INVITATION_REJECTED);
         }
 
         if (account == null || account.getAccountId() == null) {
@@ -278,12 +287,67 @@ public class EmployeeService {
         return employeeCode;
     }
 
-    private StaffAccessRole resolveAccessRole(AuthAccountSummary account) {
-        if (account.getRoles().contains("BRANCH_MANAGER")) {
-            return StaffAccessRole.BRANCH_MANAGER;
+    /**
+     * Changes authorization-relevant employment data as one user-service command.
+     * Auth is updated through its internal provisioning boundary; callers cannot
+     * mutate a staff role through the public account API.
+     */
+    @Transactional
+    public EmployeeResponse changeAccessAssignment(String id, EmployeeAccessAssignmentRequest request) {
+        Employee employee = findEmployee(id);
+        String accountId = employee.getUser().getAccountId();
+        StaffAccessRole previousRole = employee.getAccessRole();
+
+        try {
+            authAccountClient.updateStaffRole(accountId, internalServiceKey,
+                    new AuthStaffRoleRequest(request.getAccessRole().name()));
+        } catch (FeignException exception) {
+            log.warn("Auth role synchronization rejected for account {}: {}", accountId, exception.contentUTF8());
+            throw new AppException(ErrorCode.STAFF_ASSIGNMENT_UPDATE_FAILED);
         }
-        if (account.getRoles().contains("PROGRAMMING_OPERATOR")) {
-            return StaffAccessRole.PROGRAMMING_OPERATOR;
+
+        EmployeeResponse oldData = employeeMapper.toEmployeeResponse(employee);
+        employee.setCinemaId(normalizeCinemaId(request.getCinemaId()));
+        employee.setDepartment(request.getDepartment());
+        employee.setPosition(request.getPosition());
+        employee.setAccessRole(request.getAccessRole());
+        try {
+            Employee saved = employeeRepository.saveAndFlush(employee);
+            auditLogService.log("Employee", saved.getEmployeeId(), "ACCESS_ASSIGNMENT_CHANGED",
+                    oldData, saved, getCurrentAccountId());
+            staffAccessEventPublisher.assignmentUpdated(saved);
+            return employeeMapper.toEmployeeResponse(saved);
+        } catch (RuntimeException failure) {
+            if (previousRole != null) {
+                try {
+                    authAccountClient.updateStaffRole(accountId, internalServiceKey,
+                            new AuthStaffRoleRequest(previousRole.name()));
+                } catch (RuntimeException compensationFailure) {
+                    log.error("Failed to compensate Auth role for account {}", accountId, compensationFailure);
+                }
+            }
+            throw failure;
+        }
+    }
+
+    private String normalizeCinemaId(String cinemaId) {
+        return cinemaId == null || cinemaId.isBlank() ? null : cinemaId.trim();
+    }
+
+    private StaffAccessRole resolveAccessRole(AuthAccountSummary account) {
+        for (StaffAccessRole role : List.of(
+                StaffAccessRole.SYSTEM_ADMIN,
+                StaffAccessRole.PROGRAMMING_APPROVER,
+                StaffAccessRole.FINANCE_APPROVER,
+                StaffAccessRole.FINANCE_OFFICER,
+                StaffAccessRole.COMMERCIAL_MANAGER,
+                StaffAccessRole.SECURITY_AUDITOR,
+                StaffAccessRole.BRANCH_MANAGER,
+                StaffAccessRole.PROGRAMMING_OPERATOR,
+                StaffAccessRole.EMPLOYEE)) {
+            if (account.getRoles().contains(role.name())) {
+                return role;
+            }
         }
         return StaffAccessRole.EMPLOYEE;
     }

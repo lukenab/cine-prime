@@ -7,6 +7,7 @@ import movie.theater.common.security.JwtSecurityUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,7 @@ import paymentservice.repository.PaymentAttemptRepository;
 import paymentservice.repository.PaymentEventInboxRepository;
 import paymentservice.repository.PaymentReconciliationCaseRepository;
 import paymentservice.repository.PaymentRefundRepository;
+import paymentservice.repository.RefundApprovalRequestRepository;
 import paymentservice.util.PaymentHashing;
 
 import java.math.BigDecimal;
@@ -50,6 +52,7 @@ public class PaymentApplicationService {
     private final PaymentEventInboxRepository inboxRepository;
     private final PaymentReconciliationCaseRepository reconciliationRepository;
     private final PaymentRefundRepository refundRepository;
+    private final RefundApprovalRequestRepository refundApprovalRepository;
     private final BookingGateway bookingGateway;
     private final VnpaySigner vnpaySigner;
     private final VnpayProperties vnpayProperties;
@@ -277,6 +280,142 @@ public class PaymentApplicationService {
                     "Refund provider confirmation received.");
         }
         return refundResponse(refund, false);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<RefundApprovalResponse> listRefundApprovals(String status, Pageable pageable) {
+        RefundApprovalStatus parsed = parseEnum(status, RefundApprovalStatus.class);
+        Page<RefundApprovalRequest> page = parsed == null
+                ? refundApprovalRepository.findAllByOrderByCreatedAtDesc(pageable)
+                : refundApprovalRepository.findAllByStatusOrderByCreatedAtDesc(parsed, pageable);
+        return page.map(this::refundApprovalResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public RefundApprovalResponse getRefundApproval(String requestId) {
+        return refundApprovalResponse(findRefundApproval(requestId));
+    }
+
+    @Transactional(readOnly = true)
+    public RefundApprovalResponse getLatestRefundApproval(String refundId) {
+        return refundApprovalRepository.findFirstByRefund_RefundIdOrderByCreatedAtDesc(refundId)
+                .map(this::refundApprovalResponse)
+                .orElse(null);
+    }
+
+    @Transactional
+    public RefundApprovalResponse createRefundApprovalDraft(String refundId, String note) {
+        PaymentRefund refund = refundRepository.findById(refundId)
+                .orElseThrow(() -> new AppException(REFUND_NOT_FOUND));
+        if (refund.getStatus() == PaymentRefundStatus.SUCCEEDED) {
+            throw new AppException(REFUND_NOT_ALLOWED);
+        }
+        refundApprovalRepository.findFirstByRefund_RefundIdOrderByCreatedAtDesc(refundId)
+                .filter(item -> item.getStatus() != RefundApprovalStatus.REJECTED
+                        && item.getStatus() != RefundApprovalStatus.EXECUTED)
+                .ifPresent(item -> { throw new AppException(REFUND_APPROVAL_ALREADY_ACTIVE); });
+        RefundApprovalRequest item = RefundApprovalRequest.builder()
+                .refund(refund)
+                .status(RefundApprovalStatus.DRAFT)
+                .requestedBy(requireAccountId())
+                .requestNote(normalizeOptionalNote(note))
+                .build();
+        try {
+            return refundApprovalResponse(refundApprovalRepository.saveAndFlush(item));
+        } catch (DataIntegrityViolationException conflict) {
+            throw new AppException(REFUND_APPROVAL_ALREADY_ACTIVE);
+        }
+    }
+
+    @Transactional
+    public RefundApprovalResponse submitRefundApproval(String requestId) {
+        RefundApprovalRequest item = findRefundApproval(requestId);
+        requireApprovalState(item, RefundApprovalStatus.DRAFT);
+        requireRequester(item);
+        item.setStatus(RefundApprovalStatus.SUBMITTED);
+        item.setSubmittedAt(OffsetDateTime.now());
+        return refundApprovalResponse(refundApprovalRepository.save(item));
+    }
+
+    @Transactional
+    public RefundApprovalResponse approveRefundApproval(String requestId, String note) {
+        RefundApprovalRequest item = findRefundApproval(requestId);
+        requireApprovalState(item, RefundApprovalStatus.SUBMITTED);
+        String actor = requireAccountId();
+        if (actor.equals(item.getRequestedBy())) {
+            throw new AppException(REFUND_SELF_APPROVAL_FORBIDDEN);
+        }
+        item.setStatus(RefundApprovalStatus.APPROVED);
+        item.setReviewedBy(actor);
+        item.setDecisionNote(normalizeOptionalNote(note));
+        item.setReviewedAt(OffsetDateTime.now());
+        return refundApprovalResponse(refundApprovalRepository.save(item));
+    }
+
+    @Transactional
+    public RefundApprovalResponse rejectRefundApproval(String requestId, String note) {
+        RefundApprovalRequest item = findRefundApproval(requestId);
+        requireApprovalState(item, RefundApprovalStatus.SUBMITTED);
+        String actor = requireAccountId();
+        if (actor.equals(item.getRequestedBy())) {
+            throw new AppException(REFUND_SELF_APPROVAL_FORBIDDEN);
+        }
+        item.setStatus(RefundApprovalStatus.REJECTED);
+        item.setReviewedBy(actor);
+        item.setDecisionNote(normalizeOptionalNote(note));
+        item.setReviewedAt(OffsetDateTime.now());
+        return refundApprovalResponse(refundApprovalRepository.save(item));
+    }
+
+    @Transactional
+    public RefundApprovalResponse executeRefundApproval(String requestId) {
+        RefundApprovalRequest item = findRefundApproval(requestId);
+        requireApprovalState(item, RefundApprovalStatus.APPROVED);
+        retryRefund(item.getRefund().getRefundId());
+        item.setStatus(RefundApprovalStatus.EXECUTED);
+        item.setExecutedBy(requireAccountId());
+        item.setExecutedAt(OffsetDateTime.now());
+        return refundApprovalResponse(refundApprovalRepository.save(item));
+    }
+
+    private RefundApprovalRequest findRefundApproval(String requestId) {
+        return refundApprovalRepository.findById(requestId)
+                .orElseThrow(() -> new AppException(REFUND_APPROVAL_NOT_FOUND));
+    }
+
+    private void requireApprovalState(RefundApprovalRequest item, RefundApprovalStatus expected) {
+        if (item.getStatus() != expected) throw new AppException(REFUND_APPROVAL_INVALID_STATE);
+    }
+
+    private void requireRequester(RefundApprovalRequest item) {
+        if (!requireAccountId().equals(item.getRequestedBy())) {
+            throw new AppException(PAYMENT_FORBIDDEN);
+        }
+    }
+
+    private String normalizeOptionalNote(String note) {
+        if (note == null || note.isBlank()) return null;
+        String normalized = note.trim();
+        return normalized.length() > 1000 ? normalized.substring(0, 1000) : normalized;
+    }
+
+    private RefundApprovalResponse refundApprovalResponse(RefundApprovalRequest item) {
+        return RefundApprovalResponse.builder()
+                .requestId(item.getRequestId())
+                .refundId(item.getRefund().getRefundId())
+                .bookingId(item.getRefund().getBookingId())
+                .status(item.getStatus().name())
+                .requestedBy(item.getRequestedBy())
+                .reviewedBy(item.getReviewedBy())
+                .executedBy(item.getExecutedBy())
+                .requestNote(item.getRequestNote())
+                .decisionNote(item.getDecisionNote())
+                .submittedAt(item.getSubmittedAt())
+                .reviewedAt(item.getReviewedAt())
+                .executedAt(item.getExecutedAt())
+                .createdAt(item.getCreatedAt())
+                .updatedAt(item.getUpdatedAt())
+                .build();
     }
 
     @Transactional(readOnly = true)

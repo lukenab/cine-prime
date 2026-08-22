@@ -5,10 +5,10 @@ import {
   BarChart3,
   Building2,
   CalendarDays,
-  CircleDollarSign,
+  BookOpen,
   Clapperboard,
   Film,
-  Languages,
+  Layers3,
   LayoutDashboard,
   MapPin,
   Popcorn,
@@ -17,7 +17,11 @@ import {
   Ticket,
   UserCog,
   Armchair,
+  ReceiptText,
+  ScrollText,
+  KeyRound,
 } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
 
 type PaletteIcon = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 
@@ -28,26 +32,32 @@ interface PaletteEntry {
   group: string;
   keywords: string;
   icon: PaletteIcon;
+  roles?: string[];
+  permissions?: string[];
 }
 
 const entries: PaletteEntry[] = [
-  { label: "Dashboard", description: "Business overview and admin KPIs", path: "/admin", group: "Workspace", keywords: "home overview analytics revenue", icon: LayoutDashboard },
-  { label: "Movie catalogue", description: "Import and manage movie content", path: "/admin/movies", group: "Content", keywords: "movie films tmdb catalogue", icon: Film },
-  { label: "Release planning", description: "Create and review release plans", path: "/admin/release-plans", group: "Content", keywords: "release plan programming", icon: CalendarDays },
-  { label: "Screening versions", description: "Manage presentation, audio and subtitle versions", path: "/admin/screening-versions", group: "Content", keywords: "format version language audio subtitle", icon: Languages },
-  { label: "Cinema clusters", description: "Manage branches and operating status", path: "/admin/clusters", group: "Facilities", keywords: "cinema branch cluster location", icon: Building2 },
-  { label: "Screening rooms", description: "Manage rooms, layouts and capacity", path: "/admin/rooms", group: "Facilities", keywords: "room seat theatre layout", icon: Armchair },
-  { label: "Showtime operations", description: "Review and manage published showtimes", path: "/admin/showtimes", group: "Operations", keywords: "showtime schedule screening", icon: Clapperboard },
-  { label: "Automatic scheduling", description: "Generate schedule drafts for review", path: "/admin/showtimes/auto", group: "Operations", keywords: "auto schedule scheduling plan", icon: CalendarDays },
-  { label: "Price books", description: "Manage branch pricing and availability", path: "/admin/price-books", group: "Operations", keywords: "price pricing rate book", icon: CircleDollarSign },
-  { label: "Bookings", description: "Search and manage customer bookings", path: "/admin/bookings", group: "Business operations", keywords: "booking order ticket reservation", icon: Ticket },
-  { label: "Concession catalogue", description: "Manage products, SKUs and combos", path: "/admin/concessions/catalog", group: "Business operations", keywords: "concession snack popcorn drink product combo", icon: Popcorn },
-  { label: "Concession fulfillment", description: "Prepare paid orders for pickup", path: "/admin/concessions/fulfillment", group: "Business operations", keywords: "concession order pickup fulfillment", icon: Popcorn },
-  { label: "Promotions", description: "Manage promotion codes and eligibility", path: "/admin/promotions", group: "Business operations", keywords: "promotion voucher discount offer", icon: Tags },
-  { label: "Refunds & reconciliation", description: "Resolve refunds and payment exceptions", path: "/admin/refunds-reconciliation", group: "Business operations", keywords: "refund reconciliation payment finance", icon: CircleDollarSign },
-  { label: "People & access", description: "Manage customers, staff and invitations", path: "/admin/people", group: "Administration", keywords: "people users employees staff access rbac", icon: UserCog },
-  { label: "Reports", description: "Review operational and financial reports", path: "/admin/reports", group: "Administration", keywords: "report analytics dashboard", icon: BarChart3 },
-  { label: "Settings", description: "Configure workspace preferences", path: "/admin/settings", group: "Administration", keywords: "settings configuration", icon: Settings2 },
+  { label: "Dashboard", description: "Business overview and admin KPIs", path: "/admin", group: "Workspace", keywords: "home overview analytics revenue", icon: LayoutDashboard, roles: ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"] },
+  { label: "Movie catalogue", description: "Import and manage movie content", path: "/admin/movies", group: "Content", keywords: "movie films tmdb catalogue", icon: Film, permissions: ["MOVIE_READ"] },
+  { label: "Release planning", description: "Create and review release plans", path: "/admin/release-plans", group: "Content", keywords: "release plan programming", icon: CalendarDays, permissions: ["RELEASE_PLAN_READ"] },
+  { label: "Screening versions", description: "Manage presentation, audio and subtitle versions", path: "/admin/screening-versions", group: "Content", keywords: "format version language audio subtitle", icon: Layers3, permissions: ["MOVIE_READ"] },
+  { label: "Cinema clusters", description: "Manage branches and operating status", path: "/admin/clusters", group: "Facilities", keywords: "cinema branch cluster location", icon: Building2, roles: ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"] },
+  { label: "Screening rooms", description: "Manage rooms, layouts and capacity", path: "/admin/rooms", group: "Facilities", keywords: "room seat theatre layout", icon: Armchair, roles: ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"] },
+  { label: "Showtime operations", description: "Review and manage published showtimes", path: "/admin/showtimes", group: "Operations", keywords: "showtime schedule screening", icon: Clapperboard, roles: ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"] },
+  { label: "Automatic scheduling", description: "Generate schedule drafts for review", path: "/admin/showtimes/auto", group: "Operations", keywords: "auto schedule scheduling plan", icon: CalendarDays, permissions: ["SCHEDULE_PLAN_SUBMIT", "SCHEDULE_PLAN_APPROVE"] },
+  { label: "Price books", description: "Manage branch pricing and availability", path: "/admin/price-books", group: "Operations", keywords: "price pricing rate book", icon: BookOpen, permissions: ["PRICE_BOOK_READ", "PRICE_BOOK_MANAGE"] },
+  { label: "Bookings", description: "Search and manage customer bookings", path: "/admin/bookings", group: "Business operations", keywords: "booking order ticket reservation", icon: Ticket, permissions: ["BOOKING_READ"] },
+  { label: "Concession catalogue", description: "Manage products, SKUs and combos", path: "/admin/concessions/catalog", group: "Business operations", keywords: "concession snack popcorn drink product combo", icon: Popcorn, permissions: ["CONCESSION_CATALOG_DRAFT", "CONCESSION_CATALOG_APPROVE"] },
+  { label: "Concession fulfillment", description: "Prepare paid orders for pickup", path: "/admin/concessions/fulfillment", group: "Business operations", keywords: "concession order pickup fulfillment", icon: Popcorn, roles: ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"] },
+  { label: "Promotions", description: "Manage promotion codes and eligibility", path: "/admin/promotions", group: "Business operations", keywords: "promotion voucher discount offer", icon: Tags, permissions: ["PROMOTION_READ"] },
+  { label: "Refunds & reconciliation", description: "Resolve refunds and payment exceptions", path: "/admin/refunds-reconciliation", group: "Business operations", keywords: "refund reconciliation payment finance", icon: ReceiptText, permissions: ["REFUND_READ", "RECONCILIATION_READ"] },
+  { label: "Workforce operations", description: "Plan rosters and review attendance", path: "/admin/workforce", group: "Business operations", keywords: "workforce shift roster attendance timesheet leave swap", icon: CalendarDays, permissions: ["WORKFORCE_PLAN", "TIMESHEET_REVIEW"] },
+  { label: "My schedule & time", description: "View shifts, attendance and personal timesheets", path: "/admin/my-workforce", group: "Workspace", keywords: "my schedule clock in clock out timesheet leave swap", icon: CalendarDays, permissions: ["WORKFORCE_SELF_READ"] },
+  { label: "People & access", description: "Manage customers, staff and invitations", path: "/admin/people", group: "Administration", keywords: "people users employees staff access rbac", icon: UserCog, permissions: ["EMPLOYEE_READ", "USER_READ", "ROLE_MANAGE"] },
+  { label: "Access matrix", description: "Manage role permissions", path: "/admin/access-matrix", group: "Administration", keywords: "role permission rbac matrix", icon: KeyRound, permissions: ["ROLE_MANAGE"] },
+  { label: "Audit trail", description: "Review security and access events", path: "/admin/audit", group: "Administration", keywords: "audit security compliance event", icon: ScrollText, permissions: ["AUDIT_READ"] },
+  { label: "Reports", description: "Review operational and financial reports", path: "/admin/reports", group: "Administration", keywords: "report analytics dashboard", icon: BarChart3, permissions: ["REPORT_READ", "AUDIT_READ"] },
+  { label: "Settings", description: "Configure workspace preferences", path: "/admin/settings", group: "Administration", keywords: "settings configuration", icon: Settings2, permissions: ["SYSTEM_CONFIG_MANAGE"] },
 ];
 
 interface CommandPaletteProps {
@@ -56,6 +66,7 @@ interface CommandPaletteProps {
 }
 
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -63,12 +74,16 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const filteredEntries = useMemo(() => {
+    const legacyAdmin = user?.roles.some((role) => role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN");
+    const visible = entries.filter((entry) => legacyAdmin
+      || ((!entry.roles || entry.roles.some((role) => user?.roles.includes(role)))
+        && (!entry.permissions || entry.permissions.some((permission) => user?.permissions.includes(permission)))));
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return entries;
-    return entries.filter((entry) =>
+    if (!normalized) return visible;
+    return visible.filter((entry) =>
       `${entry.label} ${entry.description} ${entry.keywords}`.toLowerCase().includes(normalized),
     );
-  }, [query]);
+  }, [query, user?.permissions, user?.roles]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

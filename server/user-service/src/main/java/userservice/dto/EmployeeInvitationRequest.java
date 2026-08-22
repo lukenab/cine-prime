@@ -53,7 +53,8 @@ public class EmployeeInvitationRequest {
 
     @AssertTrue(message = "Branch is required for cinema-based staff")
     public boolean isBranchAssignmentValid() {
-        return accessRole == StaffAccessRole.PROGRAMMING_OPERATOR
+        return accessRole == null
+                || isHeadOfficeRole(accessRole)
                 || (cinemaId != null && !cinemaId.isBlank());
     }
 
@@ -66,6 +67,24 @@ public class EmployeeInvitationRequest {
             case PROGRAMMING_OPERATOR -> department == EmployeeDepartment.CONTENT_PROGRAMMING
                     && position == EmployeePosition.PROGRAMMING_OPERATOR
                     && (cinemaId == null || cinemaId.isBlank());
+            case PROGRAMMING_APPROVER -> department == EmployeeDepartment.CONTENT_PROGRAMMING
+                    && position == EmployeePosition.PROGRAMMING_APPROVER
+                    && (cinemaId == null || cinemaId.isBlank());
+            case FINANCE_OFFICER -> department == EmployeeDepartment.FINANCE
+                    && position == EmployeePosition.FINANCE_OFFICER
+                    && (cinemaId == null || cinemaId.isBlank());
+            case FINANCE_APPROVER -> department == EmployeeDepartment.FINANCE
+                    && position == EmployeePosition.FINANCE_APPROVER
+                    && (cinemaId == null || cinemaId.isBlank());
+            case COMMERCIAL_MANAGER -> department == EmployeeDepartment.COMMERCIAL
+                    && position == EmployeePosition.COMMERCIAL_MANAGER
+                    && (cinemaId == null || cinemaId.isBlank());
+            case SECURITY_AUDITOR -> department == EmployeeDepartment.RISK_COMPLIANCE
+                    && position == EmployeePosition.SECURITY_AUDITOR
+                    && (cinemaId == null || cinemaId.isBlank());
+            case SYSTEM_ADMIN -> department == EmployeeDepartment.INFORMATION_TECHNOLOGY
+                    && position == EmployeePosition.SYSTEM_ADMINISTRATOR
+                    && (cinemaId == null || cinemaId.isBlank());
             case BRANCH_MANAGER -> department == EmployeeDepartment.GENERAL_OPERATIONS
                     && position == EmployeePosition.CINEMA_MANAGER
                     && cinemaId != null && !cinemaId.isBlank();
@@ -74,5 +93,9 @@ public class EmployeeInvitationRequest {
                     && position != EmployeePosition.CINEMA_MANAGER
                     && cinemaId != null && !cinemaId.isBlank();
         };
+    }
+
+    private boolean isHeadOfficeRole(StaffAccessRole role) {
+        return role != StaffAccessRole.EMPLOYEE && role != StaffAccessRole.BRANCH_MANAGER;
     }
 }

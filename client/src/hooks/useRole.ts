@@ -6,23 +6,36 @@ import { useAuth } from "../context/AuthContext";
  * buttons that would return 403 anyway.
  */
 export function useRole() {
-  const { user } = useAuth();
+  const { user, hasRole, hasPermission } = useAuth();
   // Fallback to localStorage for ProtectedRoute compatibility
   const role = user?.role ?? localStorage.getItem("role") ?? "";
 
-  const isAdmin    = role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN";
+  const isAdmin    = hasRole("ROLE_ADMIN", "ROLE_SUPER_ADMIN");
+  const isSystemAdmin = hasRole("ROLE_SYSTEM_ADMIN");
   const isBranchManager = role === "ROLE_BRANCH_MANAGER";
   const isEmployee = role === "ROLE_EMPLOYEE";
   const isProgrammingOperator = role === "ROLE_PROGRAMMING_OPERATOR";
+  const isProgrammingApprover = hasRole("ROLE_PROGRAMMING_APPROVER");
+  const isFinanceOfficer = hasRole("ROLE_FINANCE_OFFICER");
+  const isFinanceApprover = hasRole("ROLE_FINANCE_APPROVER");
+  const isCommercialManager = hasRole("ROLE_COMMERCIAL_MANAGER");
+  const isSecurityAuditor = hasRole("ROLE_SECURITY_AUDITOR");
   const isMember   = role === "ROLE_MEMBER";
 
   return {
     role,
     username: user?.username ?? "",
     isAdmin,
+    isSystemAdmin,
     isBranchManager,
     isEmployee,
     isProgrammingOperator,
+    isProgrammingApprover,
+    isFinanceOfficer,
+    isFinanceApprover,
+    isCommercialManager,
+    isSecurityAuditor,
+    hasPermission,
     isMember,
     /**
      * Fine-grained permission flags — each matches the backend
@@ -30,16 +43,16 @@ export function useRole() {
      */
     can: {
       // ADMIN or EMPLOYEE
-      submit  : isAdmin || isProgrammingOperator,
-      startRevision: isAdmin || isProgrammingOperator,
-      edit    : isAdmin || isProgrammingOperator,
-      view    : isAdmin || isProgrammingOperator,
-      archive : isAdmin,
+      submit  : isAdmin || hasPermission("MOVIE_SUBMIT", "RELEASE_PLAN_SUBMIT", "SCHEDULE_PLAN_SUBMIT"),
+      startRevision: isAdmin || hasPermission("MOVIE_UPDATE"),
+      edit    : isAdmin || hasPermission("MOVIE_UPDATE", "RELEASE_PLAN_EDIT"),
+      view    : isAdmin || hasPermission("MOVIE_READ", "RELEASE_PLAN_READ"),
+      archive : isAdmin || hasPermission("MOVIE_APPROVE"),
 
       // ADMIN only
-      approve       : isAdmin,
-      requestChanges: isAdmin,
-      reject        : isAdmin, // Cinema Cluster still uses reject terminology.
+      approve       : isAdmin || hasPermission("MOVIE_APPROVE", "RELEASE_PLAN_APPROVE", "SCHEDULE_PLAN_APPROVE"),
+      requestChanges: isAdmin || hasPermission("MOVIE_APPROVE", "RELEASE_PLAN_APPROVE", "SCHEDULE_PLAN_APPROVE"),
+      reject        : isAdmin || hasPermission("MOVIE_APPROVE"), // Cinema Cluster still uses reject terminology.
     },
   };
 }

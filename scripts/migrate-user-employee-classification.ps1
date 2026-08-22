@@ -23,6 +23,10 @@ ALTER TABLE public.employee
             'PROJECTION_TECHNICAL',
             'FACILITIES_MAINTENANCE',
             'CONTENT_PROGRAMMING',
+            'FINANCE',
+            'COMMERCIAL',
+            'INFORMATION_TECHNOLOGY',
+            'RISK_COMPLIANCE',
             'CONCESSION',
             'FLOOR',
             'PROJECTION',
@@ -41,6 +45,12 @@ ALTER TABLE public.employee
             'ASSISTANT_MANAGER',
             'CINEMA_MANAGER',
             'PROGRAMMING_OPERATOR',
+            'PROGRAMMING_APPROVER',
+            'FINANCE_OFFICER',
+            'FINANCE_APPROVER',
+            'COMMERCIAL_MANAGER',
+            'SYSTEM_ADMINISTRATOR',
+            'SECURITY_AUDITOR',
             'STAFF',
             'MANAGER'
         )
@@ -58,6 +68,23 @@ ALTER TABLE public.employee
             'PROBATION',
             'INTERN',
             'CONTRACT'
+        )
+    );
+
+ALTER TABLE public.employee
+    DROP CONSTRAINT IF EXISTS employee_access_role_check;
+ALTER TABLE public.employee
+    ADD CONSTRAINT employee_access_role_check CHECK (
+        access_role IS NULL OR access_role IN (
+            'EMPLOYEE',
+            'BRANCH_MANAGER',
+            'PROGRAMMING_OPERATOR',
+            'PROGRAMMING_APPROVER',
+            'FINANCE_OFFICER',
+            'FINANCE_APPROVER',
+            'COMMERCIAL_MANAGER',
+            'SECURITY_AUDITOR',
+            'SYSTEM_ADMIN'
         )
     );
 

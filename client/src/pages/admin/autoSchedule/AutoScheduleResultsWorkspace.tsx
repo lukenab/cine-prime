@@ -425,7 +425,8 @@ function buildValidationIssues(summary: string | undefined, slots: SchedulePlanS
 
 export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, onNewRun, onRevalidate, onTransition }: Props) {
   const { user } = useAuth();
-  const canApprovePlan = user?.role === "ROLE_ADMIN" || user?.role === "ROLE_SUPER_ADMIN";
+  const canApprovePlan = user?.permissions.includes("SCHEDULE_PLAN_APPROVE")
+    || user?.roles.some((role) => role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN");
   const slots = plan?.slots ?? [];
   const scopeDates = useMemo(() => enumerateDates(run.startDate, run.endDate), [run.endDate, run.startDate]);
   const availableDates = useMemo(() => Array.from(new Set([...scopeDates, ...slots.map((slot) => slot.businessDate)])).sort(), [scopeDates, slots]);

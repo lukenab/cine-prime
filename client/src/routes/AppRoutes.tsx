@@ -56,6 +56,8 @@ import EditPromotionPage from "../pages/admin/EditPromotionPage";
 import PromotionDetailPage from "../pages/admin/PromotionDetailPage";
 import ReportPage from "../pages/admin/ReportPage";
 import RefundReconciliationPage from "../pages/admin/RefundReconciliationPage";
+import AuditTrailPage from "../pages/admin/AuditTrailPage";
+import RolePermissionMatrixPage from "../pages/admin/RolePermissionMatrixPage";
 import SettingsPage from "../pages/admin/SettingsPage";
 import AdminProfilePage from "../pages/admin/AdminProfilePage";
 import TicketSalePage from "../pages/admin/TicketSalePage";
@@ -64,6 +66,8 @@ import ConcessionCatalogPage from "../pages/admin/ConcessionCatalogPage";
 import EmployeeDashboardPage from "../pages/employee/EmployeeDashboardPage";
 import ProgrammingOperatorDashboardPage from "../pages/operator/ProgrammingOperatorDashboardPage";
 import ReleasePlanningQueuePage from "../pages/operator/ReleasePlanningQueuePage";
+import MyWorkforcePage from "../pages/workforce/MyWorkforcePage";
+import WorkforceOperationsPage from "../pages/workforce/WorkforceOperationsPage";
 
 import RootRedirect from "./RootRedirect";
 import ProtectedRoute from "./ProtectedRoute";
@@ -101,21 +105,27 @@ export default function AppRoutes() {
 
       {/* Profile setup — standalone page, no layout wrapper */}
       <Route element={<ProtectedRoute
-        allowedRoles={["ROLE_MEMBER", "ROLE_EMPLOYEE", "ROLE_BRANCH_MANAGER", "ROLE_PROGRAMMING_OPERATOR"]}
+        allowedRoles={["ROLE_MEMBER", "ROLE_EMPLOYEE", "ROLE_BRANCH_MANAGER", "ROLE_PROGRAMMING_OPERATOR",
+          "ROLE_PROGRAMMING_APPROVER", "ROLE_FINANCE_OFFICER", "ROLE_FINANCE_APPROVER",
+          "ROLE_COMMERCIAL_MANAGER", "ROLE_SECURITY_AUDITOR", "ROLE_SYSTEM_ADMIN"]}
       />}>
         <Route path="/profile-setup" element={<ProfileSetupPage />} />
       </Route>
 
       {/* Administrative workspace */}
-      <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_BRANCH_MANAGER", "ROLE_PROGRAMMING_OPERATOR"]} />}>
+      <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_BRANCH_MANAGER", "ROLE_PROGRAMMING_OPERATOR",
+        "ROLE_PROGRAMMING_APPROVER", "ROLE_FINANCE_OFFICER", "ROLE_FINANCE_APPROVER",
+        "ROLE_COMMERCIAL_MANAGER", "ROLE_SECURITY_AUDITOR", "ROLE_SYSTEM_ADMIN"]} />}>
         <Route path="/admin" element={<AdminLayout />}>
           <Route path="profile" element={<AdminProfilePage />} />
-          <Route element={<ProtectedRoute allowedRoles={["ROLE_PROGRAMMING_OPERATOR"]} />}>
+          <Route element={<ProtectedRoute allowedPermissions={["RELEASE_PLAN_READ"]} />}>
             <Route path="programming" element={<ProgrammingOperatorDashboardPage />} />
           </Route>
 
-          <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_PROGRAMMING_OPERATOR"]} />}>
+          <Route element={<ProtectedRoute allowedPermissions={["RELEASE_PLAN_READ"]} />}>
             <Route path="release-plans" element={<ReleasePlanningQueuePage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["MOVIE_READ"]} />}>
             <Route path="movies" element={<ManageMoviePage />}>
               <Route path="new" element={<MovieCreationStartPage />} />
             </Route>
@@ -123,7 +133,6 @@ export default function AppRoutes() {
             <Route path="movies/new/manual" element={<MovieEditorPage />} />
             <Route path="movies/:movieId/edit" element={<MovieEditorPage />} />
             <Route path="movies/:movieId/availability" element={<MovieAvailabilityPage />} />
-            <Route path="showtimes/auto" element={<AutoScheduleWorkspacePage />} />
             <Route path="persons" element={<ManagePersonsPage />} />
             <Route path="screening-versions" element={<ManageScreeningVersionsPage />} />
             <Route path="formats" element={<ManageFormatsPage />} />
@@ -131,43 +140,84 @@ export default function AppRoutes() {
             <Route path="age-ratings" element={<ManageAgeRatingsPage />} />
             <Route path="companies" element={<ManageCompaniesPage />} />
           </Route>
-
-          <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN"]} />}>
-          <Route index element={<AdminDashboard />} />
-          <Route path="clusters"  element={<ManageCinemaClusterPage />} />
-          <Route path="rooms"     element={<AllRoomsPage />} />
-          <Route path="clusters/:id" element={<ClusterDetailPage />} />
-          <Route path="clusters/:clusterId/rooms/new" element={<CinemaRoomEditorPage />} />
-          <Route path="clusters/:clusterId/rooms/:roomId/edit" element={<CinemaRoomEditorPage />} />
-          <Route path="rooms/:id"    element={<RoomDetailPage />} />
-          <Route path="showtimes" element={<ManageShowtimePage />} />
-          <Route path="bookings"  element={<ManageBookingPage />} />
-          <Route path="sell"      element={<TicketSalePage />} />
-          <Route path="concessions/fulfillment" element={<ConcessionFulfillmentPage />} />
+          <Route element={<ProtectedRoute allowedPermissions={["SCHEDULE_PLAN_SUBMIT", "SCHEDULE_PLAN_APPROVE"]} />}>
+            <Route path="showtimes/auto" element={<AutoScheduleWorkspacePage />} />
           </Route>
 
-          <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_BRANCH_MANAGER"]} />}>
+          <Route element={<ProtectedRoute allowedPermissions={["REPORT_READ"]} />}>
+            <Route index element={<AdminDashboard />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["ROOM_READ", "ROOM_UPDATE"]} />}>
+            <Route path="clusters" element={<ManageCinemaClusterPage />} />
+            <Route path="rooms" element={<AllRoomsPage />} />
+            <Route path="clusters/:id" element={<ClusterDetailPage />} />
+            <Route path="clusters/:clusterId/rooms/new" element={<CinemaRoomEditorPage />} />
+            <Route path="clusters/:clusterId/rooms/:roomId/edit" element={<CinemaRoomEditorPage />} />
+            <Route path="rooms/:id" element={<RoomDetailPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["SHOWTIME_READ"]} />}>
+            <Route path="showtimes" element={<ManageShowtimePage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["BOOKING_READ"]} />}>
+            <Route path="bookings" element={<ManageBookingPage />} />
+            <Route path="concessions/fulfillment" element={<ConcessionFulfillmentPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["TICKET_SELL"]} />}>
+            <Route path="sell" element={<TicketSalePage />} />
+          </Route>
+
+          <Route element={<ProtectedRoute allowedPermissions={["CONCESSION_CATALOG_DRAFT", "CONCESSION_CATALOG_APPROVE"]} />}>
             <Route path="concessions/catalog" element={<ConcessionCatalogPage />} />
           </Route>
 
-          <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN"]} />}>
+          <Route element={<ProtectedRoute allowedPermissions={["PRICE_BOOK_READ"]} />}>
             <Route path="price-books"        element={<ManagePriceBooksPage />} />
-            <Route path="people"             element={<PeopleAccessPage />} />
-            <Route path="employees"          element={<Navigate to="/admin/people?tab=staff" replace />} />
-            <Route path="employees/create"   element={<Navigate to="/admin/people?tab=staff&invite=1" replace />} />
-            <Route path="employees/:id"      element={<EmployeeDetailPage />} />
-            <Route path="employees/edit/:id" element={<EditEmployeePage />} />
-            <Route path="users"              element={<Navigate to="/admin/people?tab=customers" replace />} />
-            <Route path="users/create"       element={<Navigate to="/admin/people?tab=customers" replace />} />
-            <Route path="users/edit/:id"     element={<EditUserPage />} />
-            <Route path="users/:id"          element={<UserDetailPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["PROMOTION_READ"]} />}>
             <Route path="promotions"          element={<ManagePromotionPage />} />
             <Route path="promotions/create"   element={<CreatePromotionPage />} />
             <Route path="promotions/:id"      element={<PromotionDetailPage />} />
             <Route path="promotions/edit/:id" element={<EditPromotionPage />} />
-            <Route path="refunds-reconciliation" element={<RefundReconciliationPage />} />
-            <Route path="reports"   element={<ReportPage />} />
+          </Route>
+
+          <Route element={<ProtectedRoute allowedPermissions={["EMPLOYEE_READ", "USER_READ"]} />}>
+            <Route path="people"             element={<PeopleAccessPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["EMPLOYEE_READ"]} />}>
+            <Route path="employees"          element={<Navigate to="/admin/people?tab=staff" replace />} />
+            <Route path="employees/create"   element={<Navigate to="/admin/people?tab=staff&invite=1" replace />} />
+            <Route path="employees/:id"      element={<EmployeeDetailPage />} />
+            <Route path="employees/edit/:id" element={<EditEmployeePage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["USER_READ"]} />}>
+            <Route path="users"              element={<Navigate to="/admin/people?tab=customers" replace />} />
+            <Route path="users/create"       element={<Navigate to="/admin/people?tab=customers" replace />} />
+            <Route path="users/edit/:id"     element={<EditUserPage />} />
+            <Route path="users/:id"          element={<UserDetailPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["SYSTEM_CONFIG_MANAGE"]} />}>
             <Route path="settings"  element={<SettingsPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["ROLE_MANAGE"]} />}>
+            <Route path="access-matrix" element={<RolePermissionMatrixPage />} />
+          </Route>
+
+          <Route element={<ProtectedRoute allowedPermissions={["REFUND_READ", "RECONCILIATION_READ"]} />}>
+            <Route path="refunds-reconciliation" element={<RefundReconciliationPage />} />
+          </Route>
+
+          <Route element={<ProtectedRoute allowedPermissions={["WORKFORCE_PLAN", "TIMESHEET_REVIEW"]} />}>
+            <Route path="workforce" element={<WorkforceOperationsPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["WORKFORCE_SELF_READ"]} />}>
+            <Route path="my-workforce" element={<MyWorkforcePage />} />
+          </Route>
+
+          <Route element={<ProtectedRoute allowedPermissions={["REPORT_READ"]} />}>
+            <Route path="reports"   element={<ReportPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["AUDIT_READ"]} />}>
+            <Route path="audit" element={<AuditTrailPage />} />
           </Route>
         </Route>
       </Route>
@@ -180,6 +230,7 @@ export default function AppRoutes() {
           <Route path="sell" element={<TicketSalePage />} />
           <Route path="bookings" element={<ManageBookingPage />} />
           <Route path="concessions/fulfillment" element={<ConcessionFulfillmentPage />} />
+          <Route path="workforce" element={<MyWorkforcePage />} />
         </Route>
       </Route>
     </Routes>

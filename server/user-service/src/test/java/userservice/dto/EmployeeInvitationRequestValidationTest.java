@@ -53,6 +53,31 @@ class EmployeeInvitationRequestValidationTest {
     }
 
     @Test
+    void acceptsFinanceApproverWithoutBranch() {
+        var request = validRequest()
+                .cinemaId(null)
+                .department(EmployeeDepartment.FINANCE)
+                .position(EmployeePosition.FINANCE_APPROVER)
+                .accessRole(StaffAccessRole.FINANCE_APPROVER)
+                .build();
+
+        assertThat(validator.validate(request)).isEmpty();
+    }
+
+    @Test
+    void rejectsFinanceOfficerWithApproverAccess() {
+        var request = validRequest()
+                .cinemaId(null)
+                .department(EmployeeDepartment.FINANCE)
+                .position(EmployeePosition.FINANCE_OFFICER)
+                .accessRole(StaffAccessRole.FINANCE_APPROVER)
+                .build();
+
+        assertThat(validator.validate(request))
+                .anyMatch(violation -> violation.getPropertyPath().toString().equals("jobAssignmentValid"));
+    }
+
+    @Test
     void rejectsProgrammingPositionWithEmployeeAccess() {
         var request = validRequest()
                 .department(EmployeeDepartment.CONTENT_PROGRAMMING)
