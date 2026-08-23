@@ -60,6 +60,19 @@ public class Promotion {
     private int activeReservationCount;
     private int committedUsageCount;
 
+    @Column(length = 50)
+    private String createdByAccountId;
+
+    @Column(length = 50)
+    private String submittedByAccountId;
+
+    private OffsetDateTime submittedAt;
+
+    @Column(length = 50)
+    private String approvedByAccountId;
+
+    private OffsetDateTime approvedAt;
+
     @Version
     @Column(nullable = false)
     private Long version;

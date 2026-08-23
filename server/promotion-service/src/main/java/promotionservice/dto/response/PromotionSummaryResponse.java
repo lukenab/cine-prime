@@ -17,6 +17,7 @@ public record PromotionSummaryResponse(
         PromotionBenefitScope benefitScope,
         OffsetDateTime validFrom,
         OffsetDateTime validUntil,
+        int activeReservationCount,
         PriceRuleSummary priceRule
 ) {
     public record PriceRuleSummary(

@@ -25,6 +25,7 @@ export default function AdminLayout() {
     "ROLE_FINANCE_OFFICER",
     "ROLE_FINANCE_APPROVER",
     "ROLE_COMMERCIAL_MANAGER",
+    "ROLE_COMMERCIAL_APPROVER",
     "ROLE_SECURITY_AUDITOR",
     "ROLE_SYSTEM_ADMIN",
   ].includes(user?.role ?? "");

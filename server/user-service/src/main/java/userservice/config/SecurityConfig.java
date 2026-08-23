@@ -37,7 +37,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/employees/me")
                             .hasAnyAuthority("ROLE_EMPLOYEE", "ROLE_BRANCH_MANAGER", "ROLE_PROGRAMMING_OPERATOR",
                                     "ROLE_PROGRAMMING_APPROVER", "ROLE_FINANCE_OFFICER", "ROLE_FINANCE_APPROVER",
-                                    "ROLE_COMMERCIAL_MANAGER", "ROLE_SECURITY_AUDITOR", "ROLE_SYSTEM_ADMIN")
+                                    "ROLE_COMMERCIAL_MANAGER", "ROLE_COMMERCIAL_APPROVER", "ROLE_SECURITY_AUDITOR", "ROLE_SYSTEM_ADMIN")
                         .requestMatchers("/api/employees/**")
                             .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_BRANCH_MANAGER",
                                     "EMPLOYEE_READ", "EMPLOYEE_CREATE", "EMPLOYEE_UPDATE", "EMPLOYEE_DELETE")

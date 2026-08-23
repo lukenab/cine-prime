@@ -28,7 +28,7 @@ export default function EditPromotionPage() {
   useEffect(() => {
     if (!id) return;
     promotionApi.get(id).then((value) => {
-      if (value.status !== "DRAFT") setError("Only draft promotions can be edited.");
+      if (value.status !== "DRAFT" && value.status !== "REJECTED") setError("Only draft or returned promotions can be edited.");
       else setPromotion(value);
     }).catch(() => setError("Promotion could not be loaded."));
   }, [id]);

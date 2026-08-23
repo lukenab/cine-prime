@@ -18,6 +18,7 @@ const roleMetadata: Record<string, { label: string; purpose: string; category: R
   PROGRAMMING_OPERATOR: { label: "Release programming planner", purpose: "Prepares movie content, release plans and schedule drafts.", category: "operational", order: 30 },
   FINANCE_OFFICER: { label: "Finance operations officer", purpose: "Investigates refunds, payments and reconciliation cases.", category: "operational", order: 40 },
   COMMERCIAL_MANAGER: { label: "Commercial manager", purpose: "Owns cinema pricing, promotions and commercial configuration.", category: "operational", order: 50 },
+  COMMERCIAL_APPROVER: { label: "Commercial approver", purpose: "Reviews promotion submissions and controls launch, pause and archive decisions.", category: "approval", order: 25 },
   PROGRAMMING_APPROVER: { label: "Programming approver", purpose: "Reviews and approves programming submissions.", category: "approval", order: 10 },
   FINANCE_APPROVER: { label: "Finance approver", purpose: "Approves financial exceptions and refund decisions.", category: "approval", order: 20 },
   SECURITY_AUDITOR: { label: "Security auditor", purpose: "Reviews security and operational audit evidence without modifying it.", category: "approval", order: 30 },

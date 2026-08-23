@@ -49,6 +49,7 @@ const roleLabels: Record<string, string> = {
   ROLE_FINANCE_OFFICER: "Finance officer",
   ROLE_FINANCE_APPROVER: "Finance approver",
   ROLE_COMMERCIAL_MANAGER: "Commercial manager",
+  ROLE_COMMERCIAL_APPROVER: "Commercial approver",
   ROLE_SYSTEM_ADMIN: "System administrator",
   ROLE_SECURITY_AUDITOR: "Security auditor",
   ROLE_EMPLOYEE: "Employee",

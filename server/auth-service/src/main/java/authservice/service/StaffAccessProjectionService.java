@@ -25,7 +25,7 @@ public class StaffAccessProjectionService {
     static final String SUPPORTED_EVENT_VERSION = "1";
     static final Set<String> STAFF_ROLES = Set.of(
             "EMPLOYEE", "BRANCH_MANAGER", "PROGRAMMING_OPERATOR", "PROGRAMMING_APPROVER",
-            "FINANCE_OFFICER", "FINANCE_APPROVER", "COMMERCIAL_MANAGER",
+            "FINANCE_OFFICER", "FINANCE_APPROVER", "COMMERCIAL_MANAGER", "COMMERCIAL_APPROVER",
             "SECURITY_AUDITOR", "SYSTEM_ADMIN");
     static final Set<String> BRANCH_SCOPED_ROLES = Set.of("EMPLOYEE", "BRANCH_MANAGER");
     private static final Set<String> EVENT_TYPES = Set.of(

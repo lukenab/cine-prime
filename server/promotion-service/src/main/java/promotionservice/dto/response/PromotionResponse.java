@@ -14,9 +14,14 @@ public record PromotionResponse(UUID promotionId, String code, String name, Stri
                                 OffsetDateTime validFrom, OffsetDateTime validUntil,
                                 Integer globalUsageLimit, Integer perAccountUsageLimit, Long version,
                                 int activeReservationCount, int committedUsageCount,
+                                Workflow workflow,
                                 PriceRule priceRule, List<Target> targets, List<AuditEntry> auditLog) {
+    public record Workflow(String createdByAccountId,
+                           String submittedByAccountId, OffsetDateTime submittedAt,
+                           String approvedByAccountId, OffsetDateTime approvedAt) {}
     public record PriceRule(DiscountType discountType, BigDecimal percentage, BigDecimal fixedAmount,
                             BigDecimal maxDiscountAmount, BigDecimal minimumOrderAmount, String currency) {}
     public record Target(PromotionTargetType targetType, Long movieId, Long showtimeId) {}
-    public record AuditEntry(String action, String actorAccountId, OffsetDateTime occurredAt) {}
+    public record AuditEntry(String action, String actorAccountId, OffsetDateTime occurredAt,
+                             java.util.Map<String, Object> detail) {}
 }

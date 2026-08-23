@@ -18,6 +18,7 @@ export type JobRolePresetId =
   | "FINANCE_OFFICER"
   | "FINANCE_APPROVER"
   | "COMMERCIAL_MANAGER"
+  | "COMMERCIAL_APPROVER"
   | "SYSTEM_ADMINISTRATOR"
   | "SECURITY_AUDITOR";
 
@@ -47,6 +48,7 @@ export const JOB_ROLE_PRESETS: JobRolePreset[] = [
   { id: "FINANCE_OFFICER", label: "Finance officer", description: "Investigates refunds, payment attempts and reconciliation exceptions.", department: "FINANCE", position: "FINANCE_OFFICER", accessRole: "FINANCE_OFFICER", location: "HEAD_OFFICE" },
   { id: "FINANCE_APPROVER", label: "Finance approver", description: "Approves financial exceptions and high-risk refund decisions.", department: "FINANCE", position: "FINANCE_APPROVER", accessRole: "FINANCE_APPROVER", location: "HEAD_OFFICE" },
   { id: "COMMERCIAL_MANAGER", label: "Commercial manager", description: "Owns price books, commercial offers and promotion configuration.", department: "COMMERCIAL", position: "COMMERCIAL_MANAGER", accessRole: "COMMERCIAL_MANAGER", location: "HEAD_OFFICE" },
+  { id: "COMMERCIAL_APPROVER", label: "Commercial approver", description: "Reviews promotion submissions and controls customer-facing activation.", department: "COMMERCIAL", position: "COMMERCIAL_APPROVER", accessRole: "COMMERCIAL_APPROVER", location: "HEAD_OFFICE" },
   { id: "SYSTEM_ADMINISTRATOR", label: "System administrator", description: "Manages identities, access and system configuration without business approval authority.", department: "INFORMATION_TECHNOLOGY", position: "SYSTEM_ADMINISTRATOR", accessRole: "SYSTEM_ADMIN", location: "HEAD_OFFICE" },
   { id: "SECURITY_AUDITOR", label: "Security auditor", description: "Read-only access to audit evidence and compliance reports.", department: "RISK_COMPLIANCE", position: "SECURITY_AUDITOR", accessRole: "SECURITY_AUDITOR", location: "HEAD_OFFICE" },
 ];

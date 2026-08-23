@@ -142,7 +142,7 @@ export default function PeopleAccessPage() {
   const staffRows = useMemo<StaffRow[]>(() => accounts
     .filter((account) => roleNames(account).some((role) => [
       "EMPLOYEE", "BRANCH_MANAGER", "PROGRAMMING_OPERATOR", "PROGRAMMING_APPROVER",
-      "FINANCE_OFFICER", "FINANCE_APPROVER", "COMMERCIAL_MANAGER", "SECURITY_AUDITOR", "SYSTEM_ADMIN",
+      "FINANCE_OFFICER", "FINANCE_APPROVER", "COMMERCIAL_MANAGER", "COMMERCIAL_APPROVER", "SECURITY_AUDITOR", "SYSTEM_ADMIN",
     ].includes(role)))
     .map((account) => {
       const employee = employeeByAccount.get(account.accountId);
@@ -335,7 +335,7 @@ function FilterPanel({ tab, clusters, values, setters }: any) {
       <FilterSelect value={values.branchFilter} setValue={setters.setBranchFilter} placeholder="Branch" items={[{ value: "ALL", label: "All branches" }, ...clusters.map((cluster: ClusterResponse) => ({ value: String(cluster.clusterId), label: cluster.clusterName }))]} />
       {tab === "staff" && <>
         <FilterSelect value={values.departmentFilter} setValue={setters.setDepartmentFilter} placeholder="Primary work area" items={["ALL", "GENERAL_OPERATIONS", "BOX_OFFICE", "FOOD_BEVERAGE", "FLOOR_GUEST_SERVICES", "PROJECTION_TECHNICAL", "FACILITIES_MAINTENANCE", "CONTENT_PROGRAMMING", "FINANCE", "COMMERCIAL", "INFORMATION_TECHNOLOGY", "RISK_COMPLIANCE"].map((value) => ({ value, label: value === "ALL" ? "All work areas" : formatEnum(value) }))} />
-        <FilterSelect value={values.positionFilter} setValue={setters.setPositionFilter} placeholder="Position" items={["ALL", "TEAM_MEMBER", "SUPERVISOR", "ASSISTANT_MANAGER", "CINEMA_MANAGER", "PROGRAMMING_OPERATOR", "PROGRAMMING_APPROVER", "FINANCE_OFFICER", "FINANCE_APPROVER", "COMMERCIAL_MANAGER", "SYSTEM_ADMINISTRATOR", "SECURITY_AUDITOR"].map((value) => ({ value, label: value === "ALL" ? "All positions" : formatEnum(value) }))} />
+        <FilterSelect value={values.positionFilter} setValue={setters.setPositionFilter} placeholder="Position" items={["ALL", "TEAM_MEMBER", "SUPERVISOR", "ASSISTANT_MANAGER", "CINEMA_MANAGER", "PROGRAMMING_OPERATOR", "PROGRAMMING_APPROVER", "FINANCE_OFFICER", "FINANCE_APPROVER", "COMMERCIAL_MANAGER", "COMMERCIAL_APPROVER", "SYSTEM_ADMINISTRATOR", "SECURITY_AUDITOR"].map((value) => ({ value, label: value === "ALL" ? "All positions" : formatEnum(value) }))} />
         <FilterSelect value={values.employmentFilter} setValue={setters.setEmploymentFilter} placeholder="Employment" items={["ALL", "FULL_TIME", "PART_TIME", "FIXED_TERM", "SEASONAL"].map((value) => ({ value, label: value === "ALL" ? "All employment types" : formatEnum(value) }))} />
       </>}
     </>}

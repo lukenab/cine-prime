@@ -12,6 +12,7 @@ type ConfirmDialogProps = {
    *  moves the initial focus to Cancel instead of Confirm. */
   danger?: boolean;
   busy?: boolean;
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -22,7 +23,7 @@ const FOCUSABLE_SELECTOR = 'button, [href], input, select, textarea, [tabindex]:
  *  visual pattern (overlay + centered card), but parameterized so the resize
  *  data-loss and template-overwrite confirmations can both reuse it instead of
  *  each needing a bespoke modal. Adds a focus trap and Escape-to-close. */
-export function ConfirmDialog({ title, body, confirmLabel = "Confirm", cancelLabel = "Cancel", danger, busy = false, onConfirm, onCancel }: ConfirmDialogProps) {
+export function ConfirmDialog({ title, body, confirmLabel = "Confirm", cancelLabel = "Cancel", danger, busy = false, confirmDisabled = false, onConfirm, onCancel }: ConfirmDialogProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
@@ -103,7 +104,7 @@ export function ConfirmDialog({ title, body, confirmLabel = "Confirm", cancelLab
           <button
             ref={confirmRef}
             onClick={onConfirm}
-            disabled={busy}
+            disabled={busy || confirmDisabled}
             className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
             style={{ background: accentColor }}
           >

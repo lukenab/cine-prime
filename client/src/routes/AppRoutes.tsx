@@ -108,7 +108,7 @@ export default function AppRoutes() {
       <Route element={<ProtectedRoute
         allowedRoles={["ROLE_MEMBER", "ROLE_EMPLOYEE", "ROLE_BRANCH_MANAGER", "ROLE_PROGRAMMING_OPERATOR",
           "ROLE_PROGRAMMING_APPROVER", "ROLE_FINANCE_OFFICER", "ROLE_FINANCE_APPROVER",
-          "ROLE_COMMERCIAL_MANAGER", "ROLE_SECURITY_AUDITOR", "ROLE_SYSTEM_ADMIN"]}
+          "ROLE_COMMERCIAL_MANAGER", "ROLE_COMMERCIAL_APPROVER", "ROLE_SECURITY_AUDITOR", "ROLE_SYSTEM_ADMIN"]}
       />}>
         <Route path="/profile-setup" element={<ProfileSetupPage />} />
       </Route>
@@ -116,7 +116,7 @@ export default function AppRoutes() {
       {/* Administrative workspace */}
       <Route element={<ProtectedRoute allowedRoles={["ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_BRANCH_MANAGER", "ROLE_PROGRAMMING_OPERATOR",
         "ROLE_PROGRAMMING_APPROVER", "ROLE_FINANCE_OFFICER", "ROLE_FINANCE_APPROVER",
-        "ROLE_COMMERCIAL_MANAGER", "ROLE_SECURITY_AUDITOR", "ROLE_SYSTEM_ADMIN"]} />}>
+        "ROLE_COMMERCIAL_MANAGER", "ROLE_COMMERCIAL_APPROVER", "ROLE_SECURITY_AUDITOR", "ROLE_SYSTEM_ADMIN"]} />}>
         <Route path="/admin" element={<AdminLayout />}>
           <Route path="profile" element={<AdminProfilePage />} />
           <Route element={<ProtectedRoute allowedPermissions={["RELEASE_PLAN_READ"]} />}>
@@ -176,8 +176,12 @@ export default function AppRoutes() {
           </Route>
           <Route element={<ProtectedRoute allowedPermissions={["PROMOTION_READ"]} />}>
             <Route path="promotions"          element={<ManagePromotionPage />} />
-            <Route path="promotions/create"   element={<CreatePromotionPage />} />
             <Route path="promotions/:id"      element={<PromotionDetailPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["PROMOTION_CREATE"]} />}>
+            <Route path="promotions/create"   element={<CreatePromotionPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["PROMOTION_UPDATE"]} />}>
             <Route path="promotions/edit/:id" element={<EditPromotionPage />} />
           </Route>
 
