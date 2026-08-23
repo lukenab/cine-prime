@@ -77,7 +77,8 @@ public class RoleService {
         Role saved = roleRepository.save(role);
         auditLogService.success("ROLE_PERMISSIONS_UPDATED", null, "Role permission matrix updated",
                 auditLogService.metadata("roleName", normalized, "oldPermissions", previous,
-                        "newPermissions", request.getPermissions()));
+                        "newPermissions", request.getPermissions(),
+                        "changeReason", request.getChangeReason()));
         return roleMapper.toRoleResponse(saved);
     }
 }

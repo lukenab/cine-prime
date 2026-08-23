@@ -9,6 +9,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import promotionservice.dto.request.*;
 import promotionservice.dto.response.PromotionResponse;
+import promotionservice.dto.response.PromotionPageResponse;
+import promotionservice.dto.response.PromotionSummaryResponse;
 import promotionservice.entity.*;
 import promotionservice.enums.PromotionStatus;
 import promotionservice.exception.PromotionErrorCode;
@@ -80,14 +82,44 @@ public class PromotionAdminService {
         return transition(id, PromotionStatus.ARCHIVED, "RETIRED", PromotionStatus.DRAFT, PromotionStatus.ACTIVE, PromotionStatus.PAUSED);
     }
 
+    @Transactional
     public PromotionResponse get(UUID id) {
         return response(required(id));
     }
 
-    public Page<PromotionResponse> search(PromotionStatus status, Pageable pageable) {
-        /// Status là filter tùy chọn để Admin UI dùng cùng endpoint cho danh sách tổng và danh sách lọc.
-        Page<Promotion> page = status == null ? promotionRepository.findAll(pageable) : promotionRepository.findByStatus(status, pageable);
-        return page.map(this::response);
+    @Transactional
+    public PromotionPageResponse search(PromotionStatus status, String query, Pageable pageable) {
+        // Bind an empty String instead of null. PostgreSQL cannot infer the SQL
+        // type of a null parameter used by lower/concat and treats it as bytea.
+        String normalizedQuery = query == null ? "" : query.trim();
+        Page<PromotionSummaryResponse> page = promotionRepository
+                .searchAdmin(status, normalizedQuery, pageable)
+                .map(this::summaryResponse);
+
+        Map<PromotionStatus, Long> countsByStatus = promotionRepository.countByStatus().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        PromotionRepository.StatusCount::getStatus,
+                        PromotionRepository.StatusCount::getTotal
+                ));
+        long active = countsByStatus.getOrDefault(PromotionStatus.ACTIVE, 0L);
+        long draft = countsByStatus.getOrDefault(PromotionStatus.DRAFT, 0L);
+        long paused = countsByStatus.getOrDefault(PromotionStatus.PAUSED, 0L);
+        long archived = countsByStatus.getOrDefault(PromotionStatus.ARCHIVED, 0L);
+
+        return new PromotionPageResponse(
+                page.getContent(),
+                page.getTotalElements(),
+                page.getTotalPages(),
+                page.getNumber(),
+                page.getSize(),
+                new PromotionPageResponse.PromotionCounts(
+                        active + draft + paused + archived,
+                        active,
+                        draft,
+                        paused,
+                        archived
+                )
+        );
     }
 
     private PromotionResponse transition(UUID id, PromotionStatus next, String action, PromotionStatus... allowed) {
@@ -167,6 +199,26 @@ public class PromotionAdminService {
                 .map(log -> new PromotionResponse.AuditEntry(log.getAction(), log.getActorAccountId(), log.getCreatedAt()))
                 .toList();
         return new PromotionResponse(p.getPromotionId(), p.getCode(), p.getName(), p.getDescription(), p.getStatus(), p.getBenefitScope(), p.getValidFrom(), p.getValidUntil(), p.getGlobalUsageLimit(), p.getPerAccountUsageLimit(), p.getVersion(), p.getActiveReservationCount(), p.getCommittedUsageCount(), new PromotionResponse.PriceRule(r.getDiscountType(), r.getPercentage(), r.getFixedAmount(), r.getMaxDiscountAmount(), r.getMinimumOrderAmount(), r.getCurrency()), p.getTargets().stream().map(t -> new PromotionResponse.Target(t.getTargetType(), t.getMovieId(), t.getShowtimeId())).toList(), auditLog);
+    }
+
+    private PromotionSummaryResponse summaryResponse(Promotion promotion) {
+        PromotionPriceRule rule = promotion.getPriceRule();
+        return new PromotionSummaryResponse(
+                promotion.getPromotionId(),
+                promotion.getCode(),
+                promotion.getName(),
+                promotion.getStatus(),
+                promotion.getBenefitScope(),
+                promotion.getValidFrom(),
+                promotion.getValidUntil(),
+                new PromotionSummaryResponse.PriceRuleSummary(
+                        rule.getDiscountType(),
+                        rule.getPercentage(),
+                        rule.getFixedAmount(),
+                        rule.getMinimumOrderAmount(),
+                        rule.getCurrency()
+                )
+        );
     }
 
     private String normalize(String code) {

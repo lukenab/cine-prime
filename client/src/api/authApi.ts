@@ -30,57 +30,8 @@ export interface ActivateAccountPayload {
 export interface PermissionRecord { permissionName: string; description?: string }
 export interface RoleRecord { roleName: string; description?: string; permissions: PermissionRecord[] }
 
-const MOCK_EMPLOYEE_USERNAME = "employee";
-const MOCK_EMPLOYEE_EMAIL = "employee@cineprime.com";
-const MOCK_EMPLOYEE_PASSWORD = "employee";
-
-function base64UrlEncode(value: Record<string, unknown>): string {
-    return btoa(JSON.stringify(value))
-        .replace(/\+/g, "-")
-        .replace(/\//g, "_")
-        .replace(/=+$/g, "");
-}
-
-function createMockEmployeeToken(): string {
-    const now = Math.floor(Date.now() / 1000);
-    return [
-        base64UrlEncode({ alg: "none", typ: "JWT" }),
-        base64UrlEncode({
-            sub: MOCK_EMPLOYEE_USERNAME,
-            accountId: "mock-employee-account",
-            role: "ROLE_EMPLOYEE",
-            scope: "ROLE_EMPLOYEE TICKET_SELL BOOKING_READ BOOKING_CONFIRM BOOKING_CANCEL",
-            iat: now,
-            exp: now + 60 * 60 * 24 * 7,
-        }),
-        "mock-signature",
-    ].join(".");
-}
-
-function isMockEmployeeLogin(data: LoginPayLoad): boolean {
-    const username = String(data?.username ?? "").trim().toLowerCase();
-    const password = String(data?.password ?? "").trim();
-
-    return (
-        (username === MOCK_EMPLOYEE_USERNAME || username === MOCK_EMPLOYEE_EMAIL) &&
-        password === MOCK_EMPLOYEE_PASSWORD
-    );
-}
-
 export const authApi = {
-    login: (data: LoginPayLoad) => {
-        if (isMockEmployeeLogin(data)) {
-            return Promise.resolve({
-                code: 1000,
-                message: "Mock employee login successfully",
-                result: {
-                    token: createMockEmployeeToken(),
-                },
-            });
-        }
-
-        return axiosClient.post('api/auth/login', data);
-    },
+    login: (data: LoginPayLoad) => axiosClient.post('api/auth/login', data),
 
     loginWithGoogle: (data: GoogleLoginPayload) => {
         return axiosClient.post('/api/auth/google', data);
@@ -158,8 +109,8 @@ export const authApi = {
 
     getRoles: () => axiosClient.get('/api/roles'),
     getPermissions: () => axiosClient.get('/api/permissions'),
-    updateRolePermissions: (roleName: string, permissions: string[]) =>
-        axiosClient.put(`/api/roles/${encodeURIComponent(roleName)}/permissions`, { permissions }),
+    updateRolePermissions: (roleName: string, permissions: string[], changeReason?: string) =>
+        axiosClient.put(`/api/roles/${encodeURIComponent(roleName)}/permissions`, { permissions, changeReason }),
 
     logout: (token?: string | null) => {
         return axiosClient.post('/api/auth/logout', undefined, token ? {

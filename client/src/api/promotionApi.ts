@@ -45,6 +45,17 @@ export interface Promotion {
   auditLog: PromotionAuditEntry[];
 }
 
+export interface PromotionSummary {
+  promotionId: string;
+  code: string;
+  name: string;
+  status: PromotionStatus;
+  benefitScope: PromotionBenefitScope;
+  validFrom?: string | null;
+  validUntil?: string | null;
+  priceRule: Pick<PromotionPriceRule, "discountType" | "percentage" | "fixedAmount" | "minimumOrderAmount" | "currency">;
+}
+
 export interface PromotionUpsertPayload {
   code: string;
   name: string;
@@ -59,11 +70,25 @@ export interface PromotionUpsertPayload {
 }
 
 export interface PromotionPage {
-  content: Promotion[];
+  content: PromotionSummary[];
   totalElements: number;
   totalPages: number;
   number: number;
   size: number;
+  counts: {
+    total: number;
+    active: number;
+    draft: number;
+    paused: number;
+    archived: number;
+  };
+}
+
+export interface PromotionListParams {
+  status?: PromotionStatus;
+  query?: string;
+  page?: number;
+  size?: number;
 }
 
 export interface PublicPromotionOffer {
@@ -84,15 +109,31 @@ export interface PublicPromotionOffer {
 
 const resultOf = <T>(response: any): T => (response?.result ?? response) as T;
 
+const promotionListRequests = new Map<string, Promise<PromotionPage>>();
+
+async function listPromotions(params: PromotionListParams = {}): Promise<PromotionPage> {
+  const requestParams = {
+    status: params.status || undefined,
+    query: params.query?.trim() || undefined,
+    page: params.page ?? 0,
+    size: params.size ?? 20,
+  };
+  const requestKey = JSON.stringify(requestParams);
+  const existingRequest = promotionListRequests.get(requestKey);
+  if (existingRequest) return existingRequest;
+
+  const request = axiosClient
+    .get("/api/promotions", { params: requestParams })
+    .then((response) => resultOf<PromotionPage>(response))
+    .finally(() => promotionListRequests.delete(requestKey));
+  promotionListRequests.set(requestKey, request);
+  return request;
+}
+
 export const promotionApi = {
   listPublicOffers: async (): Promise<PublicPromotionOffer[]> =>
     resultOf<PublicPromotionOffer[]>(await axiosClient.get("/api/public/promotions")) ?? [],
-  list: async (status?: PromotionStatus): Promise<Promotion[]> => {
-    const response = await axiosClient.get("/api/promotions", {
-      params: { status: status || undefined, page: 0, size: 100 },
-    });
-    return resultOf<PromotionPage>(response).content ?? [];
-  },
+  list: listPromotions,
   get: async (id: string): Promise<Promotion> =>
     resultOf<Promotion>(await axiosClient.get(`/api/promotions/${id}`)),
   create: async (payload: PromotionUpsertPayload): Promise<Promotion> =>

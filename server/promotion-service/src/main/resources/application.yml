@@ -19,6 +19,7 @@ spring:
       connection-init-sql: SET TIME ZONE 'UTC'
 
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: none
     show-sql: false

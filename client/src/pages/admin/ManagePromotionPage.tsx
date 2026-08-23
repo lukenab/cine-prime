@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Eye, Pause, Pencil, Play, Plus, RefreshCw, Search, Tag, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Eye, Pause, Pencil, Play, Plus, RefreshCw, Search, Tag, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { promotionApi, type Promotion, type PromotionStatus } from "../../api/promotionApi";
+import { promotionApi, type PromotionSummary, type PromotionStatus } from "../../api/promotionApi";
 
 const money = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
 
-function discountLabel(promotion: Promotion) {
+function discountLabel(promotion: PromotionSummary) {
   return promotion.priceRule.discountType === "PERCENTAGE"
     ? `${promotion.priceRule.percentage ?? 0}%`
     : money.format(promotion.priceRule.fixedAmount ?? 0);
@@ -23,48 +23,56 @@ function statusStyle(status: PromotionStatus) {
 
 export default function ManagePromotionPage() {
   const navigate = useNavigate();
-  const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [promotions, setPromotions] = useState<PromotionSummary[]>([]);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [status, setStatus] = useState<PromotionStatus | "">("");
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const [counts, setCounts] = useState({ total: 0, active: 0, draft: 0, paused: 0, archived: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [workingId, setWorkingId] = useState<string | null>(null);
+  const requestSequence = useRef(0);
 
   const loadPromotions = useCallback(async () => {
+    const requestId = ++requestSequence.current;
     setLoading(true);
     setError("");
     try {
-      setPromotions(await promotionApi.list());
+      const result = await promotionApi.list({
+        status: status || undefined,
+        query: debouncedQuery || undefined,
+        page,
+        size: 20,
+      });
+      if (requestId !== requestSequence.current) return;
+      setPromotions(result.content ?? []);
+      setTotalPages(result.totalPages ?? 0);
+      setTotalElements(result.totalElements ?? 0);
+      setCounts(result.counts ?? { total: 0, active: 0, draft: 0, paused: 0, archived: 0 });
     } catch {
+      if (requestId !== requestSequence.current) return;
       setError("Could not load promotions. Check promotion-service and try again.");
     } finally {
-      setLoading(false);
+      if (requestId === requestSequence.current) setLoading(false);
     }
-  }, []);
+  }, [debouncedQuery, page, status]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
 
   useEffect(() => { void loadPromotions(); }, [loadPromotions]);
 
-  const filtered = useMemo(() => {
-    const keyword = query.trim().toLowerCase();
-    return promotions.filter((promotion) =>
-      (!status || promotion.status === status) &&
-      (!keyword || promotion.name.toLowerCase().includes(keyword) || promotion.code.toLowerCase().includes(keyword))
-    );
-  }, [promotions, query, status]);
-
-  const counts = useMemo(() => ({
-    total: promotions.length,
-    active: promotions.filter((p) => p.status === "ACTIVE").length,
-    draft: promotions.filter((p) => p.status === "DRAFT").length,
-    paused: promotions.filter((p) => p.status === "PAUSED").length,
-  }), [promotions]);
-
-  const changeStatus = async (promotion: Promotion, action: "activate" | "pause" | "retire") => {
+  const changeStatus = async (promotion: PromotionSummary, action: "activate" | "pause" | "retire") => {
     setWorkingId(promotion.promotionId);
     setError("");
     try {
-      const updated = await promotionApi[action](promotion.promotionId);
-      setPromotions((items) => items.map((item) => item.promotionId === updated.promotionId ? updated : item));
+      await promotionApi[action](promotion.promotionId);
+      await loadPromotions();
     } catch {
       setError(`Could not ${action} ${promotion.code}. Refresh and try again.`);
     } finally {
@@ -94,9 +102,9 @@ export default function ManagePromotionPage() {
       <div className="flex flex-wrap gap-3">
         <label className="relative min-w-[280px] flex-1">
           <Search size={17} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: "var(--text-sub)" }} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search promotion name or code..." className="h-11 w-full rounded-xl border bg-transparent pl-11 pr-4 text-sm outline-none focus:border-blue-500" style={{ color: "var(--text-main)", borderColor: "var(--border-color)", background: "var(--bg-card)" }} />
+          <input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0); }} placeholder="Search promotion name or code..." className="h-11 w-full rounded-xl border bg-transparent pl-11 pr-4 text-sm outline-none focus:border-blue-500" style={{ color: "var(--text-main)", borderColor: "var(--border-color)", background: "var(--bg-card)" }} />
         </label>
-        <select value={status} onChange={(event) => setStatus(event.target.value as PromotionStatus | "")} className="h-11 rounded-xl border px-4 text-sm outline-none" style={{ color: "var(--text-main)", borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+        <select value={status} onChange={(event) => { setStatus(event.target.value as PromotionStatus | ""); setPage(0); }} className="h-11 rounded-xl border px-4 text-sm outline-none" style={{ color: "var(--text-main)", borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
           <option value="">All statuses</option><option value="DRAFT">Draft</option><option value="ACTIVE">Active</option><option value="PAUSED">Paused</option><option value="ARCHIVED">Archived</option>
         </select>
         <button onClick={() => void loadPromotions()} className="flex h-11 items-center gap-2 rounded-xl border px-4 text-sm font-medium" style={{ color: "var(--text-main)", borderColor: "var(--border-color)", background: "var(--bg-card)" }}><RefreshCw size={16} /> Refresh</button>
@@ -110,7 +118,7 @@ export default function ManagePromotionPage() {
           <table className="w-full text-left">
             <thead className="border-b text-xs uppercase tracking-wider" style={{ color: "var(--text-sub)", borderColor: "var(--border-color)" }}><tr><th className="px-5 py-4">Promotion</th><th className="px-5 py-4">Benefit</th><th className="px-5 py-4">Valid window</th><th className="px-5 py-4">Status</th><th className="px-5 py-4 text-right">Actions</th></tr></thead>
             <tbody>
-              {loading ? <tr><td colSpan={5} className="px-5 py-16 text-center text-sm" style={{ color: "var(--text-sub)" }}>Loading promotions...</td></tr> : filtered.length === 0 ? <tr><td colSpan={5} className="px-5 py-16 text-center text-sm" style={{ color: "var(--text-sub)" }}>No promotions found.</td></tr> : filtered.map((promotion) => {
+              {loading ? <tr><td colSpan={5} className="px-5 py-16 text-center text-sm" style={{ color: "var(--text-sub)" }}>Loading promotions...</td></tr> : promotions.length === 0 ? <tr><td colSpan={5} className="px-5 py-16 text-center text-sm" style={{ color: "var(--text-sub)" }}>No promotions found.</td></tr> : promotions.map((promotion) => {
                 const badge = statusStyle(promotion.status);
                 const working = workingId === promotion.promotionId;
                 return <tr key={promotion.promotionId} className="border-b last:border-0" style={{ borderColor: "var(--border-color)" }}>
@@ -131,6 +139,35 @@ export default function ManagePromotionPage() {
           </table>
         </div>
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between gap-4 text-sm" style={{ color: "var(--text-sub)" }}>
+          <span>{totalElements} promotions</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={page === 0 || loading}
+              onClick={() => setPage((current) => Math.max(0, current - 1))}
+              className="grid h-9 w-9 place-items-center rounded-lg border disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ color: "var(--text-main)", borderColor: "var(--border-color)", background: "var(--bg-card)" }}
+              aria-label="Previous page"
+            >
+              <ChevronLeft size={17} />
+            </button>
+            <span>Page {page + 1} of {totalPages}</span>
+            <button
+              type="button"
+              disabled={page + 1 >= totalPages || loading}
+              onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))}
+              className="grid h-9 w-9 place-items-center rounded-lg border disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ color: "var(--text-main)", borderColor: "var(--border-color)", background: "var(--bg-card)" }}
+              aria-label="Next page"
+            >
+              <ChevronRight size={17} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

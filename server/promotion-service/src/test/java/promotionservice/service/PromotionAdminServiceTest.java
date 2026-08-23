@@ -3,6 +3,8 @@ package promotionservice.service;
 import movie.theater.common.exception.AppException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -79,6 +81,26 @@ class PromotionAdminServiceTest {
         when(promotionRepository.findById(id)).thenReturn(Optional.of(promotion));
 
         assertThrows(AppException.class, () -> service.activate(id));
+        verifyNoInteractions(auditLogRepository);
+    }
+
+    @Test
+    void searchUsesSummaryQueryWithoutLoadingAuditHistory() {
+        Promotion promotion = draftPromotion();
+        var pageable = PageRequest.of(0, 20);
+        PromotionRepository.StatusCount draftCount = mock(PromotionRepository.StatusCount.class);
+        when(draftCount.getStatus()).thenReturn(PromotionStatus.DRAFT);
+        when(draftCount.getTotal()).thenReturn(1L);
+        when(promotionRepository.searchAdmin(PromotionStatus.DRAFT, "summer", pageable))
+                .thenReturn(new PageImpl<>(List.of(promotion), pageable, 1));
+        when(promotionRepository.countByStatus()).thenReturn(List.of(draftCount));
+
+        var result = service.search(PromotionStatus.DRAFT, " summer ", pageable);
+
+        assertEquals(1, result.content().size());
+        assertEquals("SUMMER26", result.content().getFirst().code());
+        assertEquals(1, result.counts().total());
+        assertEquals(1, result.counts().draft());
         verifyNoInteractions(auditLogRepository);
     }
 

@@ -58,6 +58,7 @@ import ReportPage from "../pages/admin/ReportPage";
 import RefundReconciliationPage from "../pages/admin/RefundReconciliationPage";
 import AuditTrailPage from "../pages/admin/AuditTrailPage";
 import RolePermissionMatrixPage from "../pages/admin/RolePermissionMatrixPage";
+import RolePermissionComparisonPage from "../pages/admin/RolePermissionComparisonPage";
 import SettingsPage from "../pages/admin/SettingsPage";
 import AdminProfilePage from "../pages/admin/AdminProfilePage";
 import TicketSalePage from "../pages/admin/TicketSalePage";
@@ -200,6 +201,7 @@ export default function AppRoutes() {
           </Route>
           <Route element={<ProtectedRoute allowedPermissions={["ROLE_MANAGE"]} />}>
             <Route path="access-matrix" element={<RolePermissionMatrixPage />} />
+            <Route path="access-matrix/compare" element={<RolePermissionComparisonPage />} />
           </Route>
 
           <Route element={<ProtectedRoute allowedPermissions={["REFUND_READ", "RECONCILIATION_READ"]} />}>

@@ -266,28 +266,28 @@ public class ApplicationInitConfig {
         for (Map.Entry<String, Set<String>> entry : ROLE_PERMISSIONS.entrySet()) {
             String roleName = entry.getKey();
 
+            // Role assignments become database-managed after their first creation.
+            // Never overwrite changes made through the audited access matrix on startup.
+            // Future default changes must be delivered through an explicit versioned migration.
+            if (roleRepository.existsById(roleName)) {
+                log.debug("[Seed] Role already exists; preserving database permissions: {}", roleName);
+                continue;
+            }
+
             // Fetch assigned permissions from DB (already seeded above)
             Set<Permission> permissions = entry.getValue().stream()
                     .map(permName -> permissionRepository.findById(permName).orElse(null))
                     .filter(p -> p != null)
                     .collect(Collectors.toSet());
 
-            if (roleRepository.findById(roleName).isEmpty()) {
-                roleRepository.save(
-                        Role.builder()
-                                .roleName(roleName)
-                                .description(roleDescriptions.getOrDefault(roleName, roleName + " role"))
-                                .permissions(permissions)
-                                .build()
-                );
-                log.info("[Seed] Role created: {} with {} permissions", roleName, permissions.size());
-            } else {
-                // Update permissions if role already exists (idempotent update)
-                Role existing = roleRepository.findById(roleName).get();
-                existing.setPermissions(permissions);
-                roleRepository.save(existing);
-                log.debug("[Seed] Role permissions updated: {}", roleName);
-            }
+            roleRepository.save(
+                    Role.builder()
+                            .roleName(roleName)
+                            .description(roleDescriptions.getOrDefault(roleName, roleName + " role"))
+                            .permissions(permissions)
+                            .build()
+            );
+            log.info("[Seed] Role created: {} with {} permissions", roleName, permissions.size());
         }
     }
 

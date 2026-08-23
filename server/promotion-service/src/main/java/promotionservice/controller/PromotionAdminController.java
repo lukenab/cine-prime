@@ -3,13 +3,14 @@ package promotionservice.controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import movie.theater.common.dto.ApiResponse;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import promotionservice.dto.request.PromotionUpsertRequest;
 import promotionservice.dto.response.PromotionResponse;
+import promotionservice.dto.response.PromotionPageResponse;
 import promotionservice.enums.PromotionStatus;
 import promotionservice.service.PromotionAdminService;
 
@@ -34,8 +35,18 @@ public class PromotionAdminController {
     }
 
     @GetMapping
-    public ApiResponse<Page<PromotionResponse>> search(@RequestParam(required = false) PromotionStatus status, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.<Page<PromotionResponse>>builder().code(200).result(service.search(status, PageRequest.of(page, Math.min(size, 100)))).build();
+    public ApiResponse<PromotionPageResponse> search(
+            @RequestParam(required = false) PromotionStatus status,
+            @RequestParam(required = false) String query,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.max(1, Math.min(size, 100));
+        PageRequest pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "updatedAt"));
+        return ApiResponse.<PromotionPageResponse>builder()
+                .code(200)
+                .result(service.search(status, query, pageable))
+                .build();
     }
 
     @PutMapping("/{id}")
