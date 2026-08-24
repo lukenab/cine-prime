@@ -1,5 +1,0 @@
-\c movie_db;
-
-DROP TABLE IF EXISTS ticket CASCADE;
-DROP TABLE IF EXISTS booking_detail CASCADE;
-DROP TABLE IF EXISTS booking CASCADE;

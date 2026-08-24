@@ -293,7 +293,7 @@ export function Navbar() {
                 <NavLink
                   to={item.to}
                   className={({ isActive }) =>
-                    `flex items-center gap-1 ${isActive ? "text-white" : "text-white/70"} hover:text-white transition-colors duration-200`
+                    `flex items-center gap-1 transition-colors duration-200 hover:text-white ${isActive ? "font-bold text-blue-400 [text-shadow:0_0_14px_rgba(96,165,250,0.45)]" : "font-semibold text-white/70"}`
                   }
                   style={{ fontSize: "0.875rem", letterSpacing: "0.05em" }}
                 >
@@ -309,7 +309,7 @@ export function Navbar() {
                         <Link
                           key={child.to}
                           to={child.to}
-                          className="block whitespace-nowrap rounded-lg px-4 py-2.5 text-white/70 transition-colors duration-150"
+                          className="block whitespace-nowrap rounded-lg px-4 py-2.5 font-medium text-white/70 transition-colors duration-150"
                           style={{ fontSize: "0.9rem" }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.backgroundColor = "rgba(59,130,246,0.14)";
@@ -354,7 +354,7 @@ export function Navbar() {
                 key={item.to}
                 to={item.to}
                 className={({ isActive }) =>
-                  `${isActive ? "text-white" : "text-white/70"} hover:text-white transition-colors duration-200`
+                  `transition-colors duration-200 hover:text-white ${isActive ? "font-bold text-blue-400 [text-shadow:0_0_14px_rgba(96,165,250,0.45)]" : "font-semibold text-white/70"}`
                 }
                 style={{ fontSize: "0.875rem", letterSpacing: "0.05em" }}
               >
@@ -483,22 +483,7 @@ export function Navbar() {
           ) : (
             <Link
               to="/login"
-              className="flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all duration-200"
-              style={{
-                color: ACCENT,
-                border: `1px solid ${ACCENT}`,
-                backgroundColor: "rgba(59,130,246,0.08)",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = ACCENT;
-                e.currentTarget.style.color = "#050505";
-                e.currentTarget.style.boxShadow = "0 0 16px rgba(59,130,246,0.45)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = "rgba(59,130,246,0.08)";
-                e.currentTarget.style.color = ACCENT;
-                e.currentTarget.style.boxShadow = "none";
-              }}
+              className="flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(37,99,235,0.25)] transition-all duration-200 hover:-translate-y-px hover:bg-blue-500 hover:shadow-[0_6px_18px_rgba(37,99,235,0.35)] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]"
             >
               <User size={15} />
               Sign In
@@ -560,7 +545,7 @@ export function Navbar() {
                 to={item.to}
                 onClick={() => setMenuOpen(false)}
                 className={({ isActive }) =>
-                  `${isActive ? "text-white" : "text-white/70"} hover:text-white text-sm py-1`
+                  `py-1 text-sm hover:text-white ${isActive ? "font-bold text-blue-400 [text-shadow:0_0_14px_rgba(96,165,250,0.45)]" : "font-semibold text-white/70"}`
                 }
               >
                 {item.label}
@@ -575,7 +560,7 @@ export function Navbar() {
                       key={child.to}
                       to={child.to}
                       onClick={() => setMenuOpen(false)}
-                      className="text-white/50 hover:text-white text-sm py-1"
+                      className="py-1 text-sm font-medium text-white/50 hover:text-white"
                     >
                       {child.label}
                     </Link>
@@ -621,12 +606,7 @@ export function Navbar() {
             <Link
               to="/login"
               onClick={() => setMenuOpen(false)}
-              className="flex items-center justify-center gap-2 px-5 py-3 rounded-full w-full mt-1 text-sm font-semibold transition-all duration-200"
-              style={{
-                color: ACCENT,
-                border: `1px solid ${ACCENT}`,
-                backgroundColor: "rgba(59,130,246,0.08)",
-              }}
+              className="mt-1 flex w-full items-center justify-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(37,99,235,0.25)] transition-all duration-200 hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]"
             >
               <User size={16} />
               Sign In
