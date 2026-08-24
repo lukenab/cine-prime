@@ -1,4 +1,5 @@
 import { Navigate, Outlet, useLocation, useOutletContext } from "react-router-dom";
+import { RequestState } from "../components/shared/RequestState";
 
 interface ProtectedRouteProps {
   allowedRoles?: string[];
@@ -37,7 +38,13 @@ export default function ProtectedRoute({ allowedRoles, allowedPermissions }: Pro
   const roleAllowed = !allowedRoles || allowedRoles.some((allowed) => roles.includes(allowed) || role === allowed);
   const permissionAllowed = !allowedPermissions || allowedPermissions.some((allowed) => permissions.includes(allowed));
   if (!roleAllowed || !permissionAllowed) {
-    return <Navigate to="/" replace />;
+    return (
+      <RequestState
+        kind="forbidden"
+        title="This page is outside your assigned workspace"
+        description="Your account is active, but it does not have the business capability required for this route. Ask a system administrator to review your role assignment if you need access."
+      />
+    );
   }
 
   return <Outlet context={context} />;

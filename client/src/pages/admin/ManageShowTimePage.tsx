@@ -268,7 +268,7 @@ export default function ManageShowtimePage() {
 
   const openAutomaticCreate = (runId: number | null = null) => {
     setCreateChoiceOpen(false);
-    navigate(runId ? `/admin/showtimes/auto?runId=${runId}` : "/admin/showtimes/auto");
+    navigate(runId ? `/admin/showtimes/auto/create?runId=${runId}` : "/admin/showtimes/auto/create");
   };
 
   return (

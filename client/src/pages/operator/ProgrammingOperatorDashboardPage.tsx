@@ -13,6 +13,8 @@ import { useNavigate } from "react-router-dom";
 
 import { subscribeLifecycleEvents } from "../../api/lifecycleSocket";
 import { movieApi, type MovieApiResponse } from "../../api/movieApi";
+import { RequestState } from "../../components/shared/RequestState";
+import { classifyRequestFailure, type RequestFailure } from "../../utils/requestFailure";
 
 const STATUS_META: Record<string, { label: string; color: string; background: string }> = {
   DRAFT: { label: "Draft", color: "#60a5fa", background: "rgba(59,130,246,.12)" },
@@ -44,7 +46,7 @@ const quickActions = [
   {
     title: "Automatic scheduling",
     description: "Generate branch schedules from approved movies, release plans and constraints.",
-    path: "/admin/showtimes/auto",
+    path: "/admin/showtimes/auto/create",
     icon: Clapperboard,
   },
 ];
@@ -53,16 +55,16 @@ export default function ProgrammingOperatorDashboardPage() {
   const navigate = useNavigate();
   const [movies, setMovies] = useState<MovieApiResponse[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [failure, setFailure] = useState<RequestFailure | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError("");
+    setFailure(null);
     try {
       const response = await movieApi.getAllMovies();
       setMovies(response.result ?? []);
-    } catch {
-      setError("Could not load the programming queue.");
+    } catch (error) {
+      setFailure(classifyRequestFailure(error, "The programming queue could not be loaded."));
     } finally {
       setLoading(false);
     }
@@ -129,10 +131,10 @@ export default function ProgrammingOperatorDashboardPage() {
             </div>
             <button type="button" onClick={() => navigate("/admin/movies")} style={{ border: 0, padding: "4px 0", background: "transparent", color: "#3b82f6", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>View catalogue <ArrowRight size={13} /></button>
           </div>
-          {error ? (
-            <div style={{ margin: 20, padding: 16, borderRadius: 12, color: "#fb7185", background: "rgba(244,63,94,.08)", border: "1px solid rgba(244,63,94,.18)" }}>{error}</div>
+          {failure ? (
+            <div className="p-4"><RequestState compact kind={failure.kind} description={failure.description} onRetry={() => void load()} /></div>
           ) : queue.length === 0 && !loading ? (
-            <div style={{ padding: 54, textAlign: "center", color: "var(--text-sub)" }}>No movie records in the programming queue.</div>
+            <div className="p-4"><RequestState compact kind="empty" title="No movie records in the programming queue" description="Drafts and returned movie content will appear here when work is required." /></div>
           ) : (
             queue.map((movie) => {
               const status = movie.movieStatus ?? "DRAFT";

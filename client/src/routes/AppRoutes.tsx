@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import AuthLayout from "../layouts/AuthLayout";
 import CustomerLayout from "../layouts/CustomerLayout";
@@ -69,9 +69,18 @@ import ProgrammingOperatorDashboardPage from "../pages/operator/ProgrammingOpera
 import ReleasePlanningQueuePage from "../pages/operator/ReleasePlanningQueuePage";
 import MyWorkforcePage from "../pages/workforce/MyWorkforcePage";
 import WorkforceOperationsPage from "../pages/workforce/WorkforceOperationsPage";
+import ProgrammingApprovalWorkspacePage from "../pages/approver/ProgrammingApprovalWorkspacePage";
 
 import RootRedirect from "./RootRedirect";
 import ProtectedRoute from "./ProtectedRoute";
+
+function AutomaticSchedulingEntryRoute() {
+  const location = useLocation();
+  let permissions: string[] = [];
+  try { permissions = JSON.parse(localStorage.getItem("permissions") || "[]"); } catch { permissions = []; }
+  const destination = permissions.includes("SCHEDULE_PLAN_SUBMIT") ? "/admin/showtimes/auto/create" : "/admin/showtimes/auto/review";
+  return <Navigate to={`${destination}${location.search}`} replace />;
+}
 
 export default function AppRoutes() {
   return (
@@ -119,8 +128,11 @@ export default function AppRoutes() {
         "ROLE_COMMERCIAL_MANAGER", "ROLE_COMMERCIAL_APPROVER", "ROLE_SECURITY_AUDITOR", "ROLE_SYSTEM_ADMIN"]} />}>
         <Route path="/admin" element={<AdminLayout />}>
           <Route path="profile" element={<AdminProfilePage />} />
-          <Route element={<ProtectedRoute allowedPermissions={["RELEASE_PLAN_READ"]} />}>
+          <Route element={<ProtectedRoute allowedPermissions={["RELEASE_PLAN_EDIT", "SCHEDULE_PLAN_SUBMIT"]} />}>
             <Route path="programming" element={<ProgrammingOperatorDashboardPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["MOVIE_APPROVE", "RELEASE_PLAN_APPROVE", "SCHEDULE_PLAN_APPROVE"]} />}>
+            <Route path="programming/approvals" element={<ProgrammingApprovalWorkspacePage />} />
           </Route>
 
           <Route element={<ProtectedRoute allowedPermissions={["RELEASE_PLAN_READ"]} />}>
@@ -128,21 +140,35 @@ export default function AppRoutes() {
           </Route>
           <Route element={<ProtectedRoute allowedPermissions={["MOVIE_READ"]} />}>
             <Route path="movies" element={<ManageMoviePage />}>
-              <Route path="new" element={<MovieCreationStartPage />} />
+              <Route element={<ProtectedRoute allowedPermissions={["MOVIE_CREATE"]} />}>
+                <Route path="new" element={<MovieCreationStartPage />} />
+              </Route>
             </Route>
-            <Route path="movies/new/catalog" element={<TmdbCatalogPage />} />
-            <Route path="movies/new/manual" element={<MovieEditorPage />} />
-            <Route path="movies/:movieId/edit" element={<MovieEditorPage />} />
             <Route path="movies/:movieId/availability" element={<MovieAvailabilityPage />} />
             <Route path="persons" element={<ManagePersonsPage />} />
             <Route path="screening-versions" element={<ManageScreeningVersionsPage />} />
             <Route path="formats" element={<ManageFormatsPage />} />
-            <Route path="genres" element={<ManageGenresPage />} />
             <Route path="age-ratings" element={<ManageAgeRatingsPage />} />
             <Route path="companies" element={<ManageCompaniesPage />} />
           </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["MOVIE_CREATE"]} />}>
+            <Route path="movies/new/catalog" element={<TmdbCatalogPage />} />
+            <Route path="movies/new/manual" element={<MovieEditorPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["MOVIE_UPDATE"]} />}>
+            <Route path="movies/:movieId/edit" element={<MovieEditorPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["GENRE_READ"]} />}>
+            <Route path="genres" element={<ManageGenresPage />} />
+          </Route>
           <Route element={<ProtectedRoute allowedPermissions={["SCHEDULE_PLAN_SUBMIT", "SCHEDULE_PLAN_APPROVE"]} />}>
-            <Route path="showtimes/auto" element={<AutoScheduleWorkspacePage />} />
+            <Route path="showtimes/auto" element={<AutomaticSchedulingEntryRoute />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["SCHEDULE_PLAN_SUBMIT"]} />}>
+            <Route path="showtimes/auto/create" element={<AutoScheduleWorkspacePage mode="create" />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["SCHEDULE_PLAN_APPROVE"]} />}>
+            <Route path="showtimes/auto/review" element={<AutoScheduleWorkspacePage mode="review" />} />
           </Route>
 
           <Route element={<ProtectedRoute allowedPermissions={["REPORT_READ"]} />}>

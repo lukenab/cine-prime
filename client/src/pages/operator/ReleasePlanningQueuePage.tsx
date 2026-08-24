@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, Eye, Film, Search } from "lucide-react";
 import { RowActions } from "../../components/admin/RowActions";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   movieApi,
@@ -9,6 +9,9 @@ import {
   type MovieAvailabilityResponse,
 } from "../../api/movieApi";
 import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
+import { RequestState } from "../../components/shared/RequestState";
+import { classifyRequestFailure, type RequestFailure } from "../../utils/requestFailure";
+import { useRole } from "../../hooks/useRole";
 import {
   Dialog,
   DialogContent,
@@ -78,17 +81,19 @@ function formatPlanActivation(plan: MovieAvailabilityResponse) {
 }
 
 export default function ReleasePlanningQueuePage() {
+  const { can } = useRole();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [movies, setMovies] = useState<MovieApiResponse[]>([]);
   const [plans, setPlans] = useState<MovieAvailabilityResponse[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [failure, setFailure] = useState<RequestFailure | null>(null);
   const [selectedMovieId, setSelectedMovieId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError("");
+    setFailure(null);
     try {
       const [movieResponse, planResponse] = await Promise.all([
         movieApi.getAllMovies(),
@@ -96,14 +101,21 @@ export default function ReleasePlanningQueuePage() {
       ]);
       setMovies(movieResponse.result ?? []);
       setPlans(planResponse.result ?? []);
-    } catch {
-      setError("Could not load the release planning queue.");
+    } catch (requestError) {
+      setFailure(classifyRequestFailure(requestError, "The release planning queue could not be loaded."));
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    const requestedMovieId = Number(searchParams.get("movieId"));
+    if (Number.isInteger(requestedMovieId) && requestedMovieId > 0) {
+      setSelectedMovieId(requestedMovieId);
+    }
+  }, [searchParams]);
 
   const plansByMovie = useMemo(() => plans.reduce<Record<number, MovieAvailabilityResponse[]>>((result, plan) => {
     (result[plan.movieId] ??= []).push(plan);
@@ -164,11 +176,11 @@ export default function ReleasePlanningQueuePage() {
       <div style={{ borderRadius: 16, border: "1px solid var(--border-color)", background: "var(--bg-card)", overflow: "hidden" }}>
         <div style={{ overflowX: "auto" }}>
           <div style={{ minWidth: 1180 }}>
-            <div style={{ display: "grid", gridTemplateColumns: TABLE_GRID, gap: 18, minHeight: 50, alignItems: "center", padding: "15px 18px", color: "var(--text-sub)", borderBottom: "1px solid var(--border-color)", fontSize: 10.5, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>
+            <div style={{ display: "grid", gridTemplateColumns: TABLE_GRID, gap: 18, minHeight: 50, alignItems: "center", padding: "15px 18px", color: "var(--text-sub)", borderBottom: "1px solid var(--border-color)", background: "var(--bg-main)", fontSize: 10.5, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>
               <span>Movie</span><span>Coverage</span><span>Release status</span><span>Upcoming plan event</span><span>Needs attention</span><span style={{ textAlign: "right" }}>Actions</span>
             </div>
-            {error ? <div style={{ margin: 18, padding: 15, borderRadius: 12, color: "#fb7185", background: "rgba(244,63,94,.08)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}><span>{error}</span><button type="button" onClick={() => void load()} style={{ flexShrink: 0, border: "1px solid rgba(244,63,94,.3)", borderRadius: 8, padding: "6px 10px", color: "#fb7185", background: "transparent", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Retry</button></div> : rows.length === 0 && !loading ? (
-              <div style={{ padding: 52, textAlign: "center", color: "var(--text-sub)" }}>No approved movies are ready for release planning.</div>
+            {failure ? <div className="p-4"><RequestState compact kind={failure.kind} description={failure.description} onRetry={() => void load()} /></div> : rows.length === 0 && !loading ? (
+              <div className="p-4"><RequestState compact kind="empty" title="No release plans match this view" description="Approved movies and submitted cluster plans will appear here when they are ready for programming work." /></div>
             ) : rows.map((movie) => {
               const moviePlans = plansByMovie[movie.movieId] ?? [];
               const statusCounts = getStatusCounts(moviePlans);
@@ -207,7 +219,7 @@ export default function ReleasePlanningQueuePage() {
                       : { label: "—", detail: "", color: "var(--text-sub)" };
               return (
                 <div key={movie.movieId}>
-                  <div style={{ display: "grid", gridTemplateColumns: TABLE_GRID, gap: 18, padding: "15px 18px", alignItems: "center", borderBottom: "1px solid var(--border-color)" }}>
+                  <div className="transition-colors hover:bg-blue-500/5" style={{ display: "grid", gridTemplateColumns: TABLE_GRID, gap: 18, padding: "15px 18px", alignItems: "center", borderBottom: "1px solid var(--border-color)" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
                       <div style={{ width: 36, height: 46, borderRadius: 8, overflow: "hidden", background: "rgba(59,130,246,.1)", flexShrink: 0 }}>{movie.smallImage && <img src={movie.smallImage} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}</div>
                       <div style={{ minWidth: 0 }}><strong style={{ display: "block", fontSize: 13.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{movie.movieNameVn || movie.movieNameEnglish}</strong><small style={{ display: "block", color: "var(--text-sub)", marginTop: 4 }}>{movie.movieNameEnglish || `Movie #${movie.movieId}`}</small></div>
@@ -234,7 +246,16 @@ export default function ReleasePlanningQueuePage() {
         </div>
       </div>
 
-      <Dialog open={Boolean(selectedMovie)} onOpenChange={(open) => { if (!open) setSelectedMovieId(null); }}>
+      <Dialog open={Boolean(selectedMovie)} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedMovieId(null);
+          if (searchParams.has("movieId")) {
+            const next = new URLSearchParams(searchParams);
+            next.delete("movieId");
+            setSearchParams(next, { replace: true });
+          }
+        }
+      }}>
         <DialogContent
           className="h-[calc(100vh-32px)] max-h-[820px] w-[calc(100vw-32px)] max-w-[1400px] gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-[1400px]"
           style={{
@@ -325,7 +346,7 @@ export default function ReleasePlanningQueuePage() {
                   }}
                   className="flex h-10 items-center gap-2 rounded-lg bg-blue-600 px-4 text-xs font-bold text-white transition-colors hover:bg-blue-700"
                 >
-                  Manage release plans <ArrowRight size={14} />
+                  {can.approve && !can.edit ? "Review release plans" : "Manage release plans"} <ArrowRight size={14} />
                 </button>
               </div>
             </>

@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, RefreshCw, AlertCircle, Tags, Film, Hash, X, ShieldCheck, Clock } from "lucide-react";
+import { Plus, Search, RefreshCw, Tags, Film, Hash, X, ShieldCheck, Clock } from "lucide-react";
 import { useOutletContext } from "react-router-dom";
 import { movieApi, type GenreResponse, type MovieApiResponse, type CreateGenrePayload } from "../../api/movieApi";
 import { useRole } from "../../hooks/useRole";
 import { getApiErrorMessage, notify } from "../../lib/notifications";
 import { RowActions } from "../../components/admin/RowActions";
+import { RequestState } from "../../components/shared/RequestState";
+import { classifyRequestFailure, type RequestFailure } from "../../utils/requestFailure";
 
 type StatusFilter = "ALL" | "ACTIVE" | "PENDING_REVIEW";
 
@@ -122,7 +124,7 @@ export default function ManageGenresPage() {
   const [types, setTypes] = useState<GenreResponse[]>([]);
   const [movies, setMovies] = useState<MovieApiResponse[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<RequestFailure | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -131,7 +133,7 @@ export default function ManageGenresPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setFailure(null);
     try {
       const [typesRes, moviesRes] = await Promise.all([
         movieApi.getGenres(),
@@ -139,8 +141,8 @@ export default function ManageGenresPage() {
       ]);
       setTypes(typesRes.result ?? []);
       setMovies(moviesRes.result ?? []);
-    } catch (err: any) {
-      setError(err?.response?.data?.message ?? "Failed to load genres.");
+    } catch (err) {
+      setFailure(classifyRequestFailure(err, "Movie genres could not be loaded."));
     } finally {
       setLoading(false);
     }
@@ -236,15 +238,7 @@ export default function ManageGenresPage() {
       </div>
 
       {/* Error banner */}
-      {error && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl mb-5 border border-rose-200 bg-rose-50">
-          <AlertCircle size={16} className="text-rose-500 flex-shrink-0" />
-          <p style={{ fontSize: "14px", color: "#e11d48" }}>{error}</p>
-          <button onClick={loadData} className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 transition-colors text-rose-600" style={{ fontSize: "13px" }}>
-            <RefreshCw size={13} /> Retry
-          </button>
-        </div>
-      )}
+      {failure && <div className="mb-5"><RequestState compact kind={failure.kind} description={failure.description} onRetry={() => void loadData()} /></div>}
 
       {/* Status tabs (Movie list style) */}
       {(() => {
@@ -332,7 +326,7 @@ export default function ManageGenresPage() {
       </div>
 
       {/* Genre grid + table hybrid */}
-      <div className="rounded-2xl border overflow-hidden" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+      {!failure && <div className="rounded-2xl border overflow-hidden" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
         <table className="w-full">
           <thead>
             <tr className="border-b" style={{ borderColor: "var(--border-color)", backgroundColor: "rgba(128,128,128,0.04)" }}>
@@ -353,10 +347,11 @@ export default function ManageGenresPage() {
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={isAdmin ? 6 : 5} className="px-5 py-16 text-center" style={{ fontSize: "14px", color: "var(--text-sub)" }}>
-                  {searchQuery ? "No genres match your search."
-                    : statusFilter === "PENDING_REVIEW" ? "No genres awaiting review."
-                    : "No genres yet. Add one to get started."}
+                <td colSpan={isAdmin ? 6 : 5} className="p-4">
+                  <RequestState compact kind="empty"
+                    title={searchQuery ? "No genres match your search" : statusFilter === "PENDING_REVIEW" ? "No genres awaiting review" : "No genres configured"}
+                    description={searchQuery ? "Try a different name or clear the current filters." : "Genre records will appear here when they are available."}
+                  />
                 </td>
               </tr>
             ) : (
@@ -431,7 +426,7 @@ export default function ManageGenresPage() {
             </p>
           </div>
         )}
-      </div>
+      </div>}
 
       {isAdmin && <AddGenreModal
         open={modalOpen}

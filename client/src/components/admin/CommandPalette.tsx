@@ -20,6 +20,7 @@ import {
   ReceiptText,
   ScrollText,
   KeyRound,
+  ClipboardCheck,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { isPathInRoleWorkspace } from "../../utils/adminWorkspaces";
@@ -45,7 +46,9 @@ const entries: PaletteEntry[] = [
   { label: "Cinema clusters", description: "Manage branches and operating status", path: "/admin/clusters", group: "Facilities", keywords: "cinema branch cluster location", icon: Building2, roles: ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"] },
   { label: "Screening rooms", description: "Manage rooms, layouts and capacity", path: "/admin/rooms", group: "Facilities", keywords: "room seat theatre layout", icon: Armchair, roles: ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"] },
   { label: "Showtime operations", description: "Review and manage published showtimes", path: "/admin/showtimes", group: "Operations", keywords: "showtime schedule screening", icon: Clapperboard, roles: ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"] },
-  { label: "Automatic scheduling", description: "Generate schedule drafts for review", path: "/admin/showtimes/auto", group: "Operations", keywords: "auto schedule scheduling plan", icon: CalendarDays, permissions: ["SCHEDULE_PLAN_SUBMIT", "SCHEDULE_PLAN_APPROVE"] },
+  { label: "Create schedules", description: "Generate schedule drafts and submit them for review", path: "/admin/showtimes/auto/create", group: "Film programming", keywords: "auto schedule scheduling plan create", icon: CalendarDays, permissions: ["SCHEDULE_PLAN_SUBMIT"] },
+  { label: "Schedule reviews", description: "Review submitted schedules and make an approval decision", path: "/admin/showtimes/auto/review", group: "Film programming", keywords: "auto schedule approval checker review", icon: ClipboardCheck, permissions: ["SCHEDULE_PLAN_APPROVE"] },
+  { label: "Programming approvals", description: "Open all film-programming approval queues", path: "/admin/programming/approvals", group: "Film programming", keywords: "movie release schedule approval queue", icon: ClipboardCheck, permissions: ["MOVIE_APPROVE", "RELEASE_PLAN_APPROVE", "SCHEDULE_PLAN_APPROVE"] },
   { label: "Price books", description: "Manage branch pricing and availability", path: "/admin/price-books", group: "Operations", keywords: "price pricing rate book", icon: BookOpen, permissions: ["PRICE_BOOK_READ", "PRICE_BOOK_MANAGE"] },
   { label: "Bookings", description: "Search and manage customer bookings", path: "/admin/bookings", group: "Business operations", keywords: "booking order ticket reservation", icon: Ticket, permissions: ["BOOKING_READ"] },
   { label: "Concession catalogue", description: "Manage products, SKUs and combos", path: "/admin/concessions/catalog", group: "Business operations", keywords: "concession snack popcorn drink product combo", icon: Popcorn, permissions: ["CONCESSION_CATALOG_DRAFT", "CONCESSION_CATALOG_APPROVE"] },

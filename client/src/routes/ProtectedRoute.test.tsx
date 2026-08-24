@@ -32,7 +32,8 @@ describe("ProtectedRoute permission enforcement", () => {
     localStorage.setItem("roles", JSON.stringify(["ROLE_ADMIN"]));
     localStorage.setItem("permissions", JSON.stringify(["ROLE_MANAGE"]));
     renderProtected();
-    expect(screen.getByText("Public home")).toBeInTheDocument();
+    expect(screen.getByText("This page is outside your assigned workspace")).toBeInTheDocument();
+    expect(screen.queryByText("Self-service workforce")).not.toBeInTheDocument();
   });
 
   it("allows an assigned staff persona with the required permission", () => {
