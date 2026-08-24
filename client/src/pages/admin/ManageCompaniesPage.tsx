@@ -3,6 +3,7 @@ import { Plus, Search, RefreshCw, AlertCircle, Factory, Pencil, Trash2, X, Globe
 import { useOutletContext } from "react-router-dom";
 import { movieApi, type ProductionCompanyResponse, type ProductionCompanyRequest } from "../../api/movieApi";
 import { getApiErrorMessage, notify } from "../../lib/notifications";
+import { RowActions, type RowAction } from "../../components/admin/RowActions";
 
 // ── Modal ──────────────────────────────────────────────────────────────────────
 
@@ -304,7 +305,7 @@ export default function ManageCompaniesPage() {
           <thead>
             <tr className="border-b" style={{ borderColor: "var(--border-color)", backgroundColor: "rgba(128,128,128,0.04)" }}>
               {["Company", "Country", "Website", "Actions"].map((h) => (
-                <th key={h} className="px-5 py-3.5 text-left">
+                <th key={h} className={`px-5 py-3.5 ${h === "Actions" ? "w-[72px] text-right" : "text-left"}`}>
                   <span style={{ color: "var(--text-sub)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>{h}</span>
                 </th>
               ))}
@@ -344,15 +345,11 @@ export default function ManageCompaniesPage() {
                       <span style={{ fontSize: "13px", color: "var(--text-sub)" }}>—</span>
                     )}
                   </td>
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => openEdit(c)} className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-colors" style={{ fontSize: "13px", color: "var(--text-sub)", borderColor: "var(--border-color)" }}>
-                        <Pencil size={14} /> Edit
-                      </button>
-                      <button onClick={() => setDeleteTarget(c)} className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600 transition-colors" style={{ fontSize: "13px", color: "var(--text-sub)", borderColor: "var(--border-color)" }}>
-                        <Trash2 size={14} /> Delete
-                      </button>
-                    </div>
+                  <td className="w-[72px] px-5 py-3.5 text-right">
+                    <RowActions ariaLabel={`Actions for ${c.name}`} actions={[
+                      { key: "edit", label: "Edit company", icon: Pencil, onSelect: () => openEdit(c) },
+                      { key: "delete", label: "Delete company", icon: Trash2, onSelect: () => setDeleteTarget(c), destructive: true, separatorBefore: true },
+                    ] satisfies RowAction[]} />
                   </td>
                 </tr>
               ))

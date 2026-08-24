@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, Eye, Film, Search } from "lucide-react";
+import { RowActions } from "../../components/admin/RowActions";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -27,7 +28,7 @@ const PLAN_META: Record<string, { label: string; color: string; background: stri
 };
 
 const STATUS_ORDER = ["CHANGES_REQUESTED", "PLANNED", "IN_REVIEW", "APPROVED", "OPEN", "SUSPENDED", "CLOSED"];
-const TABLE_GRID = "minmax(300px,1.45fr) minmax(145px,.65fr) minmax(210px,.85fr) minmax(250px,1fr) minmax(175px,.75fr) 120px";
+const TABLE_GRID = "minmax(300px,1.45fr) minmax(145px,.65fr) minmax(210px,.85fr) minmax(250px,1fr) minmax(175px,.75fr) 72px";
 const DETAIL_GRID = "minmax(220px,1.1fr) minmax(220px,1fr) minmax(190px,.85fr) minmax(150px,.65fr) minmax(190px,.8fr)";
 const ACTIONABLE_STATUSES = new Set(["PLANNED", "CHANGES_REQUESTED", "SUSPENDED"]);
 
@@ -164,7 +165,7 @@ export default function ReleasePlanningQueuePage() {
         <div style={{ overflowX: "auto" }}>
           <div style={{ minWidth: 1180 }}>
             <div style={{ display: "grid", gridTemplateColumns: TABLE_GRID, gap: 18, minHeight: 50, alignItems: "center", padding: "15px 18px", color: "var(--text-sub)", borderBottom: "1px solid var(--border-color)", fontSize: 10.5, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>
-              <span>Movie</span><span>Coverage</span><span>Release status</span><span>Upcoming plan event</span><span>Needs attention</span><span style={{ textAlign: "right" }}>Action</span>
+              <span>Movie</span><span>Coverage</span><span>Release status</span><span>Upcoming plan event</span><span>Needs attention</span><span style={{ textAlign: "right" }}>Actions</span>
             </div>
             {error ? <div style={{ margin: 18, padding: 15, borderRadius: 12, color: "#fb7185", background: "rgba(244,63,94,.08)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}><span>{error}</span><button type="button" onClick={() => void load()} style={{ flexShrink: 0, border: "1px solid rgba(244,63,94,.3)", borderRadius: 8, padding: "6px 10px", color: "#fb7185", background: "transparent", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Retry</button></div> : rows.length === 0 && !loading ? (
               <div style={{ padding: 52, textAlign: "center", color: "var(--text-sub)" }}>No approved movies are ready for release planning.</div>
@@ -220,7 +221,11 @@ export default function ReleasePlanningQueuePage() {
                       {upcomingEvent ? <><strong style={{ display: "block", fontSize: 12.5 }}>{formatPlanDate(upcomingEvent.date, upcomingEvent.date.includes("T"))}</strong><small style={{ display: "block", color: "var(--text-sub)", marginTop: 4 }}>{upcomingEvent.plan.clusterName ?? `Cluster #${upcomingEvent.plan.clusterId}`} {upcomingEvent.type}</small></> : <strong style={{ display: "block", color: "var(--text-sub)", fontSize: 12.5 }}>—</strong>}
                     </div>
                     <div><strong style={{ display: "block", color: attention.color, fontSize: 12.5 }}>{attention.label}</strong>{attention.detail && <small style={{ display: "block", color: "var(--text-sub)", marginTop: 4 }}>{attention.detail}</small>}</div>
-                    <button type="button" onClick={() => setSelectedMovieId(movie.movieId)} style={{ justifySelf: "end", border: 0, padding: "5px 0", background: "transparent", color: "#2563eb", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}><Eye size={14} /> View details</button>
+                    <RowActions
+                      className="justify-self-end"
+                      ariaLabel={`Actions for ${movie.movieNameVn || movie.movieNameEnglish}`}
+                      actions={[{ key: "view", label: "View details", icon: Eye, onSelect: () => setSelectedMovieId(movie.movieId) }]}
+                    />
                   </div>
                 </div>
               );

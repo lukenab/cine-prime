@@ -79,6 +79,9 @@ public class EmployeeInvitationRequest {
             case COMMERCIAL_MANAGER -> department == EmployeeDepartment.COMMERCIAL
                     && position == EmployeePosition.COMMERCIAL_MANAGER
                     && (cinemaId == null || cinemaId.isBlank());
+            case COMMERCIAL_APPROVER -> department == EmployeeDepartment.COMMERCIAL
+                    && position == EmployeePosition.COMMERCIAL_APPROVER
+                    && (cinemaId == null || cinemaId.isBlank());
             case SECURITY_AUDITOR -> department == EmployeeDepartment.RISK_COMPLIANCE
                     && position == EmployeePosition.SECURITY_AUDITOR
                     && (cinemaId == null || cinemaId.isBlank());

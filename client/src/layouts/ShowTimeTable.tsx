@@ -1,13 +1,7 @@
 import { useEffect, useState } from "react";
-import { Pencil, Trash2, ChevronLeft, ChevronRight, Monitor, Building2, Clock, PlayCircle, PauseCircle, XCircle, MoreHorizontal, Film, Armchair } from "lucide-react";
+import { Pencil, Trash2, ChevronLeft, ChevronRight, Monitor, Building2, Clock, PlayCircle, PauseCircle, XCircle, Film, Armchair } from "lucide-react";
 import type { ShowtimeResponse, ShowtimeStatus } from "../api/showtimeApi";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "../components/ui/dropdown-menu";
+import { RowActions, type RowAction } from "../components/admin/RowActions";
 
 type Props = {
   showtimes: ShowtimeResponse[];
@@ -276,7 +270,12 @@ export function ShowtimeTable({
               ) : (
                 pageItems.map((item) => {
                   const st = STATUS_STYLE[item.status] ?? STATUS_STYLE.COMPLETED;
-                  const hasRowActions = item.status === "SCHEDULED" || item.status === "ON_SALE" || item.status === "SUSPENDED";
+                  const rowActions: RowAction[] = [
+                    { key: "edit", label: "Edit showtime", icon: Pencil, onSelect: () => onEdit(item), hidden: item.status !== "SCHEDULED" },
+                    { key: "open-sales", label: "Open sales", icon: PlayCircle, onSelect: () => void runSingleStatusAction(item.showTimeId, "ON_SALE"), hidden: item.status !== "SCHEDULED" && item.status !== "SUSPENDED" },
+                    { key: "suspend", label: "Suspend sales", icon: PauseCircle, onSelect: () => void runSingleStatusAction(item.showTimeId, "SUSPENDED"), hidden: item.status !== "SCHEDULED" && item.status !== "ON_SALE" },
+                    { key: "delete", label: "Delete draft showtime", icon: Trash2, onSelect: () => setConfirmDelete(item), hidden: item.status !== "SCHEDULED", destructive: true, separatorBefore: true },
+                  ];
                   return (
                     <tr key={item.showTimeId} className="border-b last:border-none hover-row transition-colors" style={{ borderColor: "var(--border-color)" }}>
                       <td className="px-5 py-3.5">
@@ -344,25 +343,8 @@ export function ShowtimeTable({
                         </span>
                       </td>
 
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {item.status === "SCHEDULED" && (
-                            <button onClick={() => onEdit(item)} className="flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-colors hover:bg-black/5 dark:hover:bg-white/5" style={{ color: "var(--text-main)", borderColor: "var(--border-color)" }}>
-                              <Pencil size={13} /> Edit
-                            </button>
-                          )}
-                          {hasRowActions ? <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button type="button" aria-label={`More actions for ${item.movieName}`} className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors action-btn" style={{ color: "var(--text-sub)" }}><MoreHorizontal size={16} /></button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
-                              {(item.status === "SCHEDULED" || item.status === "SUSPENDED") && <DropdownMenuItem disabled={bulkBusy} onSelect={() => void runSingleStatusAction(item.showTimeId, "ON_SALE")}><PlayCircle /> Open sales</DropdownMenuItem>}
-                              {(item.status === "SCHEDULED" || item.status === "ON_SALE") && <DropdownMenuItem disabled={bulkBusy} onSelect={() => void runSingleStatusAction(item.showTimeId, "SUSPENDED")}><PauseCircle /> Suspend</DropdownMenuItem>}
-                              {item.status === "SCHEDULED" && <DropdownMenuSeparator />}
-                              {item.status === "SCHEDULED" && <DropdownMenuItem variant="destructive" onSelect={() => setConfirmDelete(item)}><Trash2 /> Delete draft showtime</DropdownMenuItem>}
-                            </DropdownMenuContent>
-                          </DropdownMenu> : <span className="px-2 text-xs" style={{ color: "var(--text-sub)" }}>—</span>}
-                        </div>
+                      <td className="w-[72px] px-5 py-3.5 text-right">
+                        <RowActions ariaLabel={`Actions for ${item.movieName}`} actions={rowActions} busy={bulkBusy} />
                       </td>
                     </tr>
                   );

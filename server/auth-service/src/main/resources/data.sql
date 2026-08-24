@@ -88,3 +88,43 @@ ON CONFLICT DO NOTHING;
 -- Demo accounts (employee/member with hardcoded password) removed — auth-service's
 -- ApplicationInitConfig now only bootstraps the ADMIN account, from app.admin.* config.
 
+-- Promotion maker-checker workflow (P0/P1).
+INSERT INTO roles (role_name, description) VALUES
+('COMMERCIAL_MANAGER', 'Commercial maker - prepares pricing and promotion drafts'),
+('COMMERCIAL_APPROVER', 'Commercial checker - approves and controls promotion lifecycle')
+ON CONFLICT (role_name) DO NOTHING;
+
+INSERT INTO permission (name, description) VALUES
+('PROMOTION_CREATE', 'Create new promotion'),
+('PROMOTION_UPDATE', 'Edit promotion'),
+('PROMOTION_SUBMIT', 'Submit promotion drafts for approval'),
+('PROMOTION_APPROVE', 'Approve or reject promotion submissions'),
+('PROMOTION_ACTIVATE', 'Activate approved promotions'),
+('PROMOTION_PAUSE', 'Pause or resume live promotions'),
+('PROMOTION_ARCHIVE', 'Archive promotions with an audit reason')
+ON CONFLICT (name) DO NOTHING;
+
+-- Additive grants preserve unrelated access-matrix customizations.
+INSERT INTO role_permissions (role_name, permission_name) VALUES
+('COMMERCIAL_MANAGER', 'PROMOTION_READ'),
+('COMMERCIAL_MANAGER', 'PROMOTION_CREATE'),
+('COMMERCIAL_MANAGER', 'PROMOTION_UPDATE'),
+('COMMERCIAL_MANAGER', 'PROMOTION_SUBMIT'),
+('COMMERCIAL_APPROVER', 'PROMOTION_READ'),
+('COMMERCIAL_APPROVER', 'PROMOTION_APPROVE'),
+('COMMERCIAL_APPROVER', 'PROMOTION_ACTIVATE'),
+('COMMERCIAL_APPROVER', 'PROMOTION_PAUSE'),
+('COMMERCIAL_APPROVER', 'PROMOTION_ARCHIVE'),
+('ADMIN', 'PROMOTION_CREATE'),
+('ADMIN', 'PROMOTION_UPDATE'),
+('ADMIN', 'PROMOTION_SUBMIT'),
+('ADMIN', 'PROMOTION_APPROVE'),
+('ADMIN', 'PROMOTION_ACTIVATE'),
+('ADMIN', 'PROMOTION_PAUSE'),
+('ADMIN', 'PROMOTION_ARCHIVE')
+ON CONFLICT DO NOTHING;
+
+-- Coarse/ambiguous promotion grants are replaced by the workflow permissions above.
+DELETE FROM role_permissions WHERE permission_name IN ('PROMOTION_MANAGE', 'PROMOTION_DELETE');
+DELETE FROM permission WHERE name IN ('PROMOTION_MANAGE', 'PROMOTION_DELETE');
+

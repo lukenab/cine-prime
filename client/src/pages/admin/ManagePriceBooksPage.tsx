@@ -17,6 +17,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { RowActions, type RowAction } from "../../components/admin/RowActions";
 import { movieApi, type ClusterResponse, type ScreeningFormatResponse } from "../../api/movieApi";
 import {
   priceBookApi,
@@ -372,35 +373,17 @@ export default function ManagePriceBooksPage() {
                   {book.status}
                 </span>
               </div>
-              <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
-                <button
-                  type="button"
-                  onClick={() => setViewingBook(book)}
-                  className="rounded-lg border p-2 text-blue-500"
-                  style={{ borderColor: "rgba(37,99,235,.35)" }}
-                  title="View rate cards"
-                  aria-label={`View ${book.name}`}
-                >
-                  <Eye size={15} />
-                </button>
-                {book.status !== "ARCHIVED" && (
-                  <button type="button" onClick={() => openEdit(book)} className="rounded-lg border p-2" style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }} title="Edit">
-                    <Edit3 size={15} />
-                  </button>
-                )}
-                <button type="button" onClick={() => duplicate(book)} className="rounded-lg border p-2" style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }} title="Duplicate">
-                  <CopyPlus size={15} />
-                </button>
-                {book.status === "DRAFT" && (
-                  <button type="button" onClick={() => void changeStatus(book, "activate")} className="rounded-lg border p-2 text-emerald-500" style={{ borderColor: "rgba(16,185,129,.35)" }} title="Activate">
-                    <CheckCircle2 size={15} />
-                  </button>
-                )}
-                {book.status !== "ARCHIVED" && (
-                  <button type="button" onClick={() => void changeStatus(book, "archive")} className="rounded-lg border p-2 text-slate-500" style={{ borderColor: "var(--border-color)" }} title="Archive">
-                    <Archive size={15} />
-                  </button>
-                )}
+              <div className="flex justify-end">
+                <RowActions
+                  ariaLabel={`Actions for ${book.name}`}
+                  actions={[
+                    { key: "view", label: "View rate cards", icon: Eye, onSelect: () => setViewingBook(book) },
+                    { key: "edit", label: "Edit price book", icon: Edit3, onSelect: () => openEdit(book), hidden: book.status === "ARCHIVED" },
+                    { key: "duplicate", label: "Duplicate price book", icon: CopyPlus, onSelect: () => duplicate(book) },
+                    { key: "activate", label: "Activate price book", icon: CheckCircle2, onSelect: () => void changeStatus(book, "activate"), hidden: book.status !== "DRAFT", separatorBefore: true },
+                    { key: "archive", label: "Archive price book", icon: Archive, onSelect: () => void changeStatus(book, "archive"), hidden: book.status === "ARCHIVED", destructive: true, separatorBefore: true },
+                  ] satisfies RowAction[]}
+                />
               </div>
             </article>
           );

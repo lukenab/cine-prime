@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Eye, XCircle, CheckCircle, ChevronLeft, ChevronRight, User, Film } from "lucide-react";
+import { RowActions, type RowAction } from "../components/admin/RowActions";
 
 export type BookingStatus = "PENDING" | "CONFIRMED" | "CANCELLED";
 
@@ -152,40 +153,15 @@ export function BookingTable({ bookings, searchQuery, statusFilter, onView, onCo
                     </td>
 
                     {/* Actions */}
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center justify-end gap-1">
-                        {/* View detail */}
-                        <button onClick={() => onView(item)} title="View detail" className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors action-btn" style={{ color: "var(--text-sub)" }}>
-                          <Eye size={14} />
-                        </button>
-
-                        {/* Confirm — only for PENDING */}
-                        {item.status === "PENDING" && (
-                          <button
-                            onClick={() => onConfirm(item.id)}
-                            title="Confirm booking"
-                            className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-                            style={{ color: "#10b981", background: "rgba(16,185,129,0.08)" }}
-                          >
-                            <CheckCircle size={14} />
-                          </button>
-                        )}
-
-                        {/* Cancel — only for PENDING or CONFIRMED */}
-                        {item.status !== "CANCELLED" && (
-                          <button
-                            onClick={() => handleCancel(item.id)}
-                            title={cancelConfirm === item.id ? "Click again to confirm cancel" : "Cancel booking"}
-                            className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-                            style={{
-                              color: cancelConfirm === item.id ? "#fff" : "#ef4444",
-                              background: cancelConfirm === item.id ? "#ef4444" : "rgba(239,68,68,0.08)",
-                            }}
-                          >
-                            <XCircle size={14} />
-                          </button>
-                        )}
-                      </div>
+                    <td className="w-[72px] px-5 py-3.5 text-right">
+                      <RowActions
+                        ariaLabel={`Actions for booking ${item.bookingCode}`}
+                        actions={[
+                          { key: "view", label: "View details", icon: Eye, onSelect: () => onView(item) },
+                          { key: "confirm", label: "Confirm booking", icon: CheckCircle, onSelect: () => onConfirm(item.id), hidden: item.status !== "PENDING", separatorBefore: true },
+                          { key: "cancel", label: cancelConfirm === item.id ? "Confirm cancellation" : "Cancel booking", icon: XCircle, onSelect: () => handleCancel(item.id), hidden: item.status === "CANCELLED", destructive: true, separatorBefore: true },
+                        ] satisfies RowAction[]}
+                      />
                     </td>
                   </tr>
                 );

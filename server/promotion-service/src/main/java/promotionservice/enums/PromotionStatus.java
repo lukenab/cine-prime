@@ -1,5 +1,11 @@
 package promotionservice.enums;
 
 public enum PromotionStatus {
-    DRAFT, ACTIVE, PAUSED, ARCHIVED
+    DRAFT,
+    PENDING_APPROVAL,
+    APPROVED,
+    REJECTED,
+    ACTIVE,
+    PAUSED,
+    ARCHIVED
 }

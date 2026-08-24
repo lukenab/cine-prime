@@ -78,7 +78,7 @@ export function PromotionForm({ initial = EMPTY_PROMOTION_FORM, submitLabel, onS
   return <form onSubmit={submit} className="mx-auto max-w-4xl space-y-5">
     <div className="flex items-center gap-4">
       <button type="button" onClick={() => navigate("/admin/promotions")} className="grid h-10 w-10 place-items-center rounded-xl border" style={inputStyle}><ArrowLeft size={18} /></button>
-      <div><h1 className="text-2xl font-semibold" style={{ color: "var(--text-main)" }}>{submitLabel}</h1><p className="text-sm" style={{ color: "var(--text-sub)" }}>Draft the commercial rule first, then activate it from the promotion list.</p></div>
+      <div><h1 className="text-2xl font-semibold" style={{ color: "var(--text-main)" }}>{submitLabel}</h1><p className="text-sm" style={{ color: "var(--text-sub)" }}>Save the commercial rule as a draft, then submit it for independent approval.</p></div>
     </div>
 
     <section className="rounded-2xl border p-6" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>

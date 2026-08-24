@@ -1,27 +1,36 @@
 package promotionservice.service;
 
 import movie.theater.common.exception.AppException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import promotionservice.dto.request.PromotionPriceRuleRequest;
 import promotionservice.dto.request.PromotionTargetRequest;
 import promotionservice.dto.request.PromotionUpsertRequest;
 import promotionservice.entity.Promotion;
 import promotionservice.entity.PromotionPriceRule;
 import promotionservice.entity.PromotionTarget;
+import promotionservice.entity.PromotionAuditLog;
 import promotionservice.enums.DiscountType;
 import promotionservice.enums.PromotionStatus;
 import promotionservice.enums.PromotionTargetType;
 import promotionservice.enums.PromotionBenefitScope;
+import promotionservice.enums.PromotionAvailabilityStatus;
 import promotionservice.repository.PromotionAuditLogRepository;
 import promotionservice.repository.PromotionRepository;
 import promotionservice.validation.PromotionValidator;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -38,6 +47,11 @@ class PromotionAdminServiceTest {
     @Mock PromotionAuditLogRepository auditLogRepository;
     @Spy PromotionValidator promotionValidator = new PromotionValidator();
     @InjectMocks PromotionAdminService service;
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
 
     @Test
     void updateDraftFlushesOldTargetAndReusesExistingPriceRule() {
@@ -82,6 +96,95 @@ class PromotionAdminServiceTest {
         verifyNoInteractions(auditLogRepository);
     }
 
+    @Test
+    void submitAndApproveRequireDifferentAccounts() {
+        UUID id = UUID.randomUUID();
+        Promotion promotion = draftPromotion();
+        when(promotionRepository.findById(id)).thenReturn(Optional.of(promotion));
+
+        authenticate("commercial-maker");
+        service.submit(id, "Ready for commercial review");
+        assertEquals(PromotionStatus.PENDING_APPROVAL, promotion.getStatus());
+        assertEquals("commercial-maker", promotion.getSubmittedByAccountId());
+
+        assertThrows(AppException.class, () -> service.approve(id, "Self approval"));
+        assertEquals(PromotionStatus.PENDING_APPROVAL, promotion.getStatus());
+
+        authenticate("commercial-checker");
+        service.approve(id, "Budget verified");
+        assertEquals(PromotionStatus.APPROVED, promotion.getStatus());
+        assertEquals("commercial-checker", promotion.getApprovedByAccountId());
+    }
+
+    @Test
+    void pauseRequiresReasonAndPersistsItInAuditDetail() {
+        UUID id = UUID.randomUUID();
+        Promotion promotion = draftPromotion();
+        promotion.setStatus(PromotionStatus.ACTIVE);
+        when(promotionRepository.findById(id)).thenReturn(Optional.of(promotion));
+
+        assertThrows(AppException.class, () -> service.pause(id, " "));
+
+        service.pause(id, "Incorrect campaign configuration");
+
+        var captor = org.mockito.ArgumentCaptor.forClass(PromotionAuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        assertEquals(PromotionStatus.PAUSED, promotion.getStatus());
+        assertEquals("Incorrect campaign configuration", captor.getValue().getDetail().get("reason"));
+        assertEquals("ACTIVE", captor.getValue().getDetail().get("fromStatus"));
+        assertEquals("PAUSED", captor.getValue().getDetail().get("toStatus"));
+    }
+
+    @Test
+    void searchUsesSummaryQueryWithoutLoadingAuditHistory() {
+        Promotion promotion = draftPromotion();
+        var pageable = PageRequest.of(0, 20);
+        PromotionRepository.StatusCount draftCount = mock(PromotionRepository.StatusCount.class);
+        when(draftCount.getStatus()).thenReturn(PromotionStatus.DRAFT);
+        when(draftCount.getTotal()).thenReturn(1L);
+        when(promotionRepository.searchAdmin(PromotionStatus.DRAFT, "summer", pageable))
+                .thenReturn(new PageImpl<>(List.of(promotion), pageable, 1));
+        when(promotionRepository.countByStatus()).thenReturn(List.of(draftCount));
+        PromotionRepository.OperationalCounts operational = mock(PromotionRepository.OperationalCounts.class);
+        when(operational.getApprovedOrScheduled()).thenReturn(2L);
+        when(operational.getActiveNow()).thenReturn(3L);
+        when(promotionRepository.countOperational(any())).thenReturn(operational);
+
+        var result = service.search(PromotionStatus.DRAFT, " summer ", pageable);
+
+        assertEquals(1, result.content().size());
+        assertEquals("SUMMER26", result.content().getFirst().code());
+        assertEquals(1, result.counts().total());
+        assertEquals(1, result.counts().draft());
+        assertEquals(2, result.counts().approvedOrScheduled());
+        assertEquals(3, result.counts().activeNow());
+        verifyNoInteractions(auditLogRepository);
+    }
+
+    @Test
+    void detailSeparatesWorkflowFromAvailabilityAndIncludesAuditIdentity() {
+        UUID id = UUID.randomUUID();
+        UUID auditId = UUID.randomUUID();
+        Promotion promotion = draftPromotion();
+        promotion.setPromotionId(id);
+        promotion.setStatus(PromotionStatus.ACTIVE);
+        promotion.setValidFrom(OffsetDateTime.now().plusDays(1));
+        PromotionAuditLog log = new PromotionAuditLog();
+        log.setPromotionAuditLogId(auditId);
+        log.setAction("ACTIVATED");
+        log.setCreatedAt(OffsetDateTime.now());
+        log.setDetail(java.util.Map.of());
+        when(promotionRepository.findById(id)).thenReturn(Optional.of(promotion));
+        when(auditLogRepository.findTop20ByPromotion_PromotionIdOrderByCreatedAtDesc(id))
+                .thenReturn(List.of(log));
+
+        var result = service.get(id);
+
+        assertEquals(PromotionStatus.ACTIVE, result.status());
+        assertEquals(PromotionAvailabilityStatus.SCHEDULED, result.availabilityStatus());
+        assertEquals(auditId, result.auditLog().getFirst().auditLogId());
+    }
+
     private Promotion draftPromotion() {
         Promotion promotion = new Promotion();
         promotion.setCode("SUMMER26");
@@ -105,5 +208,14 @@ class PromotionAdminServiceTest {
                 new PromotionPriceRuleRequest(DiscountType.PERCENTAGE, BigDecimal.valueOf(percentage), null,
                         new BigDecimal("50000"), new BigDecimal("100000"), "VND"),
                 List.of(new PromotionTargetRequest(PromotionTargetType.MOVIE, movieId, null)));
+    }
+
+    private void authenticate(String accountId) {
+        Jwt jwt = Jwt.withTokenValue("test-token")
+                .header("alg", "none")
+                .claim("accountId", accountId)
+                .claim("role", "ROLE_COMMERCIAL_MANAGER")
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
     }
 }

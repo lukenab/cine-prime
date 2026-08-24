@@ -16,6 +16,7 @@ describe("defaultPathForRole", () => {
     expect(defaultPathForRole("ROLE_FINANCE_OFFICER")).toBe("/admin/refunds-reconciliation");
     expect(defaultPathForRole("ROLE_FINANCE_APPROVER")).toBe("/admin/refunds-reconciliation");
     expect(defaultPathForRole("ROLE_COMMERCIAL_MANAGER")).toBe("/admin/price-books");
+    expect(defaultPathForRole("ROLE_COMMERCIAL_APPROVER")).toBe("/admin/promotions");
     expect(defaultPathForRole("ROLE_SECURITY_AUDITOR")).toBe("/admin/audit");
   });
 

@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
@@ -33,6 +34,7 @@ public class ApplicationInitConfig {
     RoleRepository       roleRepository;
     PermissionRepository permissionRepository;
     PasswordEncoder      passwordEncoder;
+    JdbcTemplate         jdbcTemplate;
 
     @NonFinal @Value("${app.admin.username}") String adminUsername;
     @NonFinal @Value("${app.admin.password}") String adminPassword;
@@ -91,7 +93,11 @@ public class ApplicationInitConfig {
             new String[]{"PROMOTION_READ",   "View promotions"},
             new String[]{"PROMOTION_CREATE", "Create new promotion"},
             new String[]{"PROMOTION_UPDATE", "Edit promotion"},
-            new String[]{"PROMOTION_DELETE", "Delete promotion"},
+            new String[]{"PROMOTION_SUBMIT", "Submit promotion drafts for approval"},
+            new String[]{"PROMOTION_APPROVE", "Approve or reject promotion submissions"},
+            new String[]{"PROMOTION_ACTIVATE", "Activate approved promotions"},
+            new String[]{"PROMOTION_PAUSE", "Pause or resume live promotions"},
+            new String[]{"PROMOTION_ARCHIVE", "Archive promotions with an audit reason"},
 
             // Report
             new String[]{"REPORT_READ", "View revenue and statistics reports"},
@@ -184,8 +190,12 @@ public class ApplicationInitConfig {
             )),
             Map.entry("COMMERCIAL_MANAGER", Set.of(
                     "PRICE_BOOK_READ", "PRICE_BOOK_MANAGE",
-                    "PROMOTION_READ", "PROMOTION_CREATE", "PROMOTION_UPDATE", "PROMOTION_DELETE",
+                    "PROMOTION_READ", "PROMOTION_CREATE", "PROMOTION_UPDATE", "PROMOTION_SUBMIT",
                     "REPORT_READ"
+            )),
+            Map.entry("COMMERCIAL_APPROVER", Set.of(
+                    "PRICE_BOOK_READ", "PROMOTION_READ", "PROMOTION_APPROVE",
+                    "PROMOTION_ACTIVATE", "PROMOTION_PAUSE", "PROMOTION_ARCHIVE", "REPORT_READ"
             )),
             Map.entry("SECURITY_AUDITOR", Set.of("AUDIT_READ", "REPORT_READ")),
             Map.entry("SYSTEM_ADMIN", Set.of(
@@ -205,7 +215,9 @@ public class ApplicationInitConfig {
                     "USER_READ", "USER_CREATE", "USER_UPDATE", "USER_DELETE",
                     "ROOM_READ", "ROOM_UPDATE",
                     "GENRE_READ", "GENRE_CREATE", "GENRE_UPDATE", "GENRE_DELETE",
-                    "PROMOTION_READ", "PROMOTION_CREATE", "PROMOTION_UPDATE", "PROMOTION_DELETE",
+                    "PROMOTION_READ", "PROMOTION_CREATE", "PROMOTION_UPDATE",
+                    "PROMOTION_SUBMIT", "PROMOTION_APPROVE", "PROMOTION_ACTIVATE",
+                    "PROMOTION_PAUSE", "PROMOTION_ARCHIVE",
                     "REPORT_READ", "ROLE_MANAGE", "SYSTEM_CONFIG_MANAGE", "AUDIT_READ",
                     "RELEASE_PLAN_READ", "RELEASE_PLAN_EDIT", "RELEASE_PLAN_SUBMIT",
                     "RELEASE_PLAN_APPROVE", "RELEASE_PLAN_ACTIVATE",
@@ -226,9 +238,54 @@ public class ApplicationInitConfig {
         return args -> {
             seedPermissions();
             seedRoles();
+            applyPromotionApprovalCatalogMigration();
             seedAdminAccount();
             seedBranchManagerAccount();
         };
+    }
+
+    /**
+     * One-time additive migration for installations whose role catalogue already exists.
+     * Ordinary startup never overwrites access-matrix changes; a version marker makes
+     * this explicit migration run exactly once per database.
+     */
+    private void applyPromotionApprovalCatalogMigration() {
+        final String version = "2026-08-23-promotion-maker-checker-v1";
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS auth_catalog_migration (
+                    version VARCHAR(100) PRIMARY KEY,
+                    applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """);
+        Integer applied = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM auth_catalog_migration WHERE version = ?", Integer.class, version);
+        if (applied != null && applied > 0) {
+            return;
+        }
+
+        Map<String, Set<String>> grants = Map.of(
+                "COMMERCIAL_MANAGER", Set.of(
+                        "PROMOTION_READ", "PROMOTION_CREATE", "PROMOTION_UPDATE", "PROMOTION_SUBMIT"),
+                "COMMERCIAL_APPROVER", Set.of(
+                        "PROMOTION_READ", "PROMOTION_APPROVE", "PROMOTION_ACTIVATE",
+                        "PROMOTION_PAUSE", "PROMOTION_ARCHIVE"),
+                "ADMIN", Set.of(
+                        "PROMOTION_READ", "PROMOTION_CREATE", "PROMOTION_UPDATE", "PROMOTION_SUBMIT",
+                        "PROMOTION_APPROVE", "PROMOTION_ACTIVATE", "PROMOTION_PAUSE", "PROMOTION_ARCHIVE")
+        );
+        grants.forEach((roleName, permissionNames) -> permissionNames.forEach(permissionName ->
+                jdbcTemplate.update("""
+                        INSERT INTO role_permissions(role_name, permission_name)
+                        SELECT ?, ?
+                        WHERE EXISTS (SELECT 1 FROM roles WHERE role_name = ?)
+                          AND EXISTS (SELECT 1 FROM permission WHERE name = ?)
+                        ON CONFLICT DO NOTHING
+                        """, roleName, permissionName, roleName, permissionName)));
+
+        jdbcTemplate.update("DELETE FROM role_permissions WHERE permission_name IN ('PROMOTION_MANAGE', 'PROMOTION_DELETE')");
+        jdbcTemplate.update("DELETE FROM permission WHERE name IN ('PROMOTION_MANAGE', 'PROMOTION_DELETE')");
+        jdbcTemplate.update("INSERT INTO auth_catalog_migration(version) VALUES (?)", version);
+        log.info("[Migration] Applied {}", version);
     }
 
     // ── Step 1: Seed permissions ──────────────────────────────────────────────
@@ -258,6 +315,7 @@ public class ApplicationInitConfig {
                 Map.entry("FINANCE_OFFICER", "Finance maker - investigates refunds and reconciliation cases"),
                 Map.entry("FINANCE_APPROVER", "Finance checker - approves financial exceptions and refunds"),
                 Map.entry("COMMERCIAL_MANAGER", "Commercial manager - owns pricing and promotion configuration"),
+                Map.entry("COMMERCIAL_APPROVER", "Commercial checker - approves and controls promotion lifecycle"),
                 Map.entry("SECURITY_AUDITOR", "Read-only security and audit reviewer"),
                 Map.entry("SYSTEM_ADMIN", "Identity, access and system configuration administrator"),
                 Map.entry("ADMIN", "Legacy all-access administrator retained during role migration")
@@ -266,28 +324,28 @@ public class ApplicationInitConfig {
         for (Map.Entry<String, Set<String>> entry : ROLE_PERMISSIONS.entrySet()) {
             String roleName = entry.getKey();
 
+            // Role assignments become database-managed after their first creation.
+            // Never overwrite changes made through the audited access matrix on startup.
+            // Future default changes must be delivered through an explicit versioned migration.
+            if (roleRepository.existsById(roleName)) {
+                log.debug("[Seed] Role already exists; preserving database permissions: {}", roleName);
+                continue;
+            }
+
             // Fetch assigned permissions from DB (already seeded above)
             Set<Permission> permissions = entry.getValue().stream()
                     .map(permName -> permissionRepository.findById(permName).orElse(null))
                     .filter(p -> p != null)
                     .collect(Collectors.toSet());
 
-            if (roleRepository.findById(roleName).isEmpty()) {
-                roleRepository.save(
-                        Role.builder()
-                                .roleName(roleName)
-                                .description(roleDescriptions.getOrDefault(roleName, roleName + " role"))
-                                .permissions(permissions)
-                                .build()
-                );
-                log.info("[Seed] Role created: {} with {} permissions", roleName, permissions.size());
-            } else {
-                // Update permissions if role already exists (idempotent update)
-                Role existing = roleRepository.findById(roleName).get();
-                existing.setPermissions(permissions);
-                roleRepository.save(existing);
-                log.debug("[Seed] Role permissions updated: {}", roleName);
-            }
+            roleRepository.save(
+                    Role.builder()
+                            .roleName(roleName)
+                            .description(roleDescriptions.getOrDefault(roleName, roleName + " role"))
+                            .permissions(permissions)
+                            .build()
+            );
+            log.info("[Seed] Role created: {} with {} permissions", roleName, permissions.size());
         }
     }
 

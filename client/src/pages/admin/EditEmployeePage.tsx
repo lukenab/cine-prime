@@ -16,6 +16,7 @@ const POSITIONS: { value: EmployeePosition; label: string }[] = [
   { value: "FINANCE_OFFICER", label: "Finance officer" },
   { value: "FINANCE_APPROVER", label: "Finance approver" },
   { value: "COMMERCIAL_MANAGER", label: "Commercial manager" },
+  { value: "COMMERCIAL_APPROVER", label: "Commercial approver" },
   { value: "SYSTEM_ADMINISTRATOR", label: "System administrator" },
   { value: "SECURITY_AUDITOR", label: "Security auditor" },
   { value: "STAFF", label: "Staff (legacy)" },
@@ -302,7 +303,7 @@ export default function EditEmployeePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <FormField label="System access role" required>
               <select value={accessRole} onChange={(event) => setAccessRole(event.target.value as EmployeeResponse["accessRole"])} className={inputCls} style={{ ...inputStyle, background: "var(--bg-card)" }}>
-                {["EMPLOYEE", "BRANCH_MANAGER", "PROGRAMMING_OPERATOR", "PROGRAMMING_APPROVER", "FINANCE_OFFICER", "FINANCE_APPROVER", "COMMERCIAL_MANAGER", "SECURITY_AUDITOR", "SYSTEM_ADMIN"].map(role => <option key={role} value={role} style={{ background: "var(--bg-card)" }}>{role.replaceAll("_", " ")}</option>)}
+                {["EMPLOYEE", "BRANCH_MANAGER", "PROGRAMMING_OPERATOR", "PROGRAMMING_APPROVER", "FINANCE_OFFICER", "FINANCE_APPROVER", "COMMERCIAL_MANAGER", "COMMERCIAL_APPROVER", "SECURITY_AUDITOR", "SYSTEM_ADMIN"].map(role => <option key={role} value={role} style={{ background: "var(--bg-card)" }}>{role.replaceAll("_", " ")}</option>)}
               </select>
             </FormField>
             <FormField label="Cinema ID" error={errors.cinemaId}>

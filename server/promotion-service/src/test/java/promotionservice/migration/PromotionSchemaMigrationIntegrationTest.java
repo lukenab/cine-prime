@@ -36,7 +36,7 @@ class PromotionSchemaMigrationIntegrationTest {
     void freshDatabaseCreatesPromotionSchemaAndEnforcesCoreInvariants() throws Exception {
         MigrateResult result = flyway().migrate();
         assertTrue(result.success);
-        assertEquals(6, result.migrationsExecuted);
+        assertEquals(7, result.migrationsExecuted);
 
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
@@ -48,6 +48,17 @@ class PromotionSchemaMigrationIntegrationTest {
             assertTrue(tableExists(statement, "promotion_reservation"));
             assertTrue(tableExists(statement, "promotion_usage_ledger"));
             assertTrue(tableExists(statement, "promotion_audit_log"));
+
+            try (var resultSet = statement.executeQuery("""
+                    SELECT COUNT(*) AS workflow_columns
+                    FROM information_schema.columns
+                    WHERE table_name = 'promotion'
+                      AND column_name IN ('submitted_by_account_id', 'submitted_at',
+                                          'approved_by_account_id', 'approved_at')
+                    """)) {
+                assertTrue(resultSet.next());
+                assertEquals(4, resultSet.getInt("workflow_columns"));
+            }
 
             try (var resultSet = statement.executeQuery("""
                     SELECT COUNT(*) AS promotion_count

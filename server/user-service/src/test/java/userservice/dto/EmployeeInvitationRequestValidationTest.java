@@ -65,6 +65,31 @@ class EmployeeInvitationRequestValidationTest {
     }
 
     @Test
+    void acceptsCommercialApproverWithoutBranch() {
+        var request = validRequest()
+                .cinemaId(null)
+                .department(EmployeeDepartment.COMMERCIAL)
+                .position(EmployeePosition.COMMERCIAL_APPROVER)
+                .accessRole(StaffAccessRole.COMMERCIAL_APPROVER)
+                .build();
+
+        assertThat(validator.validate(request)).isEmpty();
+    }
+
+    @Test
+    void rejectsCommercialMakerWithApproverAccess() {
+        var request = validRequest()
+                .cinemaId(null)
+                .department(EmployeeDepartment.COMMERCIAL)
+                .position(EmployeePosition.COMMERCIAL_MANAGER)
+                .accessRole(StaffAccessRole.COMMERCIAL_APPROVER)
+                .build();
+
+        assertThat(validator.validate(request))
+                .anyMatch(violation -> violation.getPropertyPath().toString().equals("jobAssignmentValid"));
+    }
+
+    @Test
     void rejectsFinanceOfficerWithApproverAccess() {
         var request = validRequest()
                 .cinemaId(null)

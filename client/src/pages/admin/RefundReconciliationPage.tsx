@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   ClipboardCheck,
+  Eye,
   LoaderCircle,
   RefreshCw,
   RotateCcw,
@@ -11,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { useOutletContext } from "react-router-dom";
+import { RowActions } from "../../components/admin/RowActions";
 
 import {
   paymentApi,
@@ -167,24 +169,24 @@ export default function RefundReconciliationPage() {
 
       <section className="rr-table-card">
         {loading ? <div className="rr-empty"><LoaderCircle className="rr-spin" size={22} /> Loading operational data...</div> : tab === "refunds" ? (
-          refunds.length === 0 ? <div className="rr-empty"><ClipboardCheck size={22} /> No refund records match this filter.</div> : <div className="rr-table-scroll"><table><thead><tr><th>Refund</th><th>Booking / payment</th><th>Amount</th><th>Status</th><th>Updated</th><th /></tr></thead><tbody>
+          refunds.length === 0 ? <div className="rr-empty"><ClipboardCheck size={22} /> No refund records match this filter.</div> : <div className="rr-table-scroll"><table><thead><tr><th>Refund</th><th>Booking / payment</th><th>Amount</th><th>Status</th><th>Updated</th><th className="w-[72px] text-right">Actions</th></tr></thead><tbody>
             {refunds.map((item) => <tr key={item.refundId}>
               <td><strong>{item.refundId}</strong><small>{item.reasonCode ?? "Refund request"}</small></td>
               <td><strong>{item.bookingId}</strong><small>{item.paymentReference ?? item.paymentId ?? "—"}</small></td>
               <td><strong>{moneyValue(item.amount, item.currency)}</strong><small>{item.providerRefundReference ?? "Provider reference pending"}</small></td>
               <td><StatusPill status={item.status} />{item.failureMessage && <small className="rr-danger-text">{item.failureMessage}</small>}</td>
               <td><small>{when(item.updatedAt ?? item.createdAt)}</small></td>
-              <td><button className="rr-link" onClick={() => setDetail({ kind: "refund", value: item })}>View</button></td>
+              <td className="text-right"><RowActions ariaLabel={`Actions for refund ${item.refundId}`} actions={[{ key: "view", label: "View details", icon: Eye, onSelect: () => setDetail({ kind: "refund", value: item }) }]} /></td>
             </tr>)}
           </tbody></table></div>
-        ) : cases.length === 0 ? <div className="rr-empty"><CheckCircle2 size={22} /> No reconciliation cases match this filter.</div> : <div className="rr-table-scroll"><table><thead><tr><th>Case</th><th>Booking / payment</th><th>Severity</th><th>Status</th><th>Attempts</th><th /></tr></thead><tbody>
+        ) : cases.length === 0 ? <div className="rr-empty"><CheckCircle2 size={22} /> No reconciliation cases match this filter.</div> : <div className="rr-table-scroll"><table><thead><tr><th>Case</th><th>Booking / payment</th><th>Severity</th><th>Status</th><th>Attempts</th><th className="w-[72px] text-right">Actions</th></tr></thead><tbody>
           {cases.map((item) => <tr key={item.caseId}>
             <td><strong>Case #{item.caseId}</strong><small>{human(item.caseType)}</small></td>
             <td><strong>{item.bookingId}</strong><small>{item.paymentId}</small></td>
             <td><span className={`rr-severity rr-severity--${item.severity.toLowerCase()}`}>{human(item.severity)}</span></td>
             <td><StatusPill status={item.status} /><small>{item.details}</small></td>
             <td>{item.attemptCount}</td>
-            <td><button className="rr-link" onClick={() => setDetail({ kind: "case", value: item })}>View</button></td>
+            <td className="text-right"><RowActions ariaLabel={`Actions for reconciliation case ${item.caseId}`} actions={[{ key: "view", label: "View details", icon: Eye, onSelect: () => setDetail({ kind: "case", value: item }) }]} /></td>
           </tr>)}
         </tbody></table></div>}
       </section>

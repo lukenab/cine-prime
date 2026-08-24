@@ -34,7 +34,7 @@ export interface EmployeeInvitationPayload {
   employmentType: EmploymentType;
   hireDate: string;
   accessRole: 'EMPLOYEE' | 'BRANCH_MANAGER' | 'PROGRAMMING_OPERATOR' | 'PROGRAMMING_APPROVER'
-    | 'FINANCE_OFFICER' | 'FINANCE_APPROVER' | 'COMMERCIAL_MANAGER' | 'SECURITY_AUDITOR' | 'SYSTEM_ADMIN';
+    | 'FINANCE_OFFICER' | 'FINANCE_APPROVER' | 'COMMERCIAL_MANAGER' | 'COMMERCIAL_APPROVER' | 'SECURITY_AUDITOR' | 'SYSTEM_ADMIN';
 }
 
 export type EmployeePosition =
@@ -46,6 +46,7 @@ export type EmployeePosition =
   | 'FINANCE_OFFICER'
   | 'FINANCE_APPROVER'
   | 'COMMERCIAL_MANAGER'
+  | 'COMMERCIAL_APPROVER'
   | 'SYSTEM_ADMINISTRATOR'
   | 'SECURITY_AUDITOR'
   // Legacy API values retained while existing records are migrated.

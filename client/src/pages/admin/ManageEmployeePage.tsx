@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import { employeeApi, type EmployeeResponse } from "../../api/employeeApi";
+import { RowActions, type RowAction } from "../../components/admin/RowActions";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export type EmployeeStatus = "Active" | "Inactive";
@@ -445,7 +446,7 @@ export default function ManageEmployeePage() {
                   { label: "Type",        w: "" },
                   { label: "Status",      w: "w-28" },
                   { label: "Hire Date",   w: "w-32" },
-                  { label: "Actions",     w: "w-28", right: true },
+                  { label: "Actions",     w: "w-[72px]", right: true },
                 ].map(({ label, w, right }) => (
                   <th key={label} className={`px-5 py-3.5 text-${right ? "right" : "left"} ${w}`}>
                     <span style={{ color: "var(--text-sub)", fontSize: "11px", fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase" }}>
@@ -540,40 +541,15 @@ export default function ManageEmployeePage() {
                     </td>
 
                     {/* Actions */}
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center justify-end gap-0.5">
-                        <button
-                          onClick={() => navigate(`/admin/employees/${emp.id}`)}
-                          className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors opacity-50 group-hover:opacity-100 hover:!opacity-100"
-                          style={{ color: "var(--text-sub)" }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(59,130,246,0.1)"; (e.currentTarget as HTMLButtonElement).style.color = "#3b82f6"; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--text-sub)"; }}
-                          title="View"
-                        >
-                          <Eye size={14} />
-                        </button>
-                        <button
-                          onClick={() => navigate(`/admin/employees/edit/${emp.id}`)}
-                          className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors opacity-50 group-hover:opacity-100 hover:!opacity-100"
-                          style={{ color: "var(--text-sub)" }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(107,114,128,0.1)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--text-main)"; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--text-sub)"; }}
-                          title="Edit"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          onClick={() => emp.status === "Active" && setConfirmTarget(emp)}
-                          disabled={emp.status === "Inactive"}
-                          className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors opacity-50 group-hover:opacity-100 hover:!opacity-100 disabled:!opacity-20 disabled:cursor-not-allowed"
-                          style={{ color: "var(--text-sub)" }}
-                          onMouseEnter={(e) => { if (emp.status === "Active") { (e.currentTarget as HTMLButtonElement).style.background = "rgba(239,68,68,0.1)"; (e.currentTarget as HTMLButtonElement).style.color = "#ef4444"; } }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--text-sub)"; }}
-                          title={emp.status === "Active" ? "Deactivate" : "Already disabled"}
-                        >
-                          <UserX size={14} />
-                        </button>
-                      </div>
+                    <td className="w-[72px] px-5 py-3.5 text-right">
+                      <RowActions
+                        ariaLabel={`Actions for ${emp.fullName}`}
+                        actions={[
+                          { key: "view", label: "View details", icon: Eye, onSelect: () => navigate(`/admin/employees/${emp.id}`) },
+                          { key: "edit", label: "Edit employee", icon: Pencil, onSelect: () => navigate(`/admin/employees/edit/${emp.id}`) },
+                          { key: "deactivate", label: "Deactivate employee", icon: UserX, onSelect: () => setConfirmTarget(emp), hidden: emp.status !== "Active", destructive: true, separatorBefore: true },
+                        ] satisfies RowAction[]}
+                      />
                     </td>
                   </tr>
                 ))

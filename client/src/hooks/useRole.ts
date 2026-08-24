@@ -19,6 +19,7 @@ export function useRole() {
   const isFinanceOfficer = hasRole("ROLE_FINANCE_OFFICER");
   const isFinanceApprover = hasRole("ROLE_FINANCE_APPROVER");
   const isCommercialManager = hasRole("ROLE_COMMERCIAL_MANAGER");
+  const isCommercialApprover = hasRole("ROLE_COMMERCIAL_APPROVER");
   const isSecurityAuditor = hasRole("ROLE_SECURITY_AUDITOR");
   const isMember   = role === "ROLE_MEMBER";
 
@@ -34,6 +35,7 @@ export function useRole() {
     isFinanceOfficer,
     isFinanceApprover,
     isCommercialManager,
+    isCommercialApprover,
     isSecurityAuditor,
     hasPermission,
     isMember,

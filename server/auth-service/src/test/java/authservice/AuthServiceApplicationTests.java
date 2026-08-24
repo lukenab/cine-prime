@@ -64,6 +64,8 @@ class AuthServiceApplicationTests {
 		var programmingChecker = roleRepository.findById("PROGRAMMING_APPROVER").orElseThrow();
 		var financeMaker = roleRepository.findById("FINANCE_OFFICER").orElseThrow();
 		var financeChecker = roleRepository.findById("FINANCE_APPROVER").orElseThrow();
+		var commercialMaker = roleRepository.findById("COMMERCIAL_MANAGER").orElseThrow();
+		var commercialChecker = roleRepository.findById("COMMERCIAL_APPROVER").orElseThrow();
 		var systemAdmin = roleRepository.findById("SYSTEM_ADMIN").orElseThrow();
 
 		assertThat(programmingMaker.getPermissions()).extracting("name")
@@ -76,6 +78,12 @@ class AuthServiceApplicationTests {
 				.contains("REFUND_REVIEW").doesNotContain("REFUND_APPROVE");
 		assertThat(financeChecker.getPermissions()).extracting("name")
 				.contains("REFUND_APPROVE");
+		assertThat(commercialMaker.getPermissions()).extracting("name")
+				.contains("PROMOTION_CREATE", "PROMOTION_UPDATE", "PROMOTION_SUBMIT")
+				.doesNotContain("PROMOTION_APPROVE", "PROMOTION_ACTIVATE", "PROMOTION_ARCHIVE");
+		assertThat(commercialChecker.getPermissions()).extracting("name")
+				.contains("PROMOTION_READ", "PROMOTION_APPROVE", "PROMOTION_ACTIVATE", "PROMOTION_PAUSE", "PROMOTION_ARCHIVE")
+				.doesNotContain("PROMOTION_CREATE", "PROMOTION_UPDATE", "PROMOTION_SUBMIT");
 		assertThat(systemAdmin.getPermissions()).extracting("name")
 				.contains("ROLE_MANAGE", "SYSTEM_CONFIG_MANAGE")
 				.doesNotContain("RELEASE_PLAN_APPROVE", "REFUND_APPROVE");

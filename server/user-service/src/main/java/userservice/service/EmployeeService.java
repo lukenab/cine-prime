@@ -45,7 +45,7 @@ public class EmployeeService {
 
     private static final Set<String> EMPLOYMENT_ROLES = Set.of(
             "EMPLOYEE", "BRANCH_MANAGER", "PROGRAMMING_OPERATOR", "PROGRAMMING_APPROVER",
-            "FINANCE_OFFICER", "FINANCE_APPROVER", "COMMERCIAL_MANAGER",
+            "FINANCE_OFFICER", "FINANCE_APPROVER", "COMMERCIAL_MANAGER", "COMMERCIAL_APPROVER",
             "SECURITY_AUDITOR", "SYSTEM_ADMIN");
 
     private final EmployeeRepository employeeRepository;
@@ -340,6 +340,7 @@ public class EmployeeService {
                 StaffAccessRole.PROGRAMMING_APPROVER,
                 StaffAccessRole.FINANCE_APPROVER,
                 StaffAccessRole.FINANCE_OFFICER,
+                StaffAccessRole.COMMERCIAL_APPROVER,
                 StaffAccessRole.COMMERCIAL_MANAGER,
                 StaffAccessRole.SECURITY_AUDITOR,
                 StaffAccessRole.BRANCH_MANAGER,

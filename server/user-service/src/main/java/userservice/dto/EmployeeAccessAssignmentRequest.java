@@ -43,6 +43,8 @@ public class EmployeeAccessAssignmentRequest {
                     && position == EmployeePosition.FINANCE_APPROVER && !hasCinema;
             case COMMERCIAL_MANAGER -> department == EmployeeDepartment.COMMERCIAL
                     && position == EmployeePosition.COMMERCIAL_MANAGER && !hasCinema;
+            case COMMERCIAL_APPROVER -> department == EmployeeDepartment.COMMERCIAL
+                    && position == EmployeePosition.COMMERCIAL_APPROVER && !hasCinema;
             case SECURITY_AUDITOR -> department == EmployeeDepartment.RISK_COMPLIANCE
                     && position == EmployeePosition.SECURITY_AUDITOR && !hasCinema;
             case SYSTEM_ADMIN -> department == EmployeeDepartment.INFORMATION_TECHNOLOGY
