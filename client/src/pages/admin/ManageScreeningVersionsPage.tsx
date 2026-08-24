@@ -19,6 +19,9 @@ import {
   type ScreeningVersionStatus,
 } from "../../api/movieApi";
 import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
+import { RequestState } from "../../components/shared/RequestState";
+import { classifyRequestFailure, type RequestFailure } from "../../utils/requestFailure";
+import { useRole } from "../../hooks/useRole";
 
 type ReadinessFilter = "ALL" | "READY" | "ATTENTION" | "INACTIVE";
 
@@ -73,10 +76,12 @@ function readinessReason(version: MovieScreeningVersionCatalogResponse) {
 
 export default function ManageScreeningVersionsPage() {
   const navigate = useNavigate();
+  const { hasPermission, isAdmin } = useRole();
+  const canManageVersions = isAdmin || hasPermission("MOVIE_UPDATE");
   const [versions, setVersions] = useState<MovieScreeningVersionCatalogResponse[]>([]);
   const [formats, setFormats] = useState<ScreeningFormatResponse[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<RequestFailure | null>(null);
   const [search, setSearch] = useState("");
   const [formatId, setFormatId] = useState("");
   const [readinessFilter, setReadinessFilter] = useState<ReadinessFilter>("ALL");
@@ -84,7 +89,7 @@ export default function ManageScreeningVersionsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setFailure(null);
     try {
       const [versionResponse, formatResponse] = await Promise.all([
         movieApi.searchMovieScreeningVersions(),
@@ -92,8 +97,8 @@ export default function ManageScreeningVersionsPage() {
       ]);
       setVersions(versionResponse.result ?? []);
       setFormats(formatResponse.result ?? []);
-    } catch (requestError: any) {
-      setError(requestError?.response?.data?.message ?? "Unable to load screening versions.");
+    } catch (requestError) {
+      setFailure(classifyRequestFailure(requestError, "Screening versions could not be loaded."));
     } finally {
       setLoading(false);
     }
@@ -317,14 +322,13 @@ export default function ManageScreeningVersionsPage() {
         </button>
       </section>
 
-      {error && (
-        <div className="flex items-center gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-500">
-          <AlertTriangle size={16} /> {error}
-        </div>
-      )}
+      {failure && <RequestState compact kind={failure.kind} description={failure.description} onRetry={() => void load()} />}
 
       <section className="space-y-3" aria-label="Screening versions grouped by movie">
-        {!loading && groups.map((group) => {
+        {!failure && !loading && groups.length === 0 && (
+          <RequestState compact kind="empty" title="No screening versions match this view" description="Change the search or filters, or add a screening version to an approved movie." />
+        )}
+        {!failure && !loading && groups.map((group) => {
           const expanded = expandedMovieIds.has(group.movieId);
           const readyCount = group.versions.filter(versionIsReady).length;
           const attentionCount = group.versions.filter((version) => version.requiresAttention).length;
@@ -450,7 +454,7 @@ export default function ManageScreeningVersionsPage() {
                           >
                             {statusMeta.label}
                           </span>
-                          <button
+                          {canManageVersions && <button
                             type="button"
                             onClick={() => openMovieEditor(version.movieId)}
                             className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
@@ -461,7 +465,7 @@ export default function ManageScreeningVersionsPage() {
                             style={version.requiresAttention ? undefined : fieldStyle}
                           >
                             {version.requiresAttention ? "Fix configuration" : "Manage"}
-                          </button>
+                          </button>}
                         </div>
                       </div>
                     );
@@ -478,15 +482,6 @@ export default function ManageScreeningVersionsPage() {
           </div>
         )}
 
-        {!loading && !error && groups.length === 0 && (
-          <div className="rounded-2xl border py-16 text-center" style={fieldStyle}>
-            <MonitorPlay size={24} className="mx-auto mb-2 text-slate-400" />
-            <p className="text-sm font-semibold" style={{ color: "var(--text-main)" }}>No matching screening version</p>
-            <p className="mt-1 text-xs" style={{ color: "var(--text-sub)" }}>
-              Adjust the search, readiness or format filter.
-            </p>
-          </div>
-        )}
       </section>
 
       {!loading && groups.length > 0 && (

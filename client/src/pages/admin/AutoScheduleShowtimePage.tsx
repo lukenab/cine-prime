@@ -43,6 +43,8 @@ import {
 import AutoScheduleResultsWorkspace from "./autoSchedule/AutoScheduleResultsWorkspace";
 import { subscribeLifecycleEvents } from "../../api/lifecycleSocket";
 import AllocationPolicyPanel from "./autoSchedule/AllocationPolicyPanel";
+import { RequestState } from "../../components/shared/RequestState";
+import { classifyRequestFailure, type RequestFailure } from "../../utils/requestFailure";
 import { OPTIMIZER_META, SCENARIO_META } from "./autoSchedule/optimizerMeta";
 import {
   Dialog,
@@ -700,25 +702,28 @@ function SchedulePlanLibrary({
   onRefresh,
   onOpen,
 }: {
-  mode: "review" | "published";
+  mode: "drafts" | "review" | "published";
   plans: SchedulePlanSummaryResponse[];
   loading: boolean;
-  error: string | null;
+  error: RequestFailure | null;
   onRefresh: () => void;
   onOpen: (generationRunId: number) => void;
 }) {
   const published = mode === "published";
+  const approvalQueue = mode === "review";
   return (
     <section className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
       <header className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3.5" style={{ borderColor: "var(--border-color)" }}>
         <div>
           <h2 className="text-base font-bold" style={{ color: "var(--text-main)" }}>
-            {published ? "Published schedules" : "Plans for review"}
+            {published ? "Published schedules" : approvalQueue ? "Plans awaiting decision" : "Drafts and returned plans"}
           </h2>
           <p className="mt-1 text-xs" style={{ color: "var(--text-sub)" }}>
             {published
               ? "Open a published plan to inspect the operational schedule."
-              : "Continue generated drafts, resolve requested changes, or review plans before publishing."}
+              : approvalQueue
+                ? "Inspect the validated plan before approving it or requesting changes."
+                : "Continue generated drafts and resolve changes requested by the approver."}
           </p>
         </div>
         <button type="button" onClick={onRefresh} className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-main)", background: "var(--bg-main)" }}>
@@ -732,21 +737,12 @@ function SchedulePlanLibrary({
             <Loader2 size={16} className="animate-spin" /> Loading schedule plans…
           </div>
         ) : error ? (
-          <div className="flex min-h-48 flex-col items-center justify-center gap-3 text-center">
-            <AlertTriangle size={22} className="text-rose-500" />
-            <p className="text-sm font-semibold text-rose-500">{error}</p>
-            <button type="button" onClick={onRefresh} className="rounded-lg border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }}>Try again</button>
-          </div>
+          <RequestState compact kind={error.kind} description={error.description} onRetry={onRefresh} />
         ) : plans.length === 0 ? (
-          <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center">
-            <ClipboardCheck size={24} style={{ color: "var(--text-sub)" }} />
-            <p className="text-sm font-semibold" style={{ color: "var(--text-main)" }}>
-              {published ? "No published schedules yet" : "No plans require review"}
-            </p>
-            <p className="text-xs" style={{ color: "var(--text-sub)" }}>
-              {published ? "Published schedule plans will appear here." : "Generate a new draft to begin the review workflow."}
-            </p>
-          </div>
+          <RequestState compact kind="empty"
+            title={published ? "No published schedules yet" : approvalQueue ? "No plans require review" : "No drafts or returned plans"}
+            description={published ? "Published schedule plans will appear here." : approvalQueue ? "Submitted schedule plans will appear here for independent review." : "Generated drafts and plans returned for changes will appear here."}
+          />
         ) : (
           <div className="grid gap-3 xl:grid-cols-2">
             {plans.map((item) => {
@@ -830,21 +826,24 @@ type AutoScheduleShowtimePageProps = {
   embedded?: boolean;
   initialRunId?: number | null;
   onShowtimesChanged?: () => void;
+  workspaceMode?: "create" | "review";
 };
 
 export default function AutoScheduleShowtimePage({
   embedded = false,
   initialRunId = null,
   onShowtimesChanged,
+  workspaceMode = "create",
 }: AutoScheduleShowtimePageProps = {}) {
   const { user } = useAuth();
   const [step, setStep] = useState<StepKey>("scope");
-  const [workspaceSection, setWorkspaceSection] = useState<WorkspaceSection>("create");
+  const [workspaceSection, setWorkspaceSection] = useState<WorkspaceSection>(workspaceMode === "review" ? "review-plans" : "create");
 
   // Scope inputs
   const [clusters, setClusters] = useState<ClusterResponse[]>([]);
   const [movies, setMovies] = useState<MovieApiResponse[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
+  const [optionsFailure, setOptionsFailure] = useState<RequestFailure | null>(null);
   const [startDate, setStartDate] = useState(todayPlusDays(3));
   const [endDate, setEndDate] = useState(todayPlusDays(9));
   const [optimizerMode, setOptimizerMode] = useState<OptimizerMode>("LEGACY");
@@ -879,7 +878,7 @@ export default function AutoScheduleShowtimePage({
   const [resultsPage, setResultsPage] = useState(0);
   const [planLibrary, setPlanLibrary] = useState<SchedulePlanSummaryResponse[]>([]);
   const [loadingPlanLibrary, setLoadingPlanLibrary] = useState(false);
-  const [planLibraryError, setPlanLibraryError] = useState<string | null>(null);
+  const [planLibraryError, setPlanLibraryError] = useState<RequestFailure | null>(null);
   const [planLibraryRefresh, setPlanLibraryRefresh] = useState(0);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const resumedInitialRun = useRef<number | null>(null);
@@ -912,6 +911,10 @@ export default function AutoScheduleShowtimePage({
   }), [plan?.schedulePlanId]);
 
   useEffect(() => {
+    if (workspaceMode === "review") {
+      setLoadingOptions(false);
+      return;
+    }
     Promise.all([movieApi.getClusters(), movieApi.getAllMovies(), movieApi.getRooms(), movieApi.searchAvailabilities({})])
       .then(([clusterRes, movieRes, roomRes, availabilityRes]) => {
         const activeClusters = (clusterRes.result ?? []).filter((c) => c.status === "ACTIVE");
@@ -930,12 +933,15 @@ export default function AutoScheduleShowtimePage({
         setRooms(roomRes.result ?? []);
         setAvailabilities(availabilityRes.result ?? []);
       })
-      .catch(() => { setClusters([]); setMovies([]); setRooms([]); setClusterEligibility(new Map()); setAvailabilities([]); setScreeningVersions([]); })
+      .catch((error) => {
+        setClusters([]); setMovies([]); setRooms([]); setClusterEligibility(new Map()); setAvailabilities([]); setScreeningVersions([]);
+        setOptionsFailure(classifyRequestFailure(error, "Scheduling prerequisites could not be loaded."));
+      })
       .finally(() => setLoadingOptions(false));
     showtimeApi.getActiveGenerationPolicy()
       .then((res) => setGenerationPolicy(res.result ?? null))
       .catch(() => setGenerationPolicy(null));
-  }, []);
+  }, [workspaceMode]);
 
   useEffect(() => {
     if (step !== "scope") return;
@@ -946,10 +952,10 @@ export default function AutoScheduleShowtimePage({
       .then((response) => {
         if (active) setPlanLibrary(response.result.content ?? []);
       })
-      .catch(() => {
+      .catch((error) => {
         if (active) {
           setPlanLibrary([]);
-          setPlanLibraryError("Schedule plans could not be loaded.");
+          setPlanLibraryError(classifyRequestFailure(error, "Schedule plans could not be loaded."));
         }
       })
       .finally(() => {
@@ -992,8 +998,10 @@ export default function AutoScheduleShowtimePage({
     });
   }, [genreFilter, movieSearch, movies]);
   const reviewPlans = useMemo(
-    () => planLibrary.filter((item) => item.status !== "PUBLISHED"),
-    [planLibrary],
+    () => planLibrary.filter((item) => workspaceMode === "review"
+      ? item.status === "IN_REVIEW"
+      : item.status === "DRAFT_GENERATED" || item.status === "CHANGES_REQUESTED"),
+    [planLibrary, workspaceMode],
   );
   const publishedPlans = useMemo(
     () => planLibrary.filter((item) => item.status === "PUBLISHED"),
@@ -1289,12 +1297,14 @@ export default function AutoScheduleShowtimePage({
           "running"/"results") hid the nav entirely and made Policy unreachable from
           that flow. */}
       <nav className="flex flex-wrap items-center gap-1 rounded-xl border p-1.5" aria-label="Automatic scheduling workspace" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
-        {([
-          { id: "create", label: "Create schedule", icon: CalendarCog, count: null },
-          { id: "review-plans", label: "Review plans", icon: ClipboardCheck, count: reviewPlans.length },
+        {(workspaceMode === "review" ? ([
+          { id: "review-plans", label: "Awaiting decision", icon: ClipboardCheck, count: reviewPlans.length },
           { id: "published", label: "Published schedules", icon: CheckCircle2, count: publishedPlans.length },
-          { id: "policy", label: "Policy", icon: Settings2, count: null },
-        ] as const).map(({ id, label, icon: Icon, count }) => {
+        ] as const) : ([
+          { id: "create", label: "Create schedule", icon: CalendarCog, count: null },
+          { id: "review-plans", label: "Drafts & returns", icon: ClipboardCheck, count: reviewPlans.length },
+          { id: "policy", label: "Allocation policy", icon: Settings2, count: null },
+        ] as const)).map(({ id, label, icon: Icon, count }) => {
           const active = workspaceSection === id;
           return (
             <button
@@ -1322,7 +1332,7 @@ export default function AutoScheduleShowtimePage({
 
       {step === "scope" && workspaceSection === "review-plans" && (
         <SchedulePlanLibrary
-          mode="review"
+          mode={workspaceMode === "review" ? "review" : "drafts"}
           plans={reviewPlans}
           loading={loadingPlanLibrary}
           error={planLibraryError}
@@ -1347,7 +1357,9 @@ export default function AutoScheduleShowtimePage({
       {/* ── Step 1: Scope ── */}
       {step === "scope" && workspaceSection === "create" && (
         <div className="space-y-4">
-          {loadingOptions ? (
+          {optionsFailure ? (
+            <RequestState compact kind={optionsFailure.kind} description={optionsFailure.description} onRetry={() => window.location.reload()} />
+          ) : loadingOptions ? (
             <div className="flex items-center gap-2 rounded-2xl border p-6" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-sub)" }}>
               <RefreshCw size={16} className="animate-spin" /> Loading clusters and movies…
             </div>

@@ -5,22 +5,21 @@ import {
   ArrowRight,
   Building2,
   CalendarClock,
-  CalendarDays,
   Check,
   CheckCircle2,
   Clock3,
-  Film,
   MapPin,
+  MessageSquareWarning,
   Pause,
   Play,
   Plus,
   Search,
   Send,
-  ShieldCheck,
   Square,
   Ticket,
   X,
 } from "lucide-react";
+import { RowActions } from "../components/admin/RowActions";
 import { subscribeLifecycleEvents } from "../api/lifecycleSocket";
 import {
   movieApi,
@@ -443,14 +442,14 @@ function CreatePlanDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[65] flex items-center justify-center px-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[65] flex items-center justify-center px-4 py-6" onClick={onClose}>
       <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]" />
       <div
-        className="relative w-full max-w-2xl overflow-hidden rounded-2xl border shadow-2xl"
+        className="relative flex max-h-[92vh] w-full max-w-[920px] flex-col overflow-hidden rounded-2xl border shadow-2xl"
         style={{ background: "var(--bg-main)", borderColor: "var(--border-color)" }}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-start justify-between border-b px-6 py-5" style={{ borderColor: "var(--border-color)" }}>
+        <div className="flex items-start justify-between border-b px-7 py-5" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600">
               <CalendarClock size={19} />
@@ -474,7 +473,7 @@ function CreatePlanDialog({
           </button>
         </div>
 
-        <div className="space-y-4 px-6 py-5">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-7 py-6" style={{ background: "var(--bg-main)" }}>
           {error && (
             <div className="flex items-start gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2.5 text-rose-600">
               <AlertTriangle size={15} className="mt-0.5 flex-shrink-0" />
@@ -485,7 +484,7 @@ function CreatePlanDialog({
           {/* 2-column layout — cluster picker left, schedule fields right. The modal already
               has the width (max-w-2xl) to spare; stacking everything vertically was the main
               reason this felt so tall. */}
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid gap-6 md:grid-cols-[minmax(0,1.1fr)_minmax(300px,0.9fr)]">
             <div>
               {/* Header + toggle — mirrors the "Cinema scope" picker used in auto-schedule
                   showtime creation, so cluster-picking reads the same way across the admin. */}
@@ -637,7 +636,7 @@ function CreatePlanDialog({
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 border-t px-6 py-4" style={{ borderColor: "var(--border-color)" }}>
+        <div className="flex justify-end gap-2 border-t px-7 py-4" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
           <button
             type="button"
             onClick={onClose}
@@ -665,41 +664,19 @@ function CreatePlanDialog({
   );
 }
 
-function WorkflowStep({
-  icon,
-  label,
-  state,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  state: "complete" | "current" | "upcoming";
-}) {
-  const palette = state === "complete"
-    ? { color: "#059669", background: "rgba(5,150,105,0.1)", border: "rgba(5,150,105,0.2)" }
-    : state === "current"
-      ? { color: "#2563eb", background: "rgba(37,99,235,0.1)", border: "rgba(37,99,235,0.24)" }
-      : { color: "var(--text-sub)", background: "var(--bg-card)", border: "var(--border-color)" };
-
-  return (
-    <div className="flex min-w-0 flex-1 items-center gap-2">
-      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border" style={palette}>
-        {state === "complete" ? <Check size={13} /> : icon}
-      </div>
-      <p className="truncate" style={{ color: palette.color, fontSize: "11px", fontWeight: state === "upcoming" ? 500 : 650 }}>
-        {label}
-      </p>
-    </div>
-  );
-}
-
 export function MovieAvailabilityPanel({ movieId }: Props) {
   const navigate = useNavigate();
-  const { isAdmin, isProgrammingOperator } = useRole();
-  const canPrepareReleasePlan = isAdmin || isProgrammingOperator;
+  const { isAdmin, hasPermission } = useRole();
+  const canPrepareReleasePlan = isAdmin || hasPermission("RELEASE_PLAN_EDIT");
+  const canSubmitReleasePlan = isAdmin || hasPermission("RELEASE_PLAN_SUBMIT");
+  const canReviewReleasePlan = isAdmin || hasPermission("RELEASE_PLAN_APPROVE");
+  const canActivateReleasePlan = isAdmin || hasPermission("RELEASE_PLAN_ACTIVATE");
   const [availabilities, setAvailabilities] = useState<MovieAvailabilityResponse[]>([]);
   const [clusters, setClusters] = useState<ClusterResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [selectedReviewIds, setSelectedReviewIds] = useState<Set<number>>(new Set());
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [suspendTarget, setSuspendTarget] = useState<number | null>(null);
@@ -714,7 +691,14 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
         movieApi.searchAvailabilities({ movieId }),
         movieApi.getClusters(),
       ]);
-      setAvailabilities(availabilityResponse.result ?? []);
+      const nextAvailabilities = availabilityResponse.result ?? [];
+      setAvailabilities(nextAvailabilities);
+      setSelectedReviewIds((current) => new Set(
+        Array.from(current).filter((id) => nextAvailabilities.some((item) =>
+          item.availabilityId === id
+          && (item.status === "PLANNED" || item.status === "CHANGES_REQUESTED"),
+        )),
+      ));
       setClusters((clusterResponse.result ?? []).filter((cluster) => cluster.status === "ACTIVE"));
     } catch (requestError: unknown) {
       const message = (requestError as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -736,11 +720,48 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
 
   const counts = useMemo(() => ({
     total: availabilities.length,
-    planned: availabilities.filter((item) => item.status === "PLANNED" || item.status === "CHANGES_REQUESTED").length,
+    changes: availabilities.filter((item) => item.status === "CHANGES_REQUESTED").length,
     review: availabilities.filter((item) => item.status === "IN_REVIEW").length,
-    approved: availabilities.filter((item) => item.status === "APPROVED" || item.status === "OPEN").length,
-    open: availabilities.filter((item) => item.status === "OPEN").length,
+    approvedReady: availabilities.filter((item) => item.status === "APPROVED").length,
   }), [availabilities]);
+
+  const reviewEligiblePlans = useMemo(
+    () => availabilities.filter((item) => item.status === "PLANNED" || item.status === "CHANGES_REQUESTED"),
+    [availabilities],
+  );
+  const allReviewEligibleSelected = reviewEligiblePlans.length > 0
+    && reviewEligiblePlans.every((item) => selectedReviewIds.has(item.availabilityId));
+
+  const toggleReviewSelection = (id: number) => {
+    setSelectedReviewIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllReviewEligible = () => {
+    setSelectedReviewIds(allReviewEligibleSelected
+      ? new Set()
+      : new Set(reviewEligiblePlans.map((item) => item.availabilityId)));
+  };
+
+  const submitSelectedForReview = async () => {
+    const ids = Array.from(selectedReviewIds);
+    if (ids.length === 0 || bulkSubmitting) return;
+
+    setBulkSubmitting(true);
+    setError(null);
+    const results = await Promise.allSettled(ids.map((id) => movieApi.submitAvailabilityReview(id)));
+    const failedIds = ids.filter((_, index) => results[index].status === "rejected");
+    await load();
+    setSelectedReviewIds(new Set(failedIds));
+    if (failedIds.length > 0) {
+      const succeeded = ids.length - failedIds.length;
+      setError(`${succeeded} release plan${succeeded === 1 ? " was" : "s were"} submitted. ${failedIds.length} could not be submitted and remain selected.`);
+    }
+    setBulkSubmitting(false);
+  };
 
   const runCommand = async (id: number, command: () => Promise<unknown>) => {
     setBusyId(id);
@@ -764,6 +785,100 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
     });
     navigate(`/admin/showtimes?${query.toString()}`);
   };
+
+  const renderReleasePlanActions = (availability: MovieAvailabilityResponse, busy: boolean) => (
+    <div className="flex min-h-9 items-center justify-end gap-2">
+      {(availability.status === "APPROVED" || availability.status === "OPEN") && (
+        <button
+          type="button"
+          onClick={() => goToScheduling(availability)}
+          className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-xs font-semibold text-blue-600 transition-colors hover:bg-blue-500/5"
+          style={{ borderColor: "rgba(37,99,235,0.25)" }}
+        >
+          <Clock3 size={14} /> Schedule
+        </button>
+      )}
+
+      {canSubmitReleasePlan && !busy && !bulkSubmitting && (availability.status === "PLANNED" || availability.status === "CHANGES_REQUESTED") && (
+        <button
+          type="button"
+          onClick={() => void runCommand(availability.availabilityId, () => movieApi.submitAvailabilityReview(availability.availabilityId))}
+          className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
+        >
+          <Send size={14} /> Submit
+        </button>
+      )}
+
+      {canReviewReleasePlan && !busy && availability.status === "IN_REVIEW" && (
+        <>
+          <button
+            type="button"
+            aria-label="Request changes"
+            title="Request changes"
+            onClick={() => setChangesTarget(availability.availabilityId)}
+            className="grid size-9 shrink-0 place-items-center rounded-lg border text-amber-600 transition-colors hover:bg-amber-500/10"
+            style={{ borderColor: "rgba(217,119,6,0.3)" }}
+          >
+            <MessageSquareWarning size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => void runCommand(availability.availabilityId, () => movieApi.approveAvailability(availability.availabilityId))}
+            className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
+          >
+            <CheckCircle2 size={15} /> Approve
+          </button>
+        </>
+      )}
+
+      {canActivateReleasePlan && !busy && availability.status === "APPROVED" && (
+        <button
+          type="button"
+          onClick={() => void runCommand(availability.availabilityId, () => movieApi.openAvailability(availability.availabilityId))}
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-emerald-700"
+        >
+          <Play size={14} /> Activate
+        </button>
+      )}
+
+      {canActivateReleasePlan && !busy && availability.status === "OPEN" && (
+        <button
+          type="button"
+          onClick={() => setSuspendTarget(availability.availabilityId)}
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold text-amber-600 transition-colors hover:bg-amber-500/10"
+          style={{ borderColor: "rgba(217,119,6,0.3)" }}
+        >
+          <Pause size={14} /> Suspend
+        </button>
+      )}
+
+      {canActivateReleasePlan && !busy && availability.status === "SUSPENDED" && (
+        <button
+          type="button"
+          onClick={() => void runCommand(availability.availabilityId, () => movieApi.resumeAvailability(availability.availabilityId))}
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-emerald-700"
+        >
+          <Play size={14} /> Resume
+        </button>
+      )}
+
+      {canActivateReleasePlan && !busy && availability.status !== "CLOSED" && (
+        <RowActions
+          forceMenu
+          ariaLabel={`More actions for ${availability.clusterName ?? `cluster ${availability.clusterId}`}`}
+          actions={[{
+            key: "close",
+            label: "Close release window",
+            icon: Square,
+            separatorBefore: true,
+            onSelect: () => setCloseTarget(availability.availabilityId),
+          }]}
+        />
+      )}
+
+      {busy && <span className="whitespace-nowrap text-xs" style={{ color: "var(--text-sub)" }}>Updating…</span>}
+    </div>
+  );
 
   return (
     <section>
@@ -790,27 +905,38 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
         )}
       </div>
 
-      <div className="mt-4 flex items-center gap-2 rounded-xl border px-3 py-2.5" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
-        <WorkflowStep icon={<Film size={13} />} label="Content approved" state="complete" />
-        <ArrowRight size={12} style={{ color: "var(--text-sub)", flexShrink: 0 }} />
-        <WorkflowStep icon={<CalendarDays size={13} />} label="Release plan" state={counts.approved > 0 ? "complete" : "current"} />
-        <ArrowRight size={12} style={{ color: "var(--text-sub)", flexShrink: 0 }} />
-        <WorkflowStep icon={<Clock3 size={13} />} label="Schedule shows" state={counts.approved > 0 ? "current" : "upcoming"} />
-        <ArrowRight size={12} style={{ color: "var(--text-sub)", flexShrink: 0 }} />
-        <WorkflowStep icon={<Ticket size={13} />} label="Open sales" state="upcoming" />
+      <div
+        className="mt-5 flex flex-col gap-3 rounded-2xl border px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+        style={{ borderColor: "rgba(37,99,235,0.22)", background: "var(--bg-card)", boxShadow: "0 4px 14px rgba(15,23,42,0.06)" }}
+      >
+        <div className="flex items-center gap-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-500/10 text-emerald-600">
+            <CheckCircle2 size={18} />
+          </span>
+          <div>
+            <p className="text-sm font-bold" style={{ color: "var(--text-main)" }}>Release plan review</p>
+            <p className="mt-0.5 text-xs" style={{ color: "var(--text-sub)" }}>
+              Content approved · {counts.total} cluster{counts.total === 1 ? "" : "s"} in scope
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs" style={{ color: "var(--text-sub)" }}>
+          <span><strong className="text-violet-600">{counts.review}</strong> awaiting decision</span>
+          <span className="inline-flex items-center gap-1.5"><Ticket size={14} /> Sales remain locked until activation</span>
+        </div>
       </div>
 
       {counts.total > 0 && (
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           {[
-            ["Clusters", counts.total, "var(--text-main)"],
-            ["Draft", counts.planned, "#2563eb"],
-            ["In review", counts.review, "#7c3aed"],
-            ["Approved / open", counts.approved, "#059669"],
-          ].map(([label, value, color]) => (
-            <div key={String(label)} className="rounded-xl border px-3 py-2" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
-              <p style={{ color: "var(--text-sub)", fontSize: "10px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</p>
-              <p className="mt-0.5" style={{ color: String(color), fontSize: "17px", fontWeight: 750 }}>{value}</p>
+            ["Awaiting decision", counts.review, "Submitted for independent approval", "#7c3aed"],
+            ["Changes requested", counts.changes, "Returned to the programming operator", "#d97706"],
+            ["Approved to schedule", counts.approvedReady, "Ready for showtime scheduling", "#059669"],
+          ].map(([label, value, helper, color]) => (
+            <div key={String(label)} className="min-h-[92px] rounded-2xl border px-4 py-3.5" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)", boxShadow: "0 2px 8px rgba(15,23,42,0.05)" }}>
+              <p style={{ color: "var(--text-sub)", fontSize: "12px", fontWeight: 600 }}>{label}</p>
+              <p className="mt-1" style={{ color: String(color), fontSize: "26px", lineHeight: 1.1, fontWeight: 750 }}>{value}</p>
+              <p className="mt-1.5" style={{ color: "var(--text-sub)", fontSize: "11.5px" }}>{helper}</p>
             </div>
           ))}
         </div>
@@ -820,6 +946,36 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
         <div className="mt-3 flex items-start gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2.5 text-rose-600">
           <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
           <p style={{ fontSize: "12px" }}>{error}</p>
+        </div>
+      )}
+
+      {!loading && canSubmitReleasePlan && reviewEligiblePlans.length > 0 && (
+        <div
+          className="mt-4 flex flex-col gap-3 rounded-xl border px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
+          style={{ borderColor: "rgba(37,99,235,0.28)", background: "rgba(37,99,235,0.06)" }}
+        >
+          <label className="flex cursor-pointer items-center gap-2.5">
+            <input
+              type="checkbox"
+              checked={allReviewEligibleSelected}
+              onChange={toggleAllReviewEligible}
+              className="h-4 w-4 accent-blue-600"
+            />
+            <span style={{ color: "var(--text-main)", fontSize: "12px", fontWeight: 650 }}>
+              {selectedReviewIds.size > 0
+                ? `${selectedReviewIds.size} of ${reviewEligiblePlans.length} ready plans selected`
+                : `Select all ${reviewEligiblePlans.length} plans ready for review`}
+            </span>
+          </label>
+          <button
+            type="button"
+            disabled={selectedReviewIds.size === 0 || bulkSubmitting}
+            onClick={() => void submitSelectedForReview()}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Send size={12} />
+            {bulkSubmitting ? "Submitting..." : `Submit ${selectedReviewIds.size || "selected"} for review`}
+          </button>
         </div>
       )}
 
@@ -850,163 +1006,83 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
           )}
         </div>
       ) : (
-        <div className="mt-4 space-y-2.5">
+        <div className="mt-4 overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)", boxShadow: "0 4px 14px rgba(15,23,42,0.06)" }}>
+          <div
+            className="hidden min-h-12 items-center gap-4 border-b px-4 xl:grid"
+            style={{
+              gridTemplateColumns: "minmax(220px,1.35fr) minmax(180px,1fr) minmax(160px,.85fr) minmax(130px,.65fr) minmax(170px,.8fr)",
+              borderColor: "var(--border-color)",
+              background: "var(--bg-main)",
+              color: "var(--text-sub)",
+              fontSize: "10.5px",
+              fontWeight: 700,
+              letterSpacing: ".07em",
+              textTransform: "uppercase",
+            }}
+          >
+            <span>Cinema cluster</span>
+            <span>Showing window</span>
+            <span>Sales start</span>
+            <span>Status</span>
+            <span className="text-right">Actions</span>
+          </div>
+
           {availabilities.map((availability) => {
             const meta = STATUS_META[availability.status];
             const busy = busyId === availability.availabilityId;
+            const selectable = canSubmitReleasePlan && (availability.status === "PLANNED" || availability.status === "CHANGES_REQUESTED");
 
             return (
-              <article
+              <div
                 key={availability.availabilityId}
-                className="rounded-2xl border p-3.5"
-                style={{ borderColor: availability.status === "OPEN" ? meta.border : "var(--border-color)", background: "var(--bg-main)" }}
+                className="grid grid-cols-1 gap-4 border-b px-4 py-4 transition-colors last:border-b-0 hover:bg-blue-500/[0.035] xl:grid-cols-[minmax(220px,1.35fr)_minmax(180px,1fr)_minmax(160px,.85fr)_minmax(130px,.65fr)_minmax(170px,.8fr)] xl:items-center"
+                style={{
+                  borderColor: "var(--border-color)",
+                }}
               >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <MapPin size={14} className="flex-shrink-0" style={{ color: "#2563eb" }} />
-                        <h4 className="truncate" style={{ color: "var(--text-main)", fontSize: "13px", fontWeight: 700 }}>
-                          {availability.clusterName ?? `Cluster #${availability.clusterId}`}
-                        </h4>
-                      </div>
-                      <span className="rounded-lg border px-2 py-0.5" style={{ color: meta.color, background: meta.background, borderColor: meta.border, fontSize: "10px", fontWeight: 700 }}>
-                        {meta.label}
-                      </span>
-                    </div>
-                    <p className="mt-1" style={{ color: "var(--text-sub)", fontSize: "10.5px" }}>{meta.description}</p>
-
-                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      <div className="flex items-start gap-2 rounded-xl border px-2.5 py-2" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
-                        <CalendarDays size={13} className="mt-0.5 flex-shrink-0" style={{ color: "var(--text-sub)" }} />
-                        <div>
-                          <p style={{ color: "var(--text-sub)", fontSize: "9.5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Showing window</p>
-                          <p className="mt-0.5" style={{ color: "var(--text-main)", fontSize: "11px", fontWeight: 600 }}>
-                            {formatDate(availability.showingStartDate)} → {formatDate(availability.showingEndDate)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-2 rounded-xl border px-2.5 py-2" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
-                        <Ticket size={13} className="mt-0.5 flex-shrink-0" style={{ color: "var(--text-sub)" }} />
-                        <div>
-                          <p style={{ color: "var(--text-sub)", fontSize: "9.5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Planned sales start</p>
-                          <p className="mt-0.5" style={{ color: "var(--text-main)", fontSize: "11px", fontWeight: 600 }}>
-                            {formatDateTime(availability.salesStartAt)}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {availability.status === "SUSPENDED" && availability.suspensionReason && (
-                      <div className="mt-2 flex items-start gap-2 rounded-lg bg-amber-500/10 px-2.5 py-2 text-amber-700">
-                        <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
-                        <p style={{ fontSize: "10.5px" }}>{availability.suspensionReason}</p>
-                      </div>
-                    )}
-                    {(availability.status === "CHANGES_REQUESTED" || availability.status === "IN_REVIEW") && availability.reviewNote && (
-                      <div className="mt-2 flex items-start gap-2 rounded-lg bg-violet-500/10 px-2.5 py-2 text-violet-700">
-                        <ShieldCheck size={12} className="mt-0.5 flex-shrink-0" />
-                        <p style={{ fontSize: "10.5px" }}>{availability.reviewNote}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* No max-width cap here anymore — Suspend/Close grew from icon-only 28px
-                      squares to labeled buttons (clearer, but wider), so the old 210px cap
-                      just forced an awkward wrap. flex-wrap + justify-end still keeps this
-                      right-aligned and lets it wrap naturally on narrow screens. */}
-                  <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
-                    {(availability.status === "APPROVED" || availability.status === "OPEN") && (
-                      <button
-                        type="button"
-                        onClick={() => goToScheduling(availability)}
-                        className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-500/5"
-                        style={{ borderColor: "rgba(37,99,235,0.24)" }}
-                      >
-                        <Clock3 size={12} /> Schedule shows
-                      </button>
-                    )}
-
-                    {canPrepareReleasePlan && !busy && (availability.status === "PLANNED" || availability.status === "CHANGES_REQUESTED") && (
-                      <button
-                        type="button"
-                        onClick={() => runCommand(availability.availabilityId, () => movieApi.submitAvailabilityReview(availability.availabilityId))}
-                        className="flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white"
-                      >
-                        <Send size={11} /> Submit review
-                      </button>
-                    )}
-
-                    {isAdmin && !busy && availability.status === "IN_REVIEW" && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setChangesTarget(availability.availabilityId)}
-                          className="flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-amber-600"
-                          style={{ borderColor: "rgba(217,119,6,0.3)" }}
-                        >
-                          Request changes
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => runCommand(availability.availabilityId, () => movieApi.approveAvailability(availability.availabilityId))}
-                          className="flex items-center gap-1 rounded-lg bg-cyan-600 px-2.5 py-1.5 text-xs font-semibold text-white"
-                        >
-                          <ShieldCheck size={11} /> Approve
-                        </button>
-                      </>
-                    )}
-
-                    {isAdmin && !busy && availability.status === "APPROVED" && (
-                      <button
-                        type="button"
-                        title="Enable exhibition for this cluster"
-                        onClick={() => runCommand(availability.availabilityId, () => movieApi.openAvailability(availability.availabilityId))}
-                        className="flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white"
-                      >
-                        <Play size={11} /> Open
-                      </button>
-                    )}
-
-                    {isAdmin && !busy && availability.status === "OPEN" && (
-                      <button
-                        type="button"
-                        title="Temporarily suspend exhibition"
-                        onClick={() => setSuspendTarget(availability.availabilityId)}
-                        className="flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-amber-600 hover:bg-amber-500/10"
-                        style={{ borderColor: "var(--border-color)" }}
-                      >
-                        <Pause size={12} /> Suspend
-                      </button>
-                    )}
-
-                    {isAdmin && !busy && availability.status === "SUSPENDED" && (
-                      <button
-                        type="button"
-                        title="Resume exhibition"
-                        onClick={() => runCommand(availability.availabilityId, () => movieApi.resumeAvailability(availability.availabilityId))}
-                        className="flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white"
-                      >
-                        <Play size={11} /> Resume
-                      </button>
-                    )}
-
-                    {isAdmin && !busy && availability.status !== "CLOSED" && (
-                      <button
-                        type="button"
-                        title="Close this release window"
-                        onClick={() => setCloseTarget(availability.availabilityId)}
-                        className="flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-500/10"
-                        style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}
-                      >
-                        <Square size={11} /> Close
-                      </button>
-                    )}
-
-                    {busy && <span style={{ color: "var(--text-sub)", fontSize: "11px" }}>Updating...</span>}
+                <div className="flex min-w-0 items-center gap-3">
+                  {selectable ? (
+                    <input
+                      type="checkbox"
+                      checked={selectedReviewIds.has(availability.availabilityId)}
+                      onChange={() => toggleReviewSelection(availability.availabilityId)}
+                      className="h-4 w-4 shrink-0 accent-blue-600"
+                      aria-label={`Select release plan for ${availability.clusterName ?? `cluster ${availability.clusterId}`}`}
+                    />
+                  ) : <span className="hidden h-4 w-4 shrink-0 xl:block" />}
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-600/10 text-blue-600"><MapPin size={16} /></span>
+                  <div className="min-w-0">
+                    <strong className="block truncate text-[13.5px]" style={{ color: "var(--text-main)" }}>{availability.clusterName ?? `Cluster #${availability.clusterId}`}</strong>
+                    <span className="mt-1 block truncate text-xs" style={{ color: "var(--text-sub)" }}>Plan #{availability.availabilityId}</span>
                   </div>
                 </div>
-              </article>
+
+                <div>
+                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.06em] xl:hidden" style={{ color: "var(--text-sub)" }}>Showing window</span>
+                  <strong className="block text-[13px]" style={{ color: "var(--text-main)" }}>{formatDate(availability.showingStartDate)} – {formatDate(availability.showingEndDate)}</strong>
+                </div>
+
+                <div>
+                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.06em] xl:hidden" style={{ color: "var(--text-sub)" }}>Sales start</span>
+                  <strong className="block text-[13px]" style={{ color: "var(--text-main)" }}>{formatDateTime(availability.salesStartAt)}</strong>
+                </div>
+
+                <div className="min-w-0">
+                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.06em] xl:hidden" style={{ color: "var(--text-sub)" }}>Status</span>
+                  <span className="inline-flex rounded-full border px-2.5 py-1 text-xs font-bold" style={{ color: meta.color, background: meta.background, borderColor: meta.border }}>{meta.label}</span>
+                  {availability.reviewNote && (
+                    <span className="mt-1.5 block truncate text-[11px]" title={availability.reviewNote} style={{ color: "var(--text-sub)" }}>{availability.reviewNote}</span>
+                  )}
+                  {availability.suspensionReason && (
+                    <span className="mt-1.5 block truncate text-[11px] text-amber-600" title={availability.suspensionReason}>{availability.suspensionReason}</span>
+                  )}
+                </div>
+
+                <div className="xl:justify-self-end">
+                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.06em] xl:hidden" style={{ color: "var(--text-sub)" }}>Actions</span>
+                  {renderReleasePlanActions(availability, busy)}
+                </div>
+              </div>
             );
           })}
         </div>

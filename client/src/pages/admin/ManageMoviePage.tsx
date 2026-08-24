@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import { Search, Plus, SlidersHorizontal, RefreshCw, AlertCircle } from "lucide-react";
+import { Search, Plus, SlidersHorizontal, RefreshCw } from "lucide-react";
 import { useRole } from "../../hooks/useRole";
 import { Outlet, useOutletContext, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { subscribeLifecycleEvents } from "../../api/lifecycleSocket";
 import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
+import { RequestState } from "../../components/shared/RequestState";
+import { classifyRequestFailure, type RequestFailure } from "../../utils/requestFailure";
 
 import { MovieStatsCards } from "../../layouts/MovieStatsCards";
 import { MovieTable } from "../../layouts/MovieTable";
@@ -28,7 +30,7 @@ import {
 
 export default function ManageMoviePage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
-  const { isAdmin } = useRole();
+  const { isAdmin, hasPermission } = useRole();
   const navigate = useNavigate();
 
   const [movies, setMovies] = useState<MovieApiResponse[]>([]);
@@ -40,7 +42,7 @@ export default function ManageMoviePage() {
   const [genres, setGenres] = useState<GenreResponse[]>([]);
 
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<RequestFailure | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [genreFilter, setGenreFilter] = useState("");
@@ -55,7 +57,7 @@ export default function ManageMoviePage() {
   // ── Load movies from API ──────────────────────────────────────────────────
   const loadMovies = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setFailure(null);
     try {
       const [moviesResult, versionsResult] = await Promise.allSettled([
         movieApi.getAllMovies(),
@@ -69,9 +71,8 @@ export default function ManageMoviePage() {
           ? (versionsResult.value.result ?? [])
           : null,
       );
-    } catch (err: any) {
-      const msg = err?.response?.data?.message ?? "Failed to load movies. Is movie-service running?";
-      setError(msg);
+    } catch (err) {
+      setFailure(classifyRequestFailure(err, "The movie catalogue could not be loaded."));
     } finally {
       setLoading(false);
     }
@@ -206,19 +207,7 @@ export default function ManageMoviePage() {
       />
 
       {/* Error banner */}
-      {error && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl mb-5 border border-rose-200 bg-rose-50">
-          <AlertCircle size={16} className="text-rose-500 flex-shrink-0" />
-          <p style={{ fontSize: "14px", color: "#e11d48" }}>{error}</p>
-          <button
-            onClick={loadMovies}
-            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 transition-colors text-rose-600"
-            style={{ fontSize: "13px" }}
-          >
-            <RefreshCw size={13} /> Retry
-          </button>
-        </div>
-      )}
+      {failure && <div className="mb-5"><RequestState compact kind={failure.kind} description={failure.description} onRetry={() => void loadMovies()} /></div>}
 
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap mb-4">
@@ -253,13 +242,13 @@ export default function ManageMoviePage() {
           {loading ? "Loading…" : "Refresh"}
         </button>
 
-        <button
+        {(isAdmin || hasPermission("MOVIE_CREATE")) && <button
           onClick={handleAddMovie}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all shadow-sm"
           style={{ fontSize: "14px", fontWeight: 500, background: isDarkMode ? "#3b82f6" : "#2563eb" }}
         >
           <Plus size={16} /> Add New Movie
-        </button>
+        </button>}
       </div>
 
       {/* Genre filter panel */}
@@ -362,7 +351,7 @@ export default function ManageMoviePage() {
         </div>
       )}
 
-      {!loading && (
+      {!failure && !loading && (
         <MovieTable
           movies={movies}
           onView={handleViewMovie}
