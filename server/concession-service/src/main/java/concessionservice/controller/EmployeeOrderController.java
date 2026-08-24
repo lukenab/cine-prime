@@ -5,6 +5,7 @@ import concessionservice.service.ConcessionService;
 import concessionservice.service.ClusterAccessPolicy;
 import lombok.RequiredArgsConstructor;
 import movie.theater.common.dto.ApiResponse;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,6 +18,7 @@ public class EmployeeOrderController {
     private final ClusterAccessPolicy clusterAccessPolicy;
 
     @GetMapping
+    @PreAuthorize("hasAuthority('CONCESSION_FULFILLMENT_READ') or hasAnyRole('ADMIN','SUPER_ADMIN')")
     public ApiResponse<List<OrderResponse>> queue(
             @RequestParam Long clusterId,
             @RequestParam(required = false) String status) {
@@ -27,6 +29,7 @@ public class EmployeeOrderController {
     }
 
     @PostMapping("/{id}/{action:prepare|ready|collect}")
+    @PreAuthorize("hasAuthority('CONCESSION_FULFILLMENT_UPDATE') or hasAnyRole('ADMIN','SUPER_ADMIN')")
     public ApiResponse<OrderResponse> transition(
             @PathVariable String id,
             @PathVariable String action) {

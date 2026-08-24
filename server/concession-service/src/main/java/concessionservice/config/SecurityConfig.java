@@ -32,8 +32,9 @@ public class SecurityConfig extends JwtResourceServerSecuritySupport {
                         .requestMatchers("/api/admin/cinemas/**")
                             .hasAnyRole("BRANCH_MANAGER", "ADMIN", "SUPER_ADMIN")
                         .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
-                        .requestMatchers("/api/employee/**")
-                            .hasAnyRole("BRANCH_MANAGER", "EMPLOYEE", "ADMIN", "SUPER_ADMIN")
+                        // Method security applies the operation-specific capability;
+                        // the HTTP layer only establishes an authenticated principal.
+                        .requestMatchers("/api/employee/**").authenticated()
                         .anyRequest().authenticated());
         configureJwtResourceServer(http);
         return http.build();

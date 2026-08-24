@@ -87,7 +87,7 @@ class AuthenticationServiceTest {
         when(passwordEncoder.matches("Password@123", "encoded")).thenReturn(true);
         when(projections.resolve(account)).thenReturn(
                 new StaffAccessProjectionService.StaffAuthorization(
-                        true, true, "BRANCH_MANAGER", List.of("81")));
+                        true, true, "BRANCH_MANAGER", "NOT_APPLICABLE", List.of("81"), Set.of()));
         JwtService localJwt = new JwtService(tokens, projections);
         ReflectionTestUtils.setField(localJwt, "SIGNER_KEY", "a".repeat(64));
         ReflectionTestUtils.setField(localJwt, "VALID_DURATION", 1800L);

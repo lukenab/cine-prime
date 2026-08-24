@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import userservice.entity.Employee;
+import userservice.enums.EmployeeDepartment;
 import userservice.enums.EmployeePosition;
 import userservice.enums.StaffAccessRole;
 import userservice.event.StaffAccessEventPayload;
@@ -24,7 +25,7 @@ import java.util.concurrent.TimeoutException;
 @RequiredArgsConstructor
 @Slf4j
 public class StaffAccessEventPublisher {
-    public static final String EVENT_VERSION = "1";
+    public static final String EVENT_VERSION = "2";
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
@@ -61,6 +62,7 @@ public class StaffAccessEventPublisher {
                 new StaffAccessEventPayload(
                         accountId,
                         accessRole(employee).name(),
+                        accessProfile(employee),
                         employee.getStatus().name(),
                         clusterIds(employee),
                         employee.getAssignmentVersion()));
@@ -94,5 +96,24 @@ public class StaffAccessEventPublisher {
     private List<String> clusterIds(Employee employee) {
         String cinemaId = employee.getCinemaId();
         return cinemaId == null || cinemaId.isBlank() ? List.of() : List.of(cinemaId.trim());
+    }
+
+    private String accessProfile(Employee employee) {
+        if (accessRole(employee) != StaffAccessRole.EMPLOYEE) {
+            return "NOT_APPLICABLE";
+        }
+        EmployeeDepartment department = employee.getDepartment();
+        if (department == null) {
+            return "UNASSIGNED";
+        }
+        return switch (department) {
+            case GENERAL_OPERATIONS, BOX_OFFICE, FOOD_BEVERAGE, FLOOR_GUEST_SERVICES,
+                    PROJECTION_TECHNICAL, FACILITIES_MAINTENANCE -> department.name();
+            case CONCESSION -> EmployeeDepartment.FOOD_BEVERAGE.name();
+            case FLOOR, CUSTOMER_SERVICE -> EmployeeDepartment.FLOOR_GUEST_SERVICES.name();
+            case PROJECTION -> EmployeeDepartment.PROJECTION_TECHNICAL.name();
+            case MANAGEMENT -> EmployeeDepartment.GENERAL_OPERATIONS.name();
+            default -> "UNASSIGNED";
+        };
     }
 }

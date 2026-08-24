@@ -9,17 +9,18 @@ const ROLE_PRIORITY = [
     "ROLE_FINANCE_APPROVER", "ROLE_FINANCE_OFFICER", "ROLE_COMMERCIAL_APPROVER", "ROLE_COMMERCIAL_MANAGER",
     "ROLE_SECURITY_AUDITOR", "ROLE_BRANCH_MANAGER", "ROLE_EMPLOYEE", "ROLE_MEMBER",
 ];
+const KNOWN_ROLES = new Set(ROLE_PRIORITY);
 
-function extractAuthorities(scopeClaim: string) {
+export function extractAuthorities(scopeClaim: string) {
     const authorities = (scopeClaim || "").split(" ").filter(Boolean);
     return {
-        roles: authorities.filter((authority) => authority.startsWith("ROLE_")),
-        permissions: authorities.filter((authority) => !authority.startsWith("ROLE_")),
+        roles: authorities.filter((authority) => KNOWN_ROLES.has(authority)),
+        permissions: authorities.filter((authority) => !KNOWN_ROLES.has(authority)),
     };
 }
 
-function extractPrimaryRole(rolesClaim: string): string {
-    const roles = (rolesClaim || "").split(" ").filter(r => r.startsWith("ROLE_"));
+export function extractPrimaryRole(rolesClaim: string): string {
+    const roles = (rolesClaim || "").split(" ").filter((authority) => KNOWN_ROLES.has(authority));
     for (const r of ROLE_PRIORITY) {
         if (roles.includes(r)) return r;
     }
@@ -64,6 +65,7 @@ interface User {
     permissions: string[];
     accountId: string;
     clusterIds: string[];
+    accessProfile?: string;
 }
 
 function extractClusterIds(claim: unknown): string[] {
@@ -113,7 +115,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             localStorage.setItem("role", primaryRole);
             localStorage.setItem("roles", JSON.stringify(roles));
             localStorage.setItem("permissions", JSON.stringify(permissions));
-            setUser({ username: decoded.sub, role: primaryRole, roles, permissions, accountId, clusterIds: extractClusterIds(decoded.cinemaClusterIds) });
+            setUser({ username: decoded.sub, role: primaryRole, roles, permissions, accountId, clusterIds: extractClusterIds(decoded.cinemaClusterIds), accessProfile: decoded.staffAccessProfile });
 
             if (requiresProfile(primaryRole) && accountId) {
                 setProfileCheckPending(true);
@@ -150,7 +152,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         localStorage.setItem("role", primaryRole);
         localStorage.setItem("roles", JSON.stringify(roles));
         localStorage.setItem("permissions", JSON.stringify(permissions));
-        setUser({ username: decoded.sub, role: primaryRole, roles, permissions, accountId, clusterIds: extractClusterIds(decoded.cinemaClusterIds) });
+        setUser({ username: decoded.sub, role: primaryRole, roles, permissions, accountId, clusterIds: extractClusterIds(decoded.cinemaClusterIds), accessProfile: decoded.staffAccessProfile });
 
         if (requiresProfile(primaryRole) && accountId) {
             setProfileCheckPending(true);

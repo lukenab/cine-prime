@@ -29,6 +29,17 @@ public class AuthEventPublisher {
         sendAndWait("user-register-topic", event);
     }
 
+    public void sendRegisteredEventAsync(UserRegisteredEvent event) {
+        kafkaTemplate.send("user-register-topic", event).whenComplete((result, ex) -> {
+            if (ex != null) {
+                log.warn("Could not publish demo profile for account {}. It will be retried after the next auth startup.",
+                        event.getAccountId());
+            } else {
+                log.info("Published demo profile for account {}", event.getAccountId());
+            }
+        });
+    }
+
     public void sendAccountStatusChangedEvent(AccountStatusChangedEvent event) {
         sendAndWait("account-status-topic", event);
     }

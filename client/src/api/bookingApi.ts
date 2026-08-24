@@ -184,6 +184,29 @@ export interface BookingPage {
   last?: boolean;
 }
 
+export interface CounterSaleRequest {
+  showtimeId: number;
+  seatIds: number[];
+  terminalId: string;
+  paymentMethod: "CASH" | "CARD" | "BANK_TRANSFER";
+  receiptReference: string;
+}
+
+export interface CounterSaleResponse {
+  bookingId: string;
+  bookingCode: string;
+  status: string;
+  paymentStatus: string;
+  paymentReference: string;
+  receiptReference: string;
+  paymentMethod: string;
+  total: number;
+  currency: string;
+  seatCodes: string[];
+  paidAt: string;
+  replayed: boolean;
+}
+
 export interface SeatHoldPolicy {
   channel: "WEB" | "MOBILE" | "COUNTER";
   ttlSeconds: number;
@@ -313,6 +336,19 @@ export const bookingApi = {
     const res: any = await axiosClient.get(
       `/api/booking-operations/clusters/${clusterId}/bookings`,
       { params },
+    );
+    return res.result || res;
+  },
+
+  createCounterSale: async (
+    clusterId: number,
+    request: CounterSaleRequest,
+    idempotencyKey: string,
+  ): Promise<CounterSaleResponse> => {
+    const res: any = await axiosClient.post(
+      `/api/booking-operations/clusters/${clusterId}/counter-sales`,
+      request,
+      { headers: { "Idempotency-Key": idempotencyKey } },
     );
     return res.result || res;
   },

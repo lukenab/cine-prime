@@ -25,6 +25,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.List;
+import java.util.Set;
 import java.util.StringJoiner;
 import java.util.UUID;
 
@@ -65,6 +66,7 @@ public class JwtService {
                 .jwtID(UUID.randomUUID().toString());
         if (staffAuthorization.applicable()) {
             claimsBuilder.claim("staffAssignmentActive", staffAuthorization.authorized());
+            claimsBuilder.claim("staffAccessProfile", staffAuthorization.accessProfile());
         }
         if (isBranchScopedStaff(account)) {
             claimsBuilder.claim("cinemaClusterIds", staffAuthorization.authorized()
@@ -98,8 +100,15 @@ public class JwtService {
                 }
                 stringJoiner.add("ROLE_" + role.getRoleName());
                 if (!CollectionUtils.isEmpty(role.getPermissions())) {
-                    role.getPermissions().forEach(
-                            permission -> stringJoiner.add(permission.getName()));
+                    Set<String> effective = staffAuthorization.effectivePermissions();
+                    role.getPermissions().stream()
+                            .map(permission -> permission.getName())
+                            .filter(permission -> !"EMPLOYEE".equals(role.getRoleName())
+                                    || effective.contains(permission))
+                            .forEach(stringJoiner::add);
+                }
+                if ("EMPLOYEE".equals(role.getRoleName())) {
+                    staffAuthorization.effectivePermissions().forEach(stringJoiner::add);
                 }
             });
         }

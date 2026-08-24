@@ -22,6 +22,7 @@ import {
   KeyRound,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { isPathInRoleWorkspace } from "../../utils/adminWorkspaces";
 
 type PaletteIcon = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 
@@ -75,10 +76,9 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const filteredEntries = useMemo(() => {
-    const legacyAdmin = user?.roles.some((role) => role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN");
-    const visible = entries.filter((entry) => legacyAdmin
-      || ((!entry.roles || entry.roles.some((role) => user?.roles.includes(role)))
-        && (!entry.permissions || entry.permissions.some((permission) => user?.permissions.includes(permission)))));
+    const visible = entries.filter((entry) => isPathInRoleWorkspace(user?.role, entry.path)
+      && (!entry.roles || entry.roles.some((role) => user?.roles.includes(role)))
+      && (!entry.permissions || entry.permissions.some((permission) => user?.permissions.includes(permission))));
     const normalized = query.trim().toLowerCase();
     if (!normalized) return visible;
     return visible.filter((entry) =>

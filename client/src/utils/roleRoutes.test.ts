@@ -9,7 +9,7 @@ describe("defaultPathForRole", () => {
   it("routes administrative roles to their own workspaces", () => {
     expect(defaultPathForRole("ROLE_ADMIN")).toBe("/admin");
     expect(defaultPathForRole("ROLE_SUPER_ADMIN")).toBe("/admin");
-    expect(defaultPathForRole("ROLE_BRANCH_MANAGER")).toBe("/admin/concessions/catalog");
+    expect(defaultPathForRole("ROLE_BRANCH_MANAGER")).toBe("/admin/workforce");
     expect(defaultPathForRole("ROLE_PROGRAMMING_OPERATOR")).toBe("/admin/programming");
     expect(defaultPathForRole("ROLE_PROGRAMMING_APPROVER")).toBe("/admin/release-plans");
     expect(defaultPathForRole("ROLE_SYSTEM_ADMIN")).toBe("/admin/people");

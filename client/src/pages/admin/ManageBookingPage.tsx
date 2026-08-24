@@ -33,6 +33,8 @@ import {
 } from "../../components/booking/bookingUi";
 import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
 import "./ManageBookingPage.css";
+import { useAuth } from "../../context/AuthContext";
+import { clustersForSession } from "../../utils/clusterScope";
 
 const STATUS_OPTIONS: Array<{ value: "" | BookingStatus; label: string }> = [
   { value: "", label: "All statuses" },
@@ -55,6 +57,9 @@ const OPERATIONAL_ATTENTION = new Set<BookingStatus>([
 
 export default function ManageBookingPage() {
   const { isDarkMode } = useOutletContext<{ isDarkMode: boolean }>();
+  const { user } = useAuth();
+  const clusterScope = user?.clusterIds.join(",") ?? "";
+  const roleScope = user?.roles.join(",") ?? "";
   const [clusters, setClusters] = useState<ClusterResponse[]>([]);
   const [clusterId, setClusterId] = useState<number | null>(null);
   const [result, setResult] = useState<BookingPage | null>(null);
@@ -71,15 +76,22 @@ export default function ManageBookingPage() {
     movieApi.getClusters()
       .then((response) => {
         if (!active) return;
-        const available = (response.result ?? []).filter((cluster) => cluster.status === "ACTIVE");
+        const available = clustersForSession(
+          (response.result ?? []).filter((cluster) => cluster.status === "ACTIVE"),
+          user?.roles,
+          user?.clusterIds,
+        );
         setClusters(available);
         setClusterId((current) => current ?? available[0]?.clusterId ?? null);
+        if (!available.length && user?.roles.some((role) => role === "ROLE_EMPLOYEE" || role === "ROLE_BRANCH_MANAGER")) {
+          setError("No active cinema is assigned to this account. Contact a manager to update the staff assignment.");
+        }
       })
       .catch((requestError) => {
         if (active) setError(getApiErrorMessage(requestError, "Cinema clusters could not be loaded."));
       });
     return () => { active = false; };
-  }, []);
+  }, [clusterScope, roleScope]);
 
   const load = useCallback(async (quiet = false) => {
     if (clusterId == null) {

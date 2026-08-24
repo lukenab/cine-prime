@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarDays, Clock3, FileCheck2, RefreshCw, Repeat2, Send, Umbrella } from "lucide-react";
+import { AlertTriangle, CalendarDays, Clock3, FileCheck2, Repeat2, Send, Umbrella } from "lucide-react";
 import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
+import { AdminMetricCard } from "../../components/admin/AdminMetricCard";
 import { workforceApi, type LeaveRequest, type MonthlyTimesheetSummary, type SwapRequest, type Timesheet, type WorkforceShift } from "../../api/workforceApi";
 import { useAuth } from "../../context/AuthContext";
 import "./Workforce.css";
@@ -91,31 +92,13 @@ export default function MyWorkforcePage() {
         eyebrow="Workforce"
         title="My schedule & time"
         description="View published shifts, record attendance and submit time for manager approval."
-        actions={
-          <button className="wf-button" onClick={() => void load()}>
-            <RefreshCw size={14} />
-            Refresh
-          </button>
-        }
       />
       {error && <div className="wf-error">{error}</div>}
       <div className="wf-grid wf-grid--stats">
-        <div className="wf-stat">
-          <small>Upcoming shifts</small>
-          <strong>{stats.upcoming}</strong>
-        </div>
-        <div className="wf-stat">
-          <small>Payable this month</small>
-          <strong>{hours(stats.worked)}</strong>
-        </div>
-        <div className="wf-stat">
-          <small>Open exceptions</small>
-          <strong>{stats.exceptions}</strong>
-        </div>
-        <div className="wf-stat">
-          <small>Pending requests</small>
-          <strong>{stats.requests}</strong>
-        </div>
+        <AdminMetricCard label="Upcoming shifts" value={stats.upcoming} description="Published shifts ahead" icon={CalendarDays} tone="blue" loading={loading} />
+        <AdminMetricCard label="Approved hours" value={hours(stats.worked)} description="Current pay period" icon={Clock3} tone="emerald" loading={loading} />
+        <AdminMetricCard label="Attendance exceptions" value={stats.exceptions} description="Entries needing correction" icon={AlertTriangle} tone="amber" loading={loading} />
+        <AdminMetricCard label="Pending requests" value={stats.requests} description="Awaiting manager review" icon={Send} tone="violet" loading={loading} />
       </div>
       <div className="wf-toolbar">
         <div className="wf-tabs">

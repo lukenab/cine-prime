@@ -3,10 +3,15 @@ package authservice.config;
 import authservice.entity.Account;
 import authservice.entity.Permission;
 import authservice.entity.Role;
+import authservice.entity.StaffAccessProjection;
 import authservice.enums.AccountStatus;
+import authservice.enums.StaffProvisioningRole;
+import authservice.event.UserRegisteredEvent;
+import authservice.messaging.AuthEventPublisher;
 import authservice.repository.AccountRepository;
 import authservice.repository.PermissionRepository;
 import authservice.repository.RoleRepository;
+import authservice.repository.StaffAccessProjectionRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -19,6 +24,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -33,7 +40,9 @@ public class ApplicationInitConfig {
     AccountRepository    accountRepository;
     RoleRepository       roleRepository;
     PermissionRepository permissionRepository;
+    StaffAccessProjectionRepository staffAccessProjectionRepository;
     PasswordEncoder      passwordEncoder;
+    AuthEventPublisher   authEventPublisher;
     JdbcTemplate         jdbcTemplate;
 
     @NonFinal @Value("${app.admin.username}") String adminUsername;
@@ -43,6 +52,23 @@ public class ApplicationInitConfig {
     @NonFinal @Value("${app.branch-manager.password}") String branchManagerPassword;
     @NonFinal @Value("${app.branch-manager.email}")    String branchManagerEmail;
     @NonFinal @Value("${app.seed.sync-account-passwords:false}") boolean syncAccountPasswords;
+    @NonFinal @Value("${app.demo-staff.enabled:false}") boolean demoStaffEnabled;
+    @NonFinal @Value("${app.demo-staff.password:}") String demoStaffPassword;
+    @NonFinal @Value("${app.demo-staff.branch-cluster-id:43}") String demoBranchClusterId;
+    @NonFinal @Value("${app.demo-staff.publish-profiles:true}") boolean publishDemoProfiles;
+
+    private static final List<DemoStaffFixture> DEMO_STAFF = List.of(
+            new DemoStaffFixture(StaffProvisioningRole.EMPLOYEE, "employee", "Cinema employee", "0900000001"),
+            new DemoStaffFixture(StaffProvisioningRole.BRANCH_MANAGER, "branchmanager", "Cinema branch manager", "0900000002"),
+            new DemoStaffFixture(StaffProvisioningRole.PROGRAMMING_OPERATOR, "programmingoperator", "Programming operator", "0900000003"),
+            new DemoStaffFixture(StaffProvisioningRole.PROGRAMMING_APPROVER, "programmingapprover", "Programming approver", "0900000004"),
+            new DemoStaffFixture(StaffProvisioningRole.FINANCE_OFFICER, "financeofficer", "Finance officer", "0900000005"),
+            new DemoStaffFixture(StaffProvisioningRole.FINANCE_APPROVER, "financeapprover", "Finance approver", "0900000006"),
+            new DemoStaffFixture(StaffProvisioningRole.COMMERCIAL_MANAGER, "commercialmanager", "Commercial manager", "0900000007"),
+            new DemoStaffFixture(StaffProvisioningRole.COMMERCIAL_APPROVER, "commercialapprover", "Commercial approver", "0900000008"),
+            new DemoStaffFixture(StaffProvisioningRole.SECURITY_AUDITOR, "securityauditor", "Security auditor", "0900000009"),
+            new DemoStaffFixture(StaffProvisioningRole.SYSTEM_ADMIN, "systemadmin", "System administrator", "0900000010")
+    );
 
     // ── Permission definitions ────────────────────────────────────────────────
     // Format: { name, description }
@@ -66,6 +92,7 @@ public class ApplicationInitConfig {
 
             // Ticket
             new String[]{"TICKET_SELL", "Sell tickets at the counter"},
+            new String[]{"TICKET_CHECK_IN", "Validate and admit a customer ticket"},
 
             // Employee
             new String[]{"EMPLOYEE_READ",   "View employee list"},
@@ -132,6 +159,8 @@ public class ApplicationInitConfig {
             new String[]{"CONCESSION_CATALOG_DRAFT", "Create and edit concession product drafts"},
             new String[]{"CONCESSION_CATALOG_SUBMIT", "Submit concession products for approval"},
             new String[]{"CONCESSION_CATALOG_APPROVE", "Approve or reject concession products"},
+            new String[]{"CONCESSION_FULFILLMENT_READ", "View paid concession orders for an assigned cinema"},
+            new String[]{"CONCESSION_FULFILLMENT_UPDATE", "Prepare, mark ready and collect concession orders"},
 
             // Workforce planning and attendance
             new String[]{"WORKFORCE_SELF_READ", "View own shifts, requests and timesheets"},
@@ -154,13 +183,12 @@ public class ApplicationInitConfig {
                     "PROMOTION_READ"
             )),
             Map.entry("EMPLOYEE", Set.of(
-                    "MOVIE_READ",
-                    "SHOWTIME_READ",
-                    "BOOKING_READ", "BOOKING_CONFIRM", "BOOKING_CANCEL",
-                    "TICKET_SELL",
                     "WORKFORCE_SELF_READ", "ATTENDANCE_CLOCK", "TIMESHEET_SUBMIT", "WORKFORCE_REQUEST"
             )),
             Map.entry("BRANCH_MANAGER", Set.of(
+                    "MOVIE_READ", "SHOWTIME_READ", "BOOKING_READ", "ROOM_READ",
+                    "TICKET_SELL", "TICKET_CHECK_IN",
+                    "CONCESSION_FULFILLMENT_READ", "CONCESSION_FULFILLMENT_UPDATE",
                     "CONCESSION_CATALOG_DRAFT",
                     "CONCESSION_CATALOG_SUBMIT",
                     "WORKFORCE_SELF_READ", "ATTENDANCE_CLOCK", "TIMESHEET_SUBMIT", "WORKFORCE_REQUEST",
@@ -210,7 +238,7 @@ public class ApplicationInitConfig {
                     "MOVIE_SUBMIT", "MOVIE_APPROVE",
                     "SHOWTIME_READ", "SHOWTIME_CREATE", "SHOWTIME_UPDATE", "SHOWTIME_DELETE",
                     "BOOKING_READ", "BOOKING_CONFIRM", "BOOKING_CANCEL",
-                    "TICKET_SELL",
+                    "TICKET_SELL", "TICKET_CHECK_IN",
                     "EMPLOYEE_READ", "EMPLOYEE_CREATE", "EMPLOYEE_UPDATE", "EMPLOYEE_DELETE",
                     "USER_READ", "USER_CREATE", "USER_UPDATE", "USER_DELETE",
                     "ROOM_READ", "ROOM_UPDATE",
@@ -226,8 +254,8 @@ public class ApplicationInitConfig {
                     "REFUND_READ", "REFUND_REVIEW", "REFUND_APPROVE",
                     "RECONCILIATION_READ", "RECONCILIATION_RESOLVE",
                     "CONCESSION_CATALOG_DRAFT", "CONCESSION_CATALOG_SUBMIT",
-                    "CONCESSION_CATALOG_APPROVE",
-                    "WORKFORCE_SELF_READ", "ATTENDANCE_CLOCK", "TIMESHEET_SUBMIT", "WORKFORCE_REQUEST",
+                    "CONCESSION_CATALOG_APPROVE", "CONCESSION_FULFILLMENT_READ",
+                    "CONCESSION_FULFILLMENT_UPDATE",
                     "WORKFORCE_PLAN", "WORKFORCE_PUBLISH", "TIMESHEET_REVIEW",
                     "WORKFORCE_REQUEST_APPROVE", "WORKFORCE_CONFIG"
             ))
@@ -239,9 +267,91 @@ public class ApplicationInitConfig {
             seedPermissions();
             seedRoles();
             applyPromotionApprovalCatalogMigration();
+            applyFrontlineCapabilityMigration();
+            applyBranchManagerOperationalVisibilityMigration();
+            applyLegacyAdminSelfServiceRemoval();
             seedAdminAccount();
             seedBranchManagerAccount();
+            seedDemoStaffAccounts();
         };
+    }
+
+    private void applyFrontlineCapabilityMigration() {
+        final String version = "2026-08-24-frontline-access-profiles-v1";
+        Integer applied = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM auth_catalog_migration WHERE version = ?", Integer.class, version);
+        if (applied != null && applied > 0) {
+            return;
+        }
+
+        // EMPLOYEE is a base identity role. Operational capabilities are
+        // supplied by the local staff projection's access profile at token issue time.
+        jdbcTemplate.update("""
+                DELETE FROM role_permissions
+                WHERE role_name = 'EMPLOYEE'
+                  AND permission_name IN (
+                    'MOVIE_READ', 'SHOWTIME_READ', 'BOOKING_READ', 'BOOKING_CONFIRM',
+                    'BOOKING_CANCEL', 'TICKET_SELL', 'TICKET_CHECK_IN',
+                    'CONCESSION_FULFILLMENT_READ', 'CONCESSION_FULFILLMENT_UPDATE'
+                  )
+                """);
+
+        Map<String, Set<String>> grants = Map.of(
+                "BRANCH_MANAGER", Set.of(
+                        "TICKET_SELL", "TICKET_CHECK_IN",
+                        "CONCESSION_FULFILLMENT_READ", "CONCESSION_FULFILLMENT_UPDATE"),
+                "ADMIN", Set.of(
+                        "TICKET_CHECK_IN", "CONCESSION_FULFILLMENT_READ",
+                        "CONCESSION_FULFILLMENT_UPDATE"));
+        grants.forEach((roleName, permissions) -> permissions.forEach(permissionName ->
+                jdbcTemplate.update("""
+                        INSERT INTO role_permissions(role_name, permission_name)
+                        SELECT ?, ?
+                        WHERE EXISTS (SELECT 1 FROM roles WHERE role_name = ?)
+                          AND EXISTS (SELECT 1 FROM permission WHERE name = ?)
+                        ON CONFLICT DO NOTHING
+                        """, roleName, permissionName, roleName, permissionName)));
+
+        jdbcTemplate.update("INSERT INTO auth_catalog_migration(version) VALUES (?)", version);
+        log.info("[Migration] Applied capability-based frontline access profiles");
+    }
+
+    private void applyBranchManagerOperationalVisibilityMigration() {
+        final String version = "2026-08-24-branch-manager-operational-visibility-v1";
+        Integer applied = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM auth_catalog_migration WHERE version = ?", Integer.class, version);
+        if (applied != null && applied > 0) {
+            return;
+        }
+        Set.of("MOVIE_READ", "SHOWTIME_READ", "BOOKING_READ", "ROOM_READ")
+                .forEach(permissionName -> jdbcTemplate.update("""
+                        INSERT INTO role_permissions(role_name, permission_name)
+                        SELECT 'BRANCH_MANAGER', ?
+                        WHERE EXISTS (SELECT 1 FROM roles WHERE role_name = 'BRANCH_MANAGER')
+                          AND EXISTS (SELECT 1 FROM permission WHERE name = ?)
+                        ON CONFLICT DO NOTHING
+                        """, permissionName, permissionName));
+        jdbcTemplate.update("INSERT INTO auth_catalog_migration(version) VALUES (?)", version);
+        log.info("[Migration] Granted branch managers read access to branch operations");
+    }
+
+    private void applyLegacyAdminSelfServiceRemoval() {
+        final String version = "2026-08-24-legacy-admin-self-service-removal-v1";
+        Integer applied = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM auth_catalog_migration WHERE version = ?", Integer.class, version);
+        if (applied != null && applied > 0) {
+            return;
+        }
+        jdbcTemplate.update("""
+                DELETE FROM role_permissions
+                WHERE role_name = 'ADMIN'
+                  AND permission_name IN (
+                    'WORKFORCE_SELF_READ', 'ATTENDANCE_CLOCK',
+                    'TIMESHEET_SUBMIT', 'WORKFORCE_REQUEST'
+                  )
+                """);
+        jdbcTemplate.update("INSERT INTO auth_catalog_migration(version) VALUES (?)", version);
+        log.info("[Migration] Removed employee self-service permissions from legacy ADMIN");
     }
 
     /**
@@ -376,6 +486,100 @@ public class ApplicationInitConfig {
 
         accountRepository.save(admin);
         log.warn("[Seed] Admin account created — username: '{}'. Change the default password before going to production!", adminUsername);
+    }
+
+    /** Local/QA-only access personas. Never enable these fixtures in production. */
+    private void seedDemoStaffAccounts() {
+        if (!demoStaffEnabled) {
+            return;
+        }
+        if (demoStaffPassword == null || demoStaffPassword.length() < 8) {
+            throw new IllegalStateException("DEMO_STAFF_PASSWORD must contain at least 8 characters");
+        }
+
+        for (DemoStaffFixture fixture : DEMO_STAFF) {
+            String roleName = fixture.role().name();
+            Role role = roleRepository.findById(roleName)
+                    .orElseThrow(() -> new IllegalStateException("Demo role is missing: " + roleName));
+            String username = fixture.role() == StaffProvisioningRole.BRANCH_MANAGER
+                    ? branchManagerUsername
+                    : fixture.username();
+            String email = fixture.role() == StaffProvisioningRole.BRANCH_MANAGER
+                    ? branchManagerEmail
+                    : fixture.username() + ".demo@cineprime.vn";
+
+            Account account = accountRepository.findByUsername(username).orElseGet(() -> Account.builder()
+                    .username(username)
+                    .email(email)
+                    .build());
+            account.setRoles(Set.of(role));
+            account.setStatus(AccountStatus.ACTIVE);
+            account.setLocalLoginEnabled(true);
+            account.setPasswordHash(passwordEncoder.encode(demoStaffPassword));
+            account = accountRepository.save(account);
+
+            seedDemoProjection(account, fixture.role());
+            publishDemoProfile(account, fixture);
+        }
+
+        var orphaned = staffAccessProjectionRepository.findAll().stream()
+                .filter(projection -> !accountRepository.existsById(projection.getAccountId()))
+                .toList();
+        if (!orphaned.isEmpty()) {
+            staffAccessProjectionRepository.deleteAll(orphaned);
+            log.warn("[Demo seed] Removed {} orphaned staff access projections", orphaned.size());
+        }
+        log.warn("[Demo seed] Provisioned {} local role accounts. Never enable this seed in production.", DEMO_STAFF.size());
+    }
+
+    /**
+     * Version -1 lets the first canonical assignment event from user-service
+     * replace this fixture even when the real assignment starts at version 0.
+     */
+    private void seedDemoProjection(Account account, StaffProvisioningRole role) {
+        StaffAccessProjection projection = staffAccessProjectionRepository.findById(account.getAccountId()).orElse(null);
+        if (projection != null && projection.getLastEventId() != null
+                && !projection.getLastEventId().startsWith("demo-seed:")) {
+            return;
+        }
+        if (projection == null) {
+            projection = StaffAccessProjection.builder().accountId(account.getAccountId()).build();
+        }
+        projection.setAccountRole(role.name());
+        projection.setAccessProfile(role == StaffProvisioningRole.EMPLOYEE
+                ? "GENERAL_OPERATIONS"
+                : "NOT_APPLICABLE");
+        projection.setAssignmentActive(true);
+        projection.replaceClusterIds(Set.of(StaffProvisioningRole.EMPLOYEE, StaffProvisioningRole.BRANCH_MANAGER).contains(role)
+                ? List.of(demoBranchClusterId)
+                : List.of());
+        projection.setLastEventId("demo-seed:" + role.name());
+        projection.setLastEventVersion("1");
+        projection.setLastAssignmentVersion(-1L);
+        projection.setLastEventOccurredAt(OffsetDateTime.now());
+        staffAccessProjectionRepository.save(projection);
+    }
+
+    private void publishDemoProfile(Account account, DemoStaffFixture fixture) {
+        if (!publishDemoProfiles) {
+            return;
+        }
+        authEventPublisher.sendRegisteredEventAsync(UserRegisteredEvent.builder()
+                .accountId(account.getAccountId())
+                .email(account.getEmail())
+                .fullName(fixture.fullName())
+                .phoneNumber(fixture.phoneNumber())
+                .dateOfBirth(LocalDate.of(1990, 1, 1))
+                .gender("OTHER")
+                .address("CinePrime demo workspace")
+                .build());
+    }
+
+    private record DemoStaffFixture(
+            StaffProvisioningRole role,
+            String username,
+            String fullName,
+            String phoneNumber) {
     }
 
     private void seedBranchManagerAccount() {

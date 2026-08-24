@@ -233,10 +233,18 @@ export default function AppRoutes() {
         <Route path="/employee" element={<AdminLayout />}>
           <Route index element={<EmployeeDashboardPage />} />
           <Route path="profile" element={<AdminProfilePage />} />
-          <Route path="sell" element={<TicketSalePage />} />
-          <Route path="bookings" element={<ManageBookingPage />} />
-          <Route path="concessions/fulfillment" element={<ConcessionFulfillmentPage />} />
-          <Route path="workforce" element={<MyWorkforcePage />} />
+          <Route element={<ProtectedRoute allowedPermissions={["TICKET_SELL"]} />}>
+            <Route path="sell" element={<TicketSalePage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["BOOKING_READ"]} />}>
+            <Route path="bookings" element={<ManageBookingPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["CONCESSION_FULFILLMENT_READ"]} />}>
+            <Route path="concessions/fulfillment" element={<ConcessionFulfillmentPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedPermissions={["WORKFORCE_SELF_READ"]} />}>
+            <Route path="workforce" element={<MyWorkforcePage />} />
+          </Route>
         </Route>
       </Route>
     </Routes>

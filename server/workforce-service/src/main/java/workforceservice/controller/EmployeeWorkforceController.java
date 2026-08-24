@@ -13,7 +13,7 @@ import java.time.YearMonth;
 import java.util.List;
 
 @RestController @RequestMapping("/api/workforce/me") @RequiredArgsConstructor
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','WORKFORCE_SELF_READ')")
+@PreAuthorize("hasAuthority('WORKFORCE_SELF_READ')")
 public class EmployeeWorkforceController {
     private final WorkforceApplicationService service;
 
@@ -24,7 +24,7 @@ public class EmployeeWorkforceController {
     }
 
     @PostMapping("/shifts/{shiftId}/clock-in")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','ATTENDANCE_CLOCK')")
+    @PreAuthorize("hasAuthority('ATTENDANCE_CLOCK')")
     public ApiResponse<PunchResponse> clockIn(@PathVariable String shiftId,
                                               @RequestHeader("Idempotency-Key") String key,
                                               @Valid @RequestBody(required=false) PunchRequest request) {
@@ -32,7 +32,7 @@ public class EmployeeWorkforceController {
     }
 
     @PostMapping("/shifts/{shiftId}/clock-out")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','ATTENDANCE_CLOCK')")
+    @PreAuthorize("hasAuthority('ATTENDANCE_CLOCK')")
     public ApiResponse<PunchResponse> clockOut(@PathVariable String shiftId,
                                                @RequestHeader("Idempotency-Key") String key,
                                                @Valid @RequestBody(required=false) PunchRequest request) {
@@ -50,7 +50,7 @@ public class EmployeeWorkforceController {
     }
 
     @PostMapping("/timesheets/{timesheetId}/submit")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','TIMESHEET_SUBMIT')")
+    @PreAuthorize("hasAuthority('TIMESHEET_SUBMIT')")
     public ApiResponse<TimesheetResponse> submit(@PathVariable String timesheetId) {
         return ApiResponse.<TimesheetResponse>builder().message("Timesheet submitted for review.").result(service.submitTimesheet(timesheetId)).build();
     }
@@ -59,7 +59,7 @@ public class EmployeeWorkforceController {
     public ApiResponse<List<SwapResponse>> swaps() { return ApiResponse.<List<SwapResponse>>builder().result(service.mySwaps()).build(); }
 
     @PostMapping("/shift-swaps")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','WORKFORCE_REQUEST')")
+    @PreAuthorize("hasAuthority('WORKFORCE_REQUEST')")
     public ApiResponse<SwapResponse> createSwap(@Valid @RequestBody CreateSwapRequest request) {
         return ApiResponse.<SwapResponse>builder().message("Shift swap submitted.").result(service.createSwap(request)).build();
     }
@@ -68,7 +68,7 @@ public class EmployeeWorkforceController {
     public ApiResponse<List<LeaveResponse>> leaves() { return ApiResponse.<List<LeaveResponse>>builder().result(service.myLeaves()).build(); }
 
     @PostMapping("/leave-requests")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_SUPER_ADMIN','WORKFORCE_REQUEST')")
+    @PreAuthorize("hasAuthority('WORKFORCE_REQUEST')")
     public ApiResponse<LeaveResponse> createLeave(@Valid @RequestBody CreateLeaveRequest request) {
         return ApiResponse.<LeaveResponse>builder().message("Leave request submitted.").result(service.createLeave(request)).build();
     }
