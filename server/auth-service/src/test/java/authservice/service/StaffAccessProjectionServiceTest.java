@@ -106,6 +106,53 @@ class StaffAccessProjectionServiceTest {
         assertThat(authorization.cinemaClusterIds()).isEmpty();
     }
 
+    @Test
+    void employeeV2ProjectionDerivesCapabilitiesFromAccessProfile() {
+        when(repository.findByAccountIdForUpdate("account-1")).thenReturn(Optional.empty());
+
+        assertThat(service.project(employeeEvent("event-8", "2", "BOX_OFFICE", 8)))
+                .isEqualTo(StaffAccessProjectionService.ProjectionResult.PROJECTED);
+
+        ArgumentCaptor<StaffAccessProjection> captor = ArgumentCaptor.forClass(StaffAccessProjection.class);
+        verify(repository).save(captor.capture());
+        StaffAccessProjection projection = captor.getValue();
+        when(repository.findById("account-1")).thenReturn(Optional.of(projection));
+
+        Account employee = Account.builder()
+                .accountId("account-1")
+                .roles(Set.of(Role.builder().roleName("EMPLOYEE").build()))
+                .build();
+        var authorization = service.resolve(employee);
+
+        assertThat(authorization.authorized()).isTrue();
+        assertThat(authorization.accessProfile()).isEqualTo("BOX_OFFICE");
+        assertThat(authorization.effectivePermissions())
+                .contains("WORKFORCE_SELF_READ", "TICKET_SELL", "BOOKING_READ")
+                .doesNotContain("CONCESSION_FULFILLMENT_READ");
+    }
+
+    @Test
+    void legacyEmployeeEventFailsClosedToSelfServiceCapabilities() {
+        when(repository.findByAccountIdForUpdate("account-1")).thenReturn(Optional.empty());
+        service.project(employeeEvent("event-legacy", "1", null, 3));
+
+        ArgumentCaptor<StaffAccessProjection> captor = ArgumentCaptor.forClass(StaffAccessProjection.class);
+        verify(repository).save(captor.capture());
+        StaffAccessProjection projection = captor.getValue();
+        when(repository.findById("account-1")).thenReturn(Optional.of(projection));
+        Account employee = Account.builder()
+                .accountId("account-1")
+                .roles(Set.of(Role.builder().roleName("EMPLOYEE").build()))
+                .build();
+
+        var authorization = service.resolve(employee);
+
+        assertThat(authorization.accessProfile()).isEqualTo("UNASSIGNED");
+        assertThat(authorization.effectivePermissions())
+                .containsExactlyInAnyOrder(
+                        "WORKFORCE_SELF_READ", "ATTENDANCE_CLOCK", "TIMESHEET_SUBMIT", "WORKFORCE_REQUEST");
+    }
+
     private String event(String eventId, String eventType, long assignmentVersion, String status, String... clusterIds) {
         try {
             return objectMapper.writeValueAsString(java.util.Map.of(
@@ -121,6 +168,30 @@ class StaffAccessProjectionServiceTest {
                             "assignmentStatus", status,
                             "cinemaClusterIds", java.util.List.of(clusterIds),
                             "assignmentVersion", assignmentVersion)));
+        } catch (Exception exception) {
+            throw new AssertionError(exception);
+        }
+    }
+
+    private String employeeEvent(String eventId, String eventVersion, String accessProfile, long assignmentVersion) {
+        try {
+            java.util.Map<String, Object> payload = new java.util.HashMap<>();
+            payload.put("accountId", "account-1");
+            payload.put("accountRole", "EMPLOYEE");
+            if (accessProfile != null) {
+                payload.put("accessProfile", accessProfile);
+            }
+            payload.put("assignmentStatus", "ACTIVE");
+            payload.put("cinemaClusterIds", java.util.List.of("81"));
+            payload.put("assignmentVersion", assignmentVersion);
+            return objectMapper.writeValueAsString(java.util.Map.of(
+                    "eventId", eventId,
+                    "eventType", "STAFF_ACCESS_UPDATED",
+                    "eventVersion", eventVersion,
+                    "occurredAt", "2026-08-18T10:00:00Z",
+                    "correlationId", "correlation-1",
+                    "producer", "user-service",
+                    "payload", payload));
         } catch (Exception exception) {
             throw new AssertionError(exception);
         }

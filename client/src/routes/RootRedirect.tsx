@@ -1,5 +1,4 @@
 import { Navigate } from "react-router-dom";
-import HomePage from "../pages/customer/HomePage";
 import { defaultPathForRole } from "../utils/roleRoutes";
 
 export default function RootRedirect() {
@@ -10,5 +9,5 @@ export default function RootRedirect() {
     return <Navigate to={defaultPathForRole(role)} replace />;
   }
 
-  return <HomePage />;
+  return <Navigate to="/home" replace />;
 }

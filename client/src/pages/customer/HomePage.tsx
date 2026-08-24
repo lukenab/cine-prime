@@ -8,7 +8,7 @@ import { OffersTeaser } from "../../components/shared/OffersTeaser";
 import { UpcomingEvents } from "../../components/shared/UpcomingEvents";
 import { CinemaLocations } from "../../components/shared/CinemaLocations";
 import { ExperienceBanner } from "../../components/shared/ExperienceBanner";
-import { Testimonials } from "../../components/shared/Testimonials";
+import { AboutCinePrime } from "../../components/shared/AboutCinePrime";
 
 export default function HomePage() {
   const [movies, setMovies] = useState<MovieApiResponse[]>([]);
@@ -46,7 +46,7 @@ export default function HomePage() {
       <UpcomingEvents />
       <CinemaLocations />
       <ExperienceBanner />
-      <Testimonials />
+      <AboutCinePrime />
     </>
   );
 }

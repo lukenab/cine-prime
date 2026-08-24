@@ -81,6 +81,11 @@ app:
     email: ${BRANCH_MANAGER_EMAIL:branch.manager@cineprime.vn}
   seed:
     sync-account-passwords: ${SEED_ACCOUNT_PASSWORDS:true}
+  demo-staff:
+    enabled: ${DEMO_STAFF_ACCOUNTS_ENABLED:false}
+    password: ${DEMO_STAFF_PASSWORD:}
+    branch-cluster-id: ${DEMO_STAFF_BRANCH_CLUSTER_ID:43}
+    publish-profiles: ${DEMO_STAFF_PUBLISH_PROFILES:true}
   frontend-url: ${FRONTEND_URL:http://localhost:3000}
 
 auth:

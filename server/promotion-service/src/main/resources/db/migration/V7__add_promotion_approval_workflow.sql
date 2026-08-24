@@ -14,12 +14,14 @@ ALTER TABLE promotion
     ADD COLUMN IF NOT EXISTS approved_by_account_id VARCHAR(50),
     ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;
 
+ALTER TABLE promotion_audit_log
+    DROP CONSTRAINT IF EXISTS chk_promotion_audit_action;
+
+-- The legacy constraint only accepts RETIRED, so remove it before replacing
+-- existing values with the new ARCHIVED lifecycle term.
 UPDATE promotion_audit_log
 SET action = 'ARCHIVED'
 WHERE action = 'RETIRED';
-
-ALTER TABLE promotion_audit_log
-    DROP CONSTRAINT IF EXISTS chk_promotion_audit_action;
 
 ALTER TABLE promotion_audit_log
     ADD CONSTRAINT chk_promotion_audit_action

@@ -33,7 +33,7 @@ public class EmployeeInvitationRequest {
     @Pattern(regexp = "^(0|\\+84)[0-9]{9,10}$", message = "Invalid phone number format")
     private String phoneNumber;
 
-    @Size(max = 36, message = "Cinema ID must be at most 36 characters")
+    @Pattern(regexp = "^[1-9][0-9]*$", message = "Cinema ID must be the canonical numeric cluster ID")
     private String cinemaId;
 
     @NotNull(message = "Primary work area is required")
@@ -91,11 +91,23 @@ public class EmployeeInvitationRequest {
             case BRANCH_MANAGER -> department == EmployeeDepartment.GENERAL_OPERATIONS
                     && position == EmployeePosition.CINEMA_MANAGER
                     && cinemaId != null && !cinemaId.isBlank();
-            case EMPLOYEE -> department != EmployeeDepartment.CONTENT_PROGRAMMING
-                    && position != EmployeePosition.PROGRAMMING_OPERATOR
-                    && position != EmployeePosition.CINEMA_MANAGER
+            case EMPLOYEE -> isFrontlineAssignment()
                     && cinemaId != null && !cinemaId.isBlank();
         };
+    }
+
+    private boolean isFrontlineAssignment() {
+        boolean frontlineDepartment = switch (department) {
+            case GENERAL_OPERATIONS, BOX_OFFICE, FOOD_BEVERAGE, FLOOR_GUEST_SERVICES,
+                    PROJECTION_TECHNICAL, FACILITIES_MAINTENANCE,
+                    CONCESSION, FLOOR, PROJECTION, CUSTOMER_SERVICE, MANAGEMENT -> true;
+            default -> false;
+        };
+        boolean frontlinePosition = switch (position) {
+            case TEAM_MEMBER, SUPERVISOR, ASSISTANT_MANAGER, STAFF, MANAGER -> true;
+            default -> false;
+        };
+        return frontlineDepartment && frontlinePosition;
     }
 
     private boolean isHeadOfficeRole(StaffAccessRole role) {

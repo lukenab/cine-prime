@@ -6,6 +6,8 @@
 
 ---
 
+> Phân quyền nghiệp vụ tuyến đầu (`BOX_OFFICE`, `FOOD_BEVERAGE`, guest services) và cách đồng bộ `Access Profile` sang Auth được mô tả tại [FRONTLINE_CAPABILITY_ACCESS.md](../security/FRONTLINE_CAPABILITY_ACCESS.md). Workforce tiếp tục dùng Staff Access Projection và Cluster Scope, không gọi đồng bộ sang User trong request path.
+
 ## 1. Mục đích
 
 Tài liệu này mô tả phần Workforce Management đã triển khai trong P0 và P1, bao gồm:
@@ -592,6 +594,7 @@ Payload tối thiểu:
 {
   "accountId": "employee-account-id",
   "accountRole": "EMPLOYEE",
+  "accessProfile": "BOX_OFFICE",
   "assignmentStatus": "ACTIVE",
   "cinemaClusterIds": ["45"],
   "assignmentVersion": 3

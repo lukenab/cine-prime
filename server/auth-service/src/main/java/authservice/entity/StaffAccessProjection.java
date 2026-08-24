@@ -9,6 +9,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
@@ -30,6 +31,11 @@ public class StaffAccessProjection {
 
     @Column(name = "account_role", length = 40, nullable = false)
     private String accountRole;
+
+    @Column(name = "access_profile", length = 50, nullable = false)
+    @ColumnDefault("'UNASSIGNED'")
+    @Builder.Default
+    private String accessProfile = "UNASSIGNED";
 
     @Column(name = "assignment_active", nullable = false)
     private boolean assignmentActive;

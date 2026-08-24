@@ -114,6 +114,11 @@ services:
       BRANCH_MANAGER_PASSWORD: ${BRANCH_MANAGER_PASSWORD:-BranchManager@123}
       BRANCH_MANAGER_EMAIL: ${BRANCH_MANAGER_EMAIL:-branch.manager@cineprime.vn}
       SEED_ACCOUNT_PASSWORDS: ${SEED_ACCOUNT_PASSWORDS:-true}
+      # Local QA personas only. Keep disabled in production deployments.
+      DEMO_STAFF_ACCOUNTS_ENABLED: ${DEMO_STAFF_ACCOUNTS_ENABLED:-false}
+      DEMO_STAFF_PASSWORD: ${DEMO_STAFF_PASSWORD:-}
+      DEMO_STAFF_BRANCH_CLUSTER_ID: ${DEMO_STAFF_BRANCH_CLUSTER_ID:-43}
+      DEMO_STAFF_PUBLISH_PROFILES: ${DEMO_STAFF_PUBLISH_PROFILES:-true}
     depends_on:
       postgres:
         condition: service_healthy

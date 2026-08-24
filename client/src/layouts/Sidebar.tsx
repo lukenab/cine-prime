@@ -4,6 +4,7 @@ import { LayoutDashboard, Film, Tags, Calendar, CalendarClock, Ticket, UserCog, 
 import { useNavigate, useLocation } from "react-router-dom";
 import { OrbitaLogo } from "../components/shared/OrbitaLogo";
 import { movieApi } from "../api/movieApi";
+import { isPathInRoleWorkspace } from "../utils/adminWorkspaces";
 
 type NavChild = { icon: React.ElementType; label: string; path: string; roles?: string[]; permissions?: string[] };
 type NavItem = {
@@ -57,10 +58,10 @@ const adminNavItems: NavItem[] = [
 
 const employeeNavItems: NavItem[] = [
   { icon: LayoutDashboard, label: "Workspace", id: "dashboard", path: "/employee", group: "main", roles: ["ROLE_EMPLOYEE"] },
-  { icon: CalendarClock, label: "My Schedule & Time", id: "workforce", path: "/employee/workforce", group: "ops", permissions: ["WORKFORCE_SELF_READ"] },
-  { icon: ShoppingCart, label: "Sell Tickets", id: "sell", path: "/employee/sell", group: "ops", roles: ["ROLE_EMPLOYEE"] },
-  { icon: Ticket, label: "Bookings", id: "bookings", path: "/employee/bookings", group: "ops", roles: ["ROLE_EMPLOYEE"] },
-  { icon: Popcorn, label: "Concession Fulfillment", id: "concessions", path: "/employee/concessions/fulfillment", group: "ops", roles: ["ROLE_EMPLOYEE"] },
+  { icon: CalendarClock, label: "My Schedule & Time", id: "workforce", path: "/employee/workforce", group: "my-work", permissions: ["WORKFORCE_SELF_READ"] },
+  { icon: ShoppingCart, label: "Ticket Sales", id: "sell", path: "/employee/sell", group: "customer-operations", permissions: ["TICKET_SELL"] },
+  { icon: Ticket, label: "Booking Lookup", id: "bookings", path: "/employee/bookings", group: "customer-operations", permissions: ["BOOKING_READ"] },
+  { icon: Popcorn, label: "Order Fulfillment", id: "concessions", path: "/employee/concessions/fulfillment", group: "food-beverage", permissions: ["CONCESSION_FULFILLMENT_READ"] },
 ];
 
 /**
@@ -91,13 +92,12 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
   const { user } = useAuth();
   const userRoles = user?.roles ?? [];
   const userPermissions = user?.permissions ?? [];
-  const isLegacyAdministrator = userRoles.some((item) => item === "ROLE_ADMIN" || item === "ROLE_SUPER_ADMIN");
   const isProgrammingOperator = userRoles.some((item) => item === "ROLE_PROGRAMMING_OPERATOR" || item === "ROLE_PROGRAMMING_APPROVER");
   const visibleNavItems = user?.role === "ROLE_EMPLOYEE"
     ? employeeNavItems
     : isProgrammingOperator
       ? programmingNavItems
-      : adminNavItems;
+      : adminNavItems.filter((item) => isPathInRoleWorkspace(user?.role, item.path));
 
   // Auto-expand items whose children match the current path
   const autoExpanded = visibleNavItems
@@ -132,6 +132,9 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
     reference: { label: "Reference Data" },
     "programming-workflow": { label: "Film Programming" },
     "programming-reference": { label: "Reference Data" },
+    "my-work": { label: "My Work" },
+    "customer-operations": { label: "Customer Operations" },
+    "food-beverage": { label: "Food & Beverage" },
   };
 
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -147,7 +150,7 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
   const isAllowed = ({ roles, permissions }: { roles?: string[]; permissions?: string[] }) => {
     const roleAllowed = !roles || roles.some((allowed) => userRoles.includes(allowed));
     const permissionAllowed = !permissions || permissions.some((allowed) => userPermissions.includes(allowed));
-    return isLegacyAdministrator || (roleAllowed && permissionAllowed);
+    return roleAllowed && permissionAllowed;
   };
   const filteredNavItems = visibleNavItems.filter(isAllowed);
   const sections: { group: string; items: NavItem[] }[] = [];

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { X } from "lucide-react";
 import { userApi } from "../../api/userApi";
 import { useAuth } from "../../context/AuthContext";
+import { defaultPathForRole } from "../../utils/roleRoutes";
 import CinePrimeBrand from "../../components/shared/CinePrimeBrand";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -245,9 +246,7 @@ export default function CompleteProfilePage({ onClose, onDone, checkoutMode = fa
       if (onDone) onDone();
       else {
         const requested = (location.state as { returnTo?: string } | null)?.returnTo;
-        const fallback = user.role === "ROLE_MEMBER" ? "/home"
-          : user.role === "ROLE_EMPLOYEE" ? "/employee"
-          : user.role === "ROLE_BRANCH_MANAGER" ? "/admin/concessions/catalog" : "/admin/movies";
+        const fallback = defaultPathForRole(user.role);
         navigate(requested?.startsWith("/") && !requested.startsWith("//") ? requested : fallback, { replace: true });
       }
     } catch (err: any) {

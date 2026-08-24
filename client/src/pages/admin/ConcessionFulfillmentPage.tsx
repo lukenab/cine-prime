@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { concessionApi, type ConcessionOrder } from "../../api/concessionApi";
 import { movieApi, type ClusterResponse } from "../../api/movieApi";
+import { useAuth } from "../../context/AuthContext";
+import { clustersForSession } from "../../utils/clusterScope";
 
 type QueueFilter = "ALL" | ConcessionOrder["status"];
 type TimeFilter = "ALL" | "30_MIN" | "60_MIN" | "TODAY";
@@ -72,6 +74,9 @@ const matchesTimeFilter = (order: ConcessionOrder, filter: TimeFilter) => {
 };
 
 export default function ConcessionFulfillmentPage() {
+  const { user } = useAuth();
+  const clusterScope = user?.clusterIds.join(",") ?? "";
+  const roleScope = user?.roles.join(",") ?? "";
   const [clusters, setClusters] = useState<ClusterResponse[]>([]);
   const [clusterId, setClusterId] = useState<number | null>(null);
   const [orders, setOrders] = useState<ConcessionOrder[]>([]);
@@ -91,8 +96,11 @@ export default function ConcessionFulfillmentPage() {
     setError("");
     try {
       const response = await movieApi.getClusters();
-      const activeClusters = (response.result ?? [])
-        .filter((cluster) => cluster.status === "ACTIVE")
+      const activeClusters = clustersForSession(
+        (response.result ?? []).filter((cluster) => cluster.status === "ACTIVE"),
+        user?.roles,
+        user?.clusterIds,
+      )
         .sort((a, b) => a.clusterName.localeCompare(b.clusterName));
 
       setClusters(activeClusters);
@@ -108,7 +116,7 @@ export default function ConcessionFulfillmentPage() {
       });
 
       if (!activeClusters.length) {
-        setError("No active cinema cluster is available for concession fulfillment.");
+        setError("No authorized cinema is available for order fulfillment. Contact a manager to update the staff assignment.");
       }
     } catch (requestError: any) {
       setClusters([]);
@@ -117,7 +125,7 @@ export default function ConcessionFulfillmentPage() {
     } finally {
       setClustersLoading(false);
     }
-  }, []);
+  }, [clusterScope, roleScope]);
 
   const loadOrders = useCallback(async (mode: "initial" | "manual" | "background" = "initial") => {
     if (!clusterId) return;

@@ -36,8 +36,7 @@ export default function ProtectedRoute({ allowedRoles, allowedPermissions }: Pro
 
   const roleAllowed = !allowedRoles || allowedRoles.some((allowed) => roles.includes(allowed) || role === allowed);
   const permissionAllowed = !allowedPermissions || allowedPermissions.some((allowed) => permissions.includes(allowed));
-  const legacyAdministrator = roles.some((item) => item === "ROLE_ADMIN" || item === "ROLE_SUPER_ADMIN");
-  if (!roleAllowed || (!legacyAdministrator && !permissionAllowed)) {
+  if (!roleAllowed || !permissionAllowed) {
     return <Navigate to="/" replace />;
   }
 
