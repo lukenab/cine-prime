@@ -24,11 +24,13 @@ import promotionservice.enums.DiscountType;
 import promotionservice.enums.PromotionStatus;
 import promotionservice.enums.PromotionTargetType;
 import promotionservice.enums.PromotionBenefitScope;
+import promotionservice.enums.PromotionAvailabilityStatus;
 import promotionservice.repository.PromotionAuditLogRepository;
 import promotionservice.repository.PromotionRepository;
 import promotionservice.validation.PromotionValidator;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -143,6 +145,10 @@ class PromotionAdminServiceTest {
         when(promotionRepository.searchAdmin(PromotionStatus.DRAFT, "summer", pageable))
                 .thenReturn(new PageImpl<>(List.of(promotion), pageable, 1));
         when(promotionRepository.countByStatus()).thenReturn(List.of(draftCount));
+        PromotionRepository.OperationalCounts operational = mock(PromotionRepository.OperationalCounts.class);
+        when(operational.getApprovedOrScheduled()).thenReturn(2L);
+        when(operational.getActiveNow()).thenReturn(3L);
+        when(promotionRepository.countOperational(any())).thenReturn(operational);
 
         var result = service.search(PromotionStatus.DRAFT, " summer ", pageable);
 
@@ -150,7 +156,33 @@ class PromotionAdminServiceTest {
         assertEquals("SUMMER26", result.content().getFirst().code());
         assertEquals(1, result.counts().total());
         assertEquals(1, result.counts().draft());
+        assertEquals(2, result.counts().approvedOrScheduled());
+        assertEquals(3, result.counts().activeNow());
         verifyNoInteractions(auditLogRepository);
+    }
+
+    @Test
+    void detailSeparatesWorkflowFromAvailabilityAndIncludesAuditIdentity() {
+        UUID id = UUID.randomUUID();
+        UUID auditId = UUID.randomUUID();
+        Promotion promotion = draftPromotion();
+        promotion.setPromotionId(id);
+        promotion.setStatus(PromotionStatus.ACTIVE);
+        promotion.setValidFrom(OffsetDateTime.now().plusDays(1));
+        PromotionAuditLog log = new PromotionAuditLog();
+        log.setPromotionAuditLogId(auditId);
+        log.setAction("ACTIVATED");
+        log.setCreatedAt(OffsetDateTime.now());
+        log.setDetail(java.util.Map.of());
+        when(promotionRepository.findById(id)).thenReturn(Optional.of(promotion));
+        when(auditLogRepository.findTop20ByPromotion_PromotionIdOrderByCreatedAtDesc(id))
+                .thenReturn(List.of(log));
+
+        var result = service.get(id);
+
+        assertEquals(PromotionStatus.ACTIVE, result.status());
+        assertEquals(PromotionAvailabilityStatus.SCHEDULED, result.availabilityStatus());
+        assertEquals(auditId, result.auditLog().getFirst().auditLogId());
     }
 
     private Promotion draftPromotion() {

@@ -18,6 +18,7 @@ import promotionservice.entity.PromotionAuditLog;
 import promotionservice.entity.PromotionPriceRule;
 import promotionservice.entity.PromotionTarget;
 import promotionservice.enums.PromotionStatus;
+import promotionservice.enums.PromotionAvailabilityStatus;
 import promotionservice.exception.PromotionErrorCode;
 import promotionservice.repository.PromotionAuditLogRepository;
 import promotionservice.repository.PromotionRepository;
@@ -182,12 +183,16 @@ public class PromotionAdminService {
         long active = count(countsByStatus, PromotionStatus.ACTIVE);
         long paused = count(countsByStatus, PromotionStatus.PAUSED);
         long archived = count(countsByStatus, PromotionStatus.ARCHIVED);
+        PromotionRepository.OperationalCounts operational = promotionRepository.countOperational(OffsetDateTime.now());
+        long approvedOrScheduled = operational == null ? 0 : operational.getApprovedOrScheduled();
+        long activeNow = operational == null ? 0 : operational.getActiveNow();
 
         return new PromotionPageResponse(
                 page.getContent(), page.getTotalElements(), page.getTotalPages(), page.getNumber(), page.getSize(),
                 new PromotionPageResponse.PromotionCounts(
                         draft + pendingApproval + approved + rejected + active + paused + archived,
-                        draft, pendingApproval, approved, rejected, active, paused, archived
+                        draft, pendingApproval, approved, rejected, active, paused, archived,
+                        approvedOrScheduled, activeNow
                 )
         );
     }
@@ -320,13 +325,15 @@ public class PromotionAdminService {
         PromotionPriceRule rule = promotion.getPriceRule();
         List<PromotionResponse.AuditEntry> auditLog = auditLogRepository
                 .findTop20ByPromotion_PromotionIdOrderByCreatedAtDesc(promotion.getPromotionId()).stream()
-                .map(log -> new PromotionResponse.AuditEntry(log.getAction(), log.getActorAccountId(),
+                .map(log -> new PromotionResponse.AuditEntry(log.getPromotionAuditLogId(), log.getAction(), log.getActorAccountId(),
                         log.getCreatedAt(), log.getDetail()))
                 .toList();
         return new PromotionResponse(
                 promotion.getPromotionId(), promotion.getCode(), promotion.getName(), promotion.getDescription(),
-                promotion.getStatus(), promotion.getBenefitScope(), promotion.getValidFrom(), promotion.getValidUntil(),
+                promotion.getStatus(), availabilityStatus(promotion, OffsetDateTime.now()),
+                promotion.getBenefitScope(), promotion.getValidFrom(), promotion.getValidUntil(),
                 promotion.getGlobalUsageLimit(), promotion.getPerAccountUsageLimit(), promotion.getVersion(),
+                promotion.getCreatedAt(), promotion.getUpdatedAt(),
                 promotion.getActiveReservationCount(), promotion.getCommittedUsageCount(),
                 new PromotionResponse.Workflow(
                         promotion.getCreatedByAccountId(), promotion.getSubmittedByAccountId(),
@@ -346,12 +353,38 @@ public class PromotionAdminService {
         PromotionPriceRule rule = promotion.getPriceRule();
         return new PromotionSummaryResponse(
                 promotion.getPromotionId(), promotion.getCode(), promotion.getName(), promotion.getStatus(),
+                availabilityStatus(promotion, OffsetDateTime.now()),
                 promotion.getBenefitScope(), promotion.getValidFrom(), promotion.getValidUntil(),
-                promotion.getActiveReservationCount(),
+                promotion.getActiveReservationCount(), promotion.getCommittedUsageCount(),
+                promotion.getGlobalUsageLimit(),
                 new PromotionSummaryResponse.PriceRuleSummary(
                         rule.getDiscountType(), rule.getPercentage(), rule.getFixedAmount(),
                         rule.getMinimumOrderAmount(), rule.getCurrency())
         );
+    }
+
+    private PromotionAvailabilityStatus availabilityStatus(Promotion promotion, OffsetDateTime now) {
+        if (promotion.getStatus() == PromotionStatus.ARCHIVED) {
+            return PromotionAvailabilityStatus.ARCHIVED;
+        }
+        if (promotion.getStatus() == PromotionStatus.PAUSED) {
+            return PromotionAvailabilityStatus.PAUSED;
+        }
+        if (promotion.getStatus() != PromotionStatus.ACTIVE) {
+            return PromotionAvailabilityStatus.NOT_AVAILABLE;
+        }
+        if (promotion.getValidFrom() != null && promotion.getValidFrom().isAfter(now)) {
+            return PromotionAvailabilityStatus.SCHEDULED;
+        }
+        if (promotion.getValidUntil() != null && !promotion.getValidUntil().isAfter(now)) {
+            return PromotionAvailabilityStatus.ENDED;
+        }
+        if (promotion.getGlobalUsageLimit() != null
+                && promotion.getActiveReservationCount() + promotion.getCommittedUsageCount()
+                >= promotion.getGlobalUsageLimit()) {
+            return PromotionAvailabilityStatus.QUOTA_EXHAUSTED;
+        }
+        return PromotionAvailabilityStatus.ACTIVE;
     }
 
     private String normalize(String code) {

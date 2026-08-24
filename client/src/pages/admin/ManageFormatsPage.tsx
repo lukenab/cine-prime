@@ -3,6 +3,7 @@ import { Plus, Search, RefreshCw, AlertCircle, Monitor, Pencil, Trash2, X } from
 import { movieApi, type ScreeningFormatResponse, type ScreeningFormatRequest } from "../../api/movieApi";
 import { useRole } from "../../hooks/useRole";
 import { getApiErrorMessage, notify } from "../../lib/notifications";
+import { RowActions, type RowAction } from "../../components/admin/RowActions";
 
 // ── Format code palette ────────────────────────────────────────────────────────
 
@@ -274,7 +275,7 @@ export default function ManageFormatsPage() {
           <thead>
             <tr className="border-b" style={{ borderColor: "var(--border-color)", backgroundColor: "rgba(128,128,128,0.04)" }}>
               {["Code", "Name", "Description", "Status", ...(isAdmin ? ["Actions"] : [])].map((h) => (
-                <th key={h} className="px-5 py-3.5 text-left">
+                <th key={h} className={`px-5 py-3.5 ${h === "Actions" ? "w-[72px] text-right" : "text-left"}`}>
                   <span style={{ color: "var(--text-sub)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>{h}</span>
                 </th>
               ))}
@@ -306,15 +307,11 @@ export default function ManageFormatsPage() {
                         {f.status ?? "ACTIVE"}
                       </span>
                     </td>
-                    {isAdmin && <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => openEdit(f)} className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-colors" style={{ fontSize: "13px", color: "var(--text-sub)", borderColor: "var(--border-color)" }}>
-                          <Pencil size={14} /> Edit
-                        </button>
-                        <button onClick={() => setDeleteTarget(f)} className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600 transition-colors" style={{ fontSize: "13px", color: "var(--text-sub)", borderColor: "var(--border-color)" }}>
-                          <Trash2 size={14} /> Delete
-                        </button>
-                      </div>
+                    {isAdmin && <td className="w-[72px] px-5 py-3.5 text-right">
+                      <RowActions ariaLabel={`Actions for format ${f.formatName}`} actions={[
+                        { key: "edit", label: "Edit format", icon: Pencil, onSelect: () => openEdit(f) },
+                        { key: "delete", label: "Delete format", icon: Trash2, onSelect: () => setDeleteTarget(f), destructive: true, separatorBefore: true },
+                      ] satisfies RowAction[]} />
                     </td>}
                   </tr>
                 );

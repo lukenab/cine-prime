@@ -3,6 +3,7 @@ import {
   Eye, Pencil, Archive, ChevronLeft, ChevronRight, Clapperboard, Clock,
   SendHorizonal, ClipboardCheck, RotateCcw, AlertCircle, CalendarClock,
 } from "lucide-react";
+import { RowActions, type RowAction } from "../components/admin/RowActions";
 import type { MovieApiResponse } from "../api/movieApi";
 import { formatDisplayDate } from "../api/movieApi";
 import { useRole } from "../hooks/useRole";
@@ -70,16 +71,6 @@ function ConfirmModal({
 }
 
 /* ── Icon action button ─────────────────────────────────────────────────── */
-function ActionBtn({ icon: Icon, title, onClick, color = "var(--text-sub)" }: {
-  icon: React.ElementType; title: string; onClick: () => void; color?: string;
-}) {
-  return (
-    <button onClick={onClick} title={title} className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors action-btn flex-shrink-0" style={{ color }}>
-      <Icon size={16} />
-    </button>
-  );
-}
-
 /* ── Status-based action buttons ────────────────────────────────────────── */
 function MovieActions({
   movie, onView, onEdit, onDelete, onSubmit,
@@ -92,34 +83,18 @@ function MovieActions({
 }) {
   const { can } = useRole();
   const status = toMovieContentStatus(movie.movieStatus);
+  const actions: RowAction[] = [
+    { key: "view", label: "View details", icon: Eye, onSelect: onView },
+    { key: "submit", label: "Submit for review", icon: SendHorizonal, onSelect: onSubmit, hidden: status !== "DRAFT" || !can.submit, separatorBefore: true },
+    { key: "edit", label: "Edit movie", icon: Pencil, onSelect: onEdit, hidden: status !== "DRAFT" || !can.edit },
+    { key: "review", label: "Review submission", icon: ClipboardCheck, onSelect: onReviewClick, hidden: status !== "PENDING_REVIEW" || (!can.approve && !can.requestChanges), separatorBefore: true },
+    { key: "availability", label: "Manage availability", icon: CalendarClock, onSelect: onManageAvailability, hidden: status !== "APPROVED", separatorBefore: true },
+    { key: "revise", label: "Start revision", icon: RotateCcw, onSelect: onRework, hidden: status !== "CHANGES_REQUESTED" || !can.startRevision, separatorBefore: true },
+    { key: "archive", label: "Archive movie", icon: Archive, onSelect: onDelete, hidden: status !== "APPROVED" || !can.archive, destructive: true, separatorBefore: true },
+  ];
 
   return (
-    <div className="flex items-center justify-end gap-0.5">
-      {/* Always: View */}
-      <ActionBtn icon={Eye} title="View details" onClick={onView} />
-
-      {status === "DRAFT" && <>
-        {can.submit  && <ActionBtn icon={SendHorizonal} title="Submit for review" onClick={onSubmit} color="#2563eb" />}
-        {can.edit    && <ActionBtn icon={Pencil}        title="Edit"              onClick={onEdit} />}
-      </>}
-
-      {status === "PENDING_REVIEW" && <>
-        {(can.approve || can.requestChanges) &&
-          <ActionBtn icon={ClipboardCheck} title="Review submission" onClick={onReviewClick} color="#2563eb" />}
-        {/* Employee sees only View while waiting for admin review */}
-      </>}
-
-      {status === "APPROVED" && <>
-        <ActionBtn icon={CalendarClock} title="Manage availability" onClick={onManageAvailability} color="#2563eb" />
-        {can.archive && <ActionBtn icon={Archive} title="Archive movie" onClick={onDelete} color="#d97706" />}
-      </>}
-
-      {status === "CHANGES_REQUESTED" && <>
-        {can.startRevision && <ActionBtn icon={RotateCcw} title="Start revision" onClick={onRework} color="#2563eb" />}
-      </>}
-
-      {/* ARCHIVED: view only */}
-    </div>
+    <RowActions ariaLabel={`Actions for ${movie.movieNameEnglish}`} actions={actions} />
   );
 }
 
@@ -281,7 +256,7 @@ export function MovieTable({
                       </td>
 
                       {/* Actions */}
-                      <td className="px-5 py-3.5">
+                      <td className="w-[72px] px-5 py-3.5 text-right">
                         <MovieActions
                           movie={movie}
                           onView={() => onView(movie)}

@@ -42,6 +42,7 @@ import {
 } from "../../api/concessionApi";
 import { movieApi, type ClusterResponse } from "../../api/movieApi";
 import { ImageWithFallback } from "../../components/figma/ImageWithFallback";
+import { RowActions } from "../../components/admin/RowActions";
 import { useRole } from "../../hooks/useRole";
 import ConcessionPricingWorkspace from "./concession/ConcessionPricingWorkspace";
 
@@ -1269,7 +1270,7 @@ function PricingWorkspace({
               <th className="px-4 py-3 font-semibold">Type</th>
               <th className="px-4 py-3 font-semibold">Price</th>
               <th className="px-4 py-3 font-semibold">Availability</th>
-              <th className="px-5 py-3 text-right font-semibold">Action</th>
+              <th className="w-40 px-5 py-3 text-right font-semibold">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border-color)]">
@@ -1341,16 +1342,19 @@ function PricingRow({
           {available ? "Available" : "Unavailable"}
         </label>
       </td>
-      <td className="px-5 py-3.5 text-right">
-        <button
-          type="button"
-          disabled={!dirty || saving || !item.active || price <= 0}
-          onClick={() => onSave({ price, available })}
-          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-blue-500 transition hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-35"
-        >
-          {saving ? <LoaderCircle size={14} className="animate-spin" /> : <Save size={14} />}
-          {offer ? "Save" : "Configure"}
-        </button>
+      <td className="w-40 px-5 py-3.5 text-right">
+        <RowActions
+          ariaLabel={`Actions for ${item.name}`}
+          busy={saving}
+          primaryAction={{
+            key: "save",
+            label: offer ? "Save" : "Configure",
+            icon: Save,
+            onSelect: () => onSave({ price, available }),
+            disabled: !dirty || !item.active || price <= 0,
+            disabledReason: !item.active ? "The item is inactive" : price <= 0 ? "Enter a valid price" : !dirty ? "No unsaved changes" : undefined,
+          }}
+        />
       </td>
     </tr>
   );
@@ -1395,7 +1399,7 @@ function InventoryWorkspace({
               <th className="px-4 py-3 font-semibold">Reserved</th>
               <th className="px-4 py-3 font-semibold">Available</th>
               <th className="px-4 py-3 font-semibold">Stock status</th>
-              <th className="px-5 py-3 text-right font-semibold">Action</th>
+              <th className="w-40 px-5 py-3 text-right font-semibold">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border-color)]">
@@ -1420,10 +1424,11 @@ function InventoryWorkspace({
                   <td className="px-4 py-3.5 text-sm text-[var(--text-sub)]">{reserved}</td>
                   <td className="px-4 py-3.5 text-sm font-semibold text-[var(--text-main)]">{available}</td>
                   <td className="px-4 py-3.5"><StockBadge available={available} /></td>
-                  <td className="px-5 py-3.5 text-right">
-                    <button type="button" onClick={() => onAdjust(sku)} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-blue-500 transition hover:bg-blue-500/10">
-                      <Edit3 size={14} /> Adjust stock
-                    </button>
+                  <td className="w-40 px-5 py-3.5 text-right">
+                    <RowActions
+                      ariaLabel={`Actions for ${sku.productName}`}
+                      primaryAction={{ key: "adjust", label: "Adjust stock", icon: Edit3, onSelect: () => onAdjust(sku) }}
+                    />
                   </td>
                 </tr>
               );

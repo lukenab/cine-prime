@@ -2,6 +2,7 @@ package promotionservice.dto.response;
 
 import promotionservice.enums.DiscountType;
 import promotionservice.enums.PromotionBenefitScope;
+import promotionservice.enums.PromotionAvailabilityStatus;
 import promotionservice.enums.PromotionStatus;
 
 import java.math.BigDecimal;
@@ -14,10 +15,13 @@ public record PromotionSummaryResponse(
         String code,
         String name,
         PromotionStatus status,
+        PromotionAvailabilityStatus availabilityStatus,
         PromotionBenefitScope benefitScope,
         OffsetDateTime validFrom,
         OffsetDateTime validUntil,
         int activeReservationCount,
+        int committedUsageCount,
+        Integer globalUsageLimit,
         PriceRuleSummary priceRule
 ) {
     public record PriceRuleSummary(

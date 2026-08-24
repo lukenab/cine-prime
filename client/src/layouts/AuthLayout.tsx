@@ -1,5 +1,5 @@
-import { Outlet, Link } from "react-router-dom";
-import { Film } from "lucide-react";
+import { Outlet } from "react-router-dom";
+import CinePrimeBrand from "../components/shared/CinePrimeBrand";
 
 // Lớp film grain dựng bằng SVG noise — không phụ thuộc ảnh ngoài
 const FILM_GRAIN =
@@ -7,44 +7,12 @@ const FILM_GRAIN =
 
 export function ClickableLogo({ isMobile = false }: { isMobile?: boolean }) {
   return (
-    <Link
+    <CinePrimeBrand
       to="/"
-      style={{
-        textDecoration: "none",
-        display: "flex",
-        alignItems: "center",
-        gap: isMobile ? "8px" : "10px",
-        cursor: "pointer",
-      }}
-    >
-      <div
-        style={{
-          width: isMobile ? "32px" : "36px",
-          height: isMobile ? "32px" : "36px",
-          background: "#3b82f6",
-          borderRadius: "8px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          transition: "transform 0.2s ease",
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
-        onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-      >
-        <Film size={isMobile ? 16 : 20} color="#ffffff" strokeWidth={2.5} />
-      </div>
-      <span
-        style={{
-          color: "#ffffff",
-          fontSize: isMobile ? "18px" : "20px",
-          fontWeight: 800,
-          letterSpacing: "0.06em",
-          fontFamily: "Inter, sans-serif",
-        }}
-      >
-        CINE<span style={{ color: "#3b82f6" }}>PRIME</span>
-      </span>
-    </Link>
+      markSize={isMobile ? 38 : 44}
+      wordmarkSize={isMobile ? "1.1rem" : "1.3rem"}
+      letterSpacing="0.18em"
+    />
   );
 }
 

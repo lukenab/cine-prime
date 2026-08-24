@@ -1,6 +1,7 @@
 import axiosClient from "./api";
 
 export type PromotionStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "ACTIVE" | "PAUSED" | "ARCHIVED";
+export type PromotionAvailabilityStatus = "NOT_AVAILABLE" | "SCHEDULED" | "ACTIVE" | "PAUSED" | "ENDED" | "QUOTA_EXHAUSTED" | "ARCHIVED";
 export type PromotionDiscountType = "PERCENTAGE" | "FIXED_AMOUNT";
 export type PromotionTargetType = "MOVIE" | "SHOWTIME";
 export type PromotionBenefitScope = "TICKETS" | "CONCESSIONS" | "ORDER";
@@ -21,6 +22,7 @@ export interface PromotionTarget {
 }
 
 export interface PromotionAuditEntry {
+  auditLogId?: string | null;
   action: string;
   actorAccountId?: string | null;
   occurredAt: string;
@@ -41,12 +43,15 @@ export interface Promotion {
   name: string;
   description?: string;
   status: PromotionStatus;
+  availabilityStatus: PromotionAvailabilityStatus;
   benefitScope: PromotionBenefitScope;
   validFrom?: string | null;
   validUntil?: string | null;
   globalUsageLimit?: number | null;
   perAccountUsageLimit?: number | null;
   version: number;
+  createdAt?: string | null;
+  updatedAt?: string | null;
   activeReservationCount: number;
   committedUsageCount: number;
   priceRule: PromotionPriceRule;
@@ -60,10 +65,13 @@ export interface PromotionSummary {
   code: string;
   name: string;
   status: PromotionStatus;
+  availabilityStatus: PromotionAvailabilityStatus;
   benefitScope: PromotionBenefitScope;
   validFrom?: string | null;
   validUntil?: string | null;
   activeReservationCount: number;
+  committedUsageCount: number;
+  globalUsageLimit?: number | null;
   priceRule: Pick<PromotionPriceRule, "discountType" | "percentage" | "fixedAmount" | "minimumOrderAmount" | "currency">;
 }
 
@@ -95,6 +103,8 @@ export interface PromotionPage {
     active: number;
     paused: number;
     archived: number;
+    approvedOrScheduled: number;
+    activeNow: number;
   };
 }
 

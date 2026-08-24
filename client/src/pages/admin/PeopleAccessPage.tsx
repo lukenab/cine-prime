@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Building2, CheckCircle2, Clock3, Eye, KeyRound, MailPlus,
-  MoreHorizontal, RefreshCw, RotateCcw, Search, ShieldCheck, UserCheck,
+  RefreshCw, RotateCcw, Search, ShieldCheck, UserCheck,
   SlidersHorizontal, UserRoundCheck, UserRoundX, UsersRound, X,
 } from "lucide-react";
 
@@ -15,7 +15,7 @@ import { Toast } from "../../components/shared/Toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../../components/ui/alert-dialog";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "../../components/ui/dropdown-menu";
+import { RowActions, type RowAction } from "../../components/admin/RowActions";
 import { Input } from "../../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
@@ -389,7 +389,7 @@ function CustomerTable({ rows, loading, navigate, onStatus, onResend, onRevoke }
           <TableHead className={peopleTableHeadClass}>Booking details</TableHead>
           <TableHead className={peopleTableHeadClass}>Member since</TableHead>
           <TableHead className={peopleTableHeadClass}>Last sign-in</TableHead>
-          <TableHead className={`${peopleTableHeadClass} text-right`}>Actions</TableHead>
+          <TableHead className={`${peopleTableHeadClass} w-44 text-right`}>Actions</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -400,11 +400,8 @@ function CustomerTable({ rows, loading, navigate, onStatus, onResend, onRevoke }
             <TableCell className={peopleTableCellClass}>{row.profile?.profileCompleted ? <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-500"><CheckCircle2 size={14} /> Ready</span> : <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-500"><Clock3 size={14} /> Details required</span>}</TableCell>
             <TableCell className={`${peopleTableCellClass} text-sm text-[var(--text-sub)]`}>{formatDate(row.account.createdAt || row.profile?.createdAt)}</TableCell>
             <TableCell className={`${peopleTableCellClass} text-sm text-[var(--text-sub)]`}>{formatDateTime(row.account.lastLoginAt)}</TableCell>
-            <TableCell className={`${peopleTableCellClass} text-right`}>
-              <div className="flex items-center justify-end gap-1.5">
-                <CustomerPrimaryAction row={row} navigate={navigate} onStatus={onStatus} onResend={onResend} />
-                <CustomerActions row={row} onStatus={onStatus} onRevoke={onRevoke} />
-              </div>
+            <TableCell className={`${peopleTableCellClass} w-44 text-right`}>
+              <CustomerRowActions row={row} navigate={navigate} onStatus={onStatus} onResend={onResend} onRevoke={onRevoke} />
             </TableCell>
           </TableRow>
         ))}
@@ -423,7 +420,7 @@ function StaffTable({ rows, loading, navigate, onStatus, onResend, onRevoke }: a
           <TableHead className={peopleTableHeadClass}>Position / work area</TableHead>
           <TableHead className={peopleTableHeadClass}>Account</TableHead>
           <TableHead className={peopleTableHeadClass}>Last login</TableHead>
-          <TableHead className={`${peopleTableHeadClass} text-right`}>Actions</TableHead>
+          <TableHead className={`${peopleTableHeadClass} w-44 text-right`}>Actions</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -434,11 +431,8 @@ function StaffTable({ rows, loading, navigate, onStatus, onResend, onRevoke }: a
             <TableCell className={peopleTableCellClass}><p className="text-sm font-medium text-[var(--text-main)]">{formatEnum(row.employee?.position)}</p><p className="text-xs text-[var(--text-sub)]">{formatEnum(row.employee?.department)}</p></TableCell>
             <TableCell className={peopleTableCellClass}><StatusBadge status={row.account.status === "ACTIVE" ? row.employee?.status || row.account.status : row.account.status} /></TableCell>
             <TableCell className={`${peopleTableCellClass} text-sm text-[var(--text-sub)]`}>{formatDateTime(row.account.lastLoginAt)}</TableCell>
-            <TableCell className={`${peopleTableCellClass} text-right`}>
-              <div className="flex items-center justify-end gap-1.5">
-                <StaffPrimaryAction row={row} navigate={navigate} onStatus={onStatus} onResend={onResend} />
-                <StaffActions row={row} onStatus={onStatus} onRevoke={onRevoke} />
-              </div>
+            <TableCell className={`${peopleTableCellClass} w-44 text-right`}>
+              <StaffRowActions row={row} navigate={navigate} onStatus={onStatus} onResend={onResend} onRevoke={onRevoke} />
             </TableCell>
           </TableRow>
         ))}
@@ -457,7 +451,7 @@ function InvitationTable({ rows, loading, onResend, onCancel }: any) {
           <TableHead className={peopleTableHeadClass}>Branch</TableHead>
           <TableHead className={peopleTableHeadClass}>Sent</TableHead>
           <TableHead className={peopleTableHeadClass}>Status</TableHead>
-          <TableHead className={`${peopleTableHeadClass} text-right`}>Actions</TableHead>
+          <TableHead className={`${peopleTableHeadClass} w-44 text-right`}>Actions</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -470,16 +464,12 @@ function InvitationTable({ rows, loading, onResend, onCancel }: any) {
             <TableCell className={`${peopleTableCellClass} text-sm text-[var(--text-main)]`}>{row.cluster?.clusterName || "Unassigned"}</TableCell>
             <TableCell className={`${peopleTableCellClass} text-sm text-[var(--text-sub)]`}>{formatDate(row.account.createdAt)}</TableCell>
             <TableCell className={peopleTableCellClass}><StatusBadge status="PENDING" /></TableCell>
-            <TableCell className={`${peopleTableCellClass} text-right`}>
-              <div className="flex items-center justify-end gap-1.5">
-                <Button size="sm" variant="ghost" className={primaryActionClass} onClick={() => onResend(row.account.accountId)}><MailPlus /> Resend</Button>
-                <DropdownMenu>
-                <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="size-8 rounded-lg text-[var(--text-sub)] hover:bg-black/5 hover:text-[var(--text-main)] dark:hover:bg-white/10" aria-label="Invitation actions"><MoreHorizontal /></Button></DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem variant="destructive" onClick={() => onCancel(row)}><X /> Cancel invitation</DropdownMenuItem>
-                </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+            <TableCell className={`${peopleTableCellClass} w-44 text-right`}>
+              <RowActions
+                ariaLabel={`Actions for invitation to ${row.account.email}`}
+                primaryAction={{ key: "resend", label: "Resend", icon: MailPlus, onSelect: () => onResend(row.account.accountId) }}
+                actions={[{ key: "cancel", label: "Cancel invitation", icon: X, onSelect: () => onCancel(row), destructive: true }]}
+              />
             </TableCell>
           </TableRow>
         ))}
@@ -488,28 +478,33 @@ function InvitationTable({ rows, loading, onResend, onCancel }: any) {
   );
 }
 
-const primaryActionClass = "h-8 rounded-lg border-0 bg-blue-500/10 px-3 text-blue-600 shadow-none hover:bg-blue-500/20 hover:text-blue-700 focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/20 dark:text-blue-400 dark:hover:text-blue-300 [&_svg]:size-3.5";
-
-function CustomerPrimaryAction({ row, navigate, onStatus, onResend }: any) {
-  if (row.account.status === "PENDING") return <Button size="sm" variant="ghost" className={primaryActionClass} onClick={() => onResend(row.account.accountId)}><MailPlus /> Resend</Button>;
-  if (row.account.status === "INACTIVE") return <Button size="sm" variant="ghost" className={primaryActionClass} onClick={() => onStatus(row, "ACTIVE")}><RotateCcw /> Reactivate</Button>;
-  return <Button size="sm" variant="ghost" className={primaryActionClass} onClick={() => navigate(`/admin/users/${row.account.accountId}`)}><Eye /> View</Button>;
+function CustomerRowActions({ row, navigate, onStatus, onResend, onRevoke }: any) {
+  const actions: RowAction[] = [
+    { key: "view", label: "View details", icon: Eye, onSelect: () => navigate(`/admin/users/${row.account.accountId}`) },
+    { key: "revoke", label: "Sign out all devices", icon: KeyRound, onSelect: () => onRevoke(row) },
+    { key: "suspend", label: "Suspend customer", icon: UserRoundX, onSelect: () => onStatus(row, "INACTIVE"), hidden: row.account.status === "INACTIVE", destructive: true, separatorBefore: true },
+  ];
+  const primaryAction = row.account.status === "PENDING"
+    ? { key: "resend", label: "Resend", icon: MailPlus, onSelect: () => onResend(row.account.accountId) }
+    : row.account.status === "INACTIVE"
+      ? { key: "reactivate", label: "Reactivate", icon: RotateCcw, onSelect: () => onStatus(row, "ACTIVE") }
+      : undefined;
+  return <RowActions ariaLabel={`Actions for ${row.account.email}`} primaryAction={primaryAction} actions={actions} />;
 }
 
-function CustomerActions({ row, onStatus, onRevoke }: any) {
-  return <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="size-8 rounded-lg text-[var(--text-sub)] hover:bg-black/5 hover:text-[var(--text-main)] dark:hover:bg-white/10" aria-label="More customer actions"><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => onRevoke(row)}><KeyRound /> Sign out all devices</DropdownMenuItem>{row.account.status !== "INACTIVE" && <><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onClick={() => onStatus(row, "INACTIVE")}><UserRoundX /> Suspend</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu>;
-}
-
-function StaffPrimaryAction({ row, navigate, onStatus, onResend }: any) {
+function StaffRowActions({ row, navigate, onStatus, onResend, onRevoke }: any) {
   const disabled = row.account.status === "INACTIVE" || row.employee?.status === "DISABLED";
-  if (row.account.status === "PENDING") return <Button size="sm" variant="ghost" className={primaryActionClass} onClick={() => onResend(row.account.accountId)}><MailPlus /> Resend</Button>;
-  if (disabled) return <Button size="sm" variant="ghost" className={primaryActionClass} disabled={!row.employee} onClick={() => onStatus(row, true)}><RotateCcw /> Reactivate</Button>;
-  return <Button size="sm" variant="ghost" className={primaryActionClass} disabled={!row.employee} onClick={() => row.employee && navigate(`/admin/employees/${row.employee.employeeId}`)}><Eye /> View</Button>;
-}
-
-function StaffActions({ row, onStatus, onRevoke }: any) {
-  const disabled = row.account.status === "INACTIVE" || row.employee?.status === "DISABLED";
-  return <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="size-8 rounded-lg text-[var(--text-sub)] hover:bg-black/5 hover:text-[var(--text-main)] dark:hover:bg-white/10" aria-label="More staff actions"><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => onRevoke(row)}><KeyRound /> Sign out all devices</DropdownMenuItem>{!disabled && <><DropdownMenuSeparator /><DropdownMenuItem disabled={!row.employee} variant="destructive" onClick={() => onStatus(row, false)}><UserRoundX /> Suspend</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu>;
+  const actions: RowAction[] = [
+    { key: "view", label: "View details", icon: Eye, onSelect: () => row.employee && navigate(`/admin/employees/${row.employee.employeeId}`), disabled: !row.employee, disabledReason: "Employee profile is unavailable" },
+    { key: "revoke", label: "Sign out all devices", icon: KeyRound, onSelect: () => onRevoke(row) },
+    { key: "suspend", label: "Suspend employee", icon: UserRoundX, onSelect: () => onStatus(row, false), disabled: !row.employee, hidden: disabled, destructive: true, separatorBefore: true },
+  ];
+  const primaryAction = row.account.status === "PENDING"
+    ? { key: "resend", label: "Resend", icon: MailPlus, onSelect: () => onResend(row.account.accountId) }
+    : disabled
+      ? { key: "reactivate", label: "Reactivate", icon: RotateCcw, onSelect: () => onStatus(row, true), disabled: !row.employee, disabledReason: "Employee profile is unavailable" }
+      : undefined;
+  return <RowActions ariaLabel={`Actions for ${row.account.email}`} primaryAction={primaryAction} actions={actions} />;
 }
 
 function LoadingRows({ columns }: { columns: number }) {

@@ -4,6 +4,7 @@ import { useOutletContext } from "react-router-dom";
 import { movieApi, type GenreResponse, type MovieApiResponse, type CreateGenrePayload } from "../../api/movieApi";
 import { useRole } from "../../hooks/useRole";
 import { getApiErrorMessage, notify } from "../../lib/notifications";
+import { RowActions } from "../../components/admin/RowActions";
 
 type StatusFilter = "ALL" | "ACTIVE" | "PENDING_REVIEW";
 
@@ -336,7 +337,7 @@ export default function ManageGenresPage() {
           <thead>
             <tr className="border-b" style={{ borderColor: "var(--border-color)", backgroundColor: "rgba(128,128,128,0.04)" }}>
               {["#", "Genre", "Status", "Movies Using This Genre", "ID", ...(isAdmin ? ["Actions"] : [])].map((h) => (
-                <th key={h} className="px-5 py-3.5 text-left">
+                <th key={h} className={`px-5 py-3.5 ${h === "Actions" ? "w-[140px] text-right" : "text-left"}`}>
                   <span style={{ color: "var(--text-sub)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>{h}</span>
                 </th>
               ))}
@@ -408,18 +409,12 @@ export default function ManageGenresPage() {
                         #{type.genreId}
                       </span>
                     </td>
-                    {isAdmin && <td className="px-5 py-3.5 text-right">
-                      {type.status === "PENDING_REVIEW" && (
-                        <button
-                          onClick={() => handleApprove(type.genreId)}
-                          disabled={approvingId === type.genreId}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-60"
-                          style={{ fontSize: "12px", fontWeight: 500 }}
-                        >
-                          <ShieldCheck size={13} />
-                          {approvingId === type.genreId ? "Approving…" : "Approve"}
-                        </button>
-                      )}
+                    {isAdmin && <td className="w-[140px] px-5 py-3.5 text-right">
+                      <RowActions
+                        ariaLabel={`Actions for genre ${type.genreName}`}
+                        busy={approvingId === type.genreId}
+                        primaryAction={type.status === "PENDING_REVIEW" ? { key: "approve", label: approvingId === type.genreId ? "Approving…" : "Approve", icon: ShieldCheck, onSelect: () => handleApprove(type.genreId) } : undefined}
+                      />
                     </td>}
                   </tr>
                 );

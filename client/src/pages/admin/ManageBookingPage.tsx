@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useOutletContext } from "react-router-dom";
+import { RowActions } from "../../components/admin/RowActions";
 
 import {
   bookingApi,
@@ -228,7 +229,7 @@ export default function ManageBookingPage() {
                   <th>Amount</th>
                   <th>Status</th>
                   <th>Created</th>
-                  <th aria-label="Actions" />
+                  <th className="w-[72px] text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -256,10 +257,8 @@ export default function ManageBookingPage() {
                         </span>
                       </td>
                       <td><span>{formatBookingDateTime(booking.createdAt)}</span></td>
-                      <td>
-                        <button className="booking-admin__icon" onClick={() => setSelected(booking)} aria-label={`View ${booking.bookingCode}`}>
-                          <Eye size={17} />
-                        </button>
+                      <td className="text-right">
+                        <RowActions ariaLabel={`Actions for booking ${booking.bookingCode}`} actions={[{ key: "view", label: "View details", icon: Eye, onSelect: () => setSelected(booking) }]} />
                       </td>
                     </tr>
                   );

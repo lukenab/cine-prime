@@ -12,5 +12,6 @@ public record PromotionPageResponse(
         PromotionCounts counts
 ) {
     public record PromotionCounts(long total, long draft, long pendingApproval, long approved,
-                                  long rejected, long active, long paused, long archived) {}
+                                  long rejected, long active, long paused, long archived,
+                                  long approvedOrScheduled, long activeNow) {}
 }

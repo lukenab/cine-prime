@@ -15,6 +15,7 @@ import { ClusterWizardModal } from "./ClusterWizardModal";
 import { ClusterReviewModal } from "../../layouts/ClusterReviewModal";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog";
 import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
+import { RowActions, type RowAction } from "../../components/admin/RowActions";
 import { toast } from "sonner";
 
 // ── Status config ─────────────────────────────────────────────────────────────
@@ -28,20 +29,6 @@ const STATUS_CONFIG: Record<ClusterStatus, { label: string; icon: React.ElementT
 
 // ── Action button ─────────────────────────────────────────────────────────────
 
-function ActionBtn({ icon: Icon, title, onClick, color = "var(--text-sub)" }: {
-  icon: React.ElementType; title: string; onClick: () => void; color?: string;
-}) {
-  return (
-    <button
-      onClick={onClick} title={title}
-      className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors cluster-action-btn flex-shrink-0"
-      style={{ color }}
-    >
-      <Icon size={16} />
-    </button>
-  );
-}
-
 // ── Status-aware action buttons ───────────────────────────────────────────────
 
 function ClusterActions({
@@ -53,21 +40,19 @@ function ClusterActions({
 }) {
   const { can, isAdmin } = useRole();
   const s = cluster.status;
+  const actions: RowAction[] = [
+    { key: "edit", label: "Edit cinema cluster", icon: Edit2, onSelect: onEdit, hidden: !((s === "DRAFT" && can.edit) || ((s === "ACTIVE" || s === "INACTIVE") && isAdmin)) },
+    { key: "submit", label: "Submit for review", icon: SendHorizonal, onSelect: onSubmit, hidden: s !== "DRAFT" || !can.submit },
+    { key: "delete", label: "Delete draft", icon: Trash2, onSelect: onDelete, hidden: s !== "DRAFT" || !isAdmin, destructive: true, separatorBefore: true },
+  ];
+  const canReview = s === "PENDING_REVIEW" && (can.approve || can.reject);
 
   return (
-    <div className="flex items-center justify-end gap-0.5 opacity-0 cluster-actions transition-opacity">
-      {s === "DRAFT" && <>
-        {can.submit  && <ActionBtn icon={SendHorizonal} title="Submit for review" onClick={onSubmit}  color="#2563eb" />}
-        {can.edit    && <ActionBtn icon={Edit2}         title="Edit"              onClick={onEdit}              />}
-        {isAdmin     && <ActionBtn icon={Trash2}        title="Delete"            onClick={onDelete}  color="#ef4444" />}
-      </>}
-      {s === "PENDING_REVIEW" && <>
-        {(can.approve || can.reject) && <ActionBtn icon={Eye} title="Review" onClick={onReview} color="#2563eb" />}
-      </>}
-      {(s === "ACTIVE" || s === "INACTIVE") && <>
-        {isAdmin && <ActionBtn icon={Edit2}  title="Edit"   onClick={onEdit}   />}
-      </>}
-    </div>
+    <RowActions
+      ariaLabel={`Actions for ${cluster.clusterName}`}
+      primaryAction={canReview ? { key: "review", label: "Review", icon: Eye, onSelect: onReview } : undefined}
+      actions={actions}
+    />
   );
 }
 
@@ -329,8 +314,8 @@ export default function ManageCinemaClusterPage() {
         <table className="w-full">
           <thead>
             <tr className="border-b" style={{ borderColor: "var(--border-color)", backgroundColor: "rgba(128,128,128,0.04)" }}>
-              {["#", "Cluster", "Province", "Address", "Rooms", "Seats", "Status", ""].map((h) => (
-                <th key={h} className="px-5 py-3.5 text-left">
+              {["#", "Cluster", "Province", "Address", "Rooms", "Seats", "Status", "Actions"].map((h) => (
+                <th key={h} className={`px-5 py-3.5 ${h === "Actions" ? "w-[140px] text-right" : "text-left"}`}>
                   <span style={{ color: "var(--text-sub)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>{h}</span>
                 </th>
               ))}
@@ -464,7 +449,7 @@ export default function ManageCinemaClusterPage() {
                         </div>
                       )}
                     </td>
-                    <td className="px-5 py-4" onClick={(e) => e.stopPropagation()}>
+                    <td className="w-[140px] px-5 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                       <ClusterActions
                         cluster={cluster}
                         onEdit={() => { setWizardMode("edit"); setWizardClusterId(cluster.clusterId); setWizardOpen(true); }}

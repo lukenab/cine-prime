@@ -51,6 +51,28 @@ public interface PromotionRepository extends JpaRepository<Promotion, UUID> {
     @Query("select p.status as status, count(p) as total from Promotion p group by p.status")
     List<StatusCount> countByStatus();
 
+    interface OperationalCounts {
+        long getApprovedOrScheduled();
+        long getActiveNow();
+    }
+
+    @Query("""
+            select
+              coalesce(sum(case when (p.status = promotionservice.enums.PromotionStatus.APPROVED
+                                      and (p.validUntil is null or p.validUntil > :now))
+                                   or (p.status = promotionservice.enums.PromotionStatus.ACTIVE
+                                       and p.validFrom is not null and p.validFrom > :now)
+                       then 1 else 0 end), 0) as approvedOrScheduled,
+              coalesce(sum(case when p.status = promotionservice.enums.PromotionStatus.ACTIVE
+                        and (p.validFrom is null or p.validFrom <= :now)
+                        and (p.validUntil is null or p.validUntil > :now)
+                        and (p.globalUsageLimit is null
+                             or (p.activeReservationCount + p.committedUsageCount) < p.globalUsageLimit)
+                       then 1 else 0 end), 0) as activeNow
+            from Promotion p
+            """)
+    OperationalCounts countOperational(@Param("now") java.time.OffsetDateTime now);
+
     @EntityGraph(attributePaths = "priceRule")
     List<Promotion> findByStatusOrderByValidUntilAsc(PromotionStatus status);
 }
