@@ -7,19 +7,16 @@ import {
   CalendarClock,
   Check,
   CheckCircle2,
+  CircleStop,
   Clock3,
   MapPin,
-  MessageSquareWarning,
   Pause,
   Play,
   Plus,
   Search,
   Send,
-  Square,
-  Ticket,
   X,
 } from "lucide-react";
-import { RowActions } from "../components/admin/RowActions";
 import { subscribeLifecycleEvents } from "../api/lifecycleSocket";
 import {
   movieApi,
@@ -33,6 +30,22 @@ import { useRole } from "../hooks/useRole";
 type Props = {
   movieId: number;
 };
+
+type PlanFilter = "CURRENT" | "AWAITING" | "CHANGES" | "APPROVED" | "HISTORY";
+type TerminalPlanAction = "DISCARD" | "CANCEL" | "END_RUN";
+
+function getTerminalPlanAction(status: AvailabilityStatus): TerminalPlanAction {
+  if (status === "OPEN" || status === "SUSPENDED") return "END_RUN";
+  if (status === "APPROVED") return "CANCEL";
+  return "DISCARD";
+}
+
+function getTerminalPlanActionLabel(status: AvailabilityStatus) {
+  const action = getTerminalPlanAction(status);
+  if (action === "END_RUN") return "End run";
+  if (action === "CANCEL") return "Cancel plan";
+  return "Discard plan";
+}
 
 type StatusMeta = {
   label: string;
@@ -51,25 +64,25 @@ const STATUS_META: Record<AvailabilityStatus, StatusMeta> = {
     border: "rgba(37,99,235,0.22)",
   },
   IN_REVIEW: {
-    label: "In review",
-    description: "Awaiting administrator decision",
-    color: "#7c3aed",
-    background: "rgba(124,58,237,0.09)",
-    border: "rgba(124,58,237,0.22)",
+    label: "Awaiting decision",
+    description: "Submitted for independent review",
+    color: "#b45309",
+    background: "rgba(245,158,11,0.12)",
+    border: "rgba(217,119,6,0.28)",
   },
   CHANGES_REQUESTED: {
     label: "Changes requested",
     description: "Update and resubmit the release plan",
-    color: "#d97706",
-    background: "rgba(217,119,6,0.09)",
-    border: "rgba(217,119,6,0.24)",
+    color: "#dc2626",
+    background: "rgba(220,38,38,0.08)",
+    border: "rgba(220,38,38,0.22)",
   },
   APPROVED: {
     label: "Approved",
     description: "Public as Coming Soon; sales remain closed",
-    color: "#0891b2",
-    background: "rgba(8,145,178,0.09)",
-    border: "rgba(8,145,178,0.22)",
+    color: "#047857",
+    background: "rgba(5,150,105,0.10)",
+    border: "rgba(5,150,105,0.24)",
   },
   OPEN: {
     label: "Open",
@@ -97,7 +110,7 @@ const STATUS_META: Record<AvailabilityStatus, StatusMeta> = {
 const today = () => new Date().toISOString().slice(0, 10);
 
 function formatDate(value?: string) {
-  if (!value) return "Open-ended";
+  if (!value) return "Not set";
   const date = new Date(`${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat("en-GB", {
@@ -196,69 +209,93 @@ function SuspendPrompt({
  *  capturing one (e.g. "cancelled before playing" vs "run completed") lets reporting later
  *  tell the two apart in movie_availability_history. */
 function ClosePrompt({
+  action,
   onConfirm,
   onCancel,
 }: {
+  action: TerminalPlanAction;
   onConfirm: (reason?: string) => void;
   onCancel: () => void;
 }) {
   const [reason, setReason] = useState("");
+  const copy = action === "END_RUN"
+    ? {
+        title: "End this theatrical run?",
+        description: "This stops the film's run at this cinema cluster. The operational history will be retained and the plan cannot be reopened.",
+        placeholder: "For example: theatrical run completed as planned",
+        confirmLabel: "End run",
+      }
+    : action === "CANCEL"
+      ? {
+          title: "Cancel this release plan?",
+          description: "This cancels the approved plan before activation. The decision will remain available in release-plan history.",
+          placeholder: "For example: release cancelled before ticket sales opened",
+          confirmLabel: "Cancel plan",
+        }
+      : {
+          title: "Discard this release plan?",
+          description: "This removes the unfinished plan from the active workflow while retaining its audit history.",
+          placeholder: "For example: plan replaced by a revised booking",
+          confirmLabel: "Discard plan",
+        };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center px-4" onClick={onCancel}>
-      <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]" />
+    <div className="fixed inset-0 z-[70] flex items-center justify-center px-4 py-6" onClick={onCancel}>
+      <div className="absolute inset-0 bg-slate-950/45 backdrop-blur-[2px]" />
       <div
-        className="relative w-full max-w-md rounded-2xl border p-5 shadow-2xl"
-        style={{ background: "var(--bg-main)", borderColor: "var(--border-color)" }}
+        className="relative w-full max-w-[520px] overflow-hidden rounded-2xl border shadow-2xl"
+        style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="mb-4 flex items-start gap-3">
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-slate-500/10 text-slate-600">
-            <Square size={17} />
+        <div className="flex items-start gap-3 px-6 pb-4 pt-6">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-rose-500/10 text-rose-600">
+            <CircleStop size={19} />
           </div>
-          <div>
-            <h3 style={{ color: "var(--text-main)", fontSize: "15px", fontWeight: 700 }}>
-              Close this release window?
+          <div className="min-w-0">
+            <h3 style={{ color: "var(--text-main)", fontSize: "16px", fontWeight: 750 }}>
+              {copy.title}
             </h3>
-            <p className="mt-1" style={{ color: "var(--text-sub)", fontSize: "12px" }}>
-              This is terminal - a closed window can't be reopened; a new release plan would be needed instead.
+            <p className="mt-1.5 leading-5" style={{ color: "var(--text-sub)", fontSize: "12.5px" }}>
+              {copy.description}
             </p>
           </div>
         </div>
 
-        <label className="mb-1.5 block" style={{ color: "var(--text-main)", fontSize: "12px", fontWeight: 600 }}>
-          Reason <span style={{ color: "var(--text-sub)", fontWeight: 400 }}>(optional)</span>
-        </label>
-        <textarea
-          autoFocus
-          value={reason}
-          onChange={(event) => setReason(event.target.value)}
-          placeholder="For example: cancelled before playing, or run completed as planned"
-          rows={3}
-          className="w-full resize-none rounded-xl border px-3 py-2.5 outline-none focus:ring-2 focus:ring-slate-500/20"
-          style={{
-            background: "var(--bg-card)",
-            borderColor: "var(--border-color)",
-            color: "var(--text-main)",
-            fontSize: "13px",
-          }}
-        />
+        <div className="px-6 pb-6">
+          <label className="mb-1.5 block" style={{ color: "var(--text-main)", fontSize: "12px", fontWeight: 600 }}>
+            Reason <span style={{ color: "var(--text-sub)", fontWeight: 400 }}>(optional)</span>
+          </label>
+          <textarea
+            autoFocus
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder={copy.placeholder}
+            rows={3}
+            className="w-full resize-none rounded-xl border px-3 py-2.5 outline-none transition focus:border-rose-500/60 focus:ring-2 focus:ring-rose-500/15"
+            style={{
+              background: "var(--bg-main)",
+              borderColor: "var(--border-color)",
+              color: "var(--text-main)",
+              fontSize: "13px",
+            }}
+          />
+        </div>
 
-        <div className="mt-4 flex justify-end gap-2">
+        <div className="flex justify-end gap-2 border-t px-6 py-4" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-xl border px-4 py-2 text-sm"
-            style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }}
+            className="h-10 rounded-[10px] px-4 text-sm font-semibold transition-colors hover:bg-slate-500/10"
+            style={{ color: "var(--text-main)" }}
           >
-            Cancel
+            Keep plan
           </button>
           <button
             type="button"
             onClick={() => onConfirm(reason.trim() || undefined)}
-            className="rounded-xl bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+            className="h-10 rounded-[10px] bg-rose-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-rose-700"
           >
-            Close window
+            {copy.confirmLabel}
           </button>
         </div>
       </div>
@@ -284,7 +321,7 @@ function ReleaseReviewPrompt({
         onClick={(event) => event.stopPropagation()}
       >
         <h3 style={{ color: "var(--text-main)", fontSize: "15px", fontWeight: 700 }}>
-          Request release-plan changes
+          Request changes
         </h3>
         <p className="mt-1" style={{ color: "var(--text-sub)", fontSize: "12px" }}>
           Explain what the programming operator must update before resubmitting.
@@ -302,11 +339,85 @@ function ReleaseReviewPrompt({
           <button type="button" onClick={onCancel} className="rounded-xl border px-4 py-2 text-sm" style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }}>
             Cancel
           </button>
-          <button type="button" disabled={!note.trim()} onClick={() => onConfirm(note.trim())} className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">
+          <button type="button" disabled={!note.trim()} onClick={() => onConfirm(note.trim())} className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:opacity-40">
             Request changes
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ReleasePlanReviewModal({
+  availability,
+  busy,
+  onClose,
+  onRequestChanges,
+  onApprove,
+}: {
+  availability: MovieAvailabilityResponse;
+  busy: boolean;
+  onClose: () => void;
+  onRequestChanges: () => void;
+  onApprove: () => void;
+}) {
+  const meta = STATUS_META[availability.status];
+
+  return (
+    <div className="fixed inset-0 z-[68] flex items-center justify-center px-4 py-6" role="dialog" aria-modal="true" aria-label="Review release plan">
+      <button type="button" aria-label="Close review" className="absolute inset-0 h-full w-full bg-slate-950/45 backdrop-blur-[1px]" onClick={onClose} />
+      <section className="relative flex max-h-[min(760px,calc(100vh-3rem))] w-full max-w-[680px] flex-col overflow-hidden rounded-2xl border shadow-2xl" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
+        <header className="flex items-start justify-between gap-4 border-b px-6 py-5" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+          <div className="min-w-0">
+            <p className="text-[10.5px] font-bold uppercase tracking-[0.11em] text-blue-600">Release plan review</p>
+            <h2 className="mt-1 truncate text-xl font-bold" style={{ color: "var(--text-main)" }}>{availability.clusterName ?? `Cluster #${availability.clusterId}`}</h2>
+            <span className="mt-2 inline-flex rounded-full border px-2.5 py-1 text-xs font-bold" style={{ color: meta.color, background: meta.background, borderColor: meta.border }}>{meta.label}</span>
+          </div>
+          <button type="button" onClick={onClose} className="grid size-9 shrink-0 place-items-center rounded-[10px] transition-colors hover:bg-slate-500/10" style={{ color: "var(--text-sub)" }}>
+            <X size={17} />
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
+          <section className="overflow-hidden rounded-xl border" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+            {[
+              ["Exhibition starts", formatDate(availability.showingStartDate)],
+              ["Exhibition ends", availability.showingEndDate ? formatDate(availability.showingEndDate) : "Until further notice"],
+              ["Sales activation", availability.salesStartAt ? formatDateTime(availability.salesStartAt) : "Manual activation"],
+              ["Submitted", availability.submittedAt ? formatDateTime(availability.submittedAt) : "Not recorded"],
+              ["Submitted by", availability.submittedBy || "Not recorded"],
+            ].map(([label, value]) => (
+              <div key={label} className="grid grid-cols-[140px_1fr] gap-4 border-b px-4 py-3 last:border-b-0" style={{ borderColor: "var(--border-color)" }}>
+                <span className="text-xs" style={{ color: "var(--text-sub)" }}>{label}</span>
+                <strong className="text-right text-xs font-semibold" style={{ color: "var(--text-main)" }}>{value}</strong>
+              </div>
+            ))}
+          </section>
+
+          {availability.reviewNote && (
+            <section>
+              <h3 className="text-xs font-bold uppercase tracking-[0.06em]" style={{ color: "var(--text-sub)" }}>Review note</h3>
+              <p className="mt-2 rounded-xl border px-4 py-3 text-sm leading-6" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-main)" }}>{availability.reviewNote}</p>
+            </section>
+          )}
+
+          <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.07] px-4 py-3">
+            <p className="text-xs font-semibold text-blue-700">Approval does not open ticket sales.</p>
+            <p className="mt-1 text-xs" style={{ color: "var(--text-sub)" }}>The plan must be activated separately before customers can purchase tickets.</p>
+          </div>
+
+          <p className="text-[11px]" style={{ color: "var(--text-sub)" }}>Internal reference: RP-{availability.availabilityId}</p>
+        </div>
+
+        <footer className="flex items-center justify-end gap-2 border-t px-6 py-4" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+          <button type="button" disabled={busy} onClick={onRequestChanges} className="h-10 rounded-[10px] border px-4 text-sm font-semibold transition-colors hover:bg-rose-500/10 disabled:opacity-50" style={{ borderColor: "rgba(225,29,72,0.34)", color: "#e11d48" }}>
+            Request changes
+          </button>
+          <button type="button" disabled={busy} onClick={onApprove} className="h-10 rounded-[10px] bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:opacity-50">
+            {busy ? "Approving…" : "Approve plan"}
+          </button>
+        </footer>
+      </section>
     </div>
   );
 }
@@ -327,6 +438,7 @@ function CreatePlanDialog({
   const [clusterSearch, setClusterSearch] = useState("");
   const [showingStartDate, setShowingStartDate] = useState("");
   const [showingEndDate, setShowingEndDate] = useState("");
+  const [continuesUntilFurtherNotice, setContinuesUntilFurtherNotice] = useState(false);
   const [salesStartAt, setSalesStartAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -357,7 +469,8 @@ function CreatePlanDialog({
     salesStartAt && showingStartDate && salesStartAt.slice(0, 10) > showingStartDate,
   );
   const hasTarget = allActive || selectedClusterIds.size > 0;
-  const canSubmit = Boolean(hasTarget && showingStartDate && !invalidDateRange && !invalidSalesStart && !submitting);
+  const hasEndDateIntent = Boolean(showingEndDate || continuesUntilFurtherNotice);
+  const canSubmit = Boolean(hasTarget && showingStartDate && hasEndDateIntent && !invalidDateRange && !invalidSalesStart && !submitting);
   const targetCount = allActive ? clusters.length : selectedClusterIds.size;
 
   const handleSubmit = async () => {
@@ -371,7 +484,7 @@ function CreatePlanDialog({
         allActiveClusters: allActive || undefined,
         clusterIds: allActive ? undefined : Array.from(selectedClusterIds),
         showingStartDate,
-        showingEndDate: showingEndDate || undefined,
+        showingEndDate: continuesUntilFurtherNotice ? undefined : showingEndDate,
         salesStartAt: salesStartAt || undefined,
       });
       await onCreated();
@@ -592,19 +705,42 @@ function CreatePlanDialog({
                 </div>
                 <div>
                   <label className="mb-1.5 block" style={{ color: "var(--text-main)", fontSize: "12px", fontWeight: 600 }}>
-                    Ends <span style={{ color: "var(--text-sub)", fontWeight: 400 }}>(optional)</span>
+                    Ends {!continuesUntilFurtherNotice && <span className="text-rose-500">*</span>}
                   </label>
                   <input
                     type="date"
                     min={showingStartDate || today()}
                     value={showingEndDate}
+                    disabled={continuesUntilFurtherNotice}
                     onChange={(event) => setShowingEndDate(event.target.value)}
-                    className="w-full rounded-xl border px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500/20"
+                    className="w-full rounded-xl border px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                     style={{ colorScheme: "var(--color-scheme)" as string, background: "var(--bg-card)", borderColor: invalidDateRange ? "#e11d48" : "var(--border-color)", color: "var(--text-main)", fontSize: "13px" }}
                   />
                 </div>
               </div>
               {invalidDateRange && <p style={{ fontSize: "11px", color: "#f43f5e", marginTop: "-8px" }}>End date cannot be before start date.</p>}
+
+              <label
+                className="flex cursor-pointer items-start gap-2.5 rounded-xl border px-3 py-2.5"
+                style={{
+                  borderColor: continuesUntilFurtherNotice ? "rgba(37,99,235,0.3)" : "var(--border-color)",
+                  background: continuesUntilFurtherNotice ? "rgba(37,99,235,0.06)" : "var(--bg-card)",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={continuesUntilFurtherNotice}
+                  onChange={(event) => {
+                    setContinuesUntilFurtherNotice(event.target.checked);
+                    if (event.target.checked) setShowingEndDate("");
+                  }}
+                  className="mt-0.5 h-4 w-4 accent-blue-600"
+                />
+                <span>
+                  <strong className="block text-xs" style={{ color: "var(--text-main)" }}>Continue until further notice</strong>
+                  <span className="mt-0.5 block text-[11px]" style={{ color: "var(--text-sub)" }}>Use when the cinema has intentionally not scheduled an end date.</span>
+                </span>
+              </label>
 
               <div>
                 <label className="mb-1.5 block" style={{ color: "var(--text-main)", fontSize: "12px", fontWeight: 600 }}>
@@ -682,6 +818,8 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
   const [suspendTarget, setSuspendTarget] = useState<number | null>(null);
   const [closeTarget, setCloseTarget] = useState<number | null>(null);
   const [changesTarget, setChangesTarget] = useState<number | null>(null);
+  const [reviewTarget, setReviewTarget] = useState<number | null>(null);
+  const [planFilter, setPlanFilter] = useState<PlanFilter>(canReviewReleasePlan ? "AWAITING" : "CURRENT");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -720,10 +858,24 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
 
   const counts = useMemo(() => ({
     total: availabilities.length,
+    current: availabilities.filter((item) => item.status !== "CLOSED").length,
+    history: availabilities.filter((item) => item.status === "CLOSED").length,
     changes: availabilities.filter((item) => item.status === "CHANGES_REQUESTED").length,
     review: availabilities.filter((item) => item.status === "IN_REVIEW").length,
-    approvedReady: availabilities.filter((item) => item.status === "APPROVED").length,
+    approvedReady: availabilities.filter((item) => item.status === "APPROVED" || item.status === "OPEN").length,
   }), [availabilities]);
+
+  const filteredAvailabilities = useMemo(() => availabilities.filter((item) => {
+    if (planFilter === "CURRENT") return item.status !== "CLOSED";
+    if (planFilter === "AWAITING") return item.status === "IN_REVIEW";
+    if (planFilter === "CHANGES") return item.status === "CHANGES_REQUESTED";
+    if (planFilter === "APPROVED") return item.status === "APPROVED" || item.status === "OPEN";
+    return item.status === "CLOSED";
+  }), [availabilities, planFilter]);
+
+  const selectedReviewPlan = reviewTarget === null
+    ? null
+    : availabilities.find((item) => item.availabilityId === reviewTarget) ?? null;
 
   const reviewEligiblePlans = useMemo(
     () => availabilities.filter((item) => item.status === "PLANNED" || item.status === "CHANGES_REQUESTED"),
@@ -810,25 +962,14 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
       )}
 
       {canReviewReleasePlan && !busy && availability.status === "IN_REVIEW" && (
-        <>
-          <button
-            type="button"
-            aria-label="Request changes"
-            title="Request changes"
-            onClick={() => setChangesTarget(availability.availabilityId)}
-            className="grid size-9 shrink-0 place-items-center rounded-lg border text-amber-600 transition-colors hover:bg-amber-500/10"
-            style={{ borderColor: "rgba(217,119,6,0.3)" }}
-          >
-            <MessageSquareWarning size={16} />
-          </button>
-          <button
-            type="button"
-            onClick={() => void runCommand(availability.availabilityId, () => movieApi.approveAvailability(availability.availabilityId))}
-            className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
-          >
-            <CheckCircle2 size={15} /> Approve
-          </button>
-        </>
+        <button
+          type="button"
+          onClick={() => setReviewTarget(availability.availabilityId)}
+          className="inline-flex h-9 items-center whitespace-nowrap rounded-[10px] border px-3.5 text-xs font-semibold text-blue-600 transition-colors hover:bg-blue-500/[0.08]"
+          style={{ borderColor: "rgba(37,99,235,0.28)", background: "rgba(37,99,235,0.05)" }}
+        >
+          Review plan
+        </button>
       )}
 
       {canActivateReleasePlan && !busy && availability.status === "APPROVED" && (
@@ -862,18 +1003,18 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
         </button>
       )}
 
-      {canActivateReleasePlan && !busy && availability.status !== "CLOSED" && (
-        <RowActions
-          forceMenu
-          ariaLabel={`More actions for ${availability.clusterName ?? `cluster ${availability.clusterId}`}`}
-          actions={[{
-            key: "close",
-            label: "Close release window",
-            icon: Square,
-            separatorBefore: true,
-            onSelect: () => setCloseTarget(availability.availabilityId),
-          }]}
-        />
+      {canActivateReleasePlan
+        && !busy
+        && availability.status !== "CLOSED"
+        && availability.status !== "IN_REVIEW"
+        && (
+        <button
+          type="button"
+          onClick={() => setCloseTarget(availability.availabilityId)}
+          className="inline-flex h-9 items-center whitespace-nowrap rounded-[10px] bg-rose-500/10 px-3.5 text-xs font-semibold text-rose-600 transition-colors hover:bg-rose-500/[0.16]"
+        >
+          {getTerminalPlanActionLabel(availability.status)}
+        </button>
       )}
 
       {busy && <span className="whitespace-nowrap text-xs" style={{ color: "var(--text-sub)" }}>Updating…</span>}
@@ -882,65 +1023,40 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
 
   return (
     <section>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600">
-              <CalendarClock size={16} />
-            </div>
-            <div>
-              <h3 style={{ color: "var(--text-main)", fontSize: "14px", fontWeight: 700 }}>Release plans</h3>
-              <p style={{ color: "var(--text-sub)", fontSize: "11px" }}>Control exhibition separately for each cinema cluster.</p>
-            </div>
-          </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-xl border p-1" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+          {([
+            ["CURRENT", "Current plans", counts.current],
+            ["AWAITING", "Awaiting decision", counts.review],
+            ["CHANGES", "Changes requested", counts.changes],
+            ["APPROVED", "Approved", counts.approvedReady],
+            ["HISTORY", "History", counts.history],
+          ] as Array<[PlanFilter, string, number]>).map(([key, label, count]) => {
+            const active = planFilter === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setPlanFilter(key)}
+                className="inline-flex h-9 shrink-0 items-center gap-2 rounded-[9px] px-3 text-xs font-semibold transition-colors"
+                style={{ color: active ? "#2563eb" : "var(--text-sub)", background: active ? "rgba(37,99,235,0.10)" : "transparent" }}
+              >
+                {label}
+                <span className="min-w-5 rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={{ color: active ? "#2563eb" : "var(--text-sub)", background: active ? "rgba(37,99,235,0.12)" : "var(--bg-hover)" }}>{count}</span>
+              </button>
+            );
+          })}
         </div>
         {canPrepareReleasePlan && (
           <button
             type="button"
             onClick={() => setShowCreateDialog(true)}
-            className="flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700"
+            className="flex h-10 items-center justify-center gap-1.5 rounded-[10px] bg-blue-600 px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700"
           >
             <Plus size={13} /> New release plan
           </button>
         )}
       </div>
-
-      <div
-        className="mt-5 flex flex-col gap-3 rounded-2xl border px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
-        style={{ borderColor: "rgba(37,99,235,0.22)", background: "var(--bg-card)", boxShadow: "0 4px 14px rgba(15,23,42,0.06)" }}
-      >
-        <div className="flex items-center gap-3">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-500/10 text-emerald-600">
-            <CheckCircle2 size={18} />
-          </span>
-          <div>
-            <p className="text-sm font-bold" style={{ color: "var(--text-main)" }}>Release plan review</p>
-            <p className="mt-0.5 text-xs" style={{ color: "var(--text-sub)" }}>
-              Content approved · {counts.total} cluster{counts.total === 1 ? "" : "s"} in scope
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs" style={{ color: "var(--text-sub)" }}>
-          <span><strong className="text-violet-600">{counts.review}</strong> awaiting decision</span>
-          <span className="inline-flex items-center gap-1.5"><Ticket size={14} /> Sales remain locked until activation</span>
-        </div>
-      </div>
-
-      {counts.total > 0 && (
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {[
-            ["Awaiting decision", counts.review, "Submitted for independent approval", "#7c3aed"],
-            ["Changes requested", counts.changes, "Returned to the programming operator", "#d97706"],
-            ["Approved to schedule", counts.approvedReady, "Ready for showtime scheduling", "#059669"],
-          ].map(([label, value, helper, color]) => (
-            <div key={String(label)} className="min-h-[92px] rounded-2xl border px-4 py-3.5" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)", boxShadow: "0 2px 8px rgba(15,23,42,0.05)" }}>
-              <p style={{ color: "var(--text-sub)", fontSize: "12px", fontWeight: 600 }}>{label}</p>
-              <p className="mt-1" style={{ color: String(color), fontSize: "26px", lineHeight: 1.1, fontWeight: 750 }}>{value}</p>
-              <p className="mt-1.5" style={{ color: "var(--text-sub)", fontSize: "11.5px" }}>{helper}</p>
-            </div>
-          ))}
-        </div>
-      )}
 
       {error && (
         <div className="mt-3 flex items-start gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2.5 text-rose-600">
@@ -1005,12 +1121,17 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
             </button>
           )}
         </div>
+      ) : filteredAvailabilities.length === 0 ? (
+        <div className="mt-4 rounded-2xl border border-dashed px-5 py-10 text-center" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+          <h4 className="text-sm font-semibold" style={{ color: "var(--text-main)" }}>No plans in this view</h4>
+          <p className="mt-1 text-xs" style={{ color: "var(--text-sub)" }}>Choose another status filter to continue.</p>
+        </div>
       ) : (
         <div className="mt-4 overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)", boxShadow: "0 4px 14px rgba(15,23,42,0.06)" }}>
           <div
             className="hidden min-h-12 items-center gap-4 border-b px-4 xl:grid"
             style={{
-              gridTemplateColumns: "minmax(220px,1.35fr) minmax(180px,1fr) minmax(160px,.85fr) minmax(130px,.65fr) minmax(170px,.8fr)",
+              gridTemplateColumns: "minmax(220px,1.2fr) minmax(180px,.9fr) minmax(150px,.75fr) minmax(145px,.65fr) minmax(180px,.8fr)",
               borderColor: "var(--border-color)",
               background: "var(--bg-main)",
               color: "var(--text-sub)",
@@ -1021,13 +1142,13 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
             }}
           >
             <span>Cinema cluster</span>
-            <span>Showing window</span>
+            <span>Exhibition window</span>
             <span>Sales start</span>
             <span>Status</span>
             <span className="text-right">Actions</span>
           </div>
 
-          {availabilities.map((availability) => {
+          {filteredAvailabilities.map((availability) => {
             const meta = STATUS_META[availability.status];
             const busy = busyId === availability.availabilityId;
             const selectable = canSubmitReleasePlan && (availability.status === "PLANNED" || availability.status === "CHANGES_REQUESTED");
@@ -1035,7 +1156,7 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
             return (
               <div
                 key={availability.availabilityId}
-                className="grid grid-cols-1 gap-4 border-b px-4 py-4 transition-colors last:border-b-0 hover:bg-blue-500/[0.035] xl:grid-cols-[minmax(220px,1.35fr)_minmax(180px,1fr)_minmax(160px,.85fr)_minmax(130px,.65fr)_minmax(170px,.8fr)] xl:items-center"
+                className="grid grid-cols-1 gap-4 border-b px-4 py-4 transition-colors last:border-b-0 hover:bg-blue-500/[0.035] xl:grid-cols-[minmax(220px,1.2fr)_minmax(180px,.9fr)_minmax(150px,.75fr)_minmax(145px,.65fr)_minmax(180px,.8fr)] xl:items-center"
                 style={{
                   borderColor: "var(--border-color)",
                 }}
@@ -1053,13 +1174,15 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-600/10 text-blue-600"><MapPin size={16} /></span>
                   <div className="min-w-0">
                     <strong className="block truncate text-[13.5px]" style={{ color: "var(--text-main)" }}>{availability.clusterName ?? `Cluster #${availability.clusterId}`}</strong>
-                    <span className="mt-1 block truncate text-xs" style={{ color: "var(--text-sub)" }}>Plan #{availability.availabilityId}</span>
                   </div>
                 </div>
 
                 <div>
-                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.06em] xl:hidden" style={{ color: "var(--text-sub)" }}>Showing window</span>
-                  <strong className="block text-[13px]" style={{ color: "var(--text-main)" }}>{formatDate(availability.showingStartDate)} – {formatDate(availability.showingEndDate)}</strong>
+                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.06em] xl:hidden" style={{ color: "var(--text-sub)" }}>Exhibition window</span>
+                  <strong className="block text-[13px]" style={{ color: "var(--text-main)" }}>Starts {formatDate(availability.showingStartDate)}</strong>
+                  <span className="mt-1 block text-xs" style={{ color: availability.showingEndDate ? "var(--text-sub)" : "#b45309" }}>
+                    {availability.showingEndDate ? `Ends ${formatDate(availability.showingEndDate)}` : "Until further notice"}
+                  </span>
                 </div>
 
                 <div>
@@ -1110,12 +1233,32 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
 
       {closeTarget !== null && (
         <ClosePrompt
+          action={getTerminalPlanAction(
+            availabilities.find((item) => item.availabilityId === closeTarget)?.status ?? "PLANNED",
+          )}
           onConfirm={(reason) => {
             const id = closeTarget;
             setCloseTarget(null);
             void runCommand(id, () => movieApi.closeAvailability(id, reason));
           }}
           onCancel={() => setCloseTarget(null)}
+        />
+      )}
+
+      {selectedReviewPlan && (
+        <ReleasePlanReviewModal
+          availability={selectedReviewPlan}
+          busy={busyId === selectedReviewPlan.availabilityId}
+          onClose={() => setReviewTarget(null)}
+          onRequestChanges={() => {
+            setReviewTarget(null);
+            setChangesTarget(selectedReviewPlan.availabilityId);
+          }}
+          onApprove={() => {
+            const id = selectedReviewPlan.availabilityId;
+            setReviewTarget(null);
+            void runCommand(id, () => movieApi.approveAvailability(id));
+          }}
         />
       )}
 

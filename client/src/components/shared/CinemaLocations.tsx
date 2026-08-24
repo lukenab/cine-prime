@@ -43,7 +43,7 @@ export function CinemaLocations() {
           <div>
             <span
               style={{
-                color: "#60A5FA",
+                color: "var(--cp-accent)",
                 fontSize: "0.7rem",
                 letterSpacing: "0.25em",
                 fontWeight: 700,
@@ -63,12 +63,7 @@ export function CinemaLocations() {
             >
               Our{" "}
               <span
-                style={{
-                  background: "linear-gradient(135deg, #60A5FA, #2563EB)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                }}
+                style={{ color: "var(--cp-accent)" }}
               >
                 Locations
               </span>
@@ -89,8 +84,8 @@ export function CinemaLocations() {
                   style={
                     activeProvince === p
                       ? {
-                          background: "linear-gradient(135deg, #2563EB, #3B82F6)",
-                          color: "#FFFFFF",
+                          background: "var(--cp-grad-btn)",
+                          color: "var(--cp-accent-ink)",
                           fontWeight: 700,
                           fontSize: "0.8rem",
                         }
@@ -123,31 +118,15 @@ export function CinemaLocations() {
               <div
                 key={cluster.clusterId}
                 onClick={() => handleViewShowtimes(cluster)}
-                className="group relative rounded-2xl p-6 cursor-pointer transition-all duration-300 hover:-translate-y-1"
-                style={{
-                  border: "1px solid rgba(255,255,255,0.07)",
-                  backgroundColor: "rgba(255,255,255,0.03)",
-                }}
-                onMouseEnter={(e) => {
-                  const el = e.currentTarget as HTMLDivElement;
-                  el.style.borderColor = "rgba(96,165,250,0.35)";
-                  el.style.backgroundColor = "rgba(37,99,235,0.08)";
-                  el.style.boxShadow = "0 20px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(59,130,246,0.08)";
-                }}
-                onMouseLeave={(e) => {
-                  const el = e.currentTarget as HTMLDivElement;
-                  el.style.borderColor = "rgba(255,255,255,0.07)";
-                  el.style.backgroundColor = "rgba(255,255,255,0.03)";
-                  el.style.boxShadow = "none";
-                }}
+                className="cp-card group relative cursor-pointer p-6"
               >
                 {/* Icon + Name */}
                 <div className="flex items-start gap-4 mb-5">
                   <div
                     className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: "rgba(37,99,235,0.14)", border: "1px solid rgba(96,165,250,0.24)" }}
+                    style={{ background: "rgba(255,196,0,0.12)", border: "1px solid rgba(255,196,0,0.26)" }}
                   >
-                    <MapPin size={18} style={{ color: "#60A5FA" }} />
+                    <MapPin size={18} style={{ color: "var(--cp-accent)" }} />
                   </div>
                   <div className="min-w-0">
                     <h3
@@ -214,7 +193,7 @@ export function CinemaLocations() {
                     handleViewShowtimes(cluster);
                   }}
                   className="flex items-center gap-2 transition-all duration-200 group-hover:gap-3"
-                  style={{ color: "#60A5FA", fontSize: "0.82rem", fontWeight: 600, background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                  style={{ color: "var(--cp-accent)", fontSize: "0.82rem", fontWeight: 600, background: "none", border: "none", cursor: "pointer", padding: 0 }}
                 >
                   View showtimes
                   <ArrowRight size={14} />

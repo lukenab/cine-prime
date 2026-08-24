@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Flame, Calendar, RefreshCw } from "lucide-react";
-import { MovieCard, Movie } from "../../layouts/MovieCard";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Calendar, ChevronLeft, ChevronRight, Flame } from "lucide-react";
+import { MovieCard, type Movie } from "../../layouts/MovieCard";
 import type { MovieApiResponse } from "../../api/movieApi";
 import { TrailerModal } from "./TrailerModal";
 
@@ -10,7 +10,18 @@ type Props = {
   error?: string;
 };
 
-type TabKey = "now-showing" | "coming-soon";
+type ShelfTone = "now" | "soon";
+
+type MovieShelfProps = {
+  title: string;
+  description: string;
+  movies: MovieApiResponse[];
+  cardMovies: Movie[];
+  tone: ShelfTone;
+  loading: boolean;
+  emptyMessage: string;
+  onTrailer: (movie: MovieApiResponse) => void;
+};
 
 function formatDuration(minutes?: number): string {
   if (!minutes) return "-";
@@ -21,9 +32,9 @@ function formatDuration(minutes?: number): string {
 
 function formatReleaseDate(dateStr?: string): string {
   if (!dateStr) return "TBA";
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return "TBA";
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return "TBA";
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function toCardMovie(movie: MovieApiResponse, comingSoon: boolean): Movie {
@@ -34,135 +45,192 @@ function toCardMovie(movie: MovieApiResponse, comingSoon: boolean): Movie {
     duration: formatDuration(movie.duration),
     image: movie.largeImage || movie.smallImage,
     badge: comingSoon ? undefined : (movie.movieId % 2 === 0 ? "NEW" : "HOT"),
-    badgeColor: movie.movieId % 2 === 0 ? "#8A2BE2" : "#FF4500",
+    badgeColor: movie.movieId % 2 === 0 ? "#8B5CF6" : "#F97316",
     releaseLabel: comingSoon ? formatReleaseDate(movie.releaseDate) : undefined,
     trailerUrl: movie.trailerUrl,
   };
 }
 
-const TABS: { key: TabKey; label: string }[] = [
-  { key: "now-showing", label: "Now Showing" },
-  { key: "coming-soon", label: "Coming Soon" },
-];
-
-export function MovieShowcase({ movies, loading = false, error = "" }: Props) {
+function MovieShelf({
+  title,
+  description,
+  movies,
+  cardMovies,
+  tone,
+  loading,
+  emptyMessage,
+  onTrailer,
+}: MovieShelfProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [tab, setTab] = useState<TabKey>("now-showing");
-  const [trailerMovie, setTrailerMovie] = useState<MovieApiResponse | null>(null);
+  const [canScroll, setCanScroll] = useState(false);
+  const [atStart, setAtStart] = useState(true);
+  const [atEnd, setAtEnd] = useState(false);
+  const isNowShowing = tone === "now";
+  const accent = isNowShowing
+    ? { color: "#EF4444", soft: "rgba(239,68,68,0.12)", line: "rgba(239,68,68,0.3)" }
+    : { color: "#A855F7", soft: "rgba(139,92,246,0.13)", line: "rgba(168,85,247,0.3)" };
 
-  const nowShowing = useMemo(() => movies.filter((m) => m.displayStatus === "NOW_SHOWING"), [movies]);
-  const comingSoon = useMemo(() => movies.filter((m) => m.displayStatus === "COMING_SOON"), [movies]);
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (!element) return;
 
-  const visibleMovies = tab === "now-showing" ? nowShowing : comingSoon;
-  const cardMovies = useMemo(
-    () => visibleMovies.map((m) => toCardMovie(m, tab === "coming-soon")),
-    [visibleMovies, tab]
-  );
+    const updateScrollState = () => {
+      const maximumScroll = Math.max(0, element.scrollWidth - element.clientWidth);
+      setCanScroll(maximumScroll > 1);
+      setAtStart(element.scrollLeft <= 1);
+      setAtEnd(element.scrollLeft >= maximumScroll - 1);
+    };
+    updateScrollState();
+    window.addEventListener("resize", updateScrollState);
 
-  const scroll = (dir: "left" | "right") => {
-    if (!scrollRef.current) return;
-    scrollRef.current.scrollBy({ left: dir === "left" ? -480 : 480, behavior: "smooth" });
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateScrollState);
+    observer?.observe(element);
+
+    return () => {
+      window.removeEventListener("resize", updateScrollState);
+      observer?.disconnect();
+    };
+  }, [cardMovies.length, loading]);
+
+  const scroll = (direction: "left" | "right") => {
+    const element = scrollRef.current;
+    if (!element) return;
+    const distance = Math.max(240, element.clientWidth * 0.8);
+    element.scrollBy({ left: direction === "left" ? -distance : distance, behavior: "smooth" });
   };
 
   return (
-    <section style={{ paddingBottom: "64px" }}>
-
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-          <div className="flex items-center gap-3">
-            <div
-              className="flex items-center justify-center w-9 h-9 rounded-xl"
-              style={{ backgroundColor: "rgba(37,99,235,0.16)", border: "1px solid rgba(96,165,250,0.3)" }}
-            >
-              {tab === "now-showing" ? (
-                <Flame size={18} style={{ color: "#60A5FA" }} />
-              ) : (
-                <Calendar size={18} style={{ color: "#60A5FA" }} />
-              )}
-            </div>
-            <div>
-              <h2 style={{ color: "white", fontWeight: 800, fontSize: "1.6rem", lineHeight: 1.2 }}>
-                {tab === "now-showing" ? "Now Showing" : "Coming Soon"}
-              </h2>
-              <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.8rem" }}>
-                {loading
-                  ? "Loading movies..."
-                  : tab === "now-showing"
-                    ? `${cardMovies.length} movies available this week`
-                    : "Get notified before tickets sell out"}
-              </p>
-            </div>
+    <div className={isNowShowing ? "" : "border-t border-white/[0.08] pt-14"}>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <span
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+            style={{ backgroundColor: accent.soft, border: `1px solid ${accent.line}` }}
+          >
+            {isNowShowing
+              ? <Flame size={19} style={{ color: accent.color }} />
+              : <Calendar size={19} style={{ color: accent.color }} />}
+          </span>
+          <div>
+            <h2 className="text-[1.6rem] font-extrabold leading-tight text-white">{title}</h2>
+            <p className="mt-0.5 text-xs text-white/45">
+              {loading ? "Loading movies..." : description}
+            </p>
           </div>
+        </div>
 
-          <div className="flex items-center gap-3">
-            {/* Tab switch */}
-            <div className="flex gap-1.5 rounded-full p-1" style={{ border: "1px solid rgba(255,255,255,0.1)", backgroundColor: "rgba(255,255,255,0.03)" }}>
-              {TABS.map((t) => (
-                <button
-                  key={t.key}
-                  onClick={() => setTab(t.key)}
-                  className="rounded-full px-4 py-1.5 text-[13px] font-semibold transition-all duration-200 cursor-pointer"
-                  style={
-                    tab === t.key
-                      ? { background: "linear-gradient(135deg, #2563EB, #3B82F6)", color: "#FFFFFF" }
-                      : { color: "rgba(255,255,255,0.55)" }
-                  }
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-
+        <div className="flex items-center gap-3">
+          {canScroll && (
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={() => scroll("left")}
-                className="flex items-center justify-center w-10 h-10 rounded-full border transition-all duration-200 hover:scale-110"
-                style={{ border: "1px solid rgba(255,255,255,0.12)", backgroundColor: "rgba(255,255,255,0.05)", color: "white" }}
+                disabled={atStart}
+                aria-label={`Scroll ${title} left`}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/[0.04] text-white transition hover:scale-105 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:scale-100"
               >
                 <ChevronLeft size={18} />
               </button>
               <button
+                type="button"
                 onClick={() => scroll("right")}
-                className="flex items-center justify-center w-10 h-10 rounded-full transition-all duration-200 hover:scale-110"
-                style={{ background: "linear-gradient(135deg, #2563EB, #3B82F6)", color: "#FFFFFF" }}
+                disabled={atEnd}
+                aria-label={`Scroll ${title} right`}
+                className="flex h-10 w-10 items-center justify-center rounded-full text-white transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:scale-100"
+                style={{ backgroundColor: accent.color }}
               >
                 <ChevronRight size={18} />
               </button>
             </div>
-          </div>
+          )}
         </div>
+      </div>
 
-        {loading && (
-          <div className="flex items-center gap-2" style={{ color: "rgba(255,255,255,0.6)", minHeight: "360px" }}>
-            <RefreshCw size={18} className="animate-spin" />
-            <span>Loading movies...</span>
+      {loading && (
+        <div className="flex gap-5 overflow-hidden" aria-label={`Loading ${title}`}>
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div
+              key={index}
+              className="shrink-0 animate-pulse rounded-2xl bg-white/[0.055]"
+              style={{ width: 240, height: 360 }}
+            />
+          ))}
+        </div>
+      )}
+
+      {!loading && cardMovies.length === 0 && (
+        <div className="grid min-h-32 place-items-center rounded-2xl border border-dashed border-white/10 bg-white/[0.025] text-sm text-white/45">
+          {emptyMessage}
+        </div>
+      )}
+
+      {!loading && cardMovies.length > 0 && (
+        <div
+          ref={scrollRef}
+          onScroll={(event) => {
+            const element = event.currentTarget;
+            const maximumScroll = Math.max(0, element.scrollWidth - element.clientWidth);
+            setAtStart(element.scrollLeft <= 1);
+            setAtEnd(element.scrollLeft >= maximumScroll - 1);
+          }}
+          className="flex overflow-x-auto pb-4"
+          style={{ gap: 20, scrollbarWidth: "none", msOverflowStyle: "none" }}
+        >
+          {cardMovies.map((movie, index) => (
+            <MovieCard
+              key={movie.id}
+              movie={movie}
+              variant="standard"
+              comingSoon={!isNowShowing}
+              onTrailer={() => onTrailer(movies[index])}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function MovieShowcase({ movies, loading = false, error = "" }: Props) {
+  const [trailerMovie, setTrailerMovie] = useState<MovieApiResponse | null>(null);
+
+  const nowShowing = useMemo(() => movies.filter((movie) => movie.displayStatus === "NOW_SHOWING"), [movies]);
+  const comingSoon = useMemo(() => movies.filter((movie) => movie.displayStatus === "COMING_SOON"), [movies]);
+  const nowShowingCards = useMemo(() => nowShowing.map((movie) => toCardMovie(movie, false)), [nowShowing]);
+  const comingSoonCards = useMemo(() => comingSoon.map((movie) => toCardMovie(movie, true)), [comingSoon]);
+
+  return (
+    <section className="pb-16">
+      <div className="mx-auto max-w-7xl space-y-14 px-6">
+        {error && !loading && (
+          <div className="rounded-2xl border border-red-400/20 bg-red-500/10 px-5 py-4 text-sm text-red-200">
+            {error}
           </div>
         )}
 
-        {!loading && error && (
-          <div style={{ color: "rgba(255,255,255,0.65)", minHeight: "120px" }}>{error}</div>
-        )}
-
-        {!loading && !error && cardMovies.length === 0 && (
-          <div style={{ color: "rgba(255,255,255,0.65)", minHeight: "120px" }}>
-            {tab === "now-showing" ? "No movies are available yet." : "No upcoming movies yet."}
-          </div>
-        )}
-
-        {!loading && !error && cardMovies.length > 0 && (
-          <div
-            ref={scrollRef}
-            className="flex overflow-x-auto pb-4"
-            style={{ gap: "20px", scrollbarWidth: "none", msOverflowStyle: "none" }}
-          >
-            {cardMovies.map((movie, index) => (
-              <MovieCard
-                key={movie.id}
-                movie={movie}
-                onTrailer={() => setTrailerMovie(visibleMovies[index])}
-              />
-            ))}
-          </div>
+        {!error && (
+          <>
+            <MovieShelf
+              title="Now Showing"
+              description={`${nowShowingCards.length} movies available this week`}
+              movies={nowShowing}
+              cardMovies={nowShowingCards}
+              tone="now"
+              loading={loading}
+              emptyMessage="No movies are available yet."
+              onTrailer={setTrailerMovie}
+            />
+            <MovieShelf
+              title="Coming Soon"
+              description="Plan your next cinema visit"
+              movies={comingSoon}
+              cardMovies={comingSoonCards}
+              tone="soon"
+              loading={loading}
+              emptyMessage="No upcoming movies yet."
+              onTrailer={setTrailerMovie}
+            />
+          </>
         )}
       </div>
 

@@ -318,8 +318,8 @@ export default function ReleasePlanningQueuePage() {
                           const updatedAt = plan.updatedAt ?? plan.createdAt;
                           return (
                             <div key={plan.availabilityId} className="grid items-center gap-4 border-b px-4 py-3 last:border-b-0" style={{ gridTemplateColumns: DETAIL_GRID, borderColor: "var(--border-color)", fontSize: 12 }}>
-                              <div><strong className="block">{plan.clusterName ?? `Cluster #${plan.clusterId}`}</strong><small className="mt-1 block" style={{ color: "var(--text-sub)" }}>Plan #{plan.availabilityId}</small></div>
-                              <div><strong>{formatPlanDate(plan.showingStartDate)} – {plan.showingEndDate ? formatPlanDate(plan.showingEndDate) : "Open-ended"}</strong></div>
+                              <div><strong className="block">{plan.clusterName ?? `Cluster #${plan.clusterId}`}</strong></div>
+                              <div><strong>{formatPlanDate(plan.showingStartDate)} – {plan.showingEndDate ? formatPlanDate(plan.showingEndDate) : "Until further notice"}</strong></div>
                               <div><strong>{formatPlanActivation(plan)}</strong></div>
                               <div><span style={{ display: "inline-flex", padding: "4px 8px", borderRadius: 999, color: meta.color, background: meta.background, fontSize: 10, fontWeight: 700 }}>{meta.label}</span></div>
                               <div><strong className="block">{formatPlanDate(updatedAt, true)}</strong><small className="mt-1 block" style={{ color: "var(--text-sub)" }}>{plan.updatedBy || plan.createdBy || "System"}</small></div>

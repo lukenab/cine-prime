@@ -1,45 +1,49 @@
 /* ============================================================================
    CinePrime — cosmic design tokens ("Deep Orbit")
    ----------------------------------------------------------------------------
-   Before this file the homepage had no token layer at all: every colour was an
-   inline hex repeated across eight components, and three accent families were
-   competing (gold #FFD700 in 22 places, blue #2563EB, violet #8A2BE2). The
-   palette below collapses those into one blue/cyan system taken from the Orbita
-   brand mark, so recolouring the site is now a one-file edit.
-
-   Cyan (--cp-accent) inherits the role gold used to play: eyebrows, small
-   highlights, scarce emphasis. Blue (--cp-blue) owns anything interactive.
+   Blue Brand + Gold Commerce: blue identifies CinePrime and owns navigation,
+   account and focus states. Gold is reserved for booking, offers and other
+   conversion actions. Purple, cyan and orange are supporting content accents,
+   not competing primary colours.
    ========================================================================== */
 
 :root {
   /* Surfaces — deliberately close to the old #050505 so the change reads as a
      recolour of this site rather than a different site. */
   --cp-void: #050505;
-  --cp-deep: #070c18;
-  --cp-raise: #0b1024;
+  --cp-deep: #0b0818;
+  --cp-raise: #111016;
 
-  --cp-surface: rgba(255, 255, 255, 0.035);
-  --cp-surface-hi: rgba(37, 99, 235, 0.09);
-  --cp-line: rgba(255, 255, 255, 0.07);
-  --cp-line-hi: rgba(96, 165, 250, 0.38);
+  --cp-surface: rgba(255, 255, 255, 0.04);
+  --cp-surface-hi: rgba(255, 196, 0, 0.075);
+  --cp-line: rgba(255, 255, 255, 0.08);
+  --cp-line-hi: rgba(255, 196, 0, 0.34);
 
-  --cp-accent: #38bdf8;
-  --cp-accent-soft: #7dd3fc;
+  --cp-accent: #ffc400;
+  --cp-accent-soft: #ffe16b;
+  --cp-accent-strong: #e6a900;
+  --cp-accent-ink: #171006;
   --cp-blue: #2563eb;
   --cp-blue-2: #3b82f6;
   --cp-blue-3: #60a5fa;
+  --cp-purple: #8b5cf6;
+  --cp-magenta: #d946ef;
+  --cp-cyan: #06b6d4;
+  --cp-orange: #f97316;
   --cp-pale: #dbeafe;
 
-  --cp-ink: #f0f6ff;
+  --cp-ink: #f7f7f8;
   --cp-muted: rgba(255, 255, 255, 0.55);
   --cp-faint: rgba(255, 255, 255, 0.4);
 
-  --cp-grad-text: linear-gradient(135deg, #93c5fd 0%, #3b82f6 50%, #2563eb 100%);
+  --cp-grad-text: linear-gradient(135deg, #ffe16b 0%, #ffc400 55%, #e6a900 100%);
+  --cp-grad-brand: linear-gradient(135deg, #93c5fd 0%, #3b82f6 52%, #2563eb 100%);
+  --cp-grad-experience: linear-gradient(135deg, #c084fc 0%, #a855f7 45%, #d946ef 100%);
   --cp-grad-cyan: linear-gradient(135deg, #7dd3fc, #38bdf8);
-  --cp-grad-btn: linear-gradient(135deg, #2563eb, #38bdf8);
+  --cp-grad-btn: linear-gradient(135deg, #ffd43b, #ffc400 55%, #f5b700);
 
-  --cp-glow: 0 8px 26px rgba(37, 99, 235, 0.38);
-  --cp-glow-lg: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(59, 130, 246, 0.12);
+  --cp-glow: 0 10px 28px rgba(255, 196, 0, 0.26);
+  --cp-glow-lg: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 196, 0, 0.1);
   --cp-radius: 16px;
 }
 
@@ -56,8 +60,8 @@
 /* Deep band, used to break up long runs of otherwise identical sections. */
 .cp-section--deep {
   background: linear-gradient(180deg, var(--cp-void) 0%, var(--cp-deep) 50%, var(--cp-void) 100%);
-  border-top-color: rgba(96, 165, 250, 0.14);
-  border-bottom: 1px solid rgba(96, 165, 250, 0.14);
+  border-top-color: rgba(139, 92, 246, 0.16);
+  border-bottom: 1px solid rgba(139, 92, 246, 0.16);
 }
 
 .cp-shell {
@@ -140,6 +144,9 @@
   background-clip: text;
 }
 
+.cp-grad-text--brand { background-image: var(--cp-grad-brand); }
+.cp-grad-text--experience { background-image: var(--cp-grad-experience); }
+
 /* ------------------------------------------------------------------ cards
    These replace onMouseEnter/onMouseLeave handlers that used to write straight
    to element.style. Inline styles set from JS outrank any stylesheet rule, so
@@ -169,9 +176,9 @@
   align-items: center;
   justify-content: center;
   border-radius: 12px;
-  background: rgba(56, 189, 248, 0.13);
-  border: 1px solid rgba(125, 211, 252, 0.3);
-  color: var(--cp-accent-soft);
+  background: rgba(255, 196, 0, 0.12);
+  border: 1px solid rgba(255, 196, 0, 0.28);
+  color: var(--cp-accent);
 }
 
 /* --------------------------------------------------------------- controls */
@@ -182,14 +189,14 @@
   gap: 0.5rem;
   border-radius: 999px;
   font-weight: 700;
-  color: #fff;
+  color: var(--cp-accent-ink);
   background: var(--cp-grad-btn);
   box-shadow: var(--cp-glow);
   transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 .cp-btn:hover {
   transform: translateY(-1px) scale(1.03);
-  box-shadow: 0 12px 34px rgba(37, 99, 235, 0.5);
+  box-shadow: 0 12px 34px rgba(255, 196, 0, 0.38);
 }
 
 .cp-btn-ghost {
@@ -199,16 +206,22 @@
   gap: 0.5rem;
   border-radius: 999px;
   font-weight: 600;
-  color: var(--cp-pale);
-  border: 1px solid rgba(125, 211, 252, 0.4);
-  background: rgba(56, 189, 248, 0.07);
+  color: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(5, 5, 5, 0.28);
   backdrop-filter: blur(8px);
   transition: transform 0.25s ease, background-color 0.25s ease, border-color 0.25s ease;
 }
 .cp-btn-ghost:hover {
   transform: translateY(-1px) scale(1.03);
-  background: rgba(56, 189, 248, 0.14);
-  border-color: rgba(125, 211, 252, 0.65);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.48);
+}
+
+.cp-theme-experience .cp-card:hover {
+  border-color: rgba(168, 85, 247, 0.42);
+  background-color: rgba(139, 92, 246, 0.09);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(168, 85, 247, 0.12);
 }
 
 .cp-link {
