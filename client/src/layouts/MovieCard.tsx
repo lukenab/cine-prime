@@ -19,11 +19,15 @@ interface Movie {
 interface MovieCardProps {
   movie: Movie;
   onTrailer?: () => void;
+  variant?: "standard" | "compact";
+  comingSoon?: boolean;
 }
 
-export function MovieCard({ movie, onTrailer }: MovieCardProps) {
+export function MovieCard({ movie, onTrailer, variant = "standard", comingSoon = false }: MovieCardProps) {
   const navigate = useNavigate();
   const handleBook = () => navigate(`/showtime/${movie.id}`);
+  const handlePrimaryAction = () => comingSoon ? onTrailer?.() : handleBook();
+  const compact = variant === "compact";
 
   return (
     // The scale/shadow/z-index hover used to be written imperatively onto element.style from JS
@@ -31,12 +35,12 @@ export function MovieCard({ movie, onTrailer }: MovieCardProps) {
     // class could ever override them — the hover is now pure CSS via Tailwind utilities.
     // `group` must stay: the CTA overlay below relies on `group-hover:opacity-100`.
     <div
-      onClick={handleBook}
+      onClick={handlePrimaryAction}
       className="group relative flex-shrink-0 rounded-2xl overflow-hidden cursor-pointer transition-transform duration-300 hover:scale-105 hover:z-10 hover:shadow-[0_20px_60px_rgba(0,0,0,0.7)]"
-      style={{ width: "240px" }}
+      style={{ width: compact ? "210px" : "240px" }}
     >
       {/* Poster */}
-      <div className="relative" style={{ height: "360px" }}>
+      <div className="relative" style={{ height: compact ? "315px" : "360px" }}>
         <img
           src={movie.image}
           alt={movie.title}
@@ -113,7 +117,7 @@ export function MovieCard({ movie, onTrailer }: MovieCardProps) {
         <button
           onClick={(e) => {
             e.stopPropagation();
-            handleBook();
+            handlePrimaryAction();
           }}
           className="flex w-full max-w-[9rem] items-center justify-center gap-1.5 rounded-lg px-4 py-2.5 text-white shadow-[0_8px_22px_rgba(37,99,235,0.3)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_26px_rgba(37,99,235,0.4)]"
           style={{
@@ -122,10 +126,10 @@ export function MovieCard({ movie, onTrailer }: MovieCardProps) {
             fontSize: "0.75rem",
           }}
         >
-          <Ticket size={12} />
-          Buy tickets
+          {comingSoon ? <Play size={12} fill="currentColor" /> : <Ticket size={12} />}
+          {comingSoon ? "Watch trailer" : "Buy tickets"}
         </button>
-        <button
+        {!comingSoon && <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
@@ -136,7 +140,7 @@ export function MovieCard({ movie, onTrailer }: MovieCardProps) {
         >
           <Play size={12} fill="currentColor" />
           Watch trailer
-        </button>
+        </button>}
       </div>
     </div>
   );

@@ -1,31 +1,31 @@
 import { Zap, Volume2, Monitor, Armchair } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-// Blue/cyan ramp: the four cards still read as distinct, but stay inside the cosmic palette.
+// Supporting accents distinguish capabilities without competing with gold CTAs.
 const FEATURES = [
   {
     icon: Monitor,
     title: "4K Ultra HD",
     description: "Crystal-clear projection on massive screens up to 30 metres wide.",
-    color: "#7DD3FC",
+    color: "#FACC15",
   },
   {
     icon: Volume2,
     title: "Dolby Atmos",
     description: "Immersive 3D sound that fills the entire theatre with breathtaking audio.",
-    color: "#38BDF8",
+    color: "#A855F7",
   },
   {
     icon: Armchair,
     title: "Recliner Seats",
     description: "Fully electric leather recliners with footrests and heated cushions.",
-    color: "#60A5FA",
+    color: "#22D3EE",
   },
   {
     icon: Zap,
     title: "4DX & IMAX",
     description: "Motion seats, wind, rain effects, and the largest screens in the world.",
-    color: "#2563EB",
+    color: "#F97316",
   },
 ];
 
@@ -37,13 +37,13 @@ export function ExperienceBanner() {
     // so it keeps its own deep-navy gradient instead of the flat .cp-section shell.
     // position/overflow are needed locally so the starfield layers are clipped to the section.
     <section
-      className="cp-stars"
+      className="cp-stars cp-theme-experience"
       style={{
-        background: "linear-gradient(135deg, #050b1c 0%, #0b1430 50%, #050b1c 100%)",
+        background: "linear-gradient(135deg, #070510 0%, #11102b 50%, #070510 100%)",
         paddingTop: "80px",
         paddingBottom: "80px",
-        borderTop: "1px solid rgba(96,165,250,0.18)",
-        borderBottom: "1px solid rgba(96,165,250,0.18)",
+        borderTop: "1px solid rgba(139,92,246,0.2)",
+        borderBottom: "1px solid rgba(139,92,246,0.2)",
         position: "relative",
         overflow: "hidden",
       }}
@@ -52,7 +52,7 @@ export function ExperienceBanner() {
       <div className="cp-shell max-w-7xl mx-auto px-6">
         {/* Header */}
         <div className="text-center mb-12">
-          <span className="cp-eyebrow">Why Choose CinePrime</span>
+          <span className="cp-eyebrow" style={{ color: "var(--cp-purple)" }}>Why Choose CinePrime</span>
           <h2
             style={{
               color: "white",
@@ -62,7 +62,7 @@ export function ExperienceBanner() {
               lineHeight: 1.2,
             }}
           >
-            The Ultimate <span className="cp-grad-text">Cinema Experience</span>
+            The Ultimate <span className="cp-grad-text cp-grad-text--experience">Cinema Experience</span>
           </h2>
           <p style={{ color: "rgba(255,255,255,0.45)", fontSize: "0.9rem", marginTop: "12px" }}>
             State-of-the-art technology meets luxurious comfort for an unparalleled night out.
@@ -109,8 +109,8 @@ export function ExperienceBanner() {
         <div
           className="flex flex-col sm:flex-row items-center justify-between gap-6 mt-12 p-8 rounded-2xl"
           style={{
-            background: "linear-gradient(135deg, rgba(37,99,235,0.18) 0%, rgba(56,189,248,0.08) 100%)",
-            border: "1px solid rgba(96,165,250,0.22)",
+            background: "linear-gradient(135deg, rgba(139,92,246,0.18) 0%, rgba(255,196,0,0.08) 100%)",
+            border: "1px solid rgba(168,85,247,0.24)",
           }}
         >
           <div>

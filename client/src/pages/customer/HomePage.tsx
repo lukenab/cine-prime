@@ -5,7 +5,6 @@ import { HeroSection } from "../../components/shared/HeroSection";
 import { QuickBooking } from "../../components/shared/QuickBooking";
 import { MovieShowcase } from "../../components/shared/MovieShowcase";
 import { OffersTeaser } from "../../components/shared/OffersTeaser";
-import { UpcomingEvents } from "../../components/shared/UpcomingEvents";
 import { CinemaLocations } from "../../components/shared/CinemaLocations";
 import { ExperienceBanner } from "../../components/shared/ExperienceBanner";
 import { AboutCinePrime } from "../../components/shared/AboutCinePrime";
@@ -43,7 +42,6 @@ export default function HomePage() {
       <QuickBooking />
       <MovieShowcase movies={movies} loading={loadingMovies} error={movieError} />
       <OffersTeaser />
-      <UpcomingEvents />
       <CinemaLocations />
       <ExperienceBanner />
       <AboutCinePrime />

@@ -1,7 +1,7 @@
 import { useAuth } from "../context/AuthContext";
 import { Bell, Search, ChevronRight, User, Settings, LogOut, Sun, Moon, ExternalLink } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { CommandPalette } from "../components/admin/CommandPalette";
 
 const roleLabels: Record<string, string> = {
@@ -59,6 +59,8 @@ export function Header({ activePage, isDarkMode = true, onToggleTheme }: HeaderP
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const location = useLocation();
+  const isReleasePlanReview = /\/movies\/[^/]+\/availability(?:\/|$)/.test(location.pathname);
 
   // Xử lý click ra ngoài để đóng dropdown
   useEffect(() => {
@@ -107,7 +109,15 @@ export function Header({ activePage, isDarkMode = true, onToggleTheme }: HeaderP
       <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-sub)", fontSize: "13px" }}>
         <span style={{ color: "var(--text-sub)", fontWeight: 500 }}>CinePrime</span>
         <ChevronRight size={13} style={{ color: "var(--border-color)" }} />
-        <span style={{ color: "var(--text-main)", fontWeight: 500, transition: "color 0.2s ease" }}>{pageTitles[activePage] ?? activePage}</span>
+        {isReleasePlanReview ? (
+          <>
+            <button type="button" onClick={() => navigate("/admin/movies")} className="font-medium transition-colors hover:text-blue-600" style={{ color: "var(--text-sub)" }}>Movie catalogue</button>
+            <ChevronRight size={13} style={{ color: "var(--border-color)" }} />
+            <span style={{ color: "var(--text-main)", fontWeight: 500 }}>Release plan review</span>
+          </>
+        ) : (
+          <span style={{ color: "var(--text-main)", fontWeight: 500, transition: "color 0.2s ease" }}>{pageTitles[activePage] ?? activePage}</span>
+        )}
       </div>
 
       {/* Right controls */}

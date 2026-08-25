@@ -27,7 +27,7 @@ export function AboutCinePrime() {
     <section
       aria-labelledby="about-cineprime-title"
       className="relative overflow-hidden border-t border-white/[0.06] py-20 sm:py-24"
-      style={{ background: "linear-gradient(145deg, #050914 0%, #071126 52%, #04070f 100%)" }}
+      style={{ background: "linear-gradient(145deg, #050505 0%, #07101d 52%, #050505 100%)" }}
     >
       <div
         aria-hidden="true"
@@ -37,7 +37,7 @@ export function AboutCinePrime() {
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -right-28 -top-32 h-80 w-80 rounded-full blur-3xl"
-        style={{ background: "rgba(56,189,248,0.08)" }}
+        style={{ background: "rgba(255,196,0,0.08)" }}
       />
 
       <div className="cp-shell relative mx-auto max-w-7xl px-6">

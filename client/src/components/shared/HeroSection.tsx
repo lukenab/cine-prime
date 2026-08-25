@@ -1,6 +1,6 @@
 import { Ticket, Play } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import trailerVideo from "../../assets/GattoTeaser.mp4";
+import trailerVideo from "../../assets/Minion.mp4";
 
 export function HeroSection() {
   const navigate = useNavigate();
@@ -46,13 +46,13 @@ export function HeroSection() {
         }}
       />
 
-      {/* A cool wash over the footage so the warm trailer grade does not fight
-          the blue brand palette everywhere below it. */}
+      {/* A warm cinema wash gives the hero a commercial focal point while the
+          navbar and wordmark retain CinePrime's blue brand identity. */}
       <div
         className="absolute inset-0 z-10 pointer-events-none"
         style={{
           background:
-            "radial-gradient(120% 90% at 78% 18%, rgba(37,99,235,0.22) 0%, rgba(56,189,248,0.08) 40%, transparent 70%)",
+            "radial-gradient(120% 90% at 78% 18%, rgba(255,196,0,0.15) 0%, rgba(249,115,22,0.05) 42%, transparent 70%)",
           mixBlendMode: "screen",
         }}
       />
@@ -69,8 +69,8 @@ export function HeroSection() {
         <div
           className="flex items-center gap-2 px-3 py-1 rounded-full w-fit"
           style={{
-            border: "1px solid rgba(125,211,252,0.4)",
-            backgroundColor: "rgba(56,189,248,0.1)",
+            border: "1px solid rgba(255,196,0,0.4)",
+            backgroundColor: "rgba(255,196,0,0.1)",
             backdropFilter: "blur(8px)",
           }}
         >
@@ -78,7 +78,7 @@ export function HeroSection() {
             className="inline-block w-1.5 h-1.5 rounded-full animate-pulse"
             style={{ backgroundColor: "var(--cp-accent)" }}
           />
-          <span style={{ color: "var(--cp-accent-soft)", fontSize: "0.7rem", letterSpacing: "0.15em", fontWeight: 600 }}>
+          <span style={{ color: "var(--cp-accent)", fontSize: "0.7rem", letterSpacing: "0.15em", fontWeight: 700 }}>
             NOW SHOWING IN THEATRES
           </span>
         </div>
@@ -113,7 +113,7 @@ export function HeroSection() {
           <button
             onClick={goToBooking}
             className="cp-btn px-8 py-4"
-            style={{ fontSize: "0.9rem", letterSpacing: "0.03em" }}
+            style={{ fontSize: "0.9rem", fontWeight: 900, letterSpacing: "0.03em" }}
           >
             <Ticket size={16} />
             Book Your Movie
@@ -129,19 +129,15 @@ export function HeroSection() {
           </button>
         </div>
 
-        {/* These were "200+ Movies" and "50+ Screens" — invented counts that read
-            as a lie the moment the catalogue is empty, which the demo-readiness
-            audit flagged. Venue capabilities make the same impression without
-            claiming a number the API can contradict. */}
         <div className="flex gap-8 flex-wrap" style={{ paddingTop: "8px" }}>
           {[
-            { value: "4K", label: "Laser" },
+            { value: "200+", label: "Movies" },
+            { value: "50+", label: "Screens" },
+            { value: "4K", label: "Ultra HD" },
             { value: "Dolby", label: "Atmos" },
-            { value: "IMAX", label: "& 4DX" },
-            { value: "Recliner", label: "Seating" },
           ].map(({ value, label }) => (
             <div key={label} className="flex flex-col gap-0.5">
-              <span style={{ color: "var(--cp-accent-soft)", fontSize: "1.25rem", fontWeight: 800, lineHeight: 1 }}>
+              <span style={{ color: "var(--cp-accent)", fontSize: "1.25rem", fontWeight: 800, lineHeight: 1 }}>
                 {value}
               </span>
               <span style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.7rem", letterSpacing: "0.1em" }}>
