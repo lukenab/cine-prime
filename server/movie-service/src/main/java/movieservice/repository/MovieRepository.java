@@ -50,6 +50,53 @@ public interface MovieRepository extends JpaRepository<Movie, Long> {
             @Param("qPattern") String qPattern,
             Pageable pageable);
 
+    @Query(value = """
+            SELECT movie.movie_id
+            FROM movie movie
+            LEFT JOIN movie_translation title_vi
+              ON title_vi.movie_id = movie.movie_id AND title_vi.language_code = 'vi'
+            LEFT JOIN movie_translation title_en
+              ON title_en.movie_id = movie.movie_id AND title_en.language_code = 'en'
+            WHERE movie.status = 'APPROVED'
+              AND (:query IS NULL
+                   OR LOWER(movie.original_title) LIKE LOWER(CONCAT('%', CAST(:query AS text), '%'))
+                   OR LOWER(COALESCE(title_vi.title, '')) LIKE LOWER(CONCAT('%', CAST(:query AS text), '%'))
+                   OR LOWER(COALESCE(title_en.title, '')) LIKE LOWER(CONCAT('%', CAST(:query AS text), '%')))
+            ORDER BY COALESCE(title_vi.title, title_en.title, movie.original_title), movie.movie_id
+            """, countQuery = """
+            SELECT COUNT(*)
+            FROM movie movie
+            LEFT JOIN movie_translation title_vi
+              ON title_vi.movie_id = movie.movie_id AND title_vi.language_code = 'vi'
+            LEFT JOIN movie_translation title_en
+              ON title_en.movie_id = movie.movie_id AND title_en.language_code = 'en'
+            WHERE movie.status = 'APPROVED'
+              AND (:query IS NULL
+                   OR LOWER(movie.original_title) LIKE LOWER(CONCAT('%', CAST(:query AS text), '%'))
+                   OR LOWER(COALESCE(title_vi.title, '')) LIKE LOWER(CONCAT('%', CAST(:query AS text), '%'))
+                   OR LOWER(COALESCE(title_en.title, '')) LIKE LOWER(CONCAT('%', CAST(:query AS text), '%')))
+            """, nativeQuery = true)
+    Page<Long> findApprovedMovieIdsForReleaseQueue(
+            @Param("query") String query,
+            Pageable pageable);
+
+    @Query("""
+            SELECT DISTINCT movie FROM Movie movie
+            LEFT JOIN FETCH movie.translations
+            WHERE movie.movieId IN :movieIds
+            """)
+    List<Movie> findByMovieIdInWithTranslations(@Param("movieIds") List<Long> movieIds);
+
+    @Query("""
+            SELECT COUNT(movie) FROM Movie movie
+            WHERE movie.status = movieservice.enums.MovieStatus.APPROVED
+              AND NOT EXISTS (
+                  SELECT availability.availabilityId FROM MovieAvailability availability
+                  WHERE availability.movie = movie
+              )
+            """)
+    long countApprovedMoviesWithoutReleasePlan();
+
     // ── Admin / duplicate guard ───────────────────────────────
     boolean existsByOriginalTitleIgnoreCase(String originalTitle);
 

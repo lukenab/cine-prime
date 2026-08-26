@@ -6,15 +6,19 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import movie.theater.common.dto.ApiResponse;
 import movieservice.dto.request.BulkCreateMovieAvailabilityRequest;
+import movieservice.dto.request.BulkReleasePlanDecisionRequest;
 import movieservice.dto.request.CloseRequest;
 import movieservice.dto.request.CreateMovieAvailabilityRequest;
 import movieservice.dto.request.SuspendRequest;
 import movieservice.dto.request.UpdateMovieAvailabilityRequest;
 import movieservice.dto.request.ReleasePlanReviewRequest;
 import movieservice.dto.response.BulkCreateMovieAvailabilityResponse;
+import movieservice.dto.response.BulkReleasePlanDecisionResponse;
 import movieservice.dto.response.MovieAvailabilityResponse;
+import movieservice.dto.response.ReleasePlanningQueuePageResponse;
 import movieservice.enums.AvailabilityStatus;
 import movieservice.service.MovieAvailabilityService;
+import movieservice.service.ReleasePlanBulkDecisionService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -29,6 +33,7 @@ import java.util.List;
 public class MovieAvailabilityController {
 
     MovieAvailabilityService movieAvailabilityService;
+    ReleasePlanBulkDecisionService bulkDecisionService;
 
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'RELEASE_PLAN_READ')")
     @GetMapping
@@ -105,6 +110,29 @@ public class MovieAvailabilityController {
         return ApiResponse.<MovieAvailabilityResponse>builder()
                 .code(200).message("Release plan approved")
                 .result(movieAvailabilityService.approve(id, actor(), note))
+                .build();
+    }
+
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'RELEASE_PLAN_READ')")
+    @GetMapping("/queue")
+    public ApiResponse<ReleasePlanningQueuePageResponse> searchQueue(
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ApiResponse.<ReleasePlanningQueuePageResponse>builder()
+                .code(200)
+                .result(movieAvailabilityService.searchQueue(q, page, size))
+                .build();
+    }
+
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'RELEASE_PLAN_APPROVE')")
+    @PostMapping("/bulk-decisions")
+    public ApiResponse<BulkReleasePlanDecisionResponse> bulkDecision(
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @Valid @RequestBody BulkReleasePlanDecisionRequest request) {
+        return ApiResponse.<BulkReleasePlanDecisionResponse>builder()
+                .code(200).message("Bulk release-plan decision completed")
+                .result(bulkDecisionService.decide(request, actor(), idempotencyKey))
                 .build();
     }
 

@@ -5,10 +5,11 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   movieApi,
-  type MovieApiResponse,
   type MovieAvailabilityResponse,
+  type ReleasePlanningQueuePageResponse,
 } from "../../api/movieApi";
 import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
+import { AdminPagination } from "../../components/admin/AdminPagination";
 import { RequestState } from "../../components/shared/RequestState";
 import { classifyRequestFailure, type RequestFailure } from "../../utils/requestFailure";
 import { useRole } from "../../hooks/useRole";
@@ -31,10 +32,9 @@ const PLAN_META: Record<string, { label: string; color: string; background: stri
 };
 
 const STATUS_ORDER = ["CHANGES_REQUESTED", "PLANNED", "IN_REVIEW", "APPROVED", "OPEN", "SUSPENDED", "CLOSED"];
-const TABLE_GRID = "minmax(300px,1.45fr) minmax(145px,.65fr) minmax(210px,.85fr) minmax(250px,1fr) minmax(175px,.75fr) 72px";
+const PAGE_SIZE = 10;
+const TABLE_GRID = "minmax(270px,1.3fr) minmax(130px,.58fr) minmax(180px,.78fr) minmax(165px,.7fr) minmax(230px,.95fr) minmax(165px,.72fr) 72px";
 const DETAIL_GRID = "minmax(220px,1.1fr) minmax(220px,1fr) minmax(190px,.85fr) minmax(150px,.65fr) minmax(190px,.8fr)";
-const ACTIONABLE_STATUSES = new Set(["PLANNED", "CHANGES_REQUESTED", "SUSPENDED"]);
-
 function formatPlanDate(value?: string, includeTime = false) {
   if (!value) return "—";
   const parsed = new Date(value.length === 10 ? `${value}T00:00:00` : value);
@@ -53,23 +53,23 @@ function getStatusCounts(moviePlans: MovieAvailabilityResponse[]) {
 
 function getPlanEventTimestamp(date: string, type: string) {
   const parsed = new Date(date.length === 10 ? `${date}T00:00:00` : date);
-  if (type === "window ends" && date.length === 10) parsed.setDate(parsed.getDate() + 1);
+  if (type === "run ends" && date.length === 10) parsed.setDate(parsed.getDate() + 1);
   return parsed.getTime();
 }
 
-function getUpcomingPlanEvent(moviePlans: MovieAvailabilityResponse[]) {
+function getUpcomingPlanMilestones(moviePlans: MovieAvailabilityResponse[]) {
   const now = Date.now();
   const candidates = moviePlans.filter((plan) => !["CLOSED", "SUSPENDED"].includes(plan.status)).flatMap((plan) => [
-    plan.salesStartAt ? { type: "release activates", date: plan.salesStartAt, plan } : null,
-    plan.showingStartDate ? { type: "window starts", date: plan.showingStartDate, plan } : null,
-    plan.showingEndDate ? { type: "window ends", date: plan.showingEndDate, plan } : null,
+    plan.salesStartAt ? { type: "sales start", date: plan.salesStartAt, plan } : null,
+    plan.showingStartDate ? { type: "run starts", date: plan.showingStartDate, plan } : null,
+    plan.showingEndDate ? { type: "run ends", date: plan.showingEndDate, plan } : null,
   ]).filter((item): item is { type: string; date: string; plan: MovieAvailabilityResponse } => {
     if (!item) return false;
     const timestamp = getPlanEventTimestamp(item.date, item.type);
     return !Number.isNaN(timestamp) && timestamp >= now;
   }).sort((left, right) => getPlanEventTimestamp(left.date, left.type) - getPlanEventTimestamp(right.date, right.type));
 
-  return candidates[0] ?? null;
+  return { next: candidates[0] ?? null, remaining: Math.max(0, candidates.length - 1) };
 }
 
 function formatPlanActivation(plan: MovieAvailabilityResponse) {
@@ -84,9 +84,10 @@ export default function ReleasePlanningQueuePage() {
   const { can } = useRole();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [movies, setMovies] = useState<MovieApiResponse[]>([]);
-  const [plans, setPlans] = useState<MovieAvailabilityResponse[]>([]);
-  const [query, setQuery] = useState("");
+  const [pageResult, setPageResult] = useState<ReleasePlanningQueuePageResponse | null>(null);
+  const [query, setQuery] = useState(searchParams.get("q") ?? "");
+  const [debouncedQuery, setDebouncedQuery] = useState(searchParams.get("q") ?? "");
+  const [page, setPage] = useState(Math.max(0, Number(searchParams.get("page") ?? 1) - 1 || 0));
   const [loading, setLoading] = useState(true);
   const [failure, setFailure] = useState<RequestFailure | null>(null);
   const [selectedMovieId, setSelectedMovieId] = useState<number | null>(null);
@@ -95,20 +96,38 @@ export default function ReleasePlanningQueuePage() {
     setLoading(true);
     setFailure(null);
     try {
-      const [movieResponse, planResponse] = await Promise.all([
-        movieApi.getAllMovies(),
-        movieApi.searchAvailabilities({}),
-      ]);
-      setMovies(movieResponse.result ?? []);
-      setPlans(planResponse.result ?? []);
+      const response = await movieApi.searchReleasePlanningQueue({
+        q: debouncedQuery,
+        page,
+        size: PAGE_SIZE,
+      });
+      setPageResult(response.result ?? null);
     } catch (requestError) {
       setFailure(classifyRequestFailure(requestError, "The release planning queue could not be loaded."));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [debouncedQuery, page]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedQuery(query.trim());
+      setPage(0);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams);
+    if (debouncedQuery) next.set("q", debouncedQuery); else next.delete("q");
+    if (page > 0) next.set("page", String(page + 1)); else next.delete("page");
+    next.delete("size");
+    setSearchParams(next, { replace: true });
+  // searchParams is intentionally excluded: it is the destination of this synchronization.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedQuery, page, setSearchParams]);
 
   useEffect(() => {
     const requestedMovieId = Number(searchParams.get("movieId"));
@@ -117,28 +136,26 @@ export default function ReleasePlanningQueuePage() {
     }
   }, [searchParams]);
 
-  const plansByMovie = useMemo(() => plans.reduce<Record<number, MovieAvailabilityResponse[]>>((result, plan) => {
-    (result[plan.movieId] ??= []).push(plan);
+  const plansByMovie = useMemo(() => (pageResult?.content ?? []).reduce<Record<number, MovieAvailabilityResponse[]>>((result, movie) => {
+    result[movie.movieId] = movie.plans;
     return result;
-  }, {}), [plans]);
+  }, {}), [pageResult]);
 
-  const approvedMovies = useMemo(() => movies.filter((movie) => movie.movieStatus === "APPROVED"), [movies]);
+  const rows = useMemo(() => (pageResult?.content ?? []).map((movie) => ({
+    movieId: movie.movieId,
+    movieNameVn: movie.displayTitle,
+    movieNameEnglish: movie.originalTitle,
+    smallImage: movie.posterUrl,
+  })), [pageResult]);
 
-  const rows = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return approvedMovies
-      .filter((movie) => !normalizedQuery || `${movie.movieNameVn} ${movie.movieNameEnglish}`.toLowerCase().includes(normalizedQuery))
-      .sort((left, right) => (plansByMovie[right.movieId]?.length ?? 0) - (plansByMovie[left.movieId]?.length ?? 0));
-  }, [approvedMovies, plansByMovie, query]);
+  const movieStats = {
+    unplanned: pageResult?.summary.unplannedMovies ?? 0,
+    needsAction: pageResult?.summary.needOperatorAction ?? 0,
+    awaitingApproval: pageResult?.summary.awaitingApproval ?? 0,
+    activeReleases: pageResult?.summary.activeReleases ?? 0,
+  };
 
-  const movieStats = useMemo(() => ({
-    unplanned: approvedMovies.filter((movie) => !(plansByMovie[movie.movieId]?.length)).length,
-    needsAction: approvedMovies.filter((movie) => (plansByMovie[movie.movieId] ?? []).some((plan) => ACTIONABLE_STATUSES.has(plan.status))).length,
-    awaitingApproval: approvedMovies.filter((movie) => (plansByMovie[movie.movieId] ?? []).some((plan) => plan.status === "IN_REVIEW")).length,
-    activeReleases: approvedMovies.filter((movie) => (plansByMovie[movie.movieId] ?? []).some((plan) => plan.status === "OPEN")).length,
-  }), [approvedMovies, plansByMovie]);
-
-  const selectedMovie = approvedMovies.find((movie) => movie.movieId === selectedMovieId) ?? null;
+  const selectedMovie = rows.find((movie) => movie.movieId === selectedMovieId) ?? null;
   const selectedMoviePlans = selectedMovie
     ? [...(plansByMovie[selectedMovie.movieId] ?? [])].sort((left, right) => (left.clusterName ?? "").localeCompare(right.clusterName ?? ""))
     : [];
@@ -175,9 +192,9 @@ export default function ReleasePlanningQueuePage() {
 
       <div style={{ borderRadius: 16, border: "1px solid var(--border-color)", background: "var(--bg-card)", overflow: "hidden" }}>
         <div style={{ overflowX: "auto" }}>
-          <div style={{ minWidth: 1180 }}>
+          <div style={{ minWidth: 1380 }}>
             <div style={{ display: "grid", gridTemplateColumns: TABLE_GRID, gap: 18, minHeight: 50, alignItems: "center", padding: "15px 18px", color: "var(--text-sub)", borderBottom: "1px solid var(--border-color)", background: "var(--bg-main)", fontSize: 10.5, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>
-              <span>Movie</span><span>Coverage</span><span>Release status</span><span>Upcoming plan event</span><span>Needs attention</span><span style={{ textAlign: "right" }}>Actions</span>
+              <span>Movie</span><span>Coverage</span><span>Workflow</span><span>Sales availability</span><span>Next milestone</span><span>Needs attention</span><span style={{ textAlign: "right" }}>Actions</span>
             </div>
             {failure ? <div className="p-4"><RequestState compact kind={failure.kind} description={failure.description} onRetry={() => void load()} /></div> : rows.length === 0 && !loading ? (
               <div className="p-4"><RequestState compact kind="empty" title="No release plans match this view" description="Approved movies and submitted cluster plans will appear here when they are ready for programming work." /></div>
@@ -187,7 +204,8 @@ export default function ReleasePlanningQueuePage() {
               const statuses = Object.keys(statusCounts).sort((left, right) => STATUS_ORDER.indexOf(left) - STATUS_ORDER.indexOf(right));
               const clusterCount = new Set(moviePlans.map((plan) => plan.clusterId)).size;
               const activeClusterCount = new Set(moviePlans.filter((plan) => plan.status === "OPEN").map((plan) => plan.clusterId)).size;
-              const upcomingEvent = getUpcomingPlanEvent(moviePlans);
+              const milestones = getUpcomingPlanMilestones(moviePlans);
+              const upcomingEvent = milestones.next;
               const primaryStatus = statuses.length === 1 ? statuses[0] : null;
               const stateMeta = primaryStatus
                 ? primaryStatus === "OPEN"
@@ -202,8 +220,19 @@ export default function ReleasePlanningQueuePage() {
                       : (statusCounts.IN_REVIEW ?? 0) > 0
                         ? { ...PLAN_META.IN_REVIEW, label: "Approval in progress" }
                         : (statusCounts.APPROVED ?? 0) > 0
-                          ? { ...PLAN_META.APPROVED, label: "Activation pending" }
+                          ? { ...PLAN_META.APPROVED, label: (statusCounts.CLOSED ?? 0) > 0
+                            ? `${statusCounts.APPROVED} approved · ${statusCounts.CLOSED} closed`
+                            : "Approved" }
                           : { label: moviePlans.length ? "Planning in progress" : "Unplanned", color: "#2563eb", background: "rgba(37,99,235,.1)" };
+              const approvedPlans = moviePlans.filter((plan) => plan.status === "APPROVED");
+              const scheduledApprovedCount = approvedPlans.filter((plan) => Boolean(plan.salesStartAt)).length;
+              const salesMeta = activeClusterCount > 0
+                ? { label: `On sale in ${activeClusterCount}/${clusterCount}`, detail: "clusters", color: "#059669", background: "rgba(16,185,129,.12)" }
+                : scheduledApprovedCount > 0
+                  ? { label: `${scheduledApprovedCount} scheduled`, detail: "sales start configured", color: "#2563eb", background: "rgba(37,99,235,.1)" }
+                  : approvedPlans.length > 0
+                    ? { label: "Not scheduled", detail: `${approvedPlans.length} approved plan${approvedPlans.length === 1 ? "" : "s"}`, color: "#64748b", background: "rgba(100,116,139,.12)" }
+                    : { label: "Not on sale", detail: "", color: "#64748b", background: "rgba(100,116,139,.10)" };
               const stateSummary = statuses.map((status) => `${statusCounts[status]} ${(PLAN_META[status]?.label ?? status).toLowerCase()}`).join(" · ");
               const changeCount = statusCounts.CHANGES_REQUESTED ?? 0;
               const suspendedCount = statusCounts.SUSPENDED ?? 0;
@@ -230,7 +259,11 @@ export default function ReleasePlanningQueuePage() {
                       <small title={stateSummary} style={{ display: "block", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-sub)", marginTop: 5 }}>{statuses.length > 1 ? stateSummary : moviePlans.length ? `${moviePlans.length} plan${moviePlans.length === 1 ? "" : "s"}` : "Create the first plan"}</small>
                     </div>
                     <div>
-                      {upcomingEvent ? <><strong style={{ display: "block", fontSize: 12.5 }}>{formatPlanDate(upcomingEvent.date, upcomingEvent.date.includes("T"))}</strong><small style={{ display: "block", color: "var(--text-sub)", marginTop: 4 }}>{upcomingEvent.plan.clusterName ?? `Cluster #${upcomingEvent.plan.clusterId}`} {upcomingEvent.type}</small></> : <strong style={{ display: "block", color: "var(--text-sub)", fontSize: 12.5 }}>—</strong>}
+                      <span style={{ display: "inline-flex", padding: "5px 8px", borderRadius: 999, color: salesMeta.color, background: salesMeta.background, fontSize: 10.5, fontWeight: 700 }}>{salesMeta.label}</span>
+                      {salesMeta.detail && <small style={{ display: "block", color: "var(--text-sub)", marginTop: 5 }}>{salesMeta.detail}</small>}
+                    </div>
+                    <div>
+                      {upcomingEvent ? <><strong style={{ display: "block", fontSize: 12.5 }}>{formatPlanDate(upcomingEvent.date, upcomingEvent.date.includes("T"))}</strong><small style={{ display: "block", color: "var(--text-sub)", marginTop: 4 }}>{upcomingEvent.plan.clusterName ?? `Cluster #${upcomingEvent.plan.clusterId}`} · {upcomingEvent.type}</small>{milestones.remaining > 0 && <small style={{ display: "block", color: "#2563eb", marginTop: 3, fontWeight: 650 }}>+{milestones.remaining} other milestone{milestones.remaining === 1 ? "" : "s"}</small>}</> : <strong style={{ display: "block", color: "var(--text-sub)", fontSize: 12.5 }}>—</strong>}
                     </div>
                     <div><strong style={{ display: "block", color: attention.color, fontSize: 12.5 }}>{attention.label}</strong>{attention.detail && <small style={{ display: "block", color: "var(--text-sub)", marginTop: 4 }}>{attention.detail}</small>}</div>
                     <RowActions
@@ -244,6 +277,17 @@ export default function ReleasePlanningQueuePage() {
             })}
           </div>
         </div>
+        {!failure && pageResult && rows.length > 0 && (
+          <AdminPagination
+            page={pageResult.page}
+            size={pageResult.size}
+            totalElements={pageResult.totalElements}
+            totalPages={pageResult.totalPages}
+            itemLabel="movies"
+            loading={loading}
+            onPageChange={setPage}
+          />
+        )}
       </div>
 
       <Dialog open={Boolean(selectedMovie)} onOpenChange={(open) => {

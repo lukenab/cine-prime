@@ -4,6 +4,7 @@ import { AlertCircle, ArrowLeft, Image as ImageIcon, RefreshCw } from "lucide-re
 import { movieApi, type MovieResponse } from "../../api/movieApi";
 import { MOVIE_CONTENT_STATUS_META, toMovieContentStatus } from "../../utils/movieContentStatus";
 import { MovieAvailabilityPanel } from "../../layouts/MovieAvailabilityPanel";
+import { useRole } from "../../hooks/useRole";
 
 /** Standalone page for the theatrical-availability workflow (release plans per cluster:
  *  create/open/suspend/resume/close). This used to be a passive-looking tab inside
@@ -13,6 +14,7 @@ import { MovieAvailabilityPanel } from "../../layouts/MovieAvailabilityPanel";
 export default function MovieAvailabilityPage() {
   const { movieId } = useParams<{ movieId: string }>();
   const navigate = useNavigate();
+  const { hasPermission, isAdmin } = useRole();
   const id = movieId ? Number(movieId) : NaN;
 
   const [movie, setMovie] = useState<MovieResponse | null>(null);
@@ -64,10 +66,23 @@ export default function MovieAvailabilityPage() {
   const englishTitle = movie.translations?.find((translation) => translation.languageCode === "en")?.title;
   const displayTitle = vietnameseTitle || englishTitle || movie.originalTitle;
   const alternateTitle = movie.originalTitle !== displayTitle ? movie.originalTitle : undefined;
+  const isApprovalOnly = !isAdmin
+    && hasPermission("RELEASE_PLAN_APPROVE")
+    && !hasPermission("RELEASE_PLAN_EDIT");
+  const backTarget = isApprovalOnly ? "/admin/programming/approvals" : "/admin/release-plans";
+  const backLabel = isApprovalOnly ? "Back to Approval Workspace" : "Back to Release Planning";
 
   return (
     <>
       <header className="mb-6">
+        <button
+          type="button"
+          onClick={() => navigate(backTarget)}
+          className="mb-4 inline-flex h-9 items-center gap-2 rounded-[10px] px-2.5 text-xs font-semibold transition-colors hover:bg-slate-500/10"
+          style={{ color: "var(--text-sub)" }}
+        >
+          <ArrowLeft size={15} /> {backLabel}
+        </button>
         <div className="flex min-w-0 items-center gap-3.5">
           <div className="h-[60px] w-11 flex-shrink-0 overflow-hidden rounded-lg border" style={{ borderColor: "var(--border-color)", background: "var(--bg-hover)" }}>
             {posterUrl

@@ -5,6 +5,7 @@ import movieservice.dto.request.BulkCreateMovieAvailabilityRequest;
 import movieservice.dto.request.CreateMovieAvailabilityRequest;
 import movieservice.dto.response.BulkCreateMovieAvailabilityResponse;
 import movieservice.dto.response.MovieAvailabilityResponse;
+import movieservice.dto.response.ReleasePlanningQueuePageResponse;
 import movieservice.entity.CinemaCluster;
 import movieservice.entity.Movie;
 import movieservice.entity.MovieAvailability;
@@ -24,6 +25,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -200,6 +203,37 @@ class MovieAvailabilityServiceTest {
         assertTrue(result.getSkipped().stream().anyMatch(s -> s.getClusterId().equals(3L) && s.getReason().contains("already exists")));
     }
 
+    @Test
+    void releasePlanningQueuePagesMoviesWithoutSplittingTheirBranchPlans() {
+        approvedMovie.setOriginalTitle("Moana");
+        MovieAvailability firstPlan = MovieAvailability.builder()
+                .availabilityId(10L)
+                .movie(approvedMovie)
+                .cluster(activeCluster)
+                .status(AvailabilityStatus.IN_REVIEW)
+                .showingStartDate(LocalDate.now())
+                .build();
+        PageRequest pageable = PageRequest.of(0, 10);
+
+        when(movieRepository.findApprovedMovieIdsForReleaseQueue(null, pageable))
+                .thenReturn(new PageImpl<>(List.of(1L), pageable, 1));
+        when(movieRepository.findByMovieIdInWithTranslations(List.of(1L)))
+                .thenReturn(List.of(approvedMovie));
+        when(movieAvailabilityRepository.findQueuePlansByMovieIds(List.of(1L)))
+                .thenReturn(List.of(firstPlan));
+        when(movieRepository.countApprovedMoviesWithoutReleasePlan()).thenReturn(2L);
+        when(movieAvailabilityRepository.countDistinctApprovedMoviesByStatuses(anyList()))
+                .thenReturn(1L, 3L, 4L);
+
+        ReleasePlanningQueuePageResponse result = service.searchQueue(null, 0, 10);
+
+        assertEquals(1, result.totalElements());
+        assertEquals("Moana", result.content().getFirst().displayTitle());
+        assertEquals(1, result.content().getFirst().plans().size());
+        assertEquals(2, result.summary().unplannedMovies());
+        assertEquals(3, result.summary().awaitingApproval());
+    }
+
     // ── transition matrix ────────────────────────────────────────────────
 
     private MovieAvailability availabilityWith(AvailabilityStatus status) {
@@ -257,6 +291,34 @@ class MovieAvailabilityServiceTest {
         service.approve(10L, "admin@cineprime.vn", "Approved");
         assertEquals(AvailabilityStatus.APPROVED, availability.getStatus());
         assertEquals("admin@cineprime.vn", availability.getApprovedBy());
+    }
+
+    @Test
+    void bulkApprovalRejectsAPlanThatChangedAfterSelection() {
+        MovieAvailability availability = availabilityWith(AvailabilityStatus.IN_REVIEW);
+        availability.setVersion(4L);
+        availability.setCreatedBy("operator@cineprime.vn");
+        when(movieAvailabilityRepository.findById(10L)).thenReturn(Optional.of(availability));
+
+        AppException ex = assertThrows(AppException.class,
+                () -> service.approve(10L, 3L, "approver@cineprime.vn", null));
+
+        assertEquals(MovieErrorCode.AVAILABILITY_VERSION_CONFLICT, ex.getErrorCode());
+        assertEquals(AvailabilityStatus.IN_REVIEW, availability.getStatus());
+        verify(movieAvailabilityRepository, never()).save(availability);
+    }
+
+    @Test
+    void bulkApprovalAcceptsTheCurrentPlanVersion() {
+        MovieAvailability availability = availabilityWith(AvailabilityStatus.IN_REVIEW);
+        availability.setVersion(4L);
+        availability.setCreatedBy("operator@cineprime.vn");
+        when(movieAvailabilityRepository.findById(10L)).thenReturn(Optional.of(availability));
+
+        service.approve(10L, 4L, "approver@cineprime.vn", "Checked as a batch");
+
+        assertEquals(AvailabilityStatus.APPROVED, availability.getStatus());
+        assertEquals("approver@cineprime.vn", availability.getApprovedBy());
     }
 
     @Test

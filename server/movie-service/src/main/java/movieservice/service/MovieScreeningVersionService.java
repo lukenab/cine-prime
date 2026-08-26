@@ -5,6 +5,7 @@ import movie.theater.common.exception.AppException;
 import movieservice.dto.request.MovieScreeningVersionRequest;
 import movieservice.dto.response.MovieScreeningVersionCatalogResponse;
 import movieservice.dto.response.MovieScreeningVersionResponse;
+import movieservice.dto.response.ScreeningVersionCatalogPageResponse;
 import movieservice.entity.AudioFormat;
 import movieservice.entity.Movie;
 import movieservice.entity.MovieScreeningVersion;
@@ -16,12 +17,17 @@ import movieservice.repository.AudioFormatRepository;
 import movieservice.repository.MovieRepository;
 import movieservice.repository.MovieScreeningVersionRepository;
 import movieservice.repository.ScreeningFormatRepository;
+import movieservice.util.MovieTitleResolver;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -61,6 +67,105 @@ public class MovieScreeningVersionService {
                 .map(version -> toCatalogResponse(version, clusterIds))
                 .filter(item -> !attentionOnly || item.requiresAttention())
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ScreeningVersionCatalogPageResponse searchCatalogPage(
+            String query,
+            ScreeningVersionStatus status,
+            Integer formatId,
+            String readiness,
+            int page,
+            int size
+    ) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        String normalizedQuery = query == null || query.isBlank() ? null : query.trim();
+        String normalizedReadiness = switch (readiness == null ? "ALL" : readiness.trim().toUpperCase(Locale.ROOT)) {
+            case "READY", "ATTENTION", "INACTIVE" -> readiness.trim().toUpperCase(Locale.ROOT);
+            default -> "ALL";
+        };
+
+        Page<Long> moviePage = versionRepository.findCatalogMovieIds(
+                normalizedQuery,
+                status == null ? null : status.name(),
+                formatId,
+                normalizedReadiness,
+                PageRequest.of(safePage, safeSize));
+
+        Map<Long, ScreeningVersionCatalogPageResponse.MovieGroup> groups = new LinkedHashMap<>();
+        moviePage.getContent().forEach(movieId -> groups.put(movieId, null));
+        if (!moviePage.isEmpty()) {
+            Map<Long, List<MovieScreeningVersionCatalogResponse>> versionsByMovie =
+                    versionRepository.findCatalogByMovieIds(moviePage.getContent()).stream()
+                            .map(version -> toCatalogResponse(version, List.of()))
+                            .filter(item -> matchesCatalogFilters(
+                                    item, normalizedQuery, status, formatId, normalizedReadiness))
+                            .collect(java.util.stream.Collectors.groupingBy(
+                                    MovieScreeningVersionCatalogResponse::movieId,
+                                    LinkedHashMap::new,
+                                    java.util.stream.Collectors.toList()));
+
+            moviePage.getContent().forEach(movieId -> {
+                List<MovieScreeningVersionCatalogResponse> versions = versionsByMovie.getOrDefault(movieId, List.of());
+                if (versions.isEmpty()) return;
+                MovieScreeningVersionCatalogResponse first = versions.get(0);
+                groups.put(movieId, new ScreeningVersionCatalogPageResponse.MovieGroup(
+                        movieId,
+                        first.movieTitle(),
+                        first.originalTitle(),
+                        first.posterUrl(),
+                        first.movieStatus(),
+                        versions));
+            });
+        }
+
+        ScreeningVersionCatalogPageResponse.Summary summary =
+                new ScreeningVersionCatalogPageResponse.Summary(
+                        versionRepository.countCatalogMovies(),
+                        versionRepository.countCatalogVersions(),
+                        versionRepository.countSchedulableVersions(),
+                        versionRepository.countAttentionVersions());
+
+        return new ScreeningVersionCatalogPageResponse(
+                groups.values().stream().filter(Objects::nonNull).toList(),
+                moviePage.getNumber(),
+                moviePage.getSize(),
+                moviePage.getTotalElements(),
+                moviePage.getTotalPages(),
+                summary);
+    }
+
+    private boolean matchesCatalogFilters(
+            MovieScreeningVersionCatalogResponse item,
+            String query,
+            ScreeningVersionStatus status,
+            Integer formatId,
+            String readiness
+    ) {
+        if (status != null && item.status() != status) return false;
+        if (formatId != null && !item.formatId().equals(formatId)) return false;
+
+        boolean readinessMatches = switch (readiness) {
+            case "READY" -> item.status() == ScreeningVersionStatus.ACTIVE && !item.requiresAttention();
+            case "ATTENTION" -> item.status() == ScreeningVersionStatus.ACTIVE && item.requiresAttention();
+            case "INACTIVE" -> item.status() != ScreeningVersionStatus.ACTIVE;
+            default -> true;
+        };
+        if (!readinessMatches) return false;
+        if (query == null) return true;
+
+        String needle = query.toLowerCase(Locale.ROOT);
+        return containsIgnoreCase(item.movieTitle(), needle)
+                || containsIgnoreCase(item.originalTitle(), needle)
+                || containsIgnoreCase(item.formatCode(), needle)
+                || containsIgnoreCase(item.audioFormatCode(), needle)
+                || containsIgnoreCase(item.audioLanguageCode(), needle)
+                || containsIgnoreCase(item.subtitleLanguageCode(), needle);
+    }
+
+    private boolean containsIgnoreCase(String value, String normalizedNeedle) {
+        return value != null && value.toLowerCase(Locale.ROOT).contains(normalizedNeedle);
     }
 
     @Transactional
@@ -328,6 +433,7 @@ public class MovieScreeningVersionService {
         return new MovieScreeningVersionCatalogResponse(
                 detail.screeningVersionId(),
                 detail.movieId(),
+                MovieTitleResolver.preferredVietnameseTitle(movie),
                 movie.getOriginalTitle(),
                 movie.getPosterUrl(),
                 movie.getStatus(),
