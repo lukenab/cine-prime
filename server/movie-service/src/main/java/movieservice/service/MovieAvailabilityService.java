@@ -210,8 +210,16 @@ public class MovieAvailabilityService {
 
     @Transactional
     public MovieAvailabilityResponse approve(Long id, String actor, String note) {
+        return approve(id, null, actor, note);
+    }
+
+    @Transactional
+    public MovieAvailabilityResponse approve(Long id, Long expectedVersion, String actor, String note) {
         MovieAvailability availability = requireStatus(
                 id, AvailabilityStatus.IN_REVIEW, MovieErrorCode.AVAILABILITY_INVALID_TRANSITION);
+        if (expectedVersion != null && !expectedVersion.equals(availability.getVersion())) {
+            throw new AppException(MovieErrorCode.AVAILABILITY_VERSION_CONFLICT);
+        }
         if (sameActor(availability.getCreatedBy(), actor)
                 || sameActor(availability.getSubmittedBy(), actor)) {
             throw new AppException(MovieErrorCode.AVAILABILITY_SELF_APPROVAL_FORBIDDEN);

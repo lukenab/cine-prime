@@ -707,6 +707,18 @@ export type BulkCreateMovieAvailabilityResponse = {
   skipped: SkippedCluster[];
 };
 
+export type BulkReleasePlanDecisionPayload = {
+  decision: 'APPROVE';
+  plans: Array<{ availabilityId: number; expectedVersion: number }>;
+  note?: string;
+};
+
+export type BulkReleasePlanDecisionResponse = {
+  operationKey: string;
+  succeeded: MovieAvailabilityResponse[];
+  failed: Array<{ availabilityId: number; code: number; reason: string }>;
+};
+
 export type TmdbSearchItem = {
   tmdbId: number;
   title: string;
@@ -1302,6 +1314,11 @@ export const movieApi = {
 
   approveAvailability: (id: number, note?: string) =>
     axiosClient.post(`/api/movie-availabilities/${id}/approve`, note ? { note } : undefined) as Promise<ApiWrapper<MovieAvailabilityResponse>>,
+
+  bulkDecideAvailabilities: (payload: BulkReleasePlanDecisionPayload, idempotencyKey: string) =>
+    axiosClient.post('/api/movie-availabilities/bulk-decisions', payload, {
+      headers: { 'Idempotency-Key': idempotencyKey },
+    }) as Promise<ApiWrapper<BulkReleasePlanDecisionResponse>>,
 
   /** APPROVED → OPEN */
   openAvailability: (id: number) =>

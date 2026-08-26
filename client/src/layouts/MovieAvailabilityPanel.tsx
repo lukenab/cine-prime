@@ -34,6 +34,40 @@ type Props = {
 type PlanFilter = "CURRENT" | "AWAITING" | "CHANGES" | "APPROVED" | "HISTORY";
 type TerminalPlanAction = "DISCARD" | "CANCEL" | "END_RUN";
 
+function SelectionCheckbox({
+  checked,
+  indeterminate = false,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  label: string;
+  onChange: () => void;
+}) {
+  const selected = checked || indeterminate;
+
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={indeterminate ? "mixed" : checked}
+      aria-label={label}
+      onClick={onChange}
+      className={`grid size-[18px] shrink-0 place-items-center rounded-[5px] border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/35 focus-visible:ring-offset-2 ${selected ? "shadow-sm" : "hover:brightness-95"}`}
+      style={{
+        borderColor: selected ? "#2563eb" : "var(--border-color)",
+        background: selected ? "#2563eb" : "var(--bg-card)",
+        color: selected ? "#ffffff" : "transparent",
+      }}
+    >
+      {indeterminate
+        ? <span className="h-0.5 w-2 rounded-full bg-current" />
+        : <Check size={12} strokeWidth={3} />}
+    </button>
+  );
+}
+
 function getTerminalPlanAction(status: AvailabilityStatus): TerminalPlanAction {
   if (status === "OPEN" || status === "SUSPENDED") return "END_RUN";
   if (status === "APPROVED") return "CANCEL";
@@ -415,6 +449,61 @@ function ReleasePlanReviewModal({
           </button>
           <button type="button" disabled={busy} onClick={onApprove} className="h-10 rounded-[10px] bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:opacity-50">
             {busy ? "Approving…" : "Approve plan"}
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function BulkApprovalModal({
+  plans,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  plans: MovieAvailabilityResponse[];
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: (note?: string) => void;
+}) {
+  const [note, setNote] = useState("");
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center px-4 py-6" role="dialog" aria-modal="true" aria-label="Approve selected release plans">
+      <button type="button" aria-label="Close approval" className="absolute inset-0 h-full w-full bg-slate-950/45 backdrop-blur-[1px]" onClick={onClose} />
+      <section className="relative w-full max-w-[620px] overflow-hidden rounded-2xl border shadow-2xl" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+        <header className="flex items-start justify-between gap-4 border-b px-6 py-5" style={{ borderColor: "var(--border-color)" }}>
+          <div>
+            <p className="text-[10.5px] font-bold uppercase tracking-[0.11em] text-emerald-600">Bulk approval</p>
+            <h2 className="mt-1 text-xl font-bold" style={{ color: "var(--text-main)" }}>Approve {plans.length} release plans?</h2>
+            <p className="mt-1 text-xs leading-5" style={{ color: "var(--text-sub)" }}>Each selected cinema plan is checked again before approval. Plans changed by another user will be skipped and reported.</p>
+          </div>
+          <button type="button" onClick={onClose} className="grid size-9 shrink-0 place-items-center rounded-[10px] transition-colors hover:bg-slate-500/10" style={{ color: "var(--text-sub)" }}><X size={17} /></button>
+        </header>
+
+        <div className="space-y-4 px-6 py-5">
+          <div className="max-h-48 overflow-y-auto rounded-xl border" style={{ borderColor: "var(--border-color)" }}>
+            {plans.map((plan) => (
+              <div key={plan.availabilityId} className="flex items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0" style={{ borderColor: "var(--border-color)" }}>
+                <span className="truncate text-sm font-semibold" style={{ color: "var(--text-main)" }}>{plan.clusterName ?? `Cluster ${plan.clusterId}`}</span>
+                <span className="shrink-0 text-xs" style={{ color: "var(--text-sub)" }}>Starts {formatDate(plan.showingStartDate)}</span>
+              </div>
+            ))}
+          </div>
+          <label className="block">
+            <span className="text-xs font-semibold" style={{ color: "var(--text-main)" }}>Decision note <span className="font-normal" style={{ color: "var(--text-sub)" }}>(optional)</span></span>
+            <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} maxLength={500} placeholder="Add context for the programming operator…" className="mt-2 w-full resize-none rounded-xl border px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)", color: "var(--text-main)" }} />
+          </label>
+          <p className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.07] px-4 py-3 text-xs leading-5" style={{ color: "var(--text-sub)" }}>
+            Approval makes these plans eligible for scheduling. It does not start ticket sales.
+          </p>
+        </div>
+
+        <footer className="flex justify-end gap-2 border-t px-6 py-4" style={{ borderColor: "var(--border-color)" }}>
+          <button type="button" disabled={busy} onClick={onClose} className="h-10 rounded-[10px] px-4 text-sm font-semibold transition-colors hover:bg-slate-500/10 disabled:opacity-50" style={{ color: "var(--text-main)" }}>Cancel</button>
+          <button type="button" disabled={busy} onClick={() => onConfirm(note.trim() || undefined)} className="h-10 rounded-[10px] bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:opacity-50">
+            {busy ? "Approving…" : `Approve ${plans.length} plans`}
           </button>
         </footer>
       </section>
@@ -812,7 +901,10 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [selectedReviewIds, setSelectedReviewIds] = useState<Set<number>>(new Set());
+  const [selectedApprovalIds, setSelectedApprovalIds] = useState<Set<number>>(new Set());
   const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  const [bulkApprovalOpen, setBulkApprovalOpen] = useState(false);
+  const [bulkApproving, setBulkApproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [suspendTarget, setSuspendTarget] = useState<number | null>(null);
@@ -835,6 +927,11 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
         Array.from(current).filter((id) => nextAvailabilities.some((item) =>
           item.availabilityId === id
           && (item.status === "PLANNED" || item.status === "CHANGES_REQUESTED"),
+        )),
+      ));
+      setSelectedApprovalIds((current) => new Set(
+        Array.from(current).filter((id) => nextAvailabilities.some((item) =>
+          item.availabilityId === id && item.status === "IN_REVIEW",
         )),
       ));
       setClusters((clusterResponse.result ?? []).filter((cluster) => cluster.status === "ACTIVE"));
@@ -883,6 +980,16 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
   );
   const allReviewEligibleSelected = reviewEligiblePlans.length > 0
     && reviewEligiblePlans.every((item) => selectedReviewIds.has(item.availabilityId));
+  const approvalEligiblePlans = useMemo(
+    () => availabilities.filter((item) => item.status === "IN_REVIEW"),
+    [availabilities],
+  );
+  const selectedApprovalPlans = useMemo(
+    () => approvalEligiblePlans.filter((item) => selectedApprovalIds.has(item.availabilityId)),
+    [approvalEligiblePlans, selectedApprovalIds],
+  );
+  const allApprovalEligibleSelected = approvalEligiblePlans.length > 0
+    && approvalEligiblePlans.every((item) => selectedApprovalIds.has(item.availabilityId));
 
   const toggleReviewSelection = (id: number) => {
     setSelectedReviewIds((current) => {
@@ -896,6 +1003,48 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
     setSelectedReviewIds(allReviewEligibleSelected
       ? new Set()
       : new Set(reviewEligiblePlans.map((item) => item.availabilityId)));
+  };
+
+  const toggleApprovalSelection = (id: number) => {
+    setSelectedApprovalIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllApprovalEligible = () => {
+    setSelectedApprovalIds(allApprovalEligibleSelected
+      ? new Set()
+      : new Set(approvalEligiblePlans.map((item) => item.availabilityId)));
+  };
+
+  const approveSelectedPlans = async (note?: string) => {
+    if (selectedApprovalPlans.length === 0 || bulkApproving) return;
+    setBulkApproving(true);
+    setError(null);
+    try {
+      const response = await movieApi.bulkDecideAvailabilities({
+        decision: "APPROVE",
+        plans: selectedApprovalPlans.map((plan) => ({
+          availabilityId: plan.availabilityId,
+          expectedVersion: plan.version ?? 0,
+        })),
+        note,
+      }, crypto.randomUUID());
+      const failedIds = new Set(response.result.failed.map((failure) => failure.availabilityId));
+      setSelectedApprovalIds(failedIds);
+      setBulkApprovalOpen(false);
+      await load();
+      if (response.result.failed.length > 0) {
+        setError(`${response.result.succeeded.length} plan${response.result.succeeded.length === 1 ? " was" : "s were"} approved. ${response.result.failed.length} changed or could not be approved and remain selected.`);
+      }
+    } catch (requestError: unknown) {
+      const message = (requestError as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(message ?? "The selected release plans could not be approved.");
+    } finally {
+      setBulkApproving(false);
+    }
   };
 
   const submitSelectedForReview = async () => {
@@ -1070,19 +1219,19 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
           className="mt-4 flex flex-col gap-3 rounded-xl border px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
           style={{ borderColor: "rgba(37,99,235,0.28)", background: "rgba(37,99,235,0.06)" }}
         >
-          <label className="flex cursor-pointer items-center gap-2.5">
-            <input
-              type="checkbox"
+          <div className="flex items-center gap-2.5">
+            <SelectionCheckbox
               checked={allReviewEligibleSelected}
+              indeterminate={selectedReviewIds.size > 0 && !allReviewEligibleSelected}
+              label={allReviewEligibleSelected ? "Clear all selected release plans" : "Select all release plans ready for review"}
               onChange={toggleAllReviewEligible}
-              className="h-4 w-4 accent-blue-600"
             />
             <span style={{ color: "var(--text-main)", fontSize: "12px", fontWeight: 650 }}>
               {selectedReviewIds.size > 0
                 ? `${selectedReviewIds.size} of ${reviewEligiblePlans.length} ready plans selected`
                 : `Select all ${reviewEligiblePlans.length} plans ready for review`}
             </span>
-          </label>
+          </div>
           <button
             type="button"
             disabled={selectedReviewIds.size === 0 || bulkSubmitting}
@@ -1141,7 +1290,17 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
               textTransform: "uppercase",
             }}
           >
-            <span>Cinema cluster</span>
+            <span className="flex items-center gap-3">
+              {canReviewReleasePlan && approvalEligiblePlans.length > 0 && (
+                <SelectionCheckbox
+                  checked={allApprovalEligibleSelected}
+                  indeterminate={selectedApprovalIds.size > 0 && !allApprovalEligibleSelected}
+                  label={allApprovalEligibleSelected ? "Clear all selected release plans" : "Select all release plans awaiting a decision"}
+                  onChange={toggleAllApprovalEligible}
+                />
+              )}
+              <span>Cinema cluster</span>
+            </span>
             <span>Exhibition window</span>
             <span>Sales start</span>
             <span>Status</span>
@@ -1151,7 +1310,12 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
           {filteredAvailabilities.map((availability) => {
             const meta = STATUS_META[availability.status];
             const busy = busyId === availability.availabilityId;
-            const selectable = canSubmitReleasePlan && (availability.status === "PLANNED" || availability.status === "CHANGES_REQUESTED");
+            const submitSelectable = canSubmitReleasePlan && (availability.status === "PLANNED" || availability.status === "CHANGES_REQUESTED");
+            const approvalSelectable = canReviewReleasePlan && availability.status === "IN_REVIEW";
+            const selectable = submitSelectable || approvalSelectable;
+            const selected = approvalSelectable
+              ? selectedApprovalIds.has(availability.availabilityId)
+              : selectedReviewIds.has(availability.availabilityId);
 
             return (
               <div
@@ -1159,16 +1323,17 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
                 className="grid grid-cols-1 gap-4 border-b px-4 py-4 transition-colors last:border-b-0 hover:bg-blue-500/[0.035] xl:grid-cols-[minmax(220px,1.2fr)_minmax(180px,.9fr)_minmax(150px,.75fr)_minmax(145px,.65fr)_minmax(180px,.8fr)] xl:items-center"
                 style={{
                   borderColor: "var(--border-color)",
+                  background: selected ? "rgba(37,99,235,0.055)" : undefined,
                 }}
               >
                 <div className="flex min-w-0 items-center gap-3">
                   {selectable ? (
-                    <input
-                      type="checkbox"
-                      checked={selectedReviewIds.has(availability.availabilityId)}
-                      onChange={() => toggleReviewSelection(availability.availabilityId)}
-                      className="h-4 w-4 shrink-0 accent-blue-600"
-                      aria-label={`Select release plan for ${availability.clusterName ?? `cluster ${availability.clusterId}`}`}
+                    <SelectionCheckbox
+                      checked={selected}
+                      onChange={() => approvalSelectable
+                        ? toggleApprovalSelection(availability.availabilityId)
+                        : toggleReviewSelection(availability.availabilityId)}
+                      label={`${selected ? "Clear" : "Select"} release plan for ${availability.clusterName ?? `cluster ${availability.clusterId}`}`}
                     />
                   ) : <span className="hidden h-4 w-4 shrink-0 xl:block" />}
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-600/10 text-blue-600"><MapPin size={16} /></span>
@@ -1208,6 +1373,14 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {selectedApprovalIds.size > 0 && (
+        <div className="sticky bottom-4 z-30 mx-auto mt-4 flex w-fit max-w-[calc(100%-1rem)] items-center gap-3 rounded-xl border px-4 py-3 shadow-xl backdrop-blur" style={{ borderColor: "rgba(37,99,235,0.3)", background: "color-mix(in srgb, var(--bg-card) 94%, transparent)" }}>
+          <span className="whitespace-nowrap text-sm font-semibold" style={{ color: "var(--text-main)" }}>{selectedApprovalIds.size} selected</span>
+          <button type="button" onClick={() => setSelectedApprovalIds(new Set())} className="h-9 rounded-[9px] px-3 text-xs font-semibold transition-colors hover:bg-slate-500/10" style={{ color: "var(--text-sub)" }}>Clear</button>
+          <button type="button" onClick={() => setBulkApprovalOpen(true)} className="h-9 rounded-[9px] bg-emerald-600 px-4 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700">Approve selected</button>
         </div>
       )}
 
@@ -1259,6 +1432,15 @@ export function MovieAvailabilityPanel({ movieId }: Props) {
             setReviewTarget(null);
             void runCommand(id, () => movieApi.approveAvailability(id));
           }}
+        />
+      )}
+
+      {bulkApprovalOpen && selectedApprovalPlans.length > 0 && (
+        <BulkApprovalModal
+          plans={selectedApprovalPlans}
+          busy={bulkApproving}
+          onClose={() => { if (!bulkApproving) setBulkApprovalOpen(false); }}
+          onConfirm={(note) => void approveSelectedPlans(note)}
         />
       )}
 

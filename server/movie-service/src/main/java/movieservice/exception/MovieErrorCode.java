@@ -399,7 +399,15 @@ public enum MovieErrorCode implements BaseErrorCode {
         AVAILABILITY_REVIEW_NOTE_REQUIRED(2149,
                         "A review note is required when requesting release-plan changes.", HttpStatus.BAD_REQUEST),
         AVAILABILITY_SALES_START_INVALID(2150,
-                        "salesStartAt must be on or before showingStartDate.", HttpStatus.BAD_REQUEST);
+                        "salesStartAt must be on or before showingStartDate.", HttpStatus.BAD_REQUEST),
+        AVAILABILITY_VERSION_CONFLICT(2152,
+                        "This release plan changed after it was selected. Refresh the queue before deciding.", HttpStatus.CONFLICT),
+        RELEASE_PLAN_BULK_IDEMPOTENCY_CONFLICT(2153,
+                        "This Idempotency-Key was already used for a different bulk decision.", HttpStatus.CONFLICT),
+        RELEASE_PLAN_BULK_OPERATION_IN_PROGRESS(2154,
+                        "A bulk decision with this Idempotency-Key is already in progress.", HttpStatus.CONFLICT),
+        RELEASE_PLAN_BULK_IDEMPOTENCY_KEY_REQUIRED(2155,
+                        "A valid Idempotency-Key header is required for a bulk release-plan decision.", HttpStatus.BAD_REQUEST);
 
         int code;
         String message;

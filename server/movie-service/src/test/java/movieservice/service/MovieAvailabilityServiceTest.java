@@ -260,6 +260,34 @@ class MovieAvailabilityServiceTest {
     }
 
     @Test
+    void bulkApprovalRejectsAPlanThatChangedAfterSelection() {
+        MovieAvailability availability = availabilityWith(AvailabilityStatus.IN_REVIEW);
+        availability.setVersion(4L);
+        availability.setCreatedBy("operator@cineprime.vn");
+        when(movieAvailabilityRepository.findById(10L)).thenReturn(Optional.of(availability));
+
+        AppException ex = assertThrows(AppException.class,
+                () -> service.approve(10L, 3L, "approver@cineprime.vn", null));
+
+        assertEquals(MovieErrorCode.AVAILABILITY_VERSION_CONFLICT, ex.getErrorCode());
+        assertEquals(AvailabilityStatus.IN_REVIEW, availability.getStatus());
+        verify(movieAvailabilityRepository, never()).save(availability);
+    }
+
+    @Test
+    void bulkApprovalAcceptsTheCurrentPlanVersion() {
+        MovieAvailability availability = availabilityWith(AvailabilityStatus.IN_REVIEW);
+        availability.setVersion(4L);
+        availability.setCreatedBy("operator@cineprime.vn");
+        when(movieAvailabilityRepository.findById(10L)).thenReturn(Optional.of(availability));
+
+        service.approve(10L, 4L, "approver@cineprime.vn", "Checked as a batch");
+
+        assertEquals(AvailabilityStatus.APPROVED, availability.getStatus());
+        assertEquals("approver@cineprime.vn", availability.getApprovedBy());
+    }
+
+    @Test
     void suspendRequiresPlannedOrOpen() {
         when(movieAvailabilityRepository.findById(10L)).thenReturn(Optional.of(availabilityWith(AvailabilityStatus.CLOSED)));
 

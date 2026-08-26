@@ -55,7 +55,7 @@ class FlywayMigrationIntegrationTest {
         // Every current versioned migration plus the repeatable seed must execute on a fresh DB.
         // + R (repeatable seed) all actually executed — a fresh DB has no prior state for
         // baselineOnMigrate to kick in on.
-        assertEquals(53, result.migrationsExecuted);
+        assertEquals(56, result.migrationsExecuted);
 
         try (Connection conn = DriverManager.getConnection(
                 FRESH_DB.getJdbcUrl(), FRESH_DB.getUsername(), FRESH_DB.getPassword());
@@ -68,6 +68,7 @@ class FlywayMigrationIntegrationTest {
             assertTrue(tableExists(st, "showtime_daypart_policy"));
             assertTrue(tableExists(st, "price_book"));
             assertTrue(tableExists(st, "price_rate"));
+            assertTrue(tableExists(st, "release_plan_bulk_decision_operation"));
             assertFalse(tableExists(st, "type"), "legacy 'type' table must never be created fresh");
             try (ResultSet rs = st.executeQuery("""
                     SELECT COUNT(*), BOOL_AND(is_nullable = 'NO') AS required
