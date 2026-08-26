@@ -10,6 +10,7 @@ import movieservice.dto.request.CreateMovieAvailabilityRequest;
 import movieservice.dto.request.UpdateMovieAvailabilityRequest;
 import movieservice.dto.response.BulkCreateMovieAvailabilityResponse;
 import movieservice.dto.response.MovieAvailabilityResponse;
+import movieservice.dto.response.ReleasePlanningQueuePageResponse;
 import movieservice.entity.CinemaCluster;
 import movieservice.entity.Movie;
 import movieservice.entity.MovieAvailability;
@@ -24,11 +25,16 @@ import movieservice.repository.CinemaClusterRepository;
 import movieservice.repository.MovieAvailabilityHistoryRepository;
 import movieservice.repository.MovieAvailabilityRepository;
 import movieservice.repository.MovieRepository;
+import movieservice.util.MovieTitleResolver;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.time.LocalDateTime;
 
 /**
@@ -270,6 +276,63 @@ public class MovieAvailabilityService {
     public List<MovieAvailabilityResponse> search(Long movieId, Long clusterId, AvailabilityStatus status) {
         return movieMapper.toMovieAvailabilityResponseList(
                 movieAvailabilityRepository.search(movieId, clusterId, status));
+    }
+
+    /**
+     * Server-side queue projection paged by approved movie. The branch plans
+     * belonging to a movie are fetched as one nested unit and therefore cannot
+     * be split between pages.
+     */
+    @Transactional
+    public ReleasePlanningQueuePageResponse searchQueue(String query, int page, int size) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        String normalizedQuery = query == null || query.isBlank() ? null : query.trim();
+        Page<Long> moviePage = movieRepository.findApprovedMovieIdsForReleaseQueue(
+                normalizedQuery, PageRequest.of(safePage, safeSize));
+
+        Map<Long, Movie> moviesById = new LinkedHashMap<>();
+        moviePage.getContent().forEach(movieId -> moviesById.put(movieId, null));
+        if (!moviePage.isEmpty()) {
+            movieRepository.findByMovieIdInWithTranslations(moviePage.getContent())
+                    .forEach(movie -> moviesById.put(movie.getMovieId(), movie));
+        }
+
+        Map<Long, List<MovieAvailabilityResponse>> plansByMovie = new LinkedHashMap<>();
+        if (!moviePage.isEmpty()) {
+            movieAvailabilityRepository.findQueuePlansByMovieIds(moviePage.getContent())
+                    .forEach(plan -> plansByMovie
+                            .computeIfAbsent(plan.getMovie().getMovieId(), ignored -> new ArrayList<>())
+                            .add(movieMapper.toMovieAvailabilityResponse(plan)));
+        }
+
+        List<ReleasePlanningQueuePageResponse.MovieGroup> content = moviePage.getContent().stream()
+                .map(moviesById::get)
+                .filter(java.util.Objects::nonNull)
+                .map(movie -> new ReleasePlanningQueuePageResponse.MovieGroup(
+                        movie.getMovieId(),
+                        MovieTitleResolver.preferredVietnameseTitle(movie),
+                        movie.getOriginalTitle(),
+                        movie.getPosterUrl(),
+                        plansByMovie.getOrDefault(movie.getMovieId(), List.of())))
+                .toList();
+
+        ReleasePlanningQueuePageResponse.Summary summary = new ReleasePlanningQueuePageResponse.Summary(
+                movieRepository.countApprovedMoviesWithoutReleasePlan(),
+                movieAvailabilityRepository.countDistinctApprovedMoviesByStatuses(List.of(
+                        AvailabilityStatus.PLANNED,
+                        AvailabilityStatus.CHANGES_REQUESTED,
+                        AvailabilityStatus.SUSPENDED)),
+                movieAvailabilityRepository.countDistinctApprovedMoviesByStatuses(List.of(AvailabilityStatus.IN_REVIEW)),
+                movieAvailabilityRepository.countDistinctApprovedMoviesByStatuses(List.of(AvailabilityStatus.OPEN)));
+
+        return new ReleasePlanningQueuePageResponse(
+                content,
+                moviePage.getNumber(),
+                moviePage.getSize(),
+                moviePage.getTotalElements(),
+                moviePage.getTotalPages(),
+                summary);
     }
 
     private MovieAvailability findOrThrow(Long id) {

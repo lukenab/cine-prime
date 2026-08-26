@@ -5,6 +5,8 @@ import movieservice.enums.ScreeningVersionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -69,6 +71,201 @@ public interface MovieScreeningVersionRepository extends JpaRepository<MovieScre
             @Param("status") ScreeningVersionStatus status,
             @Param("formatId") Integer formatId
     );
+
+    /**
+     * Pages the catalogue by movie. Readiness is evaluated in SQL so page totals
+     * stay correct for READY/ATTENTION filters instead of filtering a partial
+     * page in the browser.
+     */
+    @Query(value = """
+            SELECT movie.movie_id
+            FROM movie movie
+            JOIN movie_screening_version version ON version.movie_id = movie.movie_id
+            JOIN screening_format format ON format.format_id = version.format_id
+            LEFT JOIN audio_format content_audio ON content_audio.audio_format_id = version.audio_format_id
+            LEFT JOIN movie_translation title_vi
+              ON title_vi.movie_id = movie.movie_id AND title_vi.language_code = 'vi'
+            LEFT JOIN movie_translation title_en
+              ON title_en.movie_id = movie.movie_id AND title_en.language_code = 'en'
+            WHERE (:query IS NULL
+                   OR LOWER(movie.original_title) LIKE LOWER(CONCAT('%', CAST(:query AS text), '%'))
+                   OR LOWER(COALESCE(title_vi.title, '')) LIKE LOWER(CONCAT('%', CAST(:query AS text), '%'))
+                   OR LOWER(COALESCE(title_en.title, '')) LIKE LOWER(CONCAT('%', CAST(:query AS text), '%'))
+                   OR LOWER(format.format_code) LIKE LOWER(CONCAT('%', CAST(:query AS text), '%'))
+                   OR LOWER(COALESCE(content_audio.format_code, '')) LIKE LOWER(CONCAT('%', CAST(:query AS text), '%'))
+                   OR LOWER(version.audio_language_code) LIKE LOWER(CONCAT('%', CAST(:query AS text), '%'))
+                   OR LOWER(COALESCE(version.subtitle_language_code, '')) LIKE LOWER(CONCAT('%', CAST(:query AS text), '%')))
+              AND (:status IS NULL OR version.status = CAST(:status AS varchar))
+              AND (:formatId IS NULL OR version.format_id = :formatId)
+              AND (
+                    :readiness = 'ALL'
+                    OR (:readiness = 'INACTIVE' AND version.status <> 'ACTIVE')
+                    OR (:readiness = 'READY' AND version.status = 'ACTIVE'
+                        AND version.audio_format_id IS NOT NULL
+                        AND EXISTS (
+                            SELECT 1
+                            FROM cinema_room room
+                            JOIN cinema_cluster cluster ON cluster.cluster_id = room.cluster_id
+                            JOIN cinema_room_format capability ON capability.cinema_room_id = room.cinema_room_id
+                            JOIN room_layout layout ON layout.cinema_room_id = room.cinema_room_id
+                            JOIN audio_format installed ON installed.audio_format_id = room.audio_format_id
+                            WHERE capability.format_id = version.format_id
+                              AND capability.enabled = TRUE
+                              AND room.status = 'ACTIVE'
+                              AND cluster.status = 'ACTIVE'
+                              AND layout.status = 'ACTIVE'
+                              AND layout.person_capacity > 0
+                              AND installed.active = TRUE
+                              AND (
+                                  installed.format_code = content_audio.format_code
+                                  OR (installed.format_code = 'DOLBY_ATMOS' AND content_audio.format_code IN ('DOLBY_7_1', 'DOLBY_5_1'))
+                                  OR (installed.format_code = 'DOLBY_7_1' AND content_audio.format_code = 'DOLBY_5_1')
+                              )
+                        ))
+                    OR (:readiness = 'ATTENTION' AND version.status = 'ACTIVE'
+                        AND (version.audio_format_id IS NULL OR NOT EXISTS (
+                            SELECT 1
+                            FROM cinema_room room
+                            JOIN cinema_cluster cluster ON cluster.cluster_id = room.cluster_id
+                            JOIN cinema_room_format capability ON capability.cinema_room_id = room.cinema_room_id
+                            JOIN room_layout layout ON layout.cinema_room_id = room.cinema_room_id
+                            JOIN audio_format installed ON installed.audio_format_id = room.audio_format_id
+                            WHERE capability.format_id = version.format_id
+                              AND capability.enabled = TRUE
+                              AND room.status = 'ACTIVE'
+                              AND cluster.status = 'ACTIVE'
+                              AND layout.status = 'ACTIVE'
+                              AND layout.person_capacity > 0
+                              AND installed.active = TRUE
+                              AND (
+                                  installed.format_code = content_audio.format_code
+                                  OR (installed.format_code = 'DOLBY_ATMOS' AND content_audio.format_code IN ('DOLBY_7_1', 'DOLBY_5_1'))
+                                  OR (installed.format_code = 'DOLBY_7_1' AND content_audio.format_code = 'DOLBY_5_1')
+                              )
+                        )))
+              )
+            GROUP BY movie.movie_id, title_vi.title, title_en.title, movie.original_title
+            ORDER BY COALESCE(title_vi.title, title_en.title, movie.original_title), movie.movie_id
+            """, countQuery = """
+            SELECT COUNT(DISTINCT movie.movie_id)
+            FROM movie movie
+            JOIN movie_screening_version version ON version.movie_id = movie.movie_id
+            JOIN screening_format format ON format.format_id = version.format_id
+            LEFT JOIN audio_format content_audio ON content_audio.audio_format_id = version.audio_format_id
+            LEFT JOIN movie_translation title_vi
+              ON title_vi.movie_id = movie.movie_id AND title_vi.language_code = 'vi'
+            LEFT JOIN movie_translation title_en
+              ON title_en.movie_id = movie.movie_id AND title_en.language_code = 'en'
+            WHERE (:query IS NULL
+                   OR LOWER(movie.original_title) LIKE LOWER(CONCAT('%', CAST(:query AS text), '%'))
+                   OR LOWER(COALESCE(title_vi.title, '')) LIKE LOWER(CONCAT('%', CAST(:query AS text), '%'))
+                   OR LOWER(COALESCE(title_en.title, '')) LIKE LOWER(CONCAT('%', CAST(:query AS text), '%'))
+                   OR LOWER(format.format_code) LIKE LOWER(CONCAT('%', CAST(:query AS text), '%'))
+                   OR LOWER(COALESCE(content_audio.format_code, '')) LIKE LOWER(CONCAT('%', CAST(:query AS text), '%'))
+                   OR LOWER(version.audio_language_code) LIKE LOWER(CONCAT('%', CAST(:query AS text), '%'))
+                   OR LOWER(COALESCE(version.subtitle_language_code, '')) LIKE LOWER(CONCAT('%', CAST(:query AS text), '%')))
+              AND (:status IS NULL OR version.status = CAST(:status AS varchar))
+              AND (:formatId IS NULL OR version.format_id = :formatId)
+              AND (
+                    :readiness = 'ALL'
+                    OR (:readiness = 'INACTIVE' AND version.status <> 'ACTIVE')
+                    OR (:readiness = 'READY' AND version.status = 'ACTIVE'
+                        AND version.audio_format_id IS NOT NULL
+                        AND EXISTS (
+                            SELECT 1 FROM cinema_room room
+                            JOIN cinema_cluster cluster ON cluster.cluster_id = room.cluster_id
+                            JOIN cinema_room_format capability ON capability.cinema_room_id = room.cinema_room_id
+                            JOIN room_layout layout ON layout.cinema_room_id = room.cinema_room_id
+                            JOIN audio_format installed ON installed.audio_format_id = room.audio_format_id
+                            WHERE capability.format_id = version.format_id AND capability.enabled = TRUE
+                              AND room.status = 'ACTIVE' AND cluster.status = 'ACTIVE'
+                              AND layout.status = 'ACTIVE' AND layout.person_capacity > 0 AND installed.active = TRUE
+                              AND (installed.format_code = content_audio.format_code
+                                   OR (installed.format_code = 'DOLBY_ATMOS' AND content_audio.format_code IN ('DOLBY_7_1', 'DOLBY_5_1'))
+                                   OR (installed.format_code = 'DOLBY_7_1' AND content_audio.format_code = 'DOLBY_5_1'))
+                        ))
+                    OR (:readiness = 'ATTENTION' AND version.status = 'ACTIVE'
+                        AND (version.audio_format_id IS NULL OR NOT EXISTS (
+                            SELECT 1 FROM cinema_room room
+                            JOIN cinema_cluster cluster ON cluster.cluster_id = room.cluster_id
+                            JOIN cinema_room_format capability ON capability.cinema_room_id = room.cinema_room_id
+                            JOIN room_layout layout ON layout.cinema_room_id = room.cinema_room_id
+                            JOIN audio_format installed ON installed.audio_format_id = room.audio_format_id
+                            WHERE capability.format_id = version.format_id AND capability.enabled = TRUE
+                              AND room.status = 'ACTIVE' AND cluster.status = 'ACTIVE'
+                              AND layout.status = 'ACTIVE' AND layout.person_capacity > 0 AND installed.active = TRUE
+                              AND (installed.format_code = content_audio.format_code
+                                   OR (installed.format_code = 'DOLBY_ATMOS' AND content_audio.format_code IN ('DOLBY_7_1', 'DOLBY_5_1'))
+                                   OR (installed.format_code = 'DOLBY_7_1' AND content_audio.format_code = 'DOLBY_5_1'))
+                        )))
+              )
+            """, nativeQuery = true)
+    Page<Long> findCatalogMovieIds(
+            @Param("query") String query,
+            @Param("status") String status,
+            @Param("formatId") Integer formatId,
+            @Param("readiness") String readiness,
+            Pageable pageable);
+
+    @Query("""
+            SELECT DISTINCT version
+            FROM MovieScreeningVersion version
+            JOIN FETCH version.format
+            LEFT JOIN FETCH version.audioFormat
+            JOIN FETCH version.movie movie
+            LEFT JOIN FETCH movie.translations
+            WHERE movie.movieId IN :movieIds
+            ORDER BY version.status, version.format.formatCode,
+                     version.audioLanguageCode, version.subtitleLanguageCode,
+                     version.screeningVersionId
+            """)
+    List<MovieScreeningVersion> findCatalogByMovieIds(@Param("movieIds") List<Long> movieIds);
+
+    @Query(value = "SELECT COUNT(DISTINCT movie_id) FROM movie_screening_version", nativeQuery = true)
+    long countCatalogMovies();
+
+    @Query(value = "SELECT COUNT(*) FROM movie_screening_version", nativeQuery = true)
+    long countCatalogVersions();
+
+    @Query(value = """
+            SELECT COUNT(*) FROM movie_screening_version version
+            JOIN audio_format content_audio ON content_audio.audio_format_id = version.audio_format_id
+            WHERE version.status = 'ACTIVE' AND EXISTS (
+                SELECT 1 FROM cinema_room room
+                JOIN cinema_cluster cluster ON cluster.cluster_id = room.cluster_id
+                JOIN cinema_room_format capability ON capability.cinema_room_id = room.cinema_room_id
+                JOIN room_layout layout ON layout.cinema_room_id = room.cinema_room_id
+                JOIN audio_format installed ON installed.audio_format_id = room.audio_format_id
+                WHERE capability.format_id = version.format_id AND capability.enabled = TRUE
+                  AND room.status = 'ACTIVE' AND cluster.status = 'ACTIVE'
+                  AND layout.status = 'ACTIVE' AND layout.person_capacity > 0 AND installed.active = TRUE
+                  AND (installed.format_code = content_audio.format_code
+                       OR (installed.format_code = 'DOLBY_ATMOS' AND content_audio.format_code IN ('DOLBY_7_1', 'DOLBY_5_1'))
+                       OR (installed.format_code = 'DOLBY_7_1' AND content_audio.format_code = 'DOLBY_5_1'))
+            )
+            """, nativeQuery = true)
+    long countSchedulableVersions();
+
+    @Query(value = """
+            SELECT COUNT(*) FROM movie_screening_version version
+            LEFT JOIN audio_format content_audio ON content_audio.audio_format_id = version.audio_format_id
+            WHERE version.status = 'ACTIVE' AND (
+                version.audio_format_id IS NULL OR NOT EXISTS (
+                    SELECT 1 FROM cinema_room room
+                    JOIN cinema_cluster cluster ON cluster.cluster_id = room.cluster_id
+                    JOIN cinema_room_format capability ON capability.cinema_room_id = room.cinema_room_id
+                    JOIN room_layout layout ON layout.cinema_room_id = room.cinema_room_id
+                    JOIN audio_format installed ON installed.audio_format_id = room.audio_format_id
+                    WHERE capability.format_id = version.format_id AND capability.enabled = TRUE
+                      AND room.status = 'ACTIVE' AND cluster.status = 'ACTIVE'
+                      AND layout.status = 'ACTIVE' AND layout.person_capacity > 0 AND installed.active = TRUE
+                      AND (installed.format_code = content_audio.format_code
+                           OR (installed.format_code = 'DOLBY_ATMOS' AND content_audio.format_code IN ('DOLBY_7_1', 'DOLBY_5_1'))
+                           OR (installed.format_code = 'DOLBY_7_1' AND content_audio.format_code = 'DOLBY_5_1'))
+                )
+            )
+            """, nativeQuery = true)
+    long countAttentionVersions();
 
     @Query("""
             SELECT version

@@ -4,10 +4,13 @@ import movie.theater.common.exception.AppException;
 import movieservice.dto.request.MovieScreeningVersionRequest;
 import movieservice.dto.response.MovieScreeningVersionCatalogResponse;
 import movieservice.dto.response.MovieScreeningVersionResponse;
+import movieservice.dto.response.ScreeningVersionCatalogPageResponse;
 import movieservice.entity.AudioFormat;
 import movieservice.entity.Movie;
 import movieservice.entity.MovieScreeningVersion;
 import movieservice.entity.ScreeningFormat;
+import movieservice.entity.MovieTranslation;
+import movieservice.entity.MovieTranslationId;
 import movieservice.enums.MovieStatus;
 import movieservice.enums.ScreeningVersionStatus;
 import movieservice.repository.MovieRepository;
@@ -20,6 +23,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -186,6 +191,47 @@ class MovieScreeningVersionServiceTest {
         assertEquals(1, result.size());
         assertEquals("Test Movie", result.getFirst().movieTitle());
         assertEquals(true, result.getFirst().requiresAttention());
+    }
+
+    @Test
+    void pagedCatalogGroupsByMovieAndPrefersVietnameseTitle() {
+        ScreeningFormat format = format(1, "2D");
+        AudioFormat audioFormat = audioFormat(2, "DOLBY_5_1");
+        Movie movie = movie(format);
+        movie.setOriginalTitle("The Stain");
+        movie.setTranslations(List.of(MovieTranslation.builder()
+                .id(new MovieTranslationId(10L, "vi"))
+                .movie(movie)
+                .title("Ma Nữ Oán Tình")
+                .build()));
+        MovieScreeningVersion version = MovieScreeningVersion.builder()
+                .screeningVersionId(8L)
+                .movie(movie)
+                .format(format)
+                .audioFormat(audioFormat)
+                .audioLanguageCode("vi")
+                .status(ScreeningVersionStatus.ACTIVE)
+                .build();
+        PageRequest pageable = PageRequest.of(0, 10);
+
+        when(versionRepository.findCatalogMovieIds(null, null, null, "ALL", pageable))
+                .thenReturn(new PageImpl<>(List.of(10L), pageable, 1));
+        when(versionRepository.findCatalogByMovieIds(List.of(10L))).thenReturn(List.of(version));
+        when(versionRepository.countAudioCompatibleRooms(1, 2)).thenReturn(3L);
+        when(versionRepository.countAudioCompatibleClusters(1, 2)).thenReturn(2L);
+        when(versionRepository.countCatalogMovies()).thenReturn(1L);
+        when(versionRepository.countCatalogVersions()).thenReturn(1L);
+        when(versionRepository.countSchedulableVersions()).thenReturn(1L);
+        when(versionRepository.countAttentionVersions()).thenReturn(0L);
+
+        ScreeningVersionCatalogPageResponse result =
+                service.searchCatalogPage(null, null, null, "ALL", 0, 10);
+
+        assertEquals(1, result.totalElements());
+        assertEquals("Ma Nữ Oán Tình", result.content().getFirst().displayTitle());
+        assertEquals("The Stain", result.content().getFirst().originalTitle());
+        assertEquals(1, result.content().getFirst().versions().size());
+        assertEquals(1, result.summary().schedulable());
     }
 
     private Movie movie(ScreeningFormat format) {

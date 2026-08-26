@@ -5,10 +5,11 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   movieApi,
-  type MovieApiResponse,
   type MovieAvailabilityResponse,
+  type ReleasePlanningQueuePageResponse,
 } from "../../api/movieApi";
 import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
+import { AdminPagination } from "../../components/admin/AdminPagination";
 import { RequestState } from "../../components/shared/RequestState";
 import { classifyRequestFailure, type RequestFailure } from "../../utils/requestFailure";
 import { useRole } from "../../hooks/useRole";
@@ -31,10 +32,9 @@ const PLAN_META: Record<string, { label: string; color: string; background: stri
 };
 
 const STATUS_ORDER = ["CHANGES_REQUESTED", "PLANNED", "IN_REVIEW", "APPROVED", "OPEN", "SUSPENDED", "CLOSED"];
+const PAGE_SIZE = 10;
 const TABLE_GRID = "minmax(270px,1.3fr) minmax(130px,.58fr) minmax(180px,.78fr) minmax(165px,.7fr) minmax(230px,.95fr) minmax(165px,.72fr) 72px";
 const DETAIL_GRID = "minmax(220px,1.1fr) minmax(220px,1fr) minmax(190px,.85fr) minmax(150px,.65fr) minmax(190px,.8fr)";
-const ACTIONABLE_STATUSES = new Set(["PLANNED", "CHANGES_REQUESTED", "SUSPENDED"]);
-
 function formatPlanDate(value?: string, includeTime = false) {
   if (!value) return "—";
   const parsed = new Date(value.length === 10 ? `${value}T00:00:00` : value);
@@ -84,9 +84,10 @@ export default function ReleasePlanningQueuePage() {
   const { can } = useRole();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [movies, setMovies] = useState<MovieApiResponse[]>([]);
-  const [plans, setPlans] = useState<MovieAvailabilityResponse[]>([]);
-  const [query, setQuery] = useState("");
+  const [pageResult, setPageResult] = useState<ReleasePlanningQueuePageResponse | null>(null);
+  const [query, setQuery] = useState(searchParams.get("q") ?? "");
+  const [debouncedQuery, setDebouncedQuery] = useState(searchParams.get("q") ?? "");
+  const [page, setPage] = useState(Math.max(0, Number(searchParams.get("page") ?? 1) - 1 || 0));
   const [loading, setLoading] = useState(true);
   const [failure, setFailure] = useState<RequestFailure | null>(null);
   const [selectedMovieId, setSelectedMovieId] = useState<number | null>(null);
@@ -95,20 +96,38 @@ export default function ReleasePlanningQueuePage() {
     setLoading(true);
     setFailure(null);
     try {
-      const [movieResponse, planResponse] = await Promise.all([
-        movieApi.getAllMovies(),
-        movieApi.searchAvailabilities({}),
-      ]);
-      setMovies(movieResponse.result ?? []);
-      setPlans(planResponse.result ?? []);
+      const response = await movieApi.searchReleasePlanningQueue({
+        q: debouncedQuery,
+        page,
+        size: PAGE_SIZE,
+      });
+      setPageResult(response.result ?? null);
     } catch (requestError) {
       setFailure(classifyRequestFailure(requestError, "The release planning queue could not be loaded."));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [debouncedQuery, page]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedQuery(query.trim());
+      setPage(0);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams);
+    if (debouncedQuery) next.set("q", debouncedQuery); else next.delete("q");
+    if (page > 0) next.set("page", String(page + 1)); else next.delete("page");
+    next.delete("size");
+    setSearchParams(next, { replace: true });
+  // searchParams is intentionally excluded: it is the destination of this synchronization.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedQuery, page, setSearchParams]);
 
   useEffect(() => {
     const requestedMovieId = Number(searchParams.get("movieId"));
@@ -117,28 +136,26 @@ export default function ReleasePlanningQueuePage() {
     }
   }, [searchParams]);
 
-  const plansByMovie = useMemo(() => plans.reduce<Record<number, MovieAvailabilityResponse[]>>((result, plan) => {
-    (result[plan.movieId] ??= []).push(plan);
+  const plansByMovie = useMemo(() => (pageResult?.content ?? []).reduce<Record<number, MovieAvailabilityResponse[]>>((result, movie) => {
+    result[movie.movieId] = movie.plans;
     return result;
-  }, {}), [plans]);
+  }, {}), [pageResult]);
 
-  const approvedMovies = useMemo(() => movies.filter((movie) => movie.movieStatus === "APPROVED"), [movies]);
+  const rows = useMemo(() => (pageResult?.content ?? []).map((movie) => ({
+    movieId: movie.movieId,
+    movieNameVn: movie.displayTitle,
+    movieNameEnglish: movie.originalTitle,
+    smallImage: movie.posterUrl,
+  })), [pageResult]);
 
-  const rows = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return approvedMovies
-      .filter((movie) => !normalizedQuery || `${movie.movieNameVn} ${movie.movieNameEnglish}`.toLowerCase().includes(normalizedQuery))
-      .sort((left, right) => (plansByMovie[right.movieId]?.length ?? 0) - (plansByMovie[left.movieId]?.length ?? 0));
-  }, [approvedMovies, plansByMovie, query]);
+  const movieStats = {
+    unplanned: pageResult?.summary.unplannedMovies ?? 0,
+    needsAction: pageResult?.summary.needOperatorAction ?? 0,
+    awaitingApproval: pageResult?.summary.awaitingApproval ?? 0,
+    activeReleases: pageResult?.summary.activeReleases ?? 0,
+  };
 
-  const movieStats = useMemo(() => ({
-    unplanned: approvedMovies.filter((movie) => !(plansByMovie[movie.movieId]?.length)).length,
-    needsAction: approvedMovies.filter((movie) => (plansByMovie[movie.movieId] ?? []).some((plan) => ACTIONABLE_STATUSES.has(plan.status))).length,
-    awaitingApproval: approvedMovies.filter((movie) => (plansByMovie[movie.movieId] ?? []).some((plan) => plan.status === "IN_REVIEW")).length,
-    activeReleases: approvedMovies.filter((movie) => (plansByMovie[movie.movieId] ?? []).some((plan) => plan.status === "OPEN")).length,
-  }), [approvedMovies, plansByMovie]);
-
-  const selectedMovie = approvedMovies.find((movie) => movie.movieId === selectedMovieId) ?? null;
+  const selectedMovie = rows.find((movie) => movie.movieId === selectedMovieId) ?? null;
   const selectedMoviePlans = selectedMovie
     ? [...(plansByMovie[selectedMovie.movieId] ?? [])].sort((left, right) => (left.clusterName ?? "").localeCompare(right.clusterName ?? ""))
     : [];
@@ -260,6 +277,17 @@ export default function ReleasePlanningQueuePage() {
             })}
           </div>
         </div>
+        {!failure && pageResult && rows.length > 0 && (
+          <AdminPagination
+            page={pageResult.page}
+            size={pageResult.size}
+            totalElements={pageResult.totalElements}
+            totalPages={pageResult.totalPages}
+            itemLabel="movies"
+            loading={loading}
+            onPageChange={setPage}
+          />
+        )}
       </div>
 
       <Dialog open={Boolean(selectedMovie)} onOpenChange={(open) => {

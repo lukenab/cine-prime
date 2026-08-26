@@ -15,6 +15,7 @@ public record MovieScreeningVersionCatalogResponse(
         Long screeningVersionId,
         Long movieId,
         String movieTitle,
+        String originalTitle,
         String posterUrl,
         MovieStatus movieStatus,
         Integer formatId,

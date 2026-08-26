@@ -508,9 +508,31 @@ export type MovieScreeningVersionResponse = {
 
 export type MovieScreeningVersionCatalogResponse = MovieScreeningVersionResponse & {
   movieTitle: string;
+  originalTitle?: string | null;
   posterUrl?: string | null;
   movieStatus: MovieStatus;
   requiresAttention: boolean;
+};
+
+export type ScreeningVersionCatalogPageResponse = {
+  content: Array<{
+    movieId: number;
+    displayTitle: string;
+    originalTitle: string;
+    posterUrl?: string | null;
+    movieStatus: MovieStatus;
+    versions: MovieScreeningVersionCatalogResponse[];
+  }>;
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  summary: {
+    moviesCovered: number;
+    totalVersions: number;
+    schedulable: number;
+    needsAttention: number;
+  };
 };
 
 export type MovieScreeningVersionPayload = {
@@ -705,6 +727,26 @@ export type SkippedCluster = {
 export type BulkCreateMovieAvailabilityResponse = {
   created: MovieAvailabilityResponse[];
   skipped: SkippedCluster[];
+};
+
+export type ReleasePlanningQueuePageResponse = {
+  content: Array<{
+    movieId: number;
+    displayTitle: string;
+    originalTitle: string;
+    posterUrl?: string | null;
+    plans: MovieAvailabilityResponse[];
+  }>;
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  summary: {
+    unplannedMovies: number;
+    needOperatorAction: number;
+    awaitingApproval: number;
+    activeReleases: number;
+  };
 };
 
 export type BulkReleasePlanDecisionPayload = {
@@ -1182,6 +1224,24 @@ export const movieApi = {
     return axiosClient.get(`/api/screening-versions${suffix ? `?${suffix}` : ''}`) as Promise<ApiWrapper<MovieScreeningVersionCatalogResponse[]>>;
   },
 
+  searchMovieScreeningVersionPage: (params: {
+    q?: string;
+    status?: ScreeningVersionStatus;
+    formatId?: number;
+    readiness?: 'ALL' | 'READY' | 'ATTENTION' | 'INACTIVE';
+    page?: number;
+    size?: number;
+  } = {}) => {
+    const query = new URLSearchParams();
+    if (params.q?.trim()) query.set('q', params.q.trim());
+    if (params.status) query.set('status', params.status);
+    if (params.formatId) query.set('formatId', String(params.formatId));
+    if (params.readiness && params.readiness !== 'ALL') query.set('readiness', params.readiness);
+    query.set('page', String(params.page ?? 0));
+    query.set('size', String(params.size ?? 20));
+    return axiosClient.get(`/api/screening-versions/page?${query.toString()}`) as Promise<ApiWrapper<ScreeningVersionCatalogPageResponse>>;
+  },
+
   // Lookup APIs
   getGenres: () =>
     axiosClient.get('/api/genres') as Promise<ApiWrapper<GenreResponse[]>>,
@@ -1294,6 +1354,14 @@ export const movieApi = {
     if (params.status) query.set('status', params.status);
     const qs = query.toString();
     return axiosClient.get(`/api/movie-availabilities${qs ? `?${qs}` : ''}`) as Promise<ApiWrapper<MovieAvailabilityResponse[]>>;
+  },
+
+  searchReleasePlanningQueue: (params: { q?: string; page?: number; size?: number } = {}) => {
+    const query = new URLSearchParams();
+    if (params.q?.trim()) query.set('q', params.q.trim());
+    query.set('page', String(params.page ?? 0));
+    query.set('size', String(params.size ?? 20));
+    return axiosClient.get(`/api/movie-availabilities/queue?${query.toString()}`) as Promise<ApiWrapper<ReleasePlanningQueuePageResponse>>;
   },
 
   createAvailability: (payload: CreateMovieAvailabilityPayload) =>

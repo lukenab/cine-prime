@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
   CalendarRange,
@@ -11,27 +11,22 @@ import {
   RefreshCw,
   Search,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   movieApi,
   type MovieScreeningVersionCatalogResponse,
+  type ScreeningVersionCatalogPageResponse,
   type ScreeningFormatResponse,
   type ScreeningVersionStatus,
 } from "../../api/movieApi";
 import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
+import { AdminPagination } from "../../components/admin/AdminPagination";
 import { RequestState } from "../../components/shared/RequestState";
 import { classifyRequestFailure, type RequestFailure } from "../../utils/requestFailure";
 import { useRole } from "../../hooks/useRole";
 
 type ReadinessFilter = "ALL" | "READY" | "ATTENTION" | "INACTIVE";
-
-type MovieVersionGroup = {
-  movieId: number;
-  movieTitle: string;
-  movieStatus: MovieScreeningVersionCatalogResponse["movieStatus"];
-  posterUrl?: string | null;
-  versions: MovieScreeningVersionCatalogResponse[];
-};
+const PAGE_SIZE = 10;
 
 const STATUS_META: Record<ScreeningVersionStatus, { label: string; color: string; background: string }> = {
   ACTIVE: { label: "Active", color: "#059669", background: "rgba(16,185,129,0.12)" },
@@ -76,93 +71,78 @@ function readinessReason(version: MovieScreeningVersionCatalogResponse) {
 
 export default function ManageScreeningVersionsPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { hasPermission, isAdmin } = useRole();
   const canManageVersions = isAdmin || hasPermission("MOVIE_UPDATE");
-  const [versions, setVersions] = useState<MovieScreeningVersionCatalogResponse[]>([]);
+  const [pageResult, setPageResult] = useState<ScreeningVersionCatalogPageResponse | null>(null);
   const [formats, setFormats] = useState<ScreeningFormatResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [failure, setFailure] = useState<RequestFailure | null>(null);
-  const [search, setSearch] = useState("");
-  const [formatId, setFormatId] = useState("");
-  const [readinessFilter, setReadinessFilter] = useState<ReadinessFilter>("ALL");
+  const [search, setSearch] = useState(searchParams.get("q") ?? "");
+  const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get("q") ?? "");
+  const [formatId, setFormatId] = useState(searchParams.get("format") ?? "");
+  const initialReadiness = searchParams.get("readiness") as ReadinessFilter | null;
+  const [readinessFilter, setReadinessFilter] = useState<ReadinessFilter>(
+    initialReadiness && ["ALL", "READY", "ATTENTION", "INACTIVE"].includes(initialReadiness)
+      ? initialReadiness
+      : "ALL",
+  );
+  const [page, setPage] = useState(Math.max(0, Number(searchParams.get("page") ?? 1) - 1 || 0));
   const [expandedMovieIds, setExpandedMovieIds] = useState<Set<number>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
     setFailure(null);
     try {
-      const [versionResponse, formatResponse] = await Promise.all([
-        movieApi.searchMovieScreeningVersions(),
-        movieApi.getScreeningFormats(),
-      ]);
-      setVersions(versionResponse.result ?? []);
-      setFormats(formatResponse.result ?? []);
+      const response = await movieApi.searchMovieScreeningVersionPage({
+        q: debouncedSearch,
+        formatId: formatId ? Number(formatId) : undefined,
+        readiness: readinessFilter,
+        page,
+        size: PAGE_SIZE,
+      });
+      setPageResult(response.result ?? null);
     } catch (requestError) {
       setFailure(classifyRequestFailure(requestError, "Screening versions could not be loaded."));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [debouncedSearch, formatId, page, readinessFilter]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const filtered = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    return versions.filter((version) => {
-      const matchesSearch =
-        !needle
-        || version.movieTitle.toLowerCase().includes(needle)
-        || version.formatCode.toLowerCase().includes(needle)
-        || (version.audioFormatCode ?? "").toLowerCase().includes(needle)
-        || version.audioLanguageCode.toLowerCase().includes(needle)
-        || (version.subtitleLanguageCode ?? "").toLowerCase().includes(needle);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setPage(0);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
-      const matchesReadiness =
-        readinessFilter === "ALL"
-        || (readinessFilter === "READY" && versionIsReady(version))
-        || (readinessFilter === "ATTENTION" && version.requiresAttention)
-        || (readinessFilter === "INACTIVE" && version.status !== "ACTIVE");
+  useEffect(() => {
+    void movieApi.getScreeningFormats()
+      .then((response) => setFormats(response.result ?? []))
+      .catch(() => setFormats([]));
+  }, []);
 
-      return matchesSearch
-        && matchesReadiness
-        && (!formatId || version.formatId === Number(formatId));
-    });
-  }, [formatId, readinessFilter, search, versions]);
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (debouncedSearch) next.set("q", debouncedSearch);
+    if (formatId) next.set("format", formatId);
+    if (readinessFilter !== "ALL") next.set("readiness", readinessFilter);
+    if (page > 0) next.set("page", String(page + 1));
+    setSearchParams(next, { replace: true });
+  }, [debouncedSearch, formatId, page, readinessFilter, setSearchParams]);
 
-  const groups = useMemo<MovieVersionGroup[]>(() => {
-    const grouped = new Map<number, MovieVersionGroup>();
-    filtered.forEach((version) => {
-      const existing = grouped.get(version.movieId);
-      if (existing) {
-        existing.versions.push(version);
-        return;
-      }
-      grouped.set(version.movieId, {
-        movieId: version.movieId,
-        movieTitle: version.movieTitle,
-        movieStatus: version.movieStatus,
-        posterUrl: version.posterUrl,
-        versions: [version],
-      });
-    });
-    return Array.from(grouped.values()).sort((left, right) =>
-      left.movieTitle.localeCompare(right.movieTitle),
-    );
-  }, [filtered]);
-
-  const stats = useMemo(() => ({
-    movies: new Set(versions.map((item) => item.movieId)).size,
-    total: versions.length,
-    ready: versions.filter(versionIsReady).length,
-    attention: versions.filter((item) => item.requiresAttention).length,
-  }), [versions]);
+  const groups = pageResult?.content ?? [];
+  const stats = pageResult?.summary;
 
   const summaryCards = [
     {
       label: "Movies covered",
-      value: loading ? "—" : String(stats.movies),
+      value: loading ? "—" : String(stats?.moviesCovered ?? 0),
       sub: "with screening versions",
       icon: Film,
       iconBackground: "bg-violet-50",
@@ -170,7 +150,7 @@ export default function ManageScreeningVersionsPage() {
     },
     {
       label: "Total versions",
-      value: loading ? "—" : String(stats.total),
+      value: loading ? "—" : String(stats?.totalVersions ?? 0),
       sub: "presentation packages",
       icon: MonitorPlay,
       iconBackground: "bg-blue-50",
@@ -178,7 +158,7 @@ export default function ManageScreeningVersionsPage() {
     },
     {
       label: "Schedulable",
-      value: loading ? "—" : String(stats.ready),
+      value: loading ? "—" : String(stats?.schedulable ?? 0),
       sub: "ready for scheduling",
       icon: CheckCircle2,
       iconBackground: "bg-emerald-50",
@@ -186,7 +166,7 @@ export default function ManageScreeningVersionsPage() {
     },
     {
       label: "Needs attention",
-      value: loading ? "—" : String(stats.attention),
+      value: loading ? "—" : String(stats?.needsAttention ?? 0),
       sub: "configuration blockers",
       icon: AlertTriangle,
       iconBackground: "bg-rose-50",
@@ -214,12 +194,12 @@ export default function ManageScreeningVersionsPage() {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <AdminPageHeader
         eyebrow="Film programming"
         title="Screening Versions"
         description="Review the presentation, language and audio packages available for scheduling."
-        className="!mb-0"
+        className="!mb-2"
       />
 
       <section
@@ -284,7 +264,10 @@ export default function ManageScreeningVersionsPage() {
               <button
                 key={option.value}
                 type="button"
-                onClick={() => setReadinessFilter(option.value)}
+                onClick={() => {
+                  setReadinessFilter(option.value);
+                  setPage(0);
+                }}
                 className="rounded-lg px-3 py-2 text-xs font-semibold transition-colors"
                 style={selected
                   ? { background: "#2563eb", color: "white" }
@@ -298,7 +281,10 @@ export default function ManageScreeningVersionsPage() {
 
         <select
           value={formatId}
-          onChange={(event) => setFormatId(event.target.value)}
+          onChange={(event) => {
+            setFormatId(event.target.value);
+            setPage(0);
+          }}
           className="min-w-[145px] rounded-xl border px-3 py-2.5 text-sm font-semibold outline-none focus:border-blue-500"
           style={fieldStyle}
           aria-label="Filter by presentation format"
@@ -357,12 +343,17 @@ export default function ManageScreeningVersionsPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="truncate text-base font-bold" style={{ color: "var(--text-main)" }}>
-                      {group.movieTitle}
+                      {group.displayTitle}
                     </h2>
                     <span className="rounded-md bg-slate-500/10 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
                       {group.movieStatus.replaceAll("_", " ")}
                     </span>
                   </div>
+                  {group.originalTitle && group.originalTitle !== group.displayTitle && (
+                    <p className="mt-1 truncate text-xs" style={{ color: "var(--text-sub)" }}>
+                      {group.originalTitle}
+                    </p>
+                  )}
                   <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-sub)" }}>
                     <span>{group.versions.length} version{group.versions.length === 1 ? "" : "s"}</span>
                     <span className={readyCount > 0 ? "text-emerald-500" : ""}>{readyCount} schedulable</span>
@@ -484,10 +475,18 @@ export default function ManageScreeningVersionsPage() {
 
       </section>
 
-      {!loading && groups.length > 0 && (
-        <p className="text-center text-xs" style={{ color: "var(--text-sub)" }}>
-          Showing {filtered.length} of {versions.length} versions across {groups.length} movie{groups.length === 1 ? "" : "s"}
-        </p>
+      {!loading && pageResult && groups.length > 0 && (
+        <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+          <AdminPagination
+            page={pageResult.page}
+            size={pageResult.size}
+            totalElements={pageResult.totalElements}
+            totalPages={pageResult.totalPages}
+            itemLabel="movies"
+            loading={loading}
+            onPageChange={setPage}
+          />
+        </div>
       )}
     </div>
   );

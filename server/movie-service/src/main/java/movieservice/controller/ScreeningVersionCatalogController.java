@@ -3,6 +3,7 @@ package movieservice.controller;
 import lombok.RequiredArgsConstructor;
 import movie.theater.common.dto.ApiResponse;
 import movieservice.dto.response.MovieScreeningVersionCatalogResponse;
+import movieservice.dto.response.ScreeningVersionCatalogPageResponse;
 import movieservice.enums.ScreeningVersionStatus;
 import movieservice.service.MovieScreeningVersionService;
 import org.springframework.http.HttpStatus;
@@ -38,6 +39,22 @@ public class ScreeningVersionCatalogController {
         return ApiResponse.<List<MovieScreeningVersionCatalogResponse>>builder()
                 .code(HttpStatus.OK.value())
                 .result(screeningVersionService.searchCatalog(q, status, formatId, clusterIds, attentionOnly))
+                .build();
+    }
+
+    @GetMapping("/page")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'MOVIE_READ')")
+    public ApiResponse<ScreeningVersionCatalogPageResponse> searchPage(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) ScreeningVersionStatus status,
+            @RequestParam(required = false) Integer formatId,
+            @RequestParam(defaultValue = "ALL") String readiness,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ApiResponse.<ScreeningVersionCatalogPageResponse>builder()
+                .code(HttpStatus.OK.value())
+                .result(screeningVersionService.searchCatalogPage(q, status, formatId, readiness, page, size))
                 .build();
     }
 }

@@ -15,6 +15,7 @@ import movieservice.dto.request.ReleasePlanReviewRequest;
 import movieservice.dto.response.BulkCreateMovieAvailabilityResponse;
 import movieservice.dto.response.BulkReleasePlanDecisionResponse;
 import movieservice.dto.response.MovieAvailabilityResponse;
+import movieservice.dto.response.ReleasePlanningQueuePageResponse;
 import movieservice.enums.AvailabilityStatus;
 import movieservice.service.MovieAvailabilityService;
 import movieservice.service.ReleasePlanBulkDecisionService;
@@ -109,6 +110,18 @@ public class MovieAvailabilityController {
         return ApiResponse.<MovieAvailabilityResponse>builder()
                 .code(200).message("Release plan approved")
                 .result(movieAvailabilityService.approve(id, actor(), note))
+                .build();
+    }
+
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'RELEASE_PLAN_READ')")
+    @GetMapping("/queue")
+    public ApiResponse<ReleasePlanningQueuePageResponse> searchQueue(
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ApiResponse.<ReleasePlanningQueuePageResponse>builder()
+                .code(200)
+                .result(movieAvailabilityService.searchQueue(q, page, size))
                 .build();
     }
 

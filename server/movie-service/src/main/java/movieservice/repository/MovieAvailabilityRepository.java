@@ -18,6 +18,16 @@ public interface MovieAvailabilityRepository extends JpaRepository<MovieAvailabi
 
     List<MovieAvailability> findByCluster_ClusterId(Long clusterId);
 
+    @Query("""
+            SELECT availability FROM MovieAvailability availability
+            JOIN FETCH availability.movie
+            JOIN FETCH availability.cluster
+            WHERE availability.movie.movieId IN :movieIds
+            ORDER BY availability.movie.movieId, availability.cluster.clusterName,
+                     availability.showingStartDate DESC
+            """)
+    List<MovieAvailability> findQueuePlansByMovieIds(@Param("movieIds") List<Long> movieIds);
+
     boolean existsByCluster_ClusterId(Long clusterId);
 
     @Query("""
@@ -33,6 +43,14 @@ public interface MovieAvailabilityRepository extends JpaRepository<MovieAvailabi
             @Param("status") AvailabilityStatus status);
 
     boolean existsByMovie_MovieIdAndStatusIn(Long movieId, List<AvailabilityStatus> statuses);
+
+    @Query("""
+            SELECT COUNT(DISTINCT availability.movie.movieId)
+            FROM MovieAvailability availability
+            WHERE availability.movie.status = movieservice.enums.MovieStatus.APPROVED
+              AND availability.status IN :statuses
+            """)
+    long countDistinctApprovedMoviesByStatuses(@Param("statuses") List<AvailabilityStatus> statuses);
 
     /** Nightly scheduler: OPEN/PLANNED/SUSPENDED windows whose showing_end_date has passed. */
     List<MovieAvailability> findByStatusInAndShowingEndDateBefore(List<AvailabilityStatus> statuses, LocalDate date);
