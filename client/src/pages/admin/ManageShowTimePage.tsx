@@ -34,6 +34,10 @@ export default function ManageShowtimePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const canManageShowtimes = Boolean(user?.permissions.some((permission) =>
+    permission === "SHOWTIME_CREATE" || permission === "SHOWTIME_UPDATE" || permission === "SHOWTIME_DELETE")
+    || user?.roles.some((role) => role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN"));
+  const isReadOnly = !canManageShowtimes;
 
   // Deep-link scope from a release plan's "Schedule shows" action
   // (/admin/showtimes?movieId=...&clusterId=...&availabilityId=...): when present, the
@@ -276,13 +280,15 @@ export default function ManageShowtimePage() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 style={{ color: "var(--text-main)", fontWeight: 600, fontSize: "22px", letterSpacing: "-0.01em", marginBottom: "5px" }}>
-            Showtime Workspace
+            {isReadOnly ? "Live Schedule" : "Showtime Workspace"}
           </h1>
           <p style={{ color: "var(--text-sub)", fontSize: "13px" }}>
-            Plan, generate, and manage cinema schedules in one workspace
+            {isReadOnly
+              ? "View published and operational cinema schedules across all clusters."
+              : "Plan, generate, and manage cinema schedules in one workspace"}
           </p>
         </div>
-        <div className="flex items-center rounded-xl border p-1" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+        {canManageShowtimes ? <div className="flex items-center rounded-xl border p-1" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
           {([
             ["operations", CalendarDays, "Operations"],
             ["list", List, "Showtime List"],
@@ -303,7 +309,11 @@ export default function ManageShowtimePage() {
               <Icon size={14} /> {label}
             </button>
           ))}
-        </div>
+        </div> : (
+          <span className="rounded-full border px-3 py-1.5 text-xs font-semibold" style={{ color: "var(--text-sub)", borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+            Read-only
+          </span>
+        )}
       </div>
 
       {error && (
@@ -336,14 +346,14 @@ export default function ManageShowtimePage() {
             )}
             {" "}from the release plan.
           </p>
-          <button
+          {canManageShowtimes && <button
             type="button"
             onClick={() => setCreateChoiceOpen(true)}
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-white transition-all hover:opacity-90"
             style={{ fontSize: "12px", fontWeight: 600, background: "#2563eb" }}
           >
             <Plus size={13} /> Schedule showtime
-          </button>
+          </button>}
           <button
             type="button"
             onClick={clearScope}
@@ -438,13 +448,13 @@ export default function ManageShowtimePage() {
           <span className="text-[13px] font-semibold">Refresh</span>
         </button>
 
-        <button
+        {canManageShowtimes && <button
           onClick={() => setCreateChoiceOpen(true)}
           className="flex h-10 items-center gap-2 rounded-xl px-4 text-white shadow-sm transition-all hover:opacity-90"
           style={{ fontSize: "13px", fontWeight: 600, background: isDarkMode ? "#9333ea" : "#7e22ce" }}
         >
           <Plus size={16} /> Create Schedule
-        </button>
+        </button>}
         </div>
       )}
 
@@ -499,10 +509,11 @@ export default function ManageShowtimePage() {
         <ShowtimeOperationsBoard
           showtimes={operationsShowtimes}
           busy={loading}
+          readOnly={isReadOnly}
           onEdit={(showtime) => { setEditShowtime(showtime); setModalOpen(true); }}
           onMove={handleMoveShowtime}
           onStatusChange={handleStatusChange}
-          onBulkStatusChange={handleBulkStatusChange}
+          onBulkStatusChange={canManageShowtimes ? handleBulkStatusChange : undefined}
           customerPreviewShowtimes={scopedShowtimes}
         />
       ) : workspaceView === "list" ? (
@@ -524,23 +535,23 @@ export default function ManageShowtimePage() {
         />
       )}
 
-      <ShowtimeModal
+      {canManageShowtimes && <ShowtimeModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         onSave={handleSaveShowtime}
         editShowtime={editShowtime}
         presetMovieId={scopeMovieId}
         presetClusterId={scopeClusterId}
-      />
+      />}
 
-      <ShowtimeCreateChoiceDialog
+      {canManageShowtimes && <ShowtimeCreateChoiceDialog
         open={createChoiceOpen}
         canGenerate={user?.permissions.includes("SCHEDULE_PLAN_SUBMIT")
           || user?.roles.some((role) => role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN")}
         onClose={() => setCreateChoiceOpen(false)}
         onManual={openManualCreate}
         onAutomatic={() => openAutomaticCreate()}
-      />
+      />}
 
       <style>{`
         .hover-row:hover { background-color: rgba(128, 128, 128, 0.04); }

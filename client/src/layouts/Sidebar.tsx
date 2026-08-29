@@ -70,8 +70,8 @@ const employeeNavItems: NavItem[] = [
  * usable children and made the sidebar look unfinished.
  */
 const programmingNavItems: NavItem[] = [
-  { icon: LayoutDashboard, label: "Overview", id: "programming-overview", path: "/admin/programming", group: "main", permissions: ["RELEASE_PLAN_EDIT", "SCHEDULE_PLAN_SUBMIT"] },
-  { icon: ClipboardCheck, label: "Approval Workspace", id: "programming-approvals", path: "/admin/programming/approvals", group: "programming-workflow", permissions: ["MOVIE_APPROVE", "RELEASE_PLAN_APPROVE", "SCHEDULE_PLAN_APPROVE"] },
+  { icon: LayoutDashboard, label: "Programming Workspace", id: "programming-overview", path: "/admin/programming", group: "main", permissions: ["RELEASE_PLAN_EDIT", "SCHEDULE_PLAN_SUBMIT"] },
+  { icon: ClipboardCheck, label: "Review Workspace", id: "programming-approvals", path: "/admin/programming/approvals", group: "programming-workflow", permissions: ["MOVIE_APPROVE", "RELEASE_PLAN_APPROVE", "SCHEDULE_PLAN_APPROVE"] },
   // Follow the actual programming lifecycle instead of splitting scheduling
   // into an isolated one-item section.
   { icon: Film, label: "Movie Catalogue", id: "programming-movies", path: "/admin/movies", group: "programming-workflow", permissions: ["MOVIE_READ"] },
@@ -79,6 +79,7 @@ const programmingNavItems: NavItem[] = [
   { icon: Calendar, label: "Release Planning", id: "programming-release", path: "/admin/release-plans", group: "programming-workflow", permissions: ["RELEASE_PLAN_READ"] },
   { icon: Clapperboard, label: "Create Schedules", id: "programming-schedule-create", path: "/admin/showtimes/auto/create", group: "programming-workflow", permissions: ["SCHEDULE_PLAN_SUBMIT"] },
   { icon: ClipboardCheck, label: "Schedule Reviews", id: "programming-schedule-review", path: "/admin/showtimes/auto/review", group: "programming-workflow", permissions: ["SCHEDULE_PLAN_APPROVE"] },
+  { icon: CalendarClock, label: "Live Schedule", id: "programming-live-schedule", path: "/admin/showtimes", group: "programming-workflow", roles: ["ROLE_PROGRAMMING_APPROVER"], permissions: ["SHOWTIME_READ"] },
   { icon: Monitor, label: "Screening Formats", id: "programming-formats", path: "/admin/formats", group: "programming-reference", permissions: ["MOVIE_READ"] },
   { icon: Tags, label: "Genres", id: "programming-genres", path: "/admin/genres", group: "programming-reference", permissions: ["GENRE_READ"] },
   { icon: ShieldCheck, label: "Age Ratings", id: "programming-ratings", path: "/admin/age-ratings", group: "programming-reference", permissions: ["MOVIE_READ"] },
@@ -175,7 +176,9 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
     const isWorkspaceRoot = path === "/admin" || path === "/employee";
     const isActive = isWorkspaceRoot
       ? location.pathname === path
-      : !hasChildren && location.pathname.startsWith(path);
+      : !hasChildren && (path === "/admin/showtimes"
+        ? location.pathname === path
+        : location.pathname.startsWith(path));
 
     // Parent is "active" style when any child is active
     const childActive = hasChildren && children!.some(c => location.pathname.startsWith(c.path));

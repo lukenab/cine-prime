@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarCheck2, ChevronRight, Clapperboard, Film, GitPullRequestArrow } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { movieApi, type MovieApiResponse, type MovieAvailabilityResponse } from "../../api/movieApi";
 import { showtimeApi, type SchedulePlanSummaryResponse } from "../../api/showtimeApi";
 import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
+import {
+  WorkspaceQueuePanel,
+  WorkspaceSummaryStrip,
+  WorkspaceTabs,
+} from "../../components/admin/ProgrammingWorkspaceChrome";
 import { LoadingState } from "../../components/shared/LoadingState";
 import { RequestState } from "../../components/shared/RequestState";
 import { classifyRequestFailure, type RequestFailure } from "../../utils/requestFailure";
 
-const QUEUE_PREVIEW_LIMIT = 5;
+const QUEUE_PREVIEW_LIMIT = 10;
+type ApprovalQueueTab = "movie-content" | "release-plans" | "generated-schedules";
 
 type ReleasePlanGroup = {
   movieId: number;
@@ -54,63 +60,6 @@ export function groupReleasePlansByMovie(plans: MovieAvailabilityResponse[]): Re
     .sort((a, b) => (a.submittedAt ?? "").localeCompare(b.submittedAt ?? ""));
 }
 
-function QueueSection({
-  title,
-  description,
-  countLabel,
-  accentColor,
-  viewAllTo,
-  viewAllLabel,
-  children,
-}: {
-  title: string;
-  description: string;
-  countLabel: string | number;
-  accentColor: string;
-  viewAllTo?: string;
-  viewAllLabel?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section
-      className="overflow-hidden rounded-2xl border border-t-[3px]"
-      style={{
-        borderColor: "var(--border-color)",
-        borderTopColor: accentColor,
-        background: "var(--bg-card)",
-        boxShadow: "0 6px 20px rgba(15, 23, 42, 0.07)",
-      }}
-    >
-      <header
-        className="flex min-h-[76px] items-center justify-between gap-4 border-b px-5 py-4"
-        style={{
-          borderColor: "var(--border-color)",
-          background: `linear-gradient(90deg, ${accentColor}12 0%, var(--bg-card) 72%)`,
-        }}
-      >
-        <div>
-          <h2 className="text-base font-bold" style={{ color: "var(--text-main)" }}>{title}</h2>
-          <p className="mt-1 text-[12.5px]" style={{ color: "var(--text-sub)" }}>{description}</p>
-        </div>
-        <span
-          className="whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-bold"
-          style={{ color: accentColor, borderColor: `${accentColor}24`, background: `${accentColor}12` }}
-        >
-          {countLabel}
-        </span>
-      </header>
-      {children}
-      {viewAllTo && viewAllLabel && (
-        <footer className="border-t px-5 py-3.5" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
-          <Link to={viewAllTo} className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700">
-            {viewAllLabel}<ChevronRight size={14} />
-          </Link>
-        </footer>
-      )}
-    </section>
-  );
-}
-
 function QueueLink({ to, title, meta }: { to: string; title: string; meta: string }) {
   return (
     <Link
@@ -133,6 +82,7 @@ export default function ProgrammingApprovalWorkspacePage() {
   const [schedulePlans, setSchedulePlans] = useState<SchedulePlanSummaryResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [failure, setFailure] = useState<RequestFailure | null>(null);
+  const [activeTab, setActiveTab] = useState<ApprovalQueueTab>("movie-content");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -165,89 +115,99 @@ export default function ProgrammingApprovalWorkspacePage() {
     return timestamps[0];
   }, [releasePlans, schedulePlans]);
 
+  const tabs = [
+    { id: "movie-content", label: "Movie content", count: movies.length },
+    { id: "release-plans", label: "Release plans", count: releasePlanGroups.length },
+    { id: "generated-schedules", label: "Generated schedules", count: schedulePlans.length },
+  ];
+
+  const activeQueueMeta: Record<ApprovalQueueTab, { title: string; description: string; viewAllTo?: string; viewAllLabel?: string }> = {
+    "movie-content": {
+      title: "Movie content awaiting review",
+      description: "Customer-facing catalogue records submitted for an independent decision.",
+      viewAllTo: movies.length > QUEUE_PREVIEW_LIMIT ? "/admin/movies" : undefined,
+      viewAllLabel: movies.length > QUEUE_PREVIEW_LIMIT ? `View all ${movies.length} titles` : undefined,
+    },
+    "release-plans": {
+      title: "Release plans awaiting review",
+      description: "Branch plans grouped into one review queue for each movie.",
+      viewAllTo: releasePlanGroups.length > QUEUE_PREVIEW_LIMIT ? "/admin/release-plans" : undefined,
+      viewAllLabel: releasePlanGroups.length > QUEUE_PREVIEW_LIMIT ? `View all ${releasePlanGroups.length} movie queues` : undefined,
+    },
+    "generated-schedules": {
+      title: "Generated schedules awaiting review",
+      description: "Validated schedules ready for an independent checker decision.",
+      viewAllTo: schedulePlans.length > QUEUE_PREVIEW_LIMIT ? "/admin/showtimes/auto/review" : undefined,
+      viewAllLabel: schedulePlans.length > QUEUE_PREVIEW_LIMIT ? `View all ${schedulePlans.length} schedules` : undefined,
+    },
+  };
+
+  const renderActiveQueue = () => {
+    if (activeTab === "movie-content") {
+      return movies.length
+        ? movies.slice(0, QUEUE_PREVIEW_LIMIT).map((movie) => (
+          <QueueLink
+            key={movie.movieId}
+            to="/admin/movies"
+            title={movie.movieNameVn || movie.movieNameEnglish}
+            meta="Submitted movie content"
+          />
+        ))
+        : <div className="p-4"><RequestState compact kind="empty" title="No movie reviews" description="No movie content is awaiting review." /></div>;
+    }
+
+    if (activeTab === "release-plans") {
+      return releasePlanGroups.length
+        ? releasePlanGroups.slice(0, QUEUE_PREVIEW_LIMIT).map((group) => (
+          <QueueLink
+            key={group.movieId}
+            to={`/admin/release-plans?movieId=${group.movieId}`}
+            title={group.title}
+            meta={`${group.planCount} branch plan${group.planCount === 1 ? "" : "s"} across ${group.clusterCount} cluster${group.clusterCount === 1 ? "" : "s"} · oldest ${formatDate(group.submittedAt)}`}
+          />
+        ))
+        : <div className="p-4"><RequestState compact kind="empty" title="No release-plan reviews" description="No cluster release plan is awaiting review." /></div>;
+    }
+
+    return schedulePlans.length
+      ? schedulePlans.slice(0, QUEUE_PREVIEW_LIMIT).map((plan) => (
+        <QueueLink
+          key={plan.schedulePlanId}
+          to={`/admin/showtimes/auto/review?runId=${plan.generationRunId}`}
+          title={`Schedule plan #${plan.schedulePlanId}`}
+          meta={`${plan.cinemaCount} cinemas · ${plan.sessionCount} sessions · submitted ${formatDate(plan.submittedAt)}`}
+        />
+      ))
+      : <div className="p-4"><RequestState compact kind="empty" title="No schedule reviews" description="No generated schedule is awaiting review." /></div>;
+  };
+
   return (
     <div className="mx-auto w-full max-w-[1540px] pb-10">
-      <AdminPageHeader eyebrow="Film programming" title="Approval Workspace" description="Review submitted content, release plans and generated schedules without entering creation workflows." />
+      <AdminPageHeader eyebrow="Film programming" title="Programming Review Workspace" description="Review submitted movie content, release plans and generated schedules." />
 
-      <div className="mb-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-        {[
-          { label: "Awaiting review", value: total, helper: "Across all programming queues", icon: GitPullRequestArrow, color: "#2563eb" },
-          { label: "Movie content", value: movies.length, helper: "Titles submitted for approval", icon: Film, color: "#7c3aed" },
-          { label: "Release plans", value: releasePlans.length, helper: `${releasePlanGroups.length} movie queues`, icon: CalendarCheck2, color: "#d97706" },
-          { label: "Generated schedules", value: schedulePlans.length, helper: oldestSubmission ? `Oldest submitted ${formatDate(oldestSubmission)}` : "No schedule awaiting review", icon: Clapperboard, color: "#059669" },
-        ].map(({ label, value, helper, icon: Icon, color }) => (
-          <article
-            key={label}
-            className="flex min-h-[124px] items-center justify-between rounded-2xl border border-t-[3px] p-5"
-            style={{
-              borderColor: "var(--border-color)",
-              borderTopColor: color,
-              background: "var(--bg-card)",
-              boxShadow: "0 6px 18px rgba(15, 23, 42, 0.065)",
-            }}
-          >
-            <div>
-              <p className="text-[13px] font-medium" style={{ color: "var(--text-sub)" }}>{label}</p>
-              <strong className="mt-2 block text-[28px] leading-none" style={{ color: "var(--text-main)" }}>{loading ? "–" : value}</strong>
-              <small className="mt-2 block text-[11.5px]" style={{ color: "var(--text-sub)" }}>{helper}</small>
-            </div>
-            <span className="grid h-11 w-11 place-items-center rounded-xl" style={{ color, background: `${color}16` }}><Icon size={20} /></span>
-          </article>
-        ))}
-      </div>
+      <WorkspaceSummaryStrip items={[
+        { label: "Awaiting review", value: loading ? "–" : total, helper: "Across all review queues" },
+        { label: "Movie content", value: loading ? "–" : movies.length, helper: "Titles awaiting decision", onSelect: () => setActiveTab("movie-content") },
+        { label: "Release plans", value: loading ? "–" : releasePlans.length, helper: `${releasePlanGroups.length} movie queues`, onSelect: () => setActiveTab("release-plans") },
+        { label: "Generated schedules", value: loading ? "–" : schedulePlans.length, helper: oldestSubmission ? `Oldest ${formatDate(oldestSubmission)}` : "No schedule awaiting review", onSelect: () => setActiveTab("generated-schedules") },
+      ]} />
+
+      <WorkspaceTabs tabs={tabs} activeTab={activeTab} onChange={(tab) => setActiveTab(tab as ApprovalQueueTab)} />
 
       {loading ? <LoadingState label="Loading approval queues…" /> : failure ? (
         <RequestState kind={failure.kind} description={failure.description} onRetry={() => void load()} />
-      ) : total === 0 ? (
-        <RequestState kind="empty" title="All programming queues are clear" description="New submissions from programming operators will appear here for independent review." />
       ) : (
-        <div className="grid items-start gap-5 xl:grid-cols-3">
-          <QueueSection
-            title="Movie content"
-            description="Customer-facing catalogue records"
-            countLabel={movies.length}
-            accentColor="#7c3aed"
-            viewAllTo={movies.length > QUEUE_PREVIEW_LIMIT ? "/admin/movies" : undefined}
-            viewAllLabel={movies.length > QUEUE_PREVIEW_LIMIT ? `View all ${movies.length} titles` : undefined}
-          >
-            {movies.length
-              ? movies.slice(0, QUEUE_PREVIEW_LIMIT).map((movie) => <QueueLink key={movie.movieId} to="/admin/movies" title={movie.movieNameVn || movie.movieNameEnglish} meta={`Submitted content · Movie #${movie.movieId}`} />)
-              : <RequestState compact kind="empty" title="No movie reviews" description="No movie content is awaiting review." />}
-          </QueueSection>
-
-          <QueueSection
-            title="Release plans"
-            description="Grouped by movie instead of every branch plan"
-            countLabel={`${releasePlans.length} plans · ${releasePlanGroups.length} titles`}
-            accentColor="#d97706"
-            viewAllTo={releasePlanGroups.length > QUEUE_PREVIEW_LIMIT ? "/admin/release-plans" : undefined}
-            viewAllLabel={releasePlanGroups.length > QUEUE_PREVIEW_LIMIT ? `View all ${releasePlanGroups.length} movie queues` : undefined}
-          >
-            {releasePlanGroups.length
-              ? releasePlanGroups.slice(0, QUEUE_PREVIEW_LIMIT).map((group) => (
-                <QueueLink
-                  key={group.movieId}
-                  to={`/admin/release-plans?movieId=${group.movieId}`}
-                  title={group.title}
-                  meta={`${group.planCount} branch plan${group.planCount === 1 ? "" : "s"} across ${group.clusterCount} cluster${group.clusterCount === 1 ? "" : "s"} · oldest ${formatDate(group.submittedAt)}`}
-                />
-              ))
-              : <RequestState compact kind="empty" title="No release-plan reviews" description="No cluster release plan is awaiting review." />}
-          </QueueSection>
-
-          <QueueSection
-            title="Generated schedules"
-            description="Validated plans ready for checker review"
-            countLabel={schedulePlans.length}
-            accentColor="#059669"
-            viewAllTo={schedulePlans.length > QUEUE_PREVIEW_LIMIT ? "/admin/showtimes/auto/review" : undefined}
-            viewAllLabel={schedulePlans.length > QUEUE_PREVIEW_LIMIT ? `View all ${schedulePlans.length} schedules` : undefined}
-          >
-            {schedulePlans.length
-              ? schedulePlans.slice(0, QUEUE_PREVIEW_LIMIT).map((plan) => <QueueLink key={plan.schedulePlanId} to={`/admin/showtimes/auto/review?runId=${plan.generationRunId}`} title={`Schedule plan #${plan.schedulePlanId}`} meta={`${plan.cinemaCount} cinemas · ${plan.sessionCount} sessions · submitted ${formatDate(plan.submittedAt)}`} />)
-              : <RequestState compact kind="empty" title="No schedule reviews" description="No generated schedule is awaiting review." />}
-          </QueueSection>
-        </div>
+        <WorkspaceQueuePanel
+          title={activeQueueMeta[activeTab].title}
+          description={activeQueueMeta[activeTab].description}
+          footer={activeQueueMeta[activeTab].viewAllTo && activeQueueMeta[activeTab].viewAllLabel ? (
+            <Link to={activeQueueMeta[activeTab].viewAllTo} className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700">
+              {activeQueueMeta[activeTab].viewAllLabel}<ChevronRight size={14} />
+            </Link>
+          ) : undefined}
+        >
+          {renderActiveQueue()}
+        </WorkspaceQueuePanel>
       )}
     </div>
   );

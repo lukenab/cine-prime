@@ -4,7 +4,7 @@ const WORKSPACE_PATHS: Record<string, string[]> = {
   ROLE_SYSTEM_ADMIN: ["/admin/people", "/admin/access-matrix", "/admin/audit", "/admin/settings", "/admin/profile"],
   ROLE_BRANCH_MANAGER: ["/admin/my-workforce", "/admin/showtimes", "/admin/bookings", "/admin/concessions", "/admin/workforce", "/admin/profile"],
   ROLE_PROGRAMMING_OPERATOR: ["/admin/programming", "/admin/movies", "/admin/screening-versions", "/admin/release-plans", "/admin/showtimes/auto/create", "/admin/formats", "/admin/genres", "/admin/age-ratings", "/admin/profile"],
-  ROLE_PROGRAMMING_APPROVER: ["/admin/programming/approvals", "/admin/movies", "/admin/screening-versions", "/admin/release-plans", "/admin/showtimes/auto/review", "/admin/formats", "/admin/genres", "/admin/age-ratings", "/admin/profile"],
+  ROLE_PROGRAMMING_APPROVER: ["/admin/programming/approvals", "/admin/movies", "/admin/screening-versions", "/admin/release-plans", "/admin/showtimes/auto/review", "/admin/showtimes", "/admin/formats", "/admin/genres", "/admin/age-ratings", "/admin/profile"],
   ROLE_FINANCE_OFFICER: ["/admin/refunds-reconciliation", "/admin/bookings", "/admin/reports", "/admin/profile"],
   ROLE_FINANCE_APPROVER: ["/admin/refunds-reconciliation", "/admin/bookings", "/admin/audit", "/admin/reports", "/admin/profile"],
   ROLE_COMMERCIAL_MANAGER: ["/admin/price-books", "/admin/promotions", "/admin/reports", "/admin/profile"],
@@ -16,7 +16,11 @@ export function isPathInRoleWorkspace(role: string | undefined, path: string): b
   if (!role) return false;
   const roots = WORKSPACE_PATHS[role];
   if (!roots) return true;
-  return roots.some((root) => root === path || (root !== "/admin" && path.startsWith(`${root}/`)));
+  return roots.some((root) => root === path || (
+    root !== "/admin"
+    && root !== "/admin/showtimes"
+    && path.startsWith(`${root}/`)
+  ));
 }
 
 export function workspacePathsForRole(role: string): readonly string[] {

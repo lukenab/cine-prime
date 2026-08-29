@@ -60,7 +60,7 @@ public class ScheduleController {
 
     // Internal operational reads must remain separate from the customer catalogue.
     @GetMapping("/internal")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SHOWTIME_READ')")
     public ApiResponse<List<ShowTimeResponse>> getAllInternal() {
         return ApiResponse.<List<ShowTimeResponse>>builder()
                 .result(showTimeService.getAll())
@@ -68,7 +68,7 @@ public class ScheduleController {
     }
 
     @GetMapping("/internal/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SHOWTIME_READ')")
     public ApiResponse<ShowTimeResponse> getByIdInternal(@PathVariable Long id) {
         return ApiResponse.<ShowTimeResponse>builder()
                 .result(showTimeService.getById(id))

@@ -30,5 +30,6 @@ describe("admin role workspaces", () => {
     expect(isPathInRoleWorkspace("ROLE_PROGRAMMING_APPROVER", "/admin/showtimes/auto/review")).toBe(true);
     expect(isPathInRoleWorkspace("ROLE_PROGRAMMING_APPROVER", "/admin/showtimes/auto/create")).toBe(false);
     expect(isPathInRoleWorkspace("ROLE_PROGRAMMING_APPROVER", "/admin/programming/approvals")).toBe(true);
+    expect(isPathInRoleWorkspace("ROLE_PROGRAMMING_APPROVER", "/admin/showtimes")).toBe(true);
   });
 });
