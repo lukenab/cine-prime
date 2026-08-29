@@ -88,4 +88,23 @@ describe("ShowtimeOperationsBoard", () => {
     const dialog = screen.getByRole("dialog", { name: /customer schedule view/i });
     expect(within(dialog).getByText("Customer Visible Movie")).toBeInTheDocument();
   });
+
+  it("keeps the live schedule read-only for a programming approver", () => {
+    render(
+      <ShowtimeOperationsBoard
+        showtimes={showtimes}
+        readOnly
+        onEdit={vi.fn()}
+        onMove={vi.fn().mockResolvedValue(undefined)}
+        onStatusChange={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Internal Draft Movie/i }));
+    const dialog = screen.getByRole("dialog", { name: /showtime details/i });
+
+    expect(within(dialog).queryByRole("button", { name: /^Edit$/i })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: /open sales/i })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: /cancel showtime/i })).not.toBeInTheDocument();
+  });
 });

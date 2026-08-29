@@ -37,6 +37,7 @@ type Props = {
    *  Table-only movie/status/room filters must not hide sessions from this view. */
   customerPreviewShowtimes?: ShowtimeResponse[];
   busy?: boolean;
+  readOnly?: boolean;
   onEdit: (showtime: ShowtimeResponse) => void;
   onMove: (showtime: ShowtimeResponse, roomId: number, showDate: string, startTime: string) => Promise<void>;
   onStatusChange: (showtime: ShowtimeResponse, status: ShowtimeStatus, reason?: string) => Promise<void>;
@@ -250,7 +251,7 @@ function CustomerPreview({
   );
 }
 
-export default function ShowtimeOperationsBoard({ showtimes, customerPreviewShowtimes = showtimes, busy = false, onEdit, onMove, onStatusChange, onBulkStatusChange }: Props) {
+export default function ShowtimeOperationsBoard({ showtimes, customerPreviewShowtimes = showtimes, busy = false, readOnly = false, onEdit, onMove, onStatusChange, onBulkStatusChange }: Props) {
   const datesWithSessions = useMemo(() => Array.from(new Set(showtimes.map((item) => item.showDate))).sort(), [showtimes]);
 
   // A continuous day-by-day strip (not just days that already have a session) so admins can
@@ -439,6 +440,7 @@ export default function ShowtimeOperationsBoard({ showtimes, customerPreviewShow
 
   const handleDrop = async (event: DragEvent<HTMLElement>, roomId: number) => {
     event.preventDefault();
+    if (readOnly) return;
     const id = Number(event.dataTransfer.getData("text/showtime-id"));
     const showtime = showtimes.find((item) => item.showTimeId === id);
     if (!showtime || showtime.status === "CANCELLED" || showtime.status === "COMPLETED") return;
@@ -729,7 +731,7 @@ export default function ShowtimeOperationsBoard({ showtimes, customerPreviewShow
                             {group.items.map((item) => {
                               const meta = STATUS_META[item.status];
                               const conflict = conflictIds.has(item.showTimeId);
-                              const draggable = item.status !== "CANCELLED" && item.status !== "COMPLETED";
+                              const draggable = !readOnly && item.status !== "CANCELLED" && item.status !== "COMPLETED";
                               const soldSeats = item.soldSeats ?? Math.max(0, (item.totalSeats ?? 0) - (item.availableSeats ?? item.totalSeats ?? 0));
                               const checked = selectedIds.has(item.showTimeId);
                               return (
@@ -816,7 +818,7 @@ export default function ShowtimeOperationsBoard({ showtimes, customerPreviewShow
                           const left = ((minutes(item.startTime) - timelineWindow.start) / timelineSpan) * 100;
                           const width = (duration(item) / timelineSpan) * 100;
                           const conflict = conflictIds.has(item.showTimeId);
-                          const draggable = item.status !== "CANCELLED" && item.status !== "COMPLETED";
+                          const draggable = !readOnly && item.status !== "CANCELLED" && item.status !== "COMPLETED";
                           const soldSeats = item.soldSeats ?? Math.max(0, (item.totalSeats ?? 0) - (item.availableSeats ?? item.totalSeats ?? 0));
                           return (
                             <button
@@ -904,7 +906,7 @@ export default function ShowtimeOperationsBoard({ showtimes, customerPreviewShow
             {/* Actions live in a matching bordered panel, same radius and border color as
                 the detail panel above, so the modal reads as a consistent stack of
                 sections rather than a boxed grid followed by loose floating buttons. */}
-            {selected.status !== "CANCELLED" && selected.status !== "COMPLETED" && (
+            {!readOnly && selected.status !== "CANCELLED" && selected.status !== "COMPLETED" && (
               <div className="mt-3 space-y-2 rounded-2xl border p-3" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
                 <div className="flex gap-2">
                   <button

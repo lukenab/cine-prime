@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
-  CheckCircle2,
-  CircleDashed,
   Clapperboard,
-  Clock3,
   Film,
-  Languages,
-  Workflow,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { subscribeLifecycleEvents } from "../../api/lifecycleSocket";
 import { movieApi, type MovieApiResponse } from "../../api/movieApi";
+import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
+import {
+  WorkspaceQueuePanel,
+  WorkspaceSummaryStrip,
+  WorkspaceTabs,
+} from "../../components/admin/ProgrammingWorkspaceChrome";
 import { RequestState } from "../../components/shared/RequestState";
 import { classifyRequestFailure, type RequestFailure } from "../../utils/requestFailure";
 
@@ -24,38 +25,14 @@ const STATUS_META: Record<string, { label: string; color: string; background: st
   ARCHIVED: { label: "Archived", color: "#94a3b8", background: "rgba(148,163,184,.12)" },
 };
 
-const quickActions = [
-  {
-    title: "Movie catalogue",
-    description: "Import movie metadata, prepare content and submit drafts for review.",
-    path: "/admin/movies",
-    icon: Film,
-  },
-  {
-    title: "Release planning",
-    description: "Create cluster release windows and submit plans for administrator approval.",
-    path: "/admin/release-plans",
-    icon: Clock3,
-  },
-  {
-    title: "Screening versions",
-    description: "Manage language, subtitle, audio and presentation packages used by schedules.",
-    path: "/admin/screening-versions",
-    icon: Languages,
-  },
-  {
-    title: "Automatic scheduling",
-    description: "Generate branch schedules from approved movies, release plans and constraints.",
-    path: "/admin/showtimes/auto/create",
-    icon: Clapperboard,
-  },
-];
+type OperatorQueueTab = "needs-action" | "awaiting-review" | "approved";
 
 export default function ProgrammingOperatorDashboardPage() {
   const navigate = useNavigate();
   const [movies, setMovies] = useState<MovieApiResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [failure, setFailure] = useState<RequestFailure | null>(null);
+  const [activeTab, setActiveTab] = useState<OperatorQueueTab>("needs-action");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -78,63 +55,78 @@ export default function ProgrammingOperatorDashboardPage() {
     if (event.aggregateType === "MOVIE") void load();
   }), [load]);
 
-  const counts = useMemo(() => movies.reduce<Record<string, number>>((result, movie) => {
-    const status = movie.movieStatus ?? "DRAFT";
-    result[status] = (result[status] ?? 0) + 1;
-    return result;
-  }, {}), [movies]);
+  const queues = useMemo(() => ({
+    "needs-action": movies.filter((movie) => ["DRAFT", "CHANGES_REQUESTED"].includes(movie.movieStatus ?? "DRAFT")),
+    "awaiting-review": movies.filter((movie) => movie.movieStatus === "PENDING_REVIEW"),
+    approved: movies.filter((movie) => movie.movieStatus === "APPROVED"),
+  }), [movies]);
 
-  const queue = useMemo(() => movies
-    .filter((movie) => movie.movieStatus !== "ARCHIVED")
+  const queue = useMemo(() => queues[activeTab]
     .sort((left, right) => String(right.updatedAt ?? right.createAt).localeCompare(String(left.updatedAt ?? left.createAt)))
-    .slice(0, 5), [movies]);
+    .slice(0, 10), [activeTab, queues]);
 
-  const statCards = [
-    { label: "Working drafts", value: (counts.DRAFT ?? 0) + (counts.CHANGES_REQUESTED ?? 0), note: "Ready for operator action", icon: CircleDashed, color: "#3b82f6" },
-    { label: "Awaiting admin", value: counts.PENDING_REVIEW ?? 0, note: "Submitted for review", icon: Clock3, color: "#f59e0b" },
-    { label: "Approved movies", value: counts.APPROVED ?? 0, note: "Eligible for release planning", icon: CheckCircle2, color: "#10b981" },
+  const tabMeta: Record<OperatorQueueTab, { title: string; description: string; emptyTitle: string; emptyDescription: string }> = {
+    "needs-action": {
+      title: "Needs action",
+      description: "Draft and returned movie content that can be edited now.",
+      emptyTitle: "No content needs action",
+      emptyDescription: "New drafts and returned submissions will appear here.",
+    },
+    "awaiting-review": {
+      title: "Awaiting review",
+      description: "Submitted content waiting for an independent approval decision.",
+      emptyTitle: "No content is awaiting review",
+      emptyDescription: "Submitted movie content will appear here until a reviewer responds.",
+    },
+    approved: {
+      title: "Recently approved",
+      description: "Approved titles that are eligible for release planning.",
+      emptyTitle: "No approved movie content",
+      emptyDescription: "Approved titles will appear here when review is complete.",
+    },
+  };
+
+  const tabs = [
+    { id: "needs-action", label: "Needs action", count: queues["needs-action"].length },
+    { id: "awaiting-review", label: "Awaiting review", count: queues["awaiting-review"].length },
+    { id: "approved", label: "Recently approved", count: queues.approved.length },
   ];
 
   return (
-    <div style={{ maxWidth: 1480, margin: "0 auto", color: "var(--text-main)" }}>
-      <div style={{ marginBottom: 26 }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#3b82f6", fontSize: 12, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase" }}>
-            <Workflow size={15} /> Film programming
-          </div>
-          <h1 style={{ margin: "8px 0 6px", fontSize: 30, lineHeight: 1.15 }}>Programming workspace</h1>
-          <p style={{ margin: 0, color: "var(--text-sub)", fontSize: 14, lineHeight: 1.6 }}>
-            Prepare catalogue, release and schedule drafts. Publishing remains an administrator decision.
-          </p>
-        </div>
-      </div>
+    <div className="mx-auto w-full max-w-[1540px] pb-10" style={{ color: "var(--text-main)" }}>
+      <AdminPageHeader
+        eyebrow="Film programming"
+        title="Programming Workspace"
+        description="Prepare catalogue, release and schedule drafts for independent review."
+        actions={(
+          <>
+            <button type="button" onClick={() => navigate("/admin/movies")} className="inline-flex h-10 items-center gap-2 rounded-xl border px-3.5 text-xs font-semibold transition-colors hover:bg-blue-500/5" style={{ borderColor: "var(--border-color)", color: "var(--text-main)", background: "var(--bg-card)" }}>
+              <Film size={16} /> Movie catalogue
+            </button>
+            <button type="button" onClick={() => navigate("/admin/showtimes/auto/create")} className="inline-flex h-10 items-center gap-2 rounded-xl bg-blue-600 px-3.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700">
+              <Clapperboard size={16} /> Create schedule
+            </button>
+          </>
+        )}
+      />
 
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 16, marginBottom: 20 }}>
-        {statCards.map(({ label, value, note, icon: Icon, color }) => (
-          <div key={label} style={{ minHeight: 126, padding: 20, borderRadius: 16, border: "1px solid var(--border-color)", background: "var(--bg-card)", display: "flex", justifyContent: "space-between", gap: 18 }}>
-            <div>
-              <div style={{ color: "var(--text-sub)", fontSize: 12 }}>{label}</div>
-              <div style={{ fontSize: 30, fontWeight: 700, margin: "8px 0 5px" }}>{loading ? "–" : value}</div>
-              <div style={{ color: "var(--text-sub)", fontSize: 11.5 }}>{note}</div>
-            </div>
-            <div style={{ width: 42, height: 42, flexShrink: 0, borderRadius: 12, display: "grid", placeItems: "center", color, background: `${color}18` }}><Icon size={20} /></div>
-          </div>
-        ))}
-      </section>
+      <WorkspaceSummaryStrip items={[
+        { label: "Needs action", value: loading ? "–" : queues["needs-action"].length, helper: "Draft or returned", onSelect: () => setActiveTab("needs-action") },
+        { label: "Awaiting review", value: loading ? "–" : queues["awaiting-review"].length, helper: "Submitted for decision", onSelect: () => setActiveTab("awaiting-review") },
+        { label: "Approved titles", value: loading ? "–" : queues.approved.length, helper: "Eligible for release planning", onSelect: () => setActiveTab("approved") },
+      ]} />
 
-      <section style={{ display: "grid", gridTemplateColumns: "minmax(0,1.45fr) minmax(340px,.8fr)", gap: 18 }}>
-        <div style={{ borderRadius: 16, border: "1px solid var(--border-color)", background: "var(--bg-card)", overflow: "hidden" }}>
-          <div style={{ padding: "18px 20px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <h2 style={{ margin: 0, fontSize: 16 }}>Programming queue</h2>
-              <p style={{ margin: "5px 0 0", color: "var(--text-sub)", fontSize: 12 }}>Recent content records and their approval state.</p>
-            </div>
-            <button type="button" onClick={() => navigate("/admin/movies")} style={{ border: 0, padding: "4px 0", background: "transparent", color: "#3b82f6", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>View catalogue <ArrowRight size={13} /></button>
-          </div>
+      <WorkspaceTabs tabs={tabs} activeTab={activeTab} onChange={(tab) => setActiveTab(tab as OperatorQueueTab)} />
+
+      <WorkspaceQueuePanel
+        title={tabMeta[activeTab].title}
+        description={tabMeta[activeTab].description}
+        actions={<button type="button" onClick={() => navigate("/admin/movies")} className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700">View catalogue <ArrowRight size={14} /></button>}
+      >
           {failure ? (
             <div className="p-4"><RequestState compact kind={failure.kind} description={failure.description} onRetry={() => void load()} /></div>
           ) : queue.length === 0 && !loading ? (
-            <div className="p-4"><RequestState compact kind="empty" title="No movie records in the programming queue" description="Drafts and returned movie content will appear here when work is required." /></div>
+            <div className="p-4"><RequestState compact kind="empty" title={tabMeta[activeTab].emptyTitle} description={tabMeta[activeTab].emptyDescription} /></div>
           ) : (
             queue.map((movie) => {
               const status = movie.movieStatus ?? "DRAFT";
@@ -154,22 +146,7 @@ export default function ProgrammingOperatorDashboardPage() {
               );
             })
           )}
-        </div>
-
-        <div style={{ borderRadius: 16, border: "1px solid var(--border-color)", background: "var(--bg-card)", padding: 20, alignSelf: "start" }}>
-          <h2 style={{ margin: 0, fontSize: 16 }}>Continue your workflow</h2>
-          <p style={{ margin: "6px 0 18px", color: "var(--text-sub)", fontSize: 12, lineHeight: 1.55 }}>Each tool exposes only the actions assigned to film programming.</p>
-          <div style={{ display: "grid", gap: 10 }}>
-            {quickActions.map(({ title, description, path, icon: Icon }) => (
-              <button key={title} type="button" onClick={() => navigate(path)} style={{ padding: 14, borderRadius: 13, border: "1px solid var(--border-color)", background: "var(--bg-main)", color: "var(--text-main)", display: "grid", gridTemplateColumns: "38px 1fr 18px", alignItems: "center", gap: 12, textAlign: "left", cursor: "pointer" }}>
-                <span style={{ width: 38, height: 38, borderRadius: 11, display: "grid", placeItems: "center", color: "#3b82f6", background: "rgba(59,130,246,.1)" }}><Icon size={18} /></span>
-                <span><strong style={{ display: "block", fontSize: 13 }}>{title}</strong><small style={{ display: "block", color: "var(--text-sub)", lineHeight: 1.45, marginTop: 4 }}>{description}</small></span>
-                <ArrowRight size={16} color="var(--text-sub)" />
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
+      </WorkspaceQueuePanel>
     </div>
   );
 }
