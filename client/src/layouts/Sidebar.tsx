@@ -71,15 +71,15 @@ const employeeNavItems: NavItem[] = [
  */
 const programmingNavItems: NavItem[] = [
   { icon: LayoutDashboard, label: "Programming Workspace", id: "programming-overview", path: "/admin/programming", group: "main", permissions: ["RELEASE_PLAN_EDIT", "SCHEDULE_PLAN_SUBMIT"] },
-  { icon: ClipboardCheck, label: "Review Workspace", id: "programming-approvals", path: "/admin/programming/approvals", group: "programming-workflow", permissions: ["MOVIE_APPROVE", "RELEASE_PLAN_APPROVE", "SCHEDULE_PLAN_APPROVE"] },
+  { icon: ClipboardCheck, label: "Review Workspace", id: "programming-approvals", path: "/admin/programming/approvals", group: "main", permissions: ["MOVIE_APPROVE", "RELEASE_PLAN_APPROVE", "SCHEDULE_PLAN_APPROVE"] },
   // Follow the actual programming lifecycle instead of splitting scheduling
   // into an isolated one-item section.
   { icon: Film, label: "Movie Catalogue", id: "programming-movies", path: "/admin/movies", group: "programming-workflow", permissions: ["MOVIE_READ"] },
   { icon: Layers3, label: "Screening Versions", id: "programming-versions", path: "/admin/screening-versions", group: "programming-workflow", permissions: ["MOVIE_READ"] },
   { icon: Calendar, label: "Release Planning", id: "programming-release", path: "/admin/release-plans", group: "programming-workflow", permissions: ["RELEASE_PLAN_READ"] },
   { icon: Clapperboard, label: "Create Schedules", id: "programming-schedule-create", path: "/admin/showtimes/auto/create", group: "programming-workflow", permissions: ["SCHEDULE_PLAN_SUBMIT"] },
-  { icon: ClipboardCheck, label: "Schedule Reviews", id: "programming-schedule-review", path: "/admin/showtimes/auto/review", group: "programming-workflow", permissions: ["SCHEDULE_PLAN_APPROVE"] },
-  { icon: CalendarClock, label: "Live Schedule", id: "programming-live-schedule", path: "/admin/showtimes", group: "programming-workflow", roles: ["ROLE_PROGRAMMING_APPROVER"], permissions: ["SHOWTIME_READ"] },
+  { icon: ClipboardCheck, label: "Review Schedules", id: "programming-schedule-review", path: "/admin/showtimes/auto/review", group: "programming-workflow", permissions: ["SCHEDULE_PLAN_APPROVE"] },
+  { icon: CalendarClock, label: "Live Schedule", id: "programming-live-schedule", path: "/admin/showtimes", group: "programming-workflow", roles: ["ROLE_PROGRAMMING_OPERATOR", "ROLE_PROGRAMMING_APPROVER"], permissions: ["SHOWTIME_READ"] },
   { icon: Monitor, label: "Screening Formats", id: "programming-formats", path: "/admin/formats", group: "programming-reference", permissions: ["MOVIE_READ"] },
   { icon: Tags, label: "Genres", id: "programming-genres", path: "/admin/genres", group: "programming-reference", permissions: ["GENRE_READ"] },
   { icon: ShieldCheck, label: "Age Ratings", id: "programming-ratings", path: "/admin/age-ratings", group: "programming-reference", permissions: ["MOVIE_READ"] },

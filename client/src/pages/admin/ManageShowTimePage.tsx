@@ -34,9 +34,11 @@ export default function ManageShowtimePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const canManageShowtimes = Boolean(user?.permissions.some((permission) =>
-    permission === "SHOWTIME_CREATE" || permission === "SHOWTIME_UPDATE" || permission === "SHOWTIME_DELETE")
-    || user?.roles.some((role) => role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN"));
+  // Live Schedule is an operational verification surface for programming roles.
+  // Direct showtime mutation remains an administrator responsibility; operators
+  // create schedules through the governed automatic-scheduling workflow instead.
+  const canManageShowtimes = Boolean(user?.roles.some((role) =>
+    role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN"));
   const isReadOnly = !canManageShowtimes;
 
   // Deep-link scope from a release plan's "Schedule shows" action
