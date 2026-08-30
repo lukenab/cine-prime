@@ -79,7 +79,7 @@ const programmingNavItems: NavItem[] = [
   { icon: Calendar, label: "Release Planning", id: "programming-release", path: "/admin/release-plans", group: "programming-workflow", permissions: ["RELEASE_PLAN_READ"] },
   { icon: Clapperboard, label: "Create Schedules", id: "programming-schedule-create", path: "/admin/showtimes/auto/create", group: "programming-workflow", permissions: ["SCHEDULE_PLAN_SUBMIT"] },
   { icon: ClipboardCheck, label: "Review Schedules", id: "programming-schedule-review", path: "/admin/showtimes/auto/review", group: "programming-workflow", permissions: ["SCHEDULE_PLAN_APPROVE"] },
-  { icon: CalendarClock, label: "Live Schedule", id: "programming-live-schedule", path: "/admin/showtimes", group: "programming-workflow", roles: ["ROLE_PROGRAMMING_OPERATOR", "ROLE_PROGRAMMING_APPROVER"], permissions: ["SHOWTIME_READ"] },
+  { icon: CalendarClock, label: "Published Schedules", id: "programming-live-schedule", path: "/admin/showtimes", group: "programming-workflow", roles: ["ROLE_PROGRAMMING_OPERATOR", "ROLE_PROGRAMMING_APPROVER"], permissions: ["SHOWTIME_READ"] },
   { icon: Monitor, label: "Screening Formats", id: "programming-formats", path: "/admin/formats", group: "programming-reference", permissions: ["MOVIE_READ"] },
   { icon: Tags, label: "Genres", id: "programming-genres", path: "/admin/genres", group: "programming-reference", permissions: ["GENRE_READ"] },
   { icon: ShieldCheck, label: "Age Ratings", id: "programming-ratings", path: "/admin/age-ratings", group: "programming-reference", permissions: ["MOVIE_READ"] },

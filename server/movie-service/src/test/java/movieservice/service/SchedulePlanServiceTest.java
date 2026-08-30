@@ -100,6 +100,35 @@ class SchedulePlanServiceTest {
     }
 
     @Test
+    void publishRejectsPlanThatHasNotReceivedIndependentApproval() {
+        SchedulePlan plan = plan(SchedulePlanStatus.IN_REVIEW);
+        when(schedulePlanRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(plan));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> service.publish(10L, "operator@cineprime.vn"));
+
+        assertEquals(MovieErrorCode.SCHEDULE_PLAN_INVALID_TRANSITION, exception.getErrorCode());
+        verifyNoInteractions(persistenceService, showtimeInventoryService);
+    }
+
+    @Test
+    void approveRecordsIndependentDecisionWithoutMaterializingShowtimes() {
+        SchedulePlan plan = plan(SchedulePlanStatus.IN_REVIEW);
+        plan.setSubmittedBy("operator@cineprime.vn");
+        when(schedulePlanRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(plan));
+
+        var response = service.approve(10L, "approver@cineprime.vn");
+
+        assertEquals(SchedulePlanStatus.APPROVED, plan.getStatus());
+        assertEquals("APPROVED", response.status());
+        assertEquals("approver@cineprime.vn", response.approvedBy());
+        assertNotNull(response.approvedAt());
+        verify(revalidationService).revalidate(10L, "approver@cineprime.vn");
+        verifyNoInteractions(persistenceService, showtimeInventoryService);
+    }
+
+    @Test
     void publishingAnAlreadyPublishedPlanIsIdempotent() {
         SchedulePlan plan = plan(SchedulePlanStatus.PUBLISHED);
         when(schedulePlanRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(plan));
@@ -113,7 +142,7 @@ class SchedulePlanServiceTest {
 
     @Test
     void publishingAPlanWithValidationBlockersIsRejected() {
-        SchedulePlan plan = plan(SchedulePlanStatus.IN_REVIEW);
+        SchedulePlan plan = plan(SchedulePlanStatus.APPROVED);
         plan.setBlockerCount(2);
         when(schedulePlanRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(plan));
 
@@ -123,7 +152,7 @@ class SchedulePlanServiceTest {
 
     @Test
     void publishingDefersSeatInventoryAndMaterializesPlanInOneBatch() {
-        SchedulePlan plan = plan(SchedulePlanStatus.IN_REVIEW);
+        SchedulePlan plan = plan(SchedulePlanStatus.APPROVED);
         plan.setSubmittedBy("operator@cineprime.vn");
         CinemaCluster cluster = CinemaCluster.builder()
                 .clusterId(43L)
@@ -161,24 +190,25 @@ class SchedulePlanServiceTest {
                         .created(published));
         when(showtimeInventoryService.materializeBatch(List.of(published))).thenReturn(150);
 
-        var response = service.publish(10L, "admin@cineprime.vn");
+        var response = service.publish(10L, "operator@cineprime.vn");
 
         assertEquals("PUBLISHED", response.status());
+        assertEquals("operator@cineprime.vn", response.publishedBy());
         assertSame(published, slot.getPublishedShowtime());
         verify(persistenceService).persist(eq(20L), any(), eq(15), eq(false));
         verify(showtimeInventoryService).materializeBatch(List.of(published));
     }
 
     @Test
-    void submittingAuthorCannotPublishOwnSchedulePlan() {
+    void submittingAuthorCannotApproveOwnSchedulePlan() {
         SchedulePlan plan = plan(SchedulePlanStatus.IN_REVIEW);
         plan.setSubmittedBy("programmer@cineprime.vn");
         when(schedulePlanRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(plan));
 
         AppException ex = assertThrows(AppException.class,
-                () -> service.publish(10L, "programmer@cineprime.vn"));
+                () -> service.approve(10L, "programmer@cineprime.vn"));
 
-        assertEquals(MovieErrorCode.SCHEDULE_PLAN_SELF_PUBLISH_FORBIDDEN, ex.getErrorCode());
+        assertEquals(MovieErrorCode.SCHEDULE_PLAN_SELF_APPROVAL_FORBIDDEN, ex.getErrorCode());
         verifyNoInteractions(persistenceService);
     }
 
@@ -191,6 +221,34 @@ class SchedulePlanServiceTest {
         var response = service.requestChanges(10L, "admin-2", "Resolve blockers");
 
         assertEquals("CHANGES_REQUESTED", response.status());
+    }
+
+    @Test
+    void approvedPlanCanBeReturnedWhenPublicationPreconditionsChange() {
+        SchedulePlan plan = plan(SchedulePlanStatus.APPROVED);
+        plan.setApprovedAt(java.time.LocalDateTime.now());
+        plan.setApprovedBy("approver@cineprime.vn");
+        when(schedulePlanRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(plan));
+
+        var response = service.requestChanges(10L, "operator@cineprime.vn", "Release window changed");
+
+        assertEquals("CHANGES_REQUESTED", response.status());
+        assertNull(plan.getApprovedAt());
+        assertNull(plan.getApprovedBy());
+        assertEquals("Release window changed", plan.getReviewNote());
+    }
+
+    @Test
+    void returningSchedulePlanRequiresActionableReason() {
+        SchedulePlan plan = plan(SchedulePlanStatus.IN_REVIEW);
+        when(schedulePlanRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(plan));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> service.requestChanges(10L, "approver@cineprime.vn", "  "));
+
+        assertEquals(MovieErrorCode.SCHEDULE_PLAN_REVIEW_NOTE_REQUIRED, exception.getErrorCode());
+        assertEquals(SchedulePlanStatus.IN_REVIEW, plan.getStatus());
     }
 
     @Test

@@ -44,6 +44,7 @@ public interface SchedulePlanRepository extends JpaRepository<SchedulePlan, Long
                         plan.createdAt,
                         plan.updatedAt,
                         plan.submittedAt,
+                        plan.approvedAt,
                         plan.publishedAt
                     )
                     FROM SchedulePlan plan
@@ -63,6 +64,7 @@ public interface SchedulePlanRepository extends JpaRepository<SchedulePlan, Long
                         plan.createdAt,
                         plan.updatedAt,
                         plan.submittedAt,
+                        plan.approvedAt,
                         plan.publishedAt
                     ORDER BY plan.updatedAt DESC
                     """,

@@ -63,6 +63,13 @@ export function Header({ activePage, isDarkMode = true, onToggleTheme }: HeaderP
   const isReleasePlanReview = /\/movies\/[^/]+\/availability(?:\/|$)/.test(location.pathname);
   const isProgrammingReviewWorkspace = location.pathname === "/admin/programming/approvals";
   const isProgrammingWorkspace = location.pathname === "/admin/programming";
+  const schedulePageTitle = location.pathname === "/admin/showtimes/auto/review"
+    ? "Schedule Review"
+    : location.pathname === "/admin/showtimes/auto/create"
+      ? "Automatic Scheduling"
+      : location.pathname === "/admin/showtimes"
+        ? "Published Schedules"
+        : null;
 
   // Xử lý click ra ngoài để đóng dropdown
   useEffect(() => {
@@ -116,6 +123,12 @@ export function Header({ activePage, isDarkMode = true, onToggleTheme }: HeaderP
             <button type="button" onClick={() => navigate("/admin/movies")} className="font-medium transition-colors hover:text-blue-600" style={{ color: "var(--text-sub)" }}>Movie catalogue</button>
             <ChevronRight size={13} style={{ color: "var(--border-color)" }} />
             <span style={{ color: "var(--text-main)", fontWeight: 500 }}>Release plan review</span>
+          </>
+        ) : schedulePageTitle ? (
+          <>
+            <span style={{ color: "var(--text-sub)", fontWeight: 500 }}>Film Programming</span>
+            <ChevronRight size={13} style={{ color: "var(--border-color)" }} />
+            <span style={{ color: "var(--text-main)", fontWeight: 500 }}>{schedulePageTitle}</span>
           </>
         ) : isProgrammingWorkspace || isProgrammingReviewWorkspace ? (
           <>

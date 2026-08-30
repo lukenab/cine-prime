@@ -65,7 +65,7 @@ import {
 } from "../../components/ui/dropdown-menu";
 
 type StepKey = "scope" | "review" | "running" | "results";
-type WorkspaceSection = "create" | "review-plans" | "published" | "policy";
+type WorkspaceSection = "create" | "review-plans" | "approved" | "published" | "policy";
 const MAX_AUTO_SCHEDULE_CLUSTERS = 3;
 const MAX_AUTO_SCHEDULE_MOVIES = 5;
 const STEPS: { key: StepKey; label: string; icon: typeof Calendar }[] = [
@@ -690,6 +690,7 @@ const PLAN_STATUS_META: Record<SchedulePlanResponse["status"], { label: string; 
   DRAFT_GENERATED: { label: "Draft", color: "#64748b", background: "rgba(100,116,139,.12)" },
   IN_REVIEW: { label: "In review", color: "#2563eb", background: "rgba(37,99,235,.12)" },
   CHANGES_REQUESTED: { label: "Changes requested", color: "#d97706", background: "rgba(217,119,6,.12)" },
+  APPROVED: { label: "Approved", color: "#7c3aed", background: "rgba(124,58,237,.12)" },
   PUBLISHED: { label: "Published", color: "#059669", background: "rgba(5,150,105,.12)" },
 };
 
@@ -702,7 +703,7 @@ function SchedulePlanLibrary({
   onRefresh,
   onOpen,
 }: {
-  mode: "drafts" | "review" | "published";
+  mode: "drafts" | "review" | "approved" | "published";
   plans: SchedulePlanSummaryResponse[];
   loading: boolean;
   error: RequestFailure | null;
@@ -711,18 +712,21 @@ function SchedulePlanLibrary({
 }) {
   const published = mode === "published";
   const approvalQueue = mode === "review";
+  const approved = mode === "approved";
   return (
     <section className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
       <header className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3.5" style={{ borderColor: "var(--border-color)" }}>
         <div>
           <h2 className="text-base font-bold" style={{ color: "var(--text-main)" }}>
-            {published ? "Published schedules" : approvalQueue ? "Plans awaiting decision" : "Drafts and returned plans"}
+            {published ? "Published schedules" : approved ? "Approved plans" : approvalQueue ? "Plans awaiting decision" : "Drafts and returned plans"}
           </h2>
           <p className="mt-1 text-xs" style={{ color: "var(--text-sub)" }}>
             {published
               ? "Open a published plan to inspect the operational schedule."
+              : approved
+                ? "Approval is complete. A programming operator can now publish these sessions to operations."
               : approvalQueue
-                ? "Inspect the validated plan before approving it or requesting changes."
+                ? "Review schedule impact, validation results and exceptions before making an independent decision."
                 : "Continue generated drafts and resolve changes requested by the approver."}
           </p>
         </div>
@@ -740,8 +744,8 @@ function SchedulePlanLibrary({
           <RequestState compact kind={error.kind} description={error.description} onRetry={onRefresh} />
         ) : plans.length === 0 ? (
           <RequestState compact kind="empty"
-            title={published ? "No published schedules yet" : approvalQueue ? "No plans require review" : "No drafts or returned plans"}
-            description={published ? "Published schedule plans will appear here." : approvalQueue ? "Submitted schedule plans will appear here for independent review." : "Generated drafts and plans returned for changes will appear here."}
+            title={published ? "No published schedules yet" : approved ? "No approved plans await publication" : approvalQueue ? "No plans require review" : "No drafts or returned plans"}
+            description={published ? "Published schedule plans will appear here." : approved ? "Plans appear here after an independent approval decision." : approvalQueue ? "Submitted schedule plans will appear here for independent review." : "Generated drafts and plans returned for changes will appear here."}
           />
         ) : (
           <div className="grid gap-3 xl:grid-cols-2">
@@ -749,6 +753,8 @@ function SchedulePlanLibrary({
               const statusMeta = PLAN_STATUS_META[item.status];
               const actionLabel = item.status === "PUBLISHED"
                 ? "View schedule"
+                : item.status === "APPROVED"
+                  ? "Open approved plan"
                 : item.status === "DRAFT_GENERATED"
                   ? "Review draft"
                   : "Open plan";
@@ -1007,6 +1013,10 @@ export default function AutoScheduleShowtimePage({
     () => planLibrary.filter((item) => item.status === "PUBLISHED"),
     [planLibrary],
   );
+  const approvedPlans = useMemo(
+    () => planLibrary.filter((item) => item.status === "APPROVED"),
+    [planLibrary],
+  );
   const toggleCluster = (id: number) => setSelectedClusterIds((prev) => {
     const next = new Set(prev);
     if (next.has(id)) next.delete(id);
@@ -1224,7 +1234,7 @@ export default function AutoScheduleShowtimePage({
     setExcludedRoomIds(new Set());
     setAllClusters(false);
     setResultsPage(0);
-    setWorkspaceSection("create");
+    setWorkspaceSection(workspaceMode === "review" ? "review-plans" : "create");
     setPlanLibraryRefresh((value) => value + 1);
     setStep("scope");
   };
@@ -1235,7 +1245,7 @@ export default function AutoScheduleShowtimePage({
     void pollRun(run.generationRunId, page);
   };
 
-  const transitionPlan = async (action: "submit" | "changes" | "publish", note?: string) => {
+  const transitionPlan = async (action: "submit" | "changes" | "approve" | "publish", note?: string) => {
     if (!plan) return;
     setPlanBusy(true);
     setPlanError(null);
@@ -1244,8 +1254,11 @@ export default function AutoScheduleShowtimePage({
         ? await showtimeApi.submitSchedulePlanReview(plan.schedulePlanId, note || undefined)
         : action === "changes"
           ? await showtimeApi.requestSchedulePlanChanges(plan.schedulePlanId, note || undefined)
-          : await showtimeApi.publishSchedulePlan(plan.schedulePlanId);
+          : action === "approve"
+            ? await showtimeApi.approveSchedulePlan(plan.schedulePlanId)
+            : await showtimeApi.publishSchedulePlan(plan.schedulePlanId);
       setPlan(response.result);
+      setPlanLibraryRefresh((value) => value + 1);
       if (action === "publish" && run) {
         notifiedTerminalRun.current = run.generationRunId;
         onShowtimesChanged?.();
@@ -1299,10 +1312,12 @@ export default function AutoScheduleShowtimePage({
       <nav className="flex flex-wrap items-center gap-1 rounded-xl border p-1.5" aria-label="Automatic scheduling workspace" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
         {(workspaceMode === "review" ? ([
           { id: "review-plans", label: "Awaiting decision", icon: ClipboardCheck, count: reviewPlans.length },
+          { id: "approved", label: "Approved", icon: CheckCircle2, count: approvedPlans.length },
           { id: "published", label: "Published schedules", icon: CheckCircle2, count: publishedPlans.length },
         ] as const) : ([
           { id: "create", label: "Create schedule", icon: CalendarCog, count: null },
           { id: "review-plans", label: "Drafts & returns", icon: ClipboardCheck, count: reviewPlans.length },
+          { id: "approved", label: "Ready to publish", icon: CheckCircle2, count: approvedPlans.length },
           { id: "policy", label: "Allocation policy", icon: Settings2, count: null },
         ] as const)).map(({ id, label, icon: Icon, count }) => {
           const active = workspaceSection === id;
@@ -1345,6 +1360,17 @@ export default function AutoScheduleShowtimePage({
         <SchedulePlanLibrary
           mode="published"
           plans={publishedPlans}
+          loading={loadingPlanLibrary}
+          error={planLibraryError}
+          onRefresh={() => setPlanLibraryRefresh((value) => value + 1)}
+          onOpen={resumeRun}
+        />
+      )}
+
+      {step === "scope" && workspaceSection === "approved" && (
+        <SchedulePlanLibrary
+          mode="approved"
+          plans={approvedPlans}
           loading={loadingPlanLibrary}
           error={planLibraryError}
           onRefresh={() => setPlanLibraryRefresh((value) => value + 1)}
@@ -2101,6 +2127,7 @@ export default function AutoScheduleShowtimePage({
           onNewRun={resetWizard}
           onRevalidate={revalidatePlan}
           onTransition={transitionPlan}
+          reviewMode={workspaceMode === "review"}
         />
       )}
     </div>

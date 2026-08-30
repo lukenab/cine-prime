@@ -21,7 +21,7 @@ public class SchedulePlanController {
     private final SchedulePlanService schedulePlanService;
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SCHEDULE_PLAN_SUBMIT', 'SCHEDULE_PLAN_APPROVE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SCHEDULE_PLAN_SUBMIT', 'SCHEDULE_PLAN_APPROVE', 'SCHEDULE_PLAN_PUBLISH')")
     public ApiResponse<Page<SchedulePlanSummaryResponse>> list(
             @RequestParam(required = false) SchedulePlanStatus status,
             @RequestParam(defaultValue = "0") int page,
@@ -33,13 +33,13 @@ public class SchedulePlanController {
     }
 
     @GetMapping("/{planId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SCHEDULE_PLAN_SUBMIT', 'SCHEDULE_PLAN_APPROVE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SCHEDULE_PLAN_SUBMIT', 'SCHEDULE_PLAN_APPROVE', 'SCHEDULE_PLAN_PUBLISH')")
     public ApiResponse<SchedulePlanResponse> get(@PathVariable Long planId) {
         return ok(schedulePlanService.get(planId));
     }
 
     @PostMapping("/{planId}/revalidate")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SCHEDULE_PLAN_SUBMIT')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SCHEDULE_PLAN_SUBMIT', 'SCHEDULE_PLAN_APPROVE', 'SCHEDULE_PLAN_PUBLISH')")
     public ApiResponse<SchedulePlanResponse> revalidate(
             @PathVariable Long planId,
             Authentication authentication) {
@@ -57,7 +57,7 @@ public class SchedulePlanController {
     }
 
     @PostMapping("/{planId}/request-changes")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SCHEDULE_PLAN_APPROVE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SCHEDULE_PLAN_APPROVE', 'SCHEDULE_PLAN_PUBLISH')")
     public ApiResponse<SchedulePlanResponse> requestChanges(
             @PathVariable Long planId,
             @Valid @RequestBody(required = false) SchedulePlanReviewRequest request,
@@ -66,8 +66,16 @@ public class SchedulePlanController {
                 planId, actor(authentication), request == null ? null : request.note()));
     }
 
-    @PostMapping("/{planId}/publish")
+    @PostMapping("/{planId}/approve")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SCHEDULE_PLAN_APPROVE')")
+    public ApiResponse<SchedulePlanResponse> approve(
+            @PathVariable Long planId,
+            Authentication authentication) {
+        return ok(schedulePlanService.approve(planId, actor(authentication)));
+    }
+
+    @PostMapping("/{planId}/publish")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SCHEDULE_PLAN_PUBLISH')")
     public ApiResponse<SchedulePlanResponse> publish(
             @PathVariable Long planId,
             Authentication authentication) {

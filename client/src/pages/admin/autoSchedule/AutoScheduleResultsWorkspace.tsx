@@ -37,7 +37,7 @@ function parseJson<T>(raw: string | undefined): T | null {
   }
 }
 
-type PlanAction = "submit" | "changes" | "publish";
+type PlanAction = "submit" | "changes" | "approve" | "publish";
 type ScheduleView = "board" | "timeline";
 type ContextDrawer = "issues" | "allocation";
 
@@ -49,6 +49,7 @@ type Props = {
   onNewRun: () => void;
   onRevalidate: () => Promise<void>;
   onTransition: (action: PlanAction, note?: string) => Promise<void>;
+  reviewMode?: boolean;
 };
 
 type Conflict = {
@@ -248,6 +249,7 @@ function MoviePoster({ src, title, color, background }: { src?: string; title: s
 
 function planStatusMeta(status?: SchedulePlanResponse["status"]) {
   if (status === "PUBLISHED") return { label: "Published", color: "#059669", background: "rgba(5,150,105,.12)" };
+  if (status === "APPROVED") return { label: "Approved", color: "#7c3aed", background: "rgba(124,58,237,.12)" };
   if (status === "IN_REVIEW") return { label: "In review", color: "#2563eb", background: "rgba(37,99,235,.12)" };
   if (status === "CHANGES_REQUESTED") return { label: "Changes requested", color: "#d97706", background: "rgba(217,119,6,.12)" };
   return { label: "Draft", color: "#64748b", background: "rgba(100,116,139,.12)" };
@@ -423,9 +425,11 @@ function buildValidationIssues(summary: string | undefined, slots: SchedulePlanS
     });
 }
 
-export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, onNewRun, onRevalidate, onTransition }: Props) {
+export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, onNewRun, onRevalidate, onTransition, reviewMode = false }: Props) {
   const { user } = useAuth();
   const canApprovePlan = user?.permissions.includes("SCHEDULE_PLAN_APPROVE")
+    || user?.roles.some((role) => role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN");
+  const canPublishPlan = user?.permissions.includes("SCHEDULE_PLAN_PUBLISH")
     || user?.roles.some((role) => role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN");
   const slots = plan?.slots ?? [];
   const scopeDates = useMemo(() => enumerateDates(run.startDate, run.endDate), [run.endDate, run.startDate]);
@@ -657,6 +661,21 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
               <span>{countLabel(clusterOptions.length, "cinema")}</span>
               <span aria-hidden="true">·</span>
               <span>{countLabel(totalRooms, "room")}</span>
+              {plan?.submittedBy && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span>
+                    Submitted by {plan.submittedBy}
+                    {plan.submittedAt ? ` · ${new Date(plan.submittedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}` : ""}
+                  </span>
+                </>
+              )}
+              {plan?.status === "APPROVED" && plan.approvedBy && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span>Approved by {plan.approvedBy}</span>
+                </>
+              )}
               {isPublished && plan?.publishedBy && (
                 <>
                   <span aria-hidden="true">·</span>
@@ -687,20 +706,35 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
             )}
             {plan?.status === "IN_REVIEW" && canApprovePlan && (
               <>
-                <button type="button" disabled={busy} onClick={() => setAction("changes")} className="rounded-xl border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }}>Request changes</button>
-                <button type="button" disabled={busy || backendBlockers > 0 || conflicts.length > 0} onClick={() => setAction("publish")} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">
-                  <ShieldCheck size={13} /> Publish schedule
+                <button type="button" disabled={busy} onClick={() => setAction("changes")} className="rounded-xl border px-3 py-2 text-xs font-semibold text-rose-600" style={{ borderColor: "rgba(225,29,72,.35)", background: "rgba(225,29,72,.04)" }}>Request changes</button>
+                <button type="button" disabled={busy || backendBlockers > 0 || conflicts.length > 0} onClick={() => setAction("approve")} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">
+                  <ShieldCheck size={13} /> Approve schedule
                 </button>
               </>
             )}
             {plan?.status === "IN_REVIEW" && !canApprovePlan && (
               <span className="rounded-xl border px-3 py-2 text-xs font-semibold text-blue-600" style={{ borderColor: "rgba(37,99,235,.25)", background: "rgba(37,99,235,.06)" }}>
-                Awaiting administrator review
+                Awaiting independent decision
+              </span>
+            )}
+            {plan?.status === "APPROVED" && (canApprovePlan || canPublishPlan) && (
+              <button type="button" disabled={busy} onClick={() => setAction("changes")} className="rounded-xl border px-3 py-2 text-xs font-semibold text-rose-600" style={{ borderColor: "rgba(225,29,72,.35)", background: "rgba(225,29,72,.04)" }}>
+                Request changes
+              </button>
+            )}
+            {plan?.status === "APPROVED" && canPublishPlan && (
+              <button type="button" disabled={busy || backendBlockers > 0 || conflicts.length > 0} onClick={() => setAction("publish")} className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">
+                <CalendarDays size={13} /> Publish to operations
+              </button>
+            )}
+            {plan?.status === "APPROVED" && !canPublishPlan && (
+              <span className="rounded-xl border px-3 py-2 text-xs font-semibold text-violet-600" style={{ borderColor: "rgba(124,58,237,.25)", background: "rgba(124,58,237,.06)" }}>
+                Approved · awaiting operator publication
               </span>
             )}
             {isPublished && (
               <a href="/admin/showtimes" className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white">
-                <CalendarDays size={13} /> View live schedule
+                <CalendarDays size={13} /> View published schedules
               </a>
             )}
             <details className="group relative">
@@ -743,8 +777,8 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
                 >
                   <RefreshCw size={14} className="mt-0.5 flex-shrink-0" />
                   <span>
-                    <strong className="block">Start new run</strong>
-                    <span className="mt-0.5 block text-[10px]" style={{ color: "var(--text-sub)" }}>Create a new scheduling plan</span>
+                    <strong className="block">{reviewMode ? "Back to review queue" : "Start new run"}</strong>
+                    <span className="mt-0.5 block text-[10px]" style={{ color: "var(--text-sub)" }}>{reviewMode ? "Return to submitted schedule plans" : "Create a new scheduling plan"}</span>
                   </span>
                 </button>
                 <button
@@ -1210,7 +1244,7 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
 
                   <section className="grid overflow-hidden rounded-xl border sm:grid-cols-3" style={{ borderColor: "var(--border-color)" }}>
                     {[
-                      ["Publishing blockers", backendBlockers, backendBlockers ? "#dc2626" : "#059669"],
+                      [reviewMode ? "Approval blockers" : "Publication blockers", backendBlockers, backendBlockers ? "#dc2626" : "#059669"],
                       ["Room overlaps", conflicts.length, conflicts.length ? "#dc2626" : "#059669"],
                       ["Warnings", warningCount, warningCount ? "#d97706" : "#059669"],
                     ].map(([label, value, color]) => (
@@ -1524,9 +1558,9 @@ export default function AutoScheduleResultsWorkspace({ run, plan, busy, error, o
       {action && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setAction(null); }}>
           <section role="dialog" aria-modal="true" aria-labelledby="plan-action-title" className="w-full max-w-md rounded-2xl border p-5 shadow-2xl" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-main)" }}>
-            <div className="flex items-start justify-between gap-3"><div><h3 id="plan-action-title" className="text-base font-bold">{action === "publish" ? "Publish this schedule?" : action === "changes" ? "Request schedule changes" : "Submit schedule for review"}</h3><p className="mt-1 text-xs" style={{ color: "var(--text-sub)" }}>{action === "publish" ? `${slots.length} customer-facing showtimes will be materialized.` : action === "changes" ? "Explain what must be corrected before another review." : "The draft will be locked for operational review."}</p></div><button type="button" disabled={busy} onClick={() => setAction(null)} className="rounded-lg p-1.5 hover:bg-black/5" aria-label="Close"><X size={16} /></button></div>
-            {action === "publish" ? <div className="mt-4 space-y-2 rounded-xl border p-3 text-xs" style={{ borderColor: "var(--border-color)" }}><p className="flex items-center justify-between"><span>No backend blockers</span><strong className={backendBlockers ? "text-rose-500" : "text-emerald-600"}>{backendBlockers ? "Failed" : "Passed"}</strong></p><p className="flex items-center justify-between"><span>No room overlaps</span><strong className={conflicts.length ? "text-rose-500" : "text-emerald-600"}>{conflicts.length ? "Failed" : "Passed"}</strong></p><p className="flex items-center justify-between"><span>Planned sessions</span><strong>{slots.length}</strong></p></div> : <textarea autoFocus value={note} onChange={(event) => setNote(event.target.value)} rows={4} placeholder={action === "changes" ? "Required: describe the expected corrections…" : "Optional review note…"} className="mt-4 w-full resize-none rounded-xl border bg-transparent px-3 py-2.5 text-xs outline-none" style={{ borderColor: action === "changes" && !note.trim() ? "rgba(220,38,38,.35)" : "var(--border-color)", color: "var(--text-main)" }} />}
-            <div className="mt-5 flex justify-end gap-2"><button type="button" disabled={busy} onClick={() => setAction(null)} className="rounded-xl border px-3.5 py-2 text-xs font-semibold" style={{ borderColor: "var(--border-color)" }}>Cancel</button><button type="button" disabled={busy || (action === "changes" && !note.trim()) || ((action === "submit" || action === "publish") && (backendBlockers > 0 || conflicts.length > 0))} onClick={() => void confirmAction()} className={`rounded-xl px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-40 ${action === "publish" ? "bg-emerald-600" : action === "changes" ? "bg-amber-600" : "bg-blue-600"}`}>{busy ? "Working…" : action === "publish" ? "Publish schedule" : action === "changes" ? "Request changes" : "Submit for review"}</button></div>
+            <div className="flex items-start justify-between gap-3"><div><h3 id="plan-action-title" className="text-base font-bold">{action === "publish" ? "Publish approved schedule?" : action === "approve" ? "Approve this schedule?" : action === "changes" ? "Request schedule changes" : "Submit schedule for review"}</h3><p className="mt-1 text-xs" style={{ color: "var(--text-sub)" }}>{action === "publish" ? `${slots.length} sessions will be created in Scheduled status. Ticket sales will remain closed.` : action === "approve" ? "This records an independent approval. It does not create showtimes or open ticket sales." : action === "changes" ? "Explain what must be corrected before another review." : "The draft will be locked for operational review."}</p></div><button type="button" disabled={busy} onClick={() => setAction(null)} className="rounded-lg p-1.5 hover:bg-black/5" aria-label="Close"><X size={16} /></button></div>
+            {action === "publish" || action === "approve" ? <div className="mt-4 space-y-2 rounded-xl border p-3 text-xs" style={{ borderColor: "var(--border-color)" }}><p className="flex items-center justify-between"><span>No validation blockers</span><strong className={backendBlockers ? "text-rose-500" : "text-emerald-600"}>{backendBlockers ? "Failed" : "Passed"}</strong></p><p className="flex items-center justify-between"><span>No room overlaps</span><strong className={conflicts.length ? "text-rose-500" : "text-emerald-600"}>{conflicts.length ? "Failed" : "Passed"}</strong></p><p className="flex items-center justify-between"><span>Planned sessions</span><strong>{slots.length}</strong></p>{action === "publish" && <p className="flex items-center justify-between"><span>Sales status</span><strong className="text-amber-600">Closed until ON_SALE</strong></p>}</div> : <textarea autoFocus value={note} onChange={(event) => setNote(event.target.value)} rows={4} placeholder={action === "changes" ? "Required: describe the expected corrections…" : "Optional review note…"} className="mt-4 w-full resize-none rounded-xl border bg-transparent px-3 py-2.5 text-xs outline-none" style={{ borderColor: action === "changes" && !note.trim() ? "rgba(220,38,38,.35)" : "var(--border-color)", color: "var(--text-main)" }} />}
+            <div className="mt-5 flex justify-end gap-2"><button type="button" disabled={busy} onClick={() => setAction(null)} className="rounded-xl border px-3.5 py-2 text-xs font-semibold" style={{ borderColor: "var(--border-color)" }}>Cancel</button><button type="button" disabled={busy || (action === "changes" && !note.trim()) || ((action === "submit" || action === "approve" || action === "publish") && (backendBlockers > 0 || conflicts.length > 0))} onClick={() => void confirmAction()} className={`rounded-xl px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-40 ${action === "publish" ? "bg-blue-600" : action === "approve" ? "bg-emerald-600" : action === "changes" ? "bg-rose-600" : "bg-blue-600"}`}>{busy ? "Working…" : action === "publish" ? "Publish to operations" : action === "approve" ? "Approve schedule" : action === "changes" ? "Request changes" : "Submit for review"}</button></div>
           </section>
         </div>
       )}

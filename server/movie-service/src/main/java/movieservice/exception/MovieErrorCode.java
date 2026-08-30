@@ -373,7 +373,7 @@ public enum MovieErrorCode implements BaseErrorCode {
                         "An archived price book cannot be modified or activated.",
                         HttpStatus.CONFLICT),
         SCHEDULE_PLAN_REVIEW_BLOCKED(2139,
-                        "Schedule plan cannot be submitted for review while publishing blockers remain. Resolve the blockers and generate a valid replacement plan.",
+                        "Schedule plan cannot proceed while validation blockers remain. Resolve the blockers and generate a valid replacement plan.",
                         HttpStatus.CONFLICT),
         SEAT_HOLD_NOT_FOUND(2140,
                         "Seat hold was not found for this showtime.", HttpStatus.NOT_FOUND),
@@ -400,6 +400,8 @@ public enum MovieErrorCode implements BaseErrorCode {
                         "A review note is required when requesting release-plan changes.", HttpStatus.BAD_REQUEST),
         AVAILABILITY_SALES_START_INVALID(2150,
                         "salesStartAt must be on or before showingStartDate.", HttpStatus.BAD_REQUEST),
+        SCHEDULE_PLAN_SELF_APPROVAL_FORBIDDEN(2151,
+                        "The author who submitted this schedule plan cannot approve it.", HttpStatus.FORBIDDEN),
         AVAILABILITY_VERSION_CONFLICT(2152,
                         "This release plan changed after it was selected. Refresh the queue before deciding.", HttpStatus.CONFLICT),
         RELEASE_PLAN_BULK_IDEMPOTENCY_CONFLICT(2153,
@@ -407,7 +409,9 @@ public enum MovieErrorCode implements BaseErrorCode {
         RELEASE_PLAN_BULK_OPERATION_IN_PROGRESS(2154,
                         "A bulk decision with this Idempotency-Key is already in progress.", HttpStatus.CONFLICT),
         RELEASE_PLAN_BULK_IDEMPOTENCY_KEY_REQUIRED(2155,
-                        "A valid Idempotency-Key header is required for a bulk release-plan decision.", HttpStatus.BAD_REQUEST);
+                        "A valid Idempotency-Key header is required for a bulk release-plan decision.", HttpStatus.BAD_REQUEST),
+        SCHEDULE_PLAN_REVIEW_NOTE_REQUIRED(2156,
+                        "A review note is required when returning a schedule plan for changes.", HttpStatus.BAD_REQUEST);
 
         int code;
         String message;

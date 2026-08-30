@@ -38,6 +38,8 @@ public class SchedulePlan {
 
     @Column(name = "submitted_at") LocalDateTime submittedAt;
     @Column(name = "submitted_by", length = 100) String submittedBy;
+    @Column(name = "approved_at") LocalDateTime approvedAt;
+    @Column(name = "approved_by", length = 100) String approvedBy;
     @Column(name = "published_at") LocalDateTime publishedAt;
     @Column(name = "published_by", length = 100) String publishedBy;
     @Column(name = "review_note", columnDefinition = "TEXT") String reviewNote;
