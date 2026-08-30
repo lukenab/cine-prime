@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { CalendarDays, ChevronRight, Clapperboard, Clock3, Film } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { movieApi, type MovieApiResponse, type MovieAvailabilityResponse } from "../../api/movieApi";
@@ -121,22 +121,16 @@ export default function ProgrammingApprovalWorkspacePage() {
     { id: "generated-schedules", label: "Generated schedules", count: schedulePlans.length },
   ];
 
-  const activeQueueMeta: Record<ApprovalQueueTab, { title: string; description: string; viewAllTo?: string; viewAllLabel?: string }> = {
+  const activeQueueMeta: Record<ApprovalQueueTab, { viewAllTo?: string; viewAllLabel?: string }> = {
     "movie-content": {
-      title: "Movie content awaiting review",
-      description: "Customer-facing catalogue records submitted for an independent decision.",
       viewAllTo: movies.length > QUEUE_PREVIEW_LIMIT ? "/admin/movies" : undefined,
       viewAllLabel: movies.length > QUEUE_PREVIEW_LIMIT ? `View all ${movies.length} titles` : undefined,
     },
     "release-plans": {
-      title: "Release plans awaiting review",
-      description: "Branch plans grouped into one review queue for each movie.",
       viewAllTo: releasePlanGroups.length > QUEUE_PREVIEW_LIMIT ? "/admin/release-plans" : undefined,
       viewAllLabel: releasePlanGroups.length > QUEUE_PREVIEW_LIMIT ? `View all ${releasePlanGroups.length} movie queues` : undefined,
     },
     "generated-schedules": {
-      title: "Generated schedules awaiting review",
-      description: "Validated schedules ready for an independent checker decision.",
       viewAllTo: schedulePlans.length > QUEUE_PREVIEW_LIMIT ? "/admin/showtimes/auto/review" : undefined,
       viewAllLabel: schedulePlans.length > QUEUE_PREVIEW_LIMIT ? `View all ${schedulePlans.length} schedules` : undefined,
     },
@@ -150,7 +144,7 @@ export default function ProgrammingApprovalWorkspacePage() {
             key={movie.movieId}
             to="/admin/movies"
             title={movie.movieNameVn || movie.movieNameEnglish}
-            meta="Submitted movie content"
+            meta={movie.updatedAt ? `Updated ${formatDate(movie.updatedAt)}` : "Awaiting decision"}
           />
         ))
         : <div className="p-4"><RequestState compact kind="empty" title="No movie reviews" description="No movie content is awaiting review." /></div>;
@@ -186,10 +180,10 @@ export default function ProgrammingApprovalWorkspacePage() {
       <AdminPageHeader eyebrow="Film programming" title="Programming Review Workspace" description="Review submitted movie content, release plans and generated schedules." />
 
       <WorkspaceSummaryStrip items={[
-        { label: "Awaiting review", value: loading ? "–" : total, helper: "Across all review queues" },
-        { label: "Movie content", value: loading ? "–" : movies.length, helper: "Titles awaiting decision", onSelect: () => setActiveTab("movie-content") },
-        { label: "Release plans", value: loading ? "–" : releasePlans.length, helper: `${releasePlanGroups.length} movie queues`, onSelect: () => setActiveTab("release-plans") },
-        { label: "Generated schedules", value: loading ? "–" : schedulePlans.length, helper: oldestSubmission ? `Oldest ${formatDate(oldestSubmission)}` : "No schedule awaiting review", onSelect: () => setActiveTab("generated-schedules") },
+        { label: "Awaiting review", value: loading ? "–" : total, helper: "Across all review queues", icon: Clock3, iconColor: "#2563eb", iconBackground: "rgba(37,99,235,.10)" },
+        { label: "Movie content", value: loading ? "–" : movies.length, helper: "Titles awaiting decision", icon: Film, iconColor: "#7c3aed", iconBackground: "rgba(124,58,237,.10)", onSelect: () => setActiveTab("movie-content") },
+        { label: "Release plans", value: loading ? "–" : releasePlans.length, helper: `${releasePlanGroups.length} movie queues`, icon: CalendarDays, iconColor: "#d97706", iconBackground: "rgba(217,119,6,.10)", onSelect: () => setActiveTab("release-plans") },
+        { label: "Generated schedules", value: loading ? "–" : schedulePlans.length, helper: oldestSubmission ? `Oldest ${formatDate(oldestSubmission)}` : "No schedule awaiting review", icon: Clapperboard, iconColor: "#059669", iconBackground: "rgba(5,150,105,.10)", onSelect: () => setActiveTab("generated-schedules") },
       ]} />
 
       <WorkspaceTabs tabs={tabs} activeTab={activeTab} onChange={(tab) => setActiveTab(tab as ApprovalQueueTab)} />
@@ -198,8 +192,7 @@ export default function ProgrammingApprovalWorkspacePage() {
         <RequestState kind={failure.kind} description={failure.description} onRetry={() => void load()} />
       ) : (
         <WorkspaceQueuePanel
-          title={activeQueueMeta[activeTab].title}
-          description={activeQueueMeta[activeTab].description}
+          ariaLabel={`${tabs.find((tab) => tab.id === activeTab)?.label ?? "Programming"} approval queue`}
           footer={activeQueueMeta[activeTab].viewAllTo && activeQueueMeta[activeTab].viewAllLabel ? (
             <Link to={activeQueueMeta[activeTab].viewAllTo} className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700">
               {activeQueueMeta[activeTab].viewAllLabel}<ChevronRight size={14} />

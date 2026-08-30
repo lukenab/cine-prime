@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
-  Clapperboard,
-  Film,
+  CircleAlert,
+  CircleCheck,
+  Clock3,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -98,30 +99,18 @@ export default function ProgrammingOperatorDashboardPage() {
         eyebrow="Film programming"
         title="Programming Workspace"
         description="Prepare catalogue, release and schedule drafts for independent review."
-        actions={(
-          <>
-            <button type="button" onClick={() => navigate("/admin/movies")} className="inline-flex h-10 items-center gap-2 rounded-xl border px-3.5 text-xs font-semibold transition-colors hover:bg-blue-500/5" style={{ borderColor: "var(--border-color)", color: "var(--text-main)", background: "var(--bg-card)" }}>
-              <Film size={16} /> Movie catalogue
-            </button>
-            <button type="button" onClick={() => navigate("/admin/showtimes/auto/create")} className="inline-flex h-10 items-center gap-2 rounded-xl bg-blue-600 px-3.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700">
-              <Clapperboard size={16} /> Create schedule
-            </button>
-          </>
-        )}
       />
 
       <WorkspaceSummaryStrip items={[
-        { label: "Needs action", value: loading ? "–" : queues["needs-action"].length, helper: "Draft or returned", onSelect: () => setActiveTab("needs-action") },
-        { label: "Awaiting review", value: loading ? "–" : queues["awaiting-review"].length, helper: "Submitted for decision", onSelect: () => setActiveTab("awaiting-review") },
-        { label: "Approved titles", value: loading ? "–" : queues.approved.length, helper: "Eligible for release planning", onSelect: () => setActiveTab("approved") },
+        { label: "Needs action", value: loading ? "–" : queues["needs-action"].length, helper: "Draft or returned", icon: CircleAlert, iconColor: "#2563eb", iconBackground: "rgba(37,99,235,.10)", onSelect: () => setActiveTab("needs-action") },
+        { label: "Awaiting review", value: loading ? "–" : queues["awaiting-review"].length, helper: "Submitted for decision", icon: Clock3, iconColor: "#d97706", iconBackground: "rgba(217,119,6,.10)", onSelect: () => setActiveTab("awaiting-review") },
+        { label: "Approved titles", value: loading ? "–" : queues.approved.length, helper: "Eligible for release planning", icon: CircleCheck, iconColor: "#059669", iconBackground: "rgba(5,150,105,.10)", onSelect: () => setActiveTab("approved") },
       ]} />
 
       <WorkspaceTabs tabs={tabs} activeTab={activeTab} onChange={(tab) => setActiveTab(tab as OperatorQueueTab)} />
 
       <WorkspaceQueuePanel
-        title={tabMeta[activeTab].title}
-        description={tabMeta[activeTab].description}
-        actions={<button type="button" onClick={() => navigate("/admin/movies")} className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700">View catalogue <ArrowRight size={14} /></button>}
+        ariaLabel={`${tabMeta[activeTab].title} queue`}
       >
           {failure ? (
             <div className="p-4"><RequestState compact kind={failure.kind} description={failure.description} onRetry={() => void load()} /></div>
