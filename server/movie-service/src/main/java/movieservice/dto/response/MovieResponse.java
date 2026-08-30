@@ -56,4 +56,6 @@ public class MovieResponse {
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
     String createdBy;
+    String updatedBy;
+    Long version;
 }

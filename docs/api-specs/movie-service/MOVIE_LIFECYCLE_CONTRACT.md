@@ -92,6 +92,9 @@ not a phased rollout).
 - New table `movie_status_history` (movie_id, from_status, to_status, actor,
   reason, created_at) — one row per content transition. Availability
   transitions are similarly recorded on `movie_availability_history`.
+- `GET /api/movies/{id}/status-history` exposes that content-transition audit
+  trail to authorized `MOVIE_READ` review surfaces, newest transition first.
+  It is an internal endpoint and never forms part of the public movie response.
 - Lifecycle transitions stop using the old `@Modifying` bulk JPQL updates
   (`MovieRepository.updateStatus/suspendMovie/rejectMovie`) because bulk
   updates bypass `@Version` increment; they're replaced by

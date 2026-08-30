@@ -144,6 +144,25 @@ public class MovieService {
         return response;
     }
 
+    /** Audit history for enterprise review surfaces. The movie existence check avoids
+     *  returning an indistinguishable empty history for an unknown catalog record. */
+    @Transactional
+    public List<movieservice.dto.response.MovieStatusHistoryResponse> getMovieStatusHistory(Long id) {
+        if (!movieRepository.existsById(id)) {
+            throw new AppException(MovieErrorCode.MOVIE_NOT_FOUND);
+        }
+        return movieStatusHistoryRepository.findByMovieIdOrderByCreatedAtDesc(id).stream()
+                .map(history -> movieservice.dto.response.MovieStatusHistoryResponse.builder()
+                        .historyId(history.getHistoryId())
+                        .fromStatus(history.getFromStatus() != null ? history.getFromStatus().name() : null)
+                        .toStatus(history.getToStatus().name())
+                        .actor(history.getActor())
+                        .reason(history.getReason())
+                        .createdAt(history.getCreatedAt())
+                        .build())
+                .toList();
+    }
+
     /** GET /api/movies/{id}?lang=vi — trả response với translations filter theo ngôn ngữ */
     @Transactional
     public MovieResponse getMovieByLang(Long id, String lang) {
