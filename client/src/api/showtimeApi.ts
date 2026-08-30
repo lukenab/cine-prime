@@ -192,7 +192,7 @@ export interface AutoShowtimeGenerationRunResponse {
   screeningVersionSelections?: Array<{ movieId: number; screeningVersionIds: number[] }>;
 }
 
-export type SchedulePlanStatus = 'DRAFT_GENERATED' | 'IN_REVIEW' | 'CHANGES_REQUESTED' | 'PUBLISHED';
+export type SchedulePlanStatus = 'DRAFT_GENERATED' | 'IN_REVIEW' | 'CHANGES_REQUESTED' | 'APPROVED' | 'PUBLISHED';
 
 export interface SchedulePlanSlot {
   schedulePlanSlotId: number;
@@ -238,6 +238,8 @@ export interface SchedulePlanResponse {
   slots: SchedulePlanSlot[];
   submittedAt?: string;
   submittedBy?: string;
+  approvedAt?: string;
+  approvedBy?: string;
   publishedAt?: string;
   publishedBy?: string;
   reviewNote?: string;
@@ -266,6 +268,7 @@ export interface SchedulePlanSummaryResponse {
   createdAt: string;
   updatedAt: string;
   submittedAt?: string;
+  approvedAt?: string;
   publishedAt?: string;
 }
 
@@ -439,6 +442,9 @@ export const showtimeApi = {
 
   requestSchedulePlanChanges: (id: number, note?: string) =>
     axiosClient.post(`/api/schedule-plans/${id}/request-changes`, { note }) as Promise<ApiWrapper<SchedulePlanResponse>>,
+
+  approveSchedulePlan: (id: number) =>
+    axiosClient.post(`/api/schedule-plans/${id}/approve`) as Promise<ApiWrapper<SchedulePlanResponse>>,
 
   publishSchedulePlan: (id: number) =>
     axiosClient.post(`/api/schedule-plans/${id}/publish`) as Promise<ApiWrapper<SchedulePlanResponse>>,

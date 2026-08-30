@@ -144,6 +144,7 @@ public class ApplicationInitConfig {
             new String[]{"RELEASE_PLAN_ACTIVATE", "Open, suspend and close approved release plans"},
             new String[]{"SCHEDULE_PLAN_SUBMIT", "Submit generated schedules for approval"},
             new String[]{"SCHEDULE_PLAN_APPROVE", "Approve or return generated schedules"},
+            new String[]{"SCHEDULE_PLAN_PUBLISH", "Publish independently approved schedules to operations"},
 
             // Commercial and finance
             new String[]{"PRICE_BOOK_READ", "View cinema price books"},
@@ -201,7 +202,7 @@ public class ApplicationInitConfig {
                     "SHOWTIME_READ", "SHOWTIME_CREATE", "SHOWTIME_UPDATE",
                     "ROOM_READ", "GENRE_READ",
                     "RELEASE_PLAN_READ", "RELEASE_PLAN_EDIT", "RELEASE_PLAN_SUBMIT",
-                    "SCHEDULE_PLAN_SUBMIT"
+                    "SCHEDULE_PLAN_SUBMIT", "SCHEDULE_PLAN_PUBLISH"
             )),
             Map.entry("PROGRAMMING_APPROVER", Set.of(
                     "MOVIE_READ", "MOVIE_APPROVE", "SHOWTIME_READ", "ROOM_READ", "GENRE_READ",
@@ -249,7 +250,7 @@ public class ApplicationInitConfig {
                     "REPORT_READ", "ROLE_MANAGE", "SYSTEM_CONFIG_MANAGE", "AUDIT_READ",
                     "RELEASE_PLAN_READ", "RELEASE_PLAN_EDIT", "RELEASE_PLAN_SUBMIT",
                     "RELEASE_PLAN_APPROVE", "RELEASE_PLAN_ACTIVATE",
-                    "SCHEDULE_PLAN_SUBMIT", "SCHEDULE_PLAN_APPROVE",
+                    "SCHEDULE_PLAN_SUBMIT", "SCHEDULE_PLAN_APPROVE", "SCHEDULE_PLAN_PUBLISH",
                     "PRICE_BOOK_READ", "PRICE_BOOK_MANAGE", "PAYMENT_READ",
                     "REFUND_READ", "REFUND_REVIEW", "REFUND_APPROVE",
                     "RECONCILIATION_READ", "RECONCILIATION_RESOLVE",
@@ -267,6 +268,7 @@ public class ApplicationInitConfig {
             seedPermissions();
             seedRoles();
             applyPromotionApprovalCatalogMigration();
+            applySchedulePlanPublicationSeparationMigration();
             applyFrontlineCapabilityMigration();
             applyBranchManagerOperationalVisibilityMigration();
             applyLegacyAdminSelfServiceRemoval();
@@ -274,6 +276,27 @@ public class ApplicationInitConfig {
             seedBranchManagerAccount();
             seedDemoStaffAccounts();
         };
+    }
+
+    private void applySchedulePlanPublicationSeparationMigration() {
+        final String version = "2026-08-30-schedule-plan-publication-separation-v1";
+        Integer applied = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM auth_catalog_migration WHERE version = ?", Integer.class, version);
+        if (applied != null && applied > 0) {
+            return;
+        }
+
+        Set.of("PROGRAMMING_OPERATOR", "ADMIN").forEach(roleName ->
+                jdbcTemplate.update("""
+                        INSERT INTO role_permissions(role_name, permission_name)
+                        SELECT ?, 'SCHEDULE_PLAN_PUBLISH'
+                        WHERE EXISTS (SELECT 1 FROM roles WHERE role_name = ?)
+                          AND EXISTS (SELECT 1 FROM permission WHERE name = 'SCHEDULE_PLAN_PUBLISH')
+                        ON CONFLICT DO NOTHING
+                        """, roleName, roleName));
+
+        jdbcTemplate.update("INSERT INTO auth_catalog_migration(version) VALUES (?)", version);
+        log.info("[Migration] Separated schedule approval from operational publication");
     }
 
     private void applyFrontlineCapabilityMigration() {

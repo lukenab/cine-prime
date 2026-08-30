@@ -90,11 +90,43 @@ public class SchedulePlanService {
     @Transactional
     public SchedulePlanResponse requestChanges(Long planId, String actor, String note) {
         SchedulePlan plan = loadForUpdate(planId);
+        if (plan.getStatus() != SchedulePlanStatus.IN_REVIEW
+                && plan.getStatus() != SchedulePlanStatus.APPROVED) {
+            throw new AppException(MovieErrorCode.SCHEDULE_PLAN_INVALID_TRANSITION);
+        }
+        if (note == null || note.isBlank()) {
+            throw new AppException(MovieErrorCode.SCHEDULE_PLAN_REVIEW_NOTE_REQUIRED);
+        }
+        plan.setStatus(SchedulePlanStatus.CHANGES_REQUESTED);
+        plan.setReviewNote(note.trim());
+        plan.setApprovedAt(null);
+        plan.setApprovedBy(null);
+        notifyChange(plan, "STATUS_CHANGED");
+        return toResponse(plan);
+    }
+
+    @Transactional
+    public SchedulePlanResponse approve(Long planId, String actor) {
+        revalidationService.revalidate(planId, actor);
+        SchedulePlan plan = loadForUpdate(planId);
+        if (plan.getStatus() == SchedulePlanStatus.APPROVED) {
+            return toResponse(plan);
+        }
         if (plan.getStatus() != SchedulePlanStatus.IN_REVIEW) {
             throw new AppException(MovieErrorCode.SCHEDULE_PLAN_INVALID_TRANSITION);
         }
-        plan.setStatus(SchedulePlanStatus.CHANGES_REQUESTED);
-        plan.setReviewNote(note == null ? "Changes requested by " + actor : note);
+        if (plan.getBlockerCount() != null && plan.getBlockerCount() > 0) {
+            throw new AppException(MovieErrorCode.SCHEDULE_PLAN_REVIEW_BLOCKED);
+        }
+        if ((plan.getSubmittedBy() != null && plan.getSubmittedBy().equalsIgnoreCase(actor))
+                || (plan.getGenerationRun().getRequestedBy() != null
+                && plan.getGenerationRun().getRequestedBy().equalsIgnoreCase(actor))) {
+            throw new AppException(MovieErrorCode.SCHEDULE_PLAN_SELF_APPROVAL_FORBIDDEN);
+        }
+        validateCurrentEligibility(plan);
+        plan.setStatus(SchedulePlanStatus.APPROVED);
+        plan.setApprovedAt(LocalDateTime.now());
+        plan.setApprovedBy(actor);
         notifyChange(plan, "STATUS_CHANGED");
         return toResponse(plan);
     }
@@ -107,16 +139,11 @@ public class SchedulePlanService {
         if (plan.getStatus() == SchedulePlanStatus.PUBLISHED) {
             return toResponse(plan);
         }
-        if (plan.getStatus() != SchedulePlanStatus.IN_REVIEW) {
+        if (plan.getStatus() != SchedulePlanStatus.APPROVED) {
             throw new AppException(MovieErrorCode.SCHEDULE_PLAN_INVALID_TRANSITION);
         }
         if (plan.getBlockerCount() != null && plan.getBlockerCount() > 0) {
             throw new AppException(MovieErrorCode.SCHEDULE_PLAN_PUBLISH_CONFLICT);
-        }
-        if ((plan.getSubmittedBy() != null && plan.getSubmittedBy().equalsIgnoreCase(actor))
-                || (plan.getGenerationRun().getRequestedBy() != null
-                && plan.getGenerationRun().getRequestedBy().equalsIgnoreCase(actor))) {
-            throw new AppException(MovieErrorCode.SCHEDULE_PLAN_SELF_PUBLISH_FORBIDDEN);
         }
         validateCurrentEligibility(plan);
 
@@ -207,6 +234,7 @@ public class SchedulePlanService {
                 plan.getValidatedBy(),
                 plan.getSlots().stream().map(this::toSlotResponse).toList(),
                 plan.getSubmittedAt(), plan.getSubmittedBy(),
+                plan.getApprovedAt(), plan.getApprovedBy(),
                 plan.getPublishedAt(), plan.getPublishedBy(), plan.getReviewNote());
     }
 

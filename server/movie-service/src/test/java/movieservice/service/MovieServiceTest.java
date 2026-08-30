@@ -24,6 +24,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -106,6 +107,37 @@ class MovieServiceTest {
         movieService.findPageWithFilters(0, 10, "   ", null, null, null);
 
         verify(movieRepository).findWithFilters(null, null, null, null, PageRequest.of(0, 10));
+    }
+
+    @Test
+    void statusHistoryReturnsNewestAuditTransitionsForReviewSurfaces() {
+        LocalDateTime submittedAt = LocalDateTime.of(2026, 8, 30, 9, 42);
+        MovieStatusHistory submitted = MovieStatusHistory.builder()
+                .historyId(12L)
+                .movieId(1L)
+                .fromStatus(MovieStatus.DRAFT)
+                .toStatus(MovieStatus.PENDING_REVIEW)
+                .actor("programmingoperator")
+                .createdAt(submittedAt)
+                .build();
+        when(movieRepository.existsById(1L)).thenReturn(true);
+        when(movieStatusHistoryRepository.findByMovieIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(submitted));
+
+        var result = movieService.getMovieStatusHistory(1L);
+
+        assertEquals(1, result.size());
+        assertEquals("DRAFT", result.getFirst().getFromStatus());
+        assertEquals("PENDING_REVIEW", result.getFirst().getToStatus());
+        assertEquals("programmingoperator", result.getFirst().getActor());
+        assertEquals(submittedAt, result.getFirst().getCreatedAt());
+    }
+
+    @Test
+    void statusHistoryRejectsAnUnknownMovieInsteadOfReturningAnAmbiguousEmptyList() {
+        when(movieRepository.existsById(404L)).thenReturn(false);
+
+        assertThrows(AppException.class, () -> movieService.getMovieStatusHistory(404L));
+        verifyNoInteractions(movieStatusHistoryRepository);
     }
 
     // ── Null / missing collections: khong duoc dong toi repository nao ──────

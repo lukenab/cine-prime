@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CinePrime sidebar interaction options</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #eef1f5;
+      --surface: #ffffff;
+      --surface-soft: #f6f8fb;
+      --border: #dfe4ec;
+      --text: #101828;
+      --muted: #667085;
+      --blue: #2563eb;
+      --blue-strong: #1746b5;
+      --blue-soft: #eaf1ff;
+      --hover: #f1f4f8;
+      --shadow: 0 10px 30px rgba(15, 23, 42, .08);
+    }
+
+    body[data-theme="dark"] {
+      color-scheme: dark;
+      --page: #090d16;
+      --surface: #111722;
+      --surface-soft: #171e2a;
+      --border: #293142;
+      --text: #f3f6fb;
+      --muted: #98a2b3;
+      --blue: #60a5fa;
+      --blue-strong: #2563eb;
+      --blue-soft: rgba(59, 130, 246, .16);
+      --hover: rgba(255, 255, 255, .06);
+      --shadow: 0 14px 34px rgba(0, 0, 0, .34);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--page);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      transition: background 180ms ease, color 180ms ease;
+    }
+
+    button { font: inherit; }
+    .shell { max-width: 1240px; margin: 0 auto; padding: 32px 24px 48px; }
+    .intro { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+    .eyebrow { color: var(--blue); font-size: 12px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
+    h1 { margin: 8px 0 8px; font-size: 28px; letter-spacing: -.035em; }
+    .intro p { max-width: 680px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .theme-button {
+      flex: 0 0 auto; border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px;
+      background: var(--surface); color: var(--text); cursor: pointer; font-weight: 700;
+    }
+    .hint {
+      margin-bottom: 20px; padding: 11px 14px; border: 1px solid var(--border); border-radius: 12px;
+      background: var(--surface); color: var(--muted); font-size: 13px;
+    }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: start; }
+    .collection-title { display: flex; align-items: center; gap: 12px; margin: 38px 0 18px; }
+    .collection-title::after { content: ""; height: 1px; flex: 1; background: var(--border); }
+    .collection-title span { color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: .085em; text-transform: uppercase; }
+    .option { min-width: 0; }
+    .option-head { min-height: 88px; margin-bottom: 12px; }
+    .option-label { display: inline-flex; align-items: center; gap: 7px; color: var(--blue); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+    .recommended { border-radius: 999px; padding: 4px 8px; background: var(--blue-soft); font-size: 10px; letter-spacing: .04em; }
+    h2 { margin: 8px 0 5px; font-size: 17px; }
+    .option-head p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+    .sidebar {
+      min-height: 676px; overflow: hidden; border: 1px solid var(--border); border-radius: 18px;
+      background: var(--surface); box-shadow: var(--shadow);
+    }
+    .brand { height: 62px; display: flex; align-items: center; gap: 10px; padding: 0 18px; border-bottom: 1px solid var(--border); }
+    .planet { width: 29px; height: 20px; position: relative; border-radius: 50%; transform: rotate(-12deg); background: linear-gradient(135deg, #60a5fa, #1746b5); }
+    .planet::after { content: ""; position: absolute; inset: 5px -7px; border: 2px solid #60a5fa; border-radius: 50%; }
+    .wordmark { font-size: 18px; font-weight: 850; letter-spacing: .08em; }
+    .wordmark span { color: var(--blue); }
+    .nav { padding: 10px; }
+    .group-label { margin: 18px 10px 7px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .075em; text-transform: uppercase; }
+    .nav-item {
+      position: relative; display: flex; width: 100%; min-height: 42px; align-items: center; gap: 11px;
+      margin: 2px 0; border: 0; border-radius: 10px; padding: 0 11px; background: transparent;
+      color: var(--muted); cursor: pointer; text-align: left; font-size: 13.5px; font-weight: 520;
+      transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+    }
+    .nav-item:focus-visible { outline: 2px solid color-mix(in srgb, var(--blue) 60%, transparent); outline-offset: 2px; }
+    .nav-item svg { width: 17px; height: 17px; flex: 0 0 auto; stroke: currentColor; fill: none; stroke-width: 1.8; }
+    .nav-item .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* Option A: icon tile carries selection; the whole rail stays calm. */
+    .variant-a .nav-item:hover { color: var(--text); background: transparent; }
+    .variant-a .icon-tile { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 9px; transition: background 140ms ease, color 140ms ease; }
+    .variant-a .nav-item:hover .icon-tile { background: var(--hover); }
+    .variant-a .nav-item.active { color: var(--text); font-weight: 720; }
+    .variant-a .nav-item.active .icon-tile { color: var(--blue); background: var(--blue-soft); }
+    .variant-a .nav-item.active::after { content: ""; width: 6px; height: 6px; margin-left: auto; border-radius: 50%; background: var(--blue); }
+
+    /* Option B: high-contrast selection, no indicator rail or extra border. */
+    .variant-b .nav-item:hover { color: var(--text); background: var(--hover); }
+    .variant-b .nav-item.active { color: #fff; background: var(--blue-strong); font-weight: 720; box-shadow: 0 7px 16px rgba(37, 99, 235, .24); }
+    .variant-b .nav-item.active:hover { background: var(--blue-strong); }
+
+    /* Option C: elevated white/soft surface reads like the current destination. */
+    .variant-c .nav { background: var(--surface-soft); min-height: 614px; }
+    .variant-c .nav-item:hover { color: var(--text); background: color-mix(in srgb, var(--surface) 68%, transparent); }
+    .variant-c .nav-item.active { color: var(--blue); background: var(--surface); font-weight: 720; box-shadow: 0 5px 14px rgba(15, 23, 42, .10); }
+    .variant-c .nav-item.active::before { content: ""; position: absolute; left: 0; width: 3px; height: 22px; border-radius: 999px; background: var(--blue); }
+
+    /* Option D: a solid color dock owns only the left portion; content stays white. */
+    .variant-d .nav { min-height: 614px; background: var(--surface-soft); }
+    .variant-d .nav-item { overflow: hidden; border: 1px solid transparent; padding-left: 0; gap: 12px; }
+    .variant-d .nav-item .icon-tile { display: grid; width: 42px; min-height: 40px; place-items: center; border-radius: 9px 0 0 9px; }
+    .variant-d .nav-item:hover { color: var(--text); background: color-mix(in srgb, var(--surface) 70%, transparent); }
+    .variant-d .nav-item.active { color: var(--text); background: var(--surface); border-color: var(--border); font-weight: 720; box-shadow: 0 8px 20px rgba(15, 23, 42, .10); }
+    .variant-d .nav-item.active .icon-tile { align-self: stretch; color: #fff; background: var(--blue-strong); }
+    .variant-d .nav-item.active::after { content: "›"; margin: 0 12px 0 auto; color: var(--blue); font-size: 19px; font-weight: 600; }
+
+    /* Option E: white card with a slim brand rail and a tinted icon tile. */
+    .variant-e .nav { min-height: 614px; background: #f7f8fa; }
+    body[data-theme="dark"] .variant-e .nav { background: var(--surface-soft); }
+    .variant-e .nav-item { padding-left: 12px; }
+    .variant-e .nav-item .icon-tile { display: grid; width: 29px; height: 29px; place-items: center; border-radius: 8px; }
+    .variant-e .nav-item:hover { color: var(--text); background: rgba(255, 255, 255, .68); }
+    body[data-theme="dark"] .variant-e .nav-item:hover { background: rgba(255, 255, 255, .05); }
+    .variant-e .nav-item.active { color: var(--text); background: var(--surface); font-weight: 720; box-shadow: 0 6px 18px rgba(15, 23, 42, .09); }
+    .variant-e .nav-item.active::before { content: ""; position: absolute; inset: 7px auto 7px 0; width: 5px; border-radius: 0 6px 6px 0; background: var(--blue-strong); }
+    .variant-e .nav-item.active .icon-tile { color: var(--blue); background: var(--blue-soft); }
+
+    /* Option F: a wider pale color panel gives the icon its own left column. */
+    .variant-f .nav { min-height: 614px; background: var(--surface-soft); }
+    .variant-f .nav-item { overflow: hidden; padding-left: 0; gap: 12px; }
+    .variant-f .nav-item .icon-tile { display: grid; width: 46px; min-height: 42px; place-items: center; border-radius: 9px 0 0 9px; transition: background 140ms ease, color 140ms ease; }
+    .variant-f .nav-item:hover { color: var(--text); background: var(--surface); }
+    .variant-f .nav-item:hover .icon-tile { background: var(--hover); }
+    .variant-f .nav-item.active { color: var(--text); background: var(--surface); border: 1px solid color-mix(in srgb, var(--blue) 22%, var(--border)); font-weight: 720; box-shadow: 0 7px 18px rgba(15, 23, 42, .08); }
+    .variant-f .nav-item.active .icon-tile { align-self: stretch; color: var(--blue-strong); background: var(--blue-soft); }
+    .variant-f .nav-item.active .icon-tile::after { content: ""; position: absolute; left: 0; width: 3px; height: 20px; border-radius: 999px; background: var(--blue-strong); }
+
+    @media (max-width: 960px) {
+      .grid { grid-template-columns: 1fr; }
+      .option-head { min-height: 0; }
+      .sidebar { max-width: 370px; }
+    }
+  </style>
+</head>
+<body data-theme="light">
+  <svg width="0" height="0" aria-hidden="true" style="position:absolute">
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+    <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M17 9h4M3 15h4M17 15h4"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></symbol>
+    <symbol id="i-clapper" viewBox="0 0 24 24"><path d="M4 11h16v9H4zM4 7l15-4 1 4-15 4zM8 6l3 3M14 4l3 3"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v6l4 2"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="M20 13 13 20 4 11V4h7l9 9Z"/><circle cx="8.5" cy="8.5" r="1"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 20 6v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3Z"/><path d="m9 12 2 2 4-4"/></symbol>
+  </svg>
+
+  <main class="shell">
+    <div class="intro">
+      <div>
+        <div class="eyebrow">CinePrime UI preview</div>
+        <h1>Sidebar hover & active states</h1>
+        <p>Six deliberately different directions, including three white-surface variants with a colored left accent. Hover the items and click any destination to compare its selected state.</p>
+      </div>
+      <button class="theme-button" id="themeToggle" type="button">Switch to dark</button>
+    </div>
+    <div class="hint">Interactive preview only — this file does not change the application sidebar.</div>
+
+    <div class="grid">
+      <article class="option">
+        <div class="option-head">
+          <div class="option-label">Option A <span class="recommended">Recommended</span></div>
+          <h2>Icon tile + status dot</h2>
+          <p>No full-row highlight. Selection is carried by the icon tile, stronger label and a small status dot.</p>
+        </div>
+        <section class="sidebar variant-a"></section>
+      </article>
+
+      <article class="option">
+        <div class="option-head">
+          <div class="option-label">Option B</div>
+          <h2>Filled blue capsule</h2>
+          <p>Highest contrast. The active destination behaves like a compact navigation pill.</p>
+        </div>
+        <section class="sidebar variant-b"></section>
+      </article>
+
+      <article class="option">
+        <div class="option-head">
+          <div class="option-label">Option C</div>
+          <h2>Raised destination</h2>
+          <p>The active item sits on an elevated surface with a short blue rail; hover reveals a lighter surface.</p>
+        </div>
+        <section class="sidebar variant-c"></section>
+      </article>
+    </div>
+
+    <div class="collection-title"><span>White surface + left accent</span></div>
+    <div class="grid">
+      <article class="option">
+        <div class="option-head">
+          <div class="option-label">Option D <span class="recommended">Recommended</span></div>
+          <h2>Solid color dock</h2>
+          <p>A compact blue dock anchors the icon while the label remains on a clean white surface.</p>
+        </div>
+        <section class="sidebar variant-d"></section>
+      </article>
+
+      <article class="option">
+        <div class="option-head">
+          <div class="option-label">Option E</div>
+          <h2>Slim rail + icon tile</h2>
+          <p>A five-pixel brand rail and a pale icon tile create a restrained enterprise-style selection.</p>
+        </div>
+        <section class="sidebar variant-e"></section>
+      </article>
+
+      <article class="option">
+        <div class="option-head">
+          <div class="option-label">Option F</div>
+          <h2>Pale color dock</h2>
+          <p>A wider tinted left panel feels softer than solid blue while preserving the split-surface structure.</p>
+        </div>
+        <section class="sidebar variant-f"></section>
+      </article>
+    </div>
+  </main>
+
+  <template id="sidebarTemplate">
+    <div class="brand"><span class="planet"></span><span class="wordmark">CINE<span>PRIME</span></span></div>
+    <nav class="nav" aria-label="Film programming preview">
+      <button class="nav-item active" type="button"><span class="icon-tile"><svg><use href="#i-grid"/></svg></span><span class="label">Programming Workspace</span></button>
+      <div class="group-label">Film Programming</div>
+      <button class="nav-item" type="button"><span class="icon-tile"><svg><use href="#i-film"/></svg></span><span class="label">Movie Catalogue</span></button>
+      <button class="nav-item" type="button"><span class="icon-tile"><svg><use href="#i-layers"/></svg></span><span class="label">Screening Versions</span></button>
+      <button class="nav-item" type="button"><span class="icon-tile"><svg><use href="#i-calendar"/></svg></span><span class="label">Release Planning</span></button>
+      <button class="nav-item" type="button"><span class="icon-tile"><svg><use href="#i-clapper"/></svg></span><span class="label">Create Schedules</span></button>
+      <button class="nav-item" type="button"><span class="icon-tile"><svg><use href="#i-clock"/></svg></span><span class="label">Live Schedule</span></button>
+      <div class="group-label">Reference Data</div>
+      <button class="nav-item" type="button"><span class="icon-tile"><svg><use href="#i-monitor"/></svg></span><span class="label">Screening Formats</span></button>
+      <button class="nav-item" type="button"><span class="icon-tile"><svg><use href="#i-tag"/></svg></span><span class="label">Genres</span></button>
+      <button class="nav-item" type="button"><span class="icon-tile"><svg><use href="#i-shield"/></svg></span><span class="label">Age Ratings</span></button>
+    </nav>
+  </template>
+
+  <script>
+    const template = document.querySelector('#sidebarTemplate');
+    document.querySelectorAll('.sidebar').forEach((sidebar) => {
+      sidebar.append(template.content.cloneNode(true));
+      sidebar.querySelectorAll('.nav-item').forEach((item) => {
+        item.addEventListener('click', () => {
+          sidebar.querySelectorAll('.nav-item').forEach((candidate) => candidate.classList.remove('active'));
+          item.classList.add('active');
+        });
+      });
+    });
+
+    const themeToggle = document.querySelector('#themeToggle');
+    themeToggle.addEventListener('click', () => {
+      const next = document.body.dataset.theme === 'light' ? 'dark' : 'light';
+      document.body.dataset.theme = next;
+      themeToggle.textContent = next === 'light' ? 'Switch to dark' : 'Switch to light';
+    });
+  </script>
+</body>
+</html>

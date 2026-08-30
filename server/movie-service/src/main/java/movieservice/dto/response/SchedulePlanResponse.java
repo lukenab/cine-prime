@@ -17,6 +17,8 @@ public record SchedulePlanResponse(
         List<Slot> slots,
         LocalDateTime submittedAt,
         String submittedBy,
+        LocalDateTime approvedAt,
+        String approvedBy,
         LocalDateTime publishedAt,
         String publishedBy,
         String reviewNote

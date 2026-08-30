@@ -71,15 +71,15 @@ const employeeNavItems: NavItem[] = [
  */
 const programmingNavItems: NavItem[] = [
   { icon: LayoutDashboard, label: "Programming Workspace", id: "programming-overview", path: "/admin/programming", group: "main", permissions: ["RELEASE_PLAN_EDIT", "SCHEDULE_PLAN_SUBMIT"] },
-  { icon: ClipboardCheck, label: "Review Workspace", id: "programming-approvals", path: "/admin/programming/approvals", group: "programming-workflow", permissions: ["MOVIE_APPROVE", "RELEASE_PLAN_APPROVE", "SCHEDULE_PLAN_APPROVE"] },
+  { icon: ClipboardCheck, label: "Review Workspace", id: "programming-approvals", path: "/admin/programming/approvals", group: "main", permissions: ["MOVIE_APPROVE", "RELEASE_PLAN_APPROVE", "SCHEDULE_PLAN_APPROVE"] },
   // Follow the actual programming lifecycle instead of splitting scheduling
   // into an isolated one-item section.
   { icon: Film, label: "Movie Catalogue", id: "programming-movies", path: "/admin/movies", group: "programming-workflow", permissions: ["MOVIE_READ"] },
   { icon: Layers3, label: "Screening Versions", id: "programming-versions", path: "/admin/screening-versions", group: "programming-workflow", permissions: ["MOVIE_READ"] },
   { icon: Calendar, label: "Release Planning", id: "programming-release", path: "/admin/release-plans", group: "programming-workflow", permissions: ["RELEASE_PLAN_READ"] },
   { icon: Clapperboard, label: "Create Schedules", id: "programming-schedule-create", path: "/admin/showtimes/auto/create", group: "programming-workflow", permissions: ["SCHEDULE_PLAN_SUBMIT"] },
-  { icon: ClipboardCheck, label: "Schedule Reviews", id: "programming-schedule-review", path: "/admin/showtimes/auto/review", group: "programming-workflow", permissions: ["SCHEDULE_PLAN_APPROVE"] },
-  { icon: CalendarClock, label: "Live Schedule", id: "programming-live-schedule", path: "/admin/showtimes", group: "programming-workflow", roles: ["ROLE_PROGRAMMING_APPROVER"], permissions: ["SHOWTIME_READ"] },
+  { icon: ClipboardCheck, label: "Review Schedules", id: "programming-schedule-review", path: "/admin/showtimes/auto/review", group: "programming-workflow", permissions: ["SCHEDULE_PLAN_APPROVE"] },
+  { icon: CalendarClock, label: "Published Schedules", id: "programming-live-schedule", path: "/admin/showtimes", group: "programming-workflow", roles: ["ROLE_PROGRAMMING_OPERATOR", "ROLE_PROGRAMMING_APPROVER"], permissions: ["SHOWTIME_READ"] },
   { icon: Monitor, label: "Screening Formats", id: "programming-formats", path: "/admin/formats", group: "programming-reference", permissions: ["MOVIE_READ"] },
   { icon: Tags, label: "Genres", id: "programming-genres", path: "/admin/genres", group: "programming-reference", permissions: ["GENRE_READ"] },
   { icon: ShieldCheck, label: "Age Ratings", id: "programming-ratings", path: "/admin/age-ratings", group: "programming-reference", permissions: ["MOVIE_READ"] },
@@ -187,17 +187,17 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
       width: "100%", display: "flex", alignItems: "center", gap: "11px",
       padding: nestedInSection ? "10px 12px 10px 30px" : "10px 12px",
       marginBottom: "2px", borderRadius: "8px",
-      border: "none", cursor: "pointer",
-      background: active ? (isDarkMode ? "rgba(59,130,246,0.1)" : "rgba(37,99,235,0.08)") : "transparent",
+      border: "none", outline: "none", cursor: "pointer",
+      background: active ? (isDarkMode ? "rgba(59,130,246,0.12)" : "rgba(37,99,235,0.08)") : "transparent",
       color: active ? (isDarkMode ? "#3b82f6" : "#2563eb") : "var(--text-sub)",
       fontSize: "13.5px", fontWeight: active ? 600 : 500,
-      letterSpacing: "0.01em", transition: "all 0.15s ease",
+      letterSpacing: "0.01em", transition: "background-color 140ms ease, color 140ms ease",
       position: "relative", textAlign: "left",
-      boxShadow: active ? (isDarkMode ? "inset 0 0 0 1px rgba(59,130,246,0.15)" : "inset 0 0 0 1px rgba(37,99,235,0.2)") : "none",
+      boxShadow: "none",
     });
 
     const hoverOn = (e: React.MouseEvent<HTMLButtonElement>, active: boolean) => {
-      if (!active) { e.currentTarget.style.background = isDarkMode ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.04)"; e.currentTarget.style.color = "var(--text-main)"; }
+      if (!active) { e.currentTarget.style.background = isDarkMode ? "rgba(255,255,255,0.055)" : "rgba(15,23,42,0.045)"; e.currentTarget.style.color = "var(--text-main)"; }
     };
     const hoverOff = (e: React.MouseEvent<HTMLButtonElement>, active: boolean) => {
       if (!active) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-sub)"; }
@@ -207,15 +207,16 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
       <div key={id}>
         {/* Parent button */}
         <button
+          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/55"
           onClick={() => hasChildren ? toggleExpand(id) : navigate(path)}
           style={btnStyle(isActive || childActive)}
           onMouseEnter={(e) => hoverOn(e, isActive || childActive)}
           onMouseLeave={(e) => hoverOff(e, isActive || childActive)}
         >
           {(isActive || childActive) && (
-            <span style={{ position: "absolute", left: nestedInSection ? 16 : 0, top: "50%", transform: "translateY(-50%)", width: "3px", height: "18px", background: isDarkMode ? "#3b82f6" : "#2563eb", borderRadius: "0 2px 2px 0", boxShadow: isDarkMode ? "0 0 8px rgba(59,130,246,0.7)" : "0 0 6px rgba(37,99,235,0.4)" }} />
+            <span style={{ position: "absolute", left: nestedInSection ? 16 : 0, top: "50%", transform: "translateY(-50%)", width: "3px", height: "20px", background: isDarkMode ? "#3b82f6" : "#2563eb", borderRadius: "999px", boxShadow: "none" }} />
           )}
-          <Icon size={16} style={(isActive || childActive) && isDarkMode ? { filter: "drop-shadow(0 0 4px rgba(59,130,246,0.5))" } : {}} />
+          <Icon size={16} style={{ flexShrink: 0 }} />
           <span style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
           {id === "movies" && pendingMovies > 0 && (
             <span style={{
@@ -244,17 +245,18 @@ export function Sidebar({ isDarkMode = true }: SidebarProps) {
                 return (
                   <button
                     key={child.path}
+                    className="focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/55"
                     onClick={() => navigate(child.path)}
                     style={{
                       width: "100%", display: "flex", alignItems: "center", gap: "9px",
                       padding: nestedInSection ? "8px 12px 8px 54px" : "8px 12px 8px 36px",
-                      borderRadius: "8px", border: "none", cursor: "pointer",
-                      background: childIsActive ? (isDarkMode ? "rgba(59,130,246,0.08)" : "rgba(37,99,235,0.06)") : "transparent",
+                      borderRadius: "8px", border: "none", outline: "none", cursor: "pointer",
+                      background: childIsActive ? (isDarkMode ? "rgba(59,130,246,0.12)" : "rgba(37,99,235,0.08)") : "transparent",
                       color: childIsActive ? (isDarkMode ? "#3b82f6" : "#2563eb") : "var(--text-sub)",
                       fontSize: "12.5px", fontWeight: childIsActive ? 600 : 400,
-                      transition: "all 0.15s ease", textAlign: "left",
+                      transition: "background-color 140ms ease, color 140ms ease", textAlign: "left",
                     }}
-                    onMouseEnter={(e) => { if (!childIsActive) { e.currentTarget.style.background = isDarkMode ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)"; e.currentTarget.style.color = "var(--text-main)"; } }}
+                    onMouseEnter={(e) => { if (!childIsActive) { e.currentTarget.style.background = isDarkMode ? "rgba(255,255,255,0.055)" : "rgba(15,23,42,0.045)"; e.currentTarget.style.color = "var(--text-main)"; } }}
                     onMouseLeave={(e) => { if (!childIsActive) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-sub)"; } }}
                   >
                     <ChildIcon size={13} />

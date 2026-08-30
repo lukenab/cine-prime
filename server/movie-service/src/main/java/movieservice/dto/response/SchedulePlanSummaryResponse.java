@@ -19,6 +19,7 @@ public record SchedulePlanSummaryResponse(
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
         LocalDateTime submittedAt,
+        LocalDateTime approvedAt,
         LocalDateTime publishedAt
 ) {
 }

@@ -10,6 +10,7 @@ import movieservice.dto.request.RejectRequest;
 import movieservice.dto.request.UpdateMovieRequest;
 import movieservice.dto.response.ImageUploadResponse;
 import movieservice.dto.response.MovieResponse;
+import movieservice.dto.response.MovieStatusHistoryResponse;
 import movieservice.dto.response.PublicMovieResponse;
 import movieservice.enums.MovieStatus;
 import movieservice.service.MovieService;
@@ -59,6 +60,15 @@ public class MovieController {
         return ApiResponse.<MovieResponse>builder()
                 .code(200)
                 .result(lang != null ? movieService.getMovieByLang(id, lang) : movieService.getMovie(id))
+                .build();
+    }
+
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'MOVIE_READ')")
+    @GetMapping("/{id}/status-history")
+    public ApiResponse<List<MovieStatusHistoryResponse>> getStatusHistory(@PathVariable Long id) {
+        return ApiResponse.<List<MovieStatusHistoryResponse>>builder()
+                .code(200)
+                .result(movieService.getMovieStatusHistory(id))
                 .build();
     }
 

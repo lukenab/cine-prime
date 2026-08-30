@@ -638,6 +638,18 @@ export type MovieResponse = {
   scoreSource?: string;
   createdAt?: string;
   updatedAt?: string;
+  createdBy?: string;
+  updatedBy?: string;
+  version?: number;
+};
+
+export type MovieStatusHistoryResponse = {
+  historyId: number;
+  fromStatus?: MovieStatus;
+  toStatus: MovieStatus;
+  actor: string;
+  reason?: string;
+  createdAt: string;
 };
 
 /** Read-model returned by GET /api/movies/public (MOV-LC-07) — displayStatus is
@@ -1178,6 +1190,9 @@ export const movieApi = {
     const url = lang ? `/api/movies/${id}?lang=${lang}` : `/api/movies/${id}`;
     return axiosClient.get(url) as Promise<ApiWrapper<MovieResponse>>;
   },
+
+  getMovieStatusHistory: (id: number) =>
+    axiosClient.get(`/api/movies/${id}/status-history`) as Promise<ApiWrapper<MovieStatusHistoryResponse[]>>,
 
   createMovie: (payload: CreateMovieRequest) =>
     axiosClient.post('/api/movies', payload) as Promise<ApiWrapper<MovieResponse>>,

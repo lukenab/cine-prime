@@ -34,8 +34,8 @@ Mọi thay đổi thực hiện qua Access Matrix phải được ghi Audit Log 
 |---|---|---|---|---|
 | `EMPLOYEE` | Base role cho self-service; nghiệp vụ quầy được cấp theo Access Profile | Assigned Cluster | Employee Workspace, My Schedule & Time | Branch Operations |
 | `BRANCH_MANAGER` | Điều hành một hoặc nhiều chi nhánh và quản lý đội ngũ tại rạp | Assigned Clusters | Workforce Operations, My Schedule & Time, Branch Operations | Regional Operations |
-| `PROGRAMMING_OPERATOR` | Chuẩn bị nội dung phim, kế hoạch phát hành và bản nháp lịch chiếu | Trụ sở chính | Film Programming | Head of Programming |
-| `PROGRAMMING_APPROVER` | Kiểm tra và phê duyệt nội dung, kế hoạch phát hành, lịch chiếu | Trụ sở chính | Programming Approval Queue | Head of Programming |
+| `PROGRAMMING_OPERATOR` | Chuẩn bị nội dung phim, kế hoạch phát hành, bản nháp lịch chiếu; publish lịch đã được duyệt và quản lý trạng thái mở bán | Trụ sở chính | Film Programming, Showtime Operations | Head of Programming |
+| `PROGRAMMING_APPROVER` | Kiểm tra và phê duyệt độc lập nội dung, kế hoạch phát hành và lịch chiếu; không publish hoặc mở bán suất chiếu | Trụ sở chính | Programming Approval Queue | Head of Programming |
 | `FINANCE_OFFICER` | Điều tra yêu cầu hoàn tiền và sai lệch đối soát | Trụ sở chính hoặc Finance Scope được giao | Refunds & Reconciliation | Finance Controller |
 | `FINANCE_APPROVER` | Phê duyệt quyết định tài chính do Finance Officer chuẩn bị | Trụ sở chính | Finance Approval Queue, Audit Evidence | Finance Controller/CFO Delegate |
 | `COMMERCIAL_MANAGER` | Chuẩn bị bảng giá và chiến dịch khuyến mãi | Trụ sở chính | Price Books, Promotions | Commercial Director |
@@ -68,6 +68,8 @@ Chi tiết mapping giữa Department, Access Profile, capability, Cluster Scope 
 | `SYSTEM_ADMIN` | `SECURITY_AUDITOR` | Người thay đổi quyền không được là người duy nhất kiểm tra thay đổi của chính mình |
 
 Các quy tắc trên phải được thực thi trong policy của backend workflow, không chỉ bằng cách ẩn nút trên giao diện.
+
+Vòng đời schedule plan được tách thành `DRAFT_GENERATED → IN_REVIEW → APPROVED → PUBLISHED`. Quyết định `APPROVED` không tạo suất chiếu. `PROGRAMMING_OPERATOR` dùng `SCHEDULE_PLAN_PUBLISH` để materialize lịch đã duyệt thành các suất `SCHEDULED`; vé chỉ được bán sau transition riêng sang `ON_SALE` bằng quyền `SHOWTIME_UPDATE`.
 
 ## 5. Local QA Accounts
 
@@ -110,7 +112,9 @@ Với từng tài khoản, đăng nhập tại `/login`, kiểm tra trang đích
 | System Admin mở `/admin/my-workforce` | Không xuất hiện trên sidebar và route bị từ chối |
 | Legacy Admin mở `/admin/my-workforce` | Không xuất hiện trên sidebar và route bị từ chối |
 | Programming Operator tạo/sửa bản nháp phim hoặc release plan | Được phép; thao tác phê duyệt không hiển thị hoặc bị từ chối |
-| Programming Approver mở hàng đợi phê duyệt | Được phép; thao tác tạo bản nháp không hiển thị hoặc bị từ chối |
+| Programming Operator publish schedule plan đang `APPROVED` | Được phép; tạo suất `SCHEDULED`, chưa mở bán |
+| Programming Operator chuyển suất `SCHEDULED` sang `ON_SALE` | Được phép qua Showtime Operations và phải là thao tác riêng sau publish |
+| Programming Approver mở hàng đợi phê duyệt | Được phép; có thể approve/request changes nhưng không publish hoặc mở bán |
 | Finance Officer chuẩn bị quyết định hoàn tiền | Được phép; không được phê duyệt cuối cùng |
 | Finance Approver duyệt quyết định do người khác tạo | Được phép và phải có audit log |
 | Commercial Manager tạo và submit khuyến mãi | Được phép; không được duyệt hoặc kích hoạt |

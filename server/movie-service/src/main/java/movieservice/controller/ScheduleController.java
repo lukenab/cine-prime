@@ -75,11 +75,11 @@ public class ScheduleController {
                 .build();
     }
 
-    // ── Write (ADMIN only) ────────────────────────────────────────────────────
+    // ── Operational writes ───────────────────────────────────────────────────
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SHOWTIME_CREATE')")
     public ApiResponse<ShowTimePricingResponse> createShowTime(
             @Valid @RequestBody CreateShowTimeRequest request) {
         return ApiResponse.<ShowTimePricingResponse>builder()
@@ -90,7 +90,7 @@ public class ScheduleController {
     }
 
     @PostMapping("/generate-preview")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SHOWTIME_CREATE')")
     public ApiResponse<BulkShowTimePreviewResponse> generatePreview(
             @Valid @RequestBody BulkShowTimeRequest request) {
         return ApiResponse.<BulkShowTimePreviewResponse>builder()
@@ -102,7 +102,7 @@ public class ScheduleController {
 
     @PostMapping("/bulk")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SHOWTIME_CREATE')")
     public ApiResponse<BulkShowTimeCreateResponse> bulkCreate(
             @Valid @RequestBody BulkShowTimeRequest request) {
         return ApiResponse.<BulkShowTimeCreateResponse>builder()
@@ -114,7 +114,7 @@ public class ScheduleController {
 
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SHOWTIME_UPDATE')")
     public ApiResponse<ShowTimePricingResponse> updateShowTime(
             @PathVariable Long id,
             @Valid @RequestBody UpdateShowTimeRequest request) {
@@ -126,7 +126,7 @@ public class ScheduleController {
     }
 
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SHOWTIME_UPDATE')")
     public ApiResponse<ShowTimeResponse> updateStatus(
             @PathVariable Long id,
             @Valid @RequestBody UpdateShowTimeStatusRequest request,
@@ -139,7 +139,7 @@ public class ScheduleController {
     }
 
     @PatchMapping("/bulk/status")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SHOWTIME_UPDATE')")
     public ApiResponse<List<ShowTimeResponse>> bulkUpdateStatus(
             @Valid @RequestBody BulkUpdateShowTimeStatusRequest request,
             Authentication authentication) {
@@ -151,7 +151,7 @@ public class ScheduleController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'SHOWTIME_DELETE')")
     public ApiResponse<Void> deleteShowTime(@PathVariable Long id) {
         showTimeService.deleteById(id);
         return ApiResponse.<Void>builder()

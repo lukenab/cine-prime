@@ -26,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../components/ui/select";
+import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
 
 type WorkspaceView = "operations" | "list" | "runs";
 
@@ -34,10 +35,14 @@ export default function ManageShowtimePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const canManageShowtimes = Boolean(user?.permissions.some((permission) =>
-    permission === "SHOWTIME_CREATE" || permission === "SHOWTIME_UPDATE" || permission === "SHOWTIME_DELETE")
-    || user?.roles.some((role) => role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN"));
-  const isReadOnly = !canManageShowtimes;
+  // Approvers monitor published operations. Operators and administrators own the
+  // separate publication / sales-opening phase through explicit showtime rights.
+  const isOperationsAdmin = Boolean(user?.roles.some((role) => role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN"));
+  const canCreateShowtimes = Boolean(isOperationsAdmin || user?.permissions.includes("SHOWTIME_CREATE"));
+  const canUpdateShowtimes = Boolean(isOperationsAdmin || user?.permissions.includes("SHOWTIME_UPDATE"));
+  const canDeleteShowtimes = Boolean(isOperationsAdmin || user?.permissions.includes("SHOWTIME_DELETE"));
+  const canManageShowtimes = canCreateShowtimes || canUpdateShowtimes;
+  const isReadOnly = !canUpdateShowtimes;
 
   // Deep-link scope from a release plan's "Schedule shows" action
   // (/admin/showtimes?movieId=...&clusterId=...&availabilityId=...): when present, the
@@ -277,18 +282,13 @@ export default function ManageShowtimePage() {
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 style={{ color: "var(--text-main)", fontWeight: 600, fontSize: "22px", letterSpacing: "-0.01em", marginBottom: "5px" }}>
-            {isReadOnly ? "Live Schedule" : "Showtime Workspace"}
-          </h1>
-          <p style={{ color: "var(--text-sub)", fontSize: "13px" }}>
-            {isReadOnly
-              ? "View published and operational cinema schedules across all clusters."
-              : "Plan, generate, and manage cinema schedules in one workspace"}
-          </p>
-        </div>
-        {canManageShowtimes ? <div className="flex items-center rounded-xl border p-1" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+      <AdminPageHeader
+        eyebrow="Film programming"
+        title="Published Schedules"
+        description={isReadOnly
+          ? "Monitor published and operational cinema schedules across all clusters. Changes are managed by programming operations."
+          : "Monitor published schedules, open ticket sales and manage operational showtime status."}
+        actions={canManageShowtimes ? <div className="flex items-center rounded-xl border p-1" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
           {([
             ["operations", CalendarDays, "Operations"],
             ["list", List, "Showtime List"],
@@ -309,12 +309,8 @@ export default function ManageShowtimePage() {
               <Icon size={14} /> {label}
             </button>
           ))}
-        </div> : (
-          <span className="rounded-full border px-3 py-1.5 text-xs font-semibold" style={{ color: "var(--text-sub)", borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
-            Read-only
-          </span>
-        )}
-      </div>
+        </div> : undefined}
+      />
 
       {error && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl mb-5 border border-rose-200 bg-rose-50">
@@ -346,7 +342,7 @@ export default function ManageShowtimePage() {
             )}
             {" "}from the release plan.
           </p>
-          {canManageShowtimes && <button
+          {canCreateShowtimes && <button
             type="button"
             onClick={() => setCreateChoiceOpen(true)}
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-white transition-all hover:opacity-90"
@@ -448,7 +444,7 @@ export default function ManageShowtimePage() {
           <span className="text-[13px] font-semibold">Refresh</span>
         </button>
 
-        {canManageShowtimes && <button
+        {canCreateShowtimes && <button
           onClick={() => setCreateChoiceOpen(true)}
           className="flex h-10 items-center gap-2 rounded-xl px-4 text-white shadow-sm transition-all hover:opacity-90"
           style={{ fontSize: "13px", fontWeight: 600, background: isDarkMode ? "#9333ea" : "#7e22ce" }}
@@ -513,19 +509,19 @@ export default function ManageShowtimePage() {
           onEdit={(showtime) => { setEditShowtime(showtime); setModalOpen(true); }}
           onMove={handleMoveShowtime}
           onStatusChange={handleStatusChange}
-          onBulkStatusChange={canManageShowtimes ? handleBulkStatusChange : undefined}
+          onBulkStatusChange={canUpdateShowtimes ? handleBulkStatusChange : undefined}
           customerPreviewShowtimes={scopedShowtimes}
         />
       ) : workspaceView === "list" ? (
         <ShowtimeTable
           showtimes={scopedShowtimes}
-          onEdit={(s) => { setEditShowtime(s); setModalOpen(true); }}
-          onDelete={handleDeleteShowtime}
+          onEdit={canUpdateShowtimes ? (s) => { setEditShowtime(s); setModalOpen(true); } : undefined}
+          onDelete={canDeleteShowtimes ? handleDeleteShowtime : undefined}
           searchQuery={searchQuery}
           statusFilter={statusFilter}
           dateFilter={dateFilter}
           roomFilter={roomFilter}
-          onBulkStatusChange={handleBulkStatusChange}
+          onBulkStatusChange={canUpdateShowtimes ? handleBulkStatusChange : undefined}
           scopedToOneCinema={Boolean(clusterFilter || scopeClusterId)}
         />
       ) : (
@@ -544,7 +540,7 @@ export default function ManageShowtimePage() {
         presetClusterId={scopeClusterId}
       />}
 
-      {canManageShowtimes && <ShowtimeCreateChoiceDialog
+      {canCreateShowtimes && <ShowtimeCreateChoiceDialog
         open={createChoiceOpen}
         canGenerate={user?.permissions.includes("SCHEDULE_PLAN_SUBMIT")
           || user?.roles.some((role) => role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN")}

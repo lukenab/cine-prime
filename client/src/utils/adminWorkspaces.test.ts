@@ -27,6 +27,7 @@ describe("admin role workspaces", () => {
   it("separates automatic schedule creation from approval", () => {
     expect(isPathInRoleWorkspace("ROLE_PROGRAMMING_OPERATOR", "/admin/showtimes/auto/create")).toBe(true);
     expect(isPathInRoleWorkspace("ROLE_PROGRAMMING_OPERATOR", "/admin/showtimes/auto/review")).toBe(false);
+    expect(isPathInRoleWorkspace("ROLE_PROGRAMMING_OPERATOR", "/admin/showtimes")).toBe(true);
     expect(isPathInRoleWorkspace("ROLE_PROGRAMMING_APPROVER", "/admin/showtimes/auto/review")).toBe(true);
     expect(isPathInRoleWorkspace("ROLE_PROGRAMMING_APPROVER", "/admin/showtimes/auto/create")).toBe(false);
     expect(isPathInRoleWorkspace("ROLE_PROGRAMMING_APPROVER", "/admin/programming/approvals")).toBe(true);

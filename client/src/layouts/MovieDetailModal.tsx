@@ -1,12 +1,12 @@
 import {
   X, Film, Tag, Globe, Users, Clock, Calendar, MapPin,
   Building2, ExternalLink, Play, Loader2, ChevronDown, ChevronLeft, ChevronRight, Image as ImageIcon,
-  AlertTriangle, Check, CheckCircle2, UserRound, XCircle,
+  AlertTriangle, Check, CheckCircle2, History, UserRound, XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
-import type { MovieResponse } from "../api/movieApi";
+import { movieApi, type MovieResponse, type MovieStatusHistoryResponse } from "../api/movieApi";
 import {
   MOVIE_CONTENT_STATUS_META,
   toMovieContentStatus,
@@ -33,7 +33,7 @@ type ReviewModeProps = BaseProps & {
 
 type Props = ViewModeProps | ReviewModeProps;
 
-type TabKey = "overview" | "media" | "credits";
+type TabKey = "overview" | "media" | "credits" | "activity";
 
 type ReviewCheck = {
   key: string;
@@ -46,7 +46,7 @@ const MIN_NOTE_LENGTH = 10;
 
 const LANG_NAME: Record<string, string> = {
   en: "English", vi: "Tiếng Việt", ja: "日本語", ko: "한국어",
-  zh: "中文", fr: "Français", th: "ภาษาไทย",
+  zh: "中文", fr: "Français", th: "ภาษาไทย", ug: "Uyghur",
 };
 
 const READINESS_FIELD_LABELS: Record<string, string> = {
@@ -63,7 +63,7 @@ const READINESS_FIELD_LABELS: Record<string, string> = {
 };
 
 const FL: React.CSSProperties = {
-  fontSize: "10.5px", fontWeight: 600, letterSpacing: "0.07em",
+  fontSize: "11px", lineHeight: "16px", fontWeight: 700, letterSpacing: "0.07em",
   textTransform: "uppercase", color: "var(--text-sub)", marginBottom: "4px",
 };
 
@@ -100,6 +100,22 @@ function formatDate(value?: string) {
     : date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+function formatDateTime(value?: string) {
+  if (!value) return "Not recorded";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleString("en-GB", {
+        day: "2-digit", month: "short", year: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      });
+}
+
+function formatWorkflowStatus(value?: string) {
+  if (!value) return "Created";
+  return value.toLowerCase().replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
+}
+
 function SectionLabel({ icon: Icon, children }: { icon: typeof Tag; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-1.5 mb-2">
@@ -120,7 +136,7 @@ function SectionHeading({ icon: Icon, title, description }: {
         <Icon size={17} />
       </div>
       <div>
-        <h3 className="text-base font-bold" style={{ color: "var(--text-main)" }}>{title}</h3>
+        <h3 className="text-[17px] font-bold leading-6" style={{ color: "var(--text-main)" }}>{title}</h3>
         {description && <p className="mt-0.5 text-xs" style={{ color: "var(--text-sub)" }}>{description}</p>}
       </div>
     </div>
@@ -169,10 +185,10 @@ function AgeRatingDisplay({ code, description }: { code?: string; description?: 
 function MetaRow({ icon: Icon, label, value }: { icon: typeof Film; label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-3 py-2">
-      <span className="flex flex-shrink-0 items-center gap-1.5 text-[11px] font-medium" style={{ color: "var(--text-sub)" }}>
+      <span className="flex flex-shrink-0 items-center gap-1.5 text-[12.5px] font-medium leading-5" style={{ color: "var(--text-sub)" }}>
         <Icon size={12} />{label}
       </span>
-      <span className="text-right text-xs font-semibold leading-snug" style={{ color: "var(--text-main)" }}>{value}</span>
+      <span className="text-right text-[13px] font-semibold leading-5" style={{ color: "var(--text-main)" }}>{value}</span>
     </div>
   );
 }
@@ -182,7 +198,7 @@ export function MovieDetailModal(props: Props) {
   const mode = props.mode ?? "view";
   const isReview = mode === "review";
   const reviewProps = props.mode === "review" ? props : null;
-  const { can } = useRole();
+  const { can, username } = useRole();
 
   const [synopsisLang, setSynopsisLang] = useState<"vi" | "en">("vi");
   const [mediaIdx, setMediaIdx] = useState(0);
@@ -191,6 +207,9 @@ export function MovieDetailModal(props: Props) {
   const [showPassedChecks, setShowPassedChecks] = useState(false);
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState<"approve" | "reject" | null>(null);
+  const [history, setHistory] = useState<MovieStatusHistoryResponse[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyUnavailable, setHistoryUnavailable] = useState(false);
   const mediaTouchStartX = useRef<number | null>(null);
 
   const handleClose = () => {
@@ -225,6 +244,22 @@ export function MovieDetailModal(props: Props) {
     setNote("");
   }, [movie?.movieId, open]);
 
+  useEffect(() => {
+    if (!open || !isReview || !movie?.movieId) {
+      setHistory([]);
+      setHistoryUnavailable(false);
+      return;
+    }
+    let cancelled = false;
+    setHistoryLoading(true);
+    setHistoryUnavailable(false);
+    movieApi.getMovieStatusHistory(movie.movieId)
+      .then((response) => { if (!cancelled) setHistory(response.result ?? []); })
+      .catch(() => { if (!cancelled) { setHistory([]); setHistoryUnavailable(true); } })
+      .finally(() => { if (!cancelled) setHistoryLoading(false); });
+    return () => { cancelled = true; };
+  }, [isReview, movie?.movieId, open]);
+
   const vi = movie?.translations?.find(t => t.languageCode === "vi");
   const en = movie?.translations?.find(t => t.languageCode === "en");
   const directors = movie?.cast?.filter(c => c.roleType === "DIRECTOR") ?? [];
@@ -235,7 +270,12 @@ export function MovieDetailModal(props: Props) {
   const poster = images.find(i => i.imageType === "POSTER" && i.isDefault) ?? images.find(i => i.imageType === "POSTER");
   const posterUrl = poster?.imageUrl ?? movie?.posterUrl;
   const title = en?.title ?? movie?.originalTitle ?? "Untitled movie";
+  const localizedTitle = vi?.title || en?.title || movie?.originalTitle || "Untitled movie";
+  const showOriginalTitle = Boolean(movie?.originalTitle && movie.originalTitle.toLocaleLowerCase() !== localizedTitle.toLocaleLowerCase());
   const primarySynopsis = vi?.synopsis || en?.synopsis || movie?.synopsis || "";
+  const submittedEvent = history.find((entry) => entry.toStatus === "PENDING_REVIEW");
+  const contentSource = movie?.tmdbId ? `TMDB linked · ${movie.tmdbId}` : "Internal catalogue";
+  const selfApproval = Boolean(username && movie?.createdBy && username.toLocaleLowerCase() === movie.createdBy.toLocaleLowerCase());
 
   // Every asset (poster + backdrops + stills), poster first — feeds the Media tab's carousel.
   const mediaImages = images.length > 0
@@ -286,13 +326,21 @@ export function MovieDetailModal(props: Props) {
 
   const noteTooShort = note.trim().length > 0 && note.trim().length < MIN_NOTE_LENGTH;
   const approvalReady = Boolean(movie) && blockers.length === 0;
+  const decisionReady = approvalReady && !selfApproval;
   const passedCount = readinessChecks.length - blockers.length;
 
   const tabs = useMemo(() => {
+    if (isReview) {
+      return [
+        { key: "overview" as TabKey, label: "Content", show: true },
+        { key: "media" as TabKey, label: "Assets & credits", show: true },
+        { key: "activity" as TabKey, label: "Activity", show: true },
+      ];
+    }
     const list: Array<{ key: TabKey; label: string; show: boolean }> = [
       { key: "overview", label: "Overview", show: true },
       { key: "media", label: "Media", show: mediaImages.length > 0 },
-      { key: "credits", label: isReview ? "Credits" : "Cast & Crew", show: isReview || directors.length > 0 || actors.length > 0 },
+      { key: "credits", label: "Cast & Crew", show: directors.length > 0 || actors.length > 0 },
     ];
     return list.filter((t) => t.show);
   }, [actors.length, directors.length, isReview, mediaImages.length]);
@@ -301,13 +349,13 @@ export function MovieDetailModal(props: Props) {
 
   const dims = isReview
     ? {
-        shell: "h-[min(92vh,880px)] max-w-6xl",
+        shell: "h-[min(94vh,920px)] max-w-[1320px]",
         asideW: "lg:w-[300px]",
         asideGap: "gap-5",
         asidePad: "p-5 lg:p-6",
         headerPad: "py-4",
         tabPad: "px-4 py-4",
-        mainPad: "p-5 sm:p-6",
+        mainPad: "p-6 lg:p-8",
       }
     : {
         shell: "h-[min(94vh,820px)] max-w-3xl",
@@ -320,7 +368,7 @@ export function MovieDetailModal(props: Props) {
       };
 
   const handleApprove = async () => {
-    if (!movie || !approvalReady || !reviewProps) return;
+    if (!movie || !decisionReady || !reviewProps) return;
     setSubmitting("approve");
     try {
       await reviewProps.onApprove(movie.movieId);
@@ -368,22 +416,19 @@ export function MovieDetailModal(props: Props) {
         onClick={(event) => event.stopPropagation()}
       >
         {/* ── Header ── */}
-        <header className={`flex flex-shrink-0 items-center justify-between gap-4 border-b px-5 sm:px-6 ${dims.headerPad}`} style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+        <header className={`flex flex-shrink-0 items-center justify-between gap-4 border-b px-5 sm:px-6 lg:px-7 ${dims.headerPad}`} style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
           {isReview && movie ? (
-            <div className="flex min-w-0 flex-1 items-center gap-3.5">
-              <div className="h-16 w-11 flex-shrink-0 overflow-hidden rounded-lg border" style={{ borderColor: "var(--border-color)", background: "var(--bg-hover)" }}>
+            <div className="flex min-w-0 flex-1 items-center gap-4">
+              <div className="h-[68px] w-12 flex-shrink-0 overflow-hidden rounded-lg border" style={{ borderColor: "var(--border-color)", background: "var(--bg-hover)" }}>
                 {posterUrl
                   ? <img src={posterUrl} alt="" className="h-full w-full object-cover" />
                   : <div className="flex h-full w-full items-center justify-center" style={{ color: "var(--text-sub)" }}><ImageIcon size={17} /></div>}
               </div>
               <div className="min-w-0">
-                <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.1em] text-blue-600">Content approval</p>
-                <h2 id="movie-detail-title" className="truncate text-lg font-bold leading-tight" style={{ color: "var(--text-main)" }}>{movie.originalTitle}</h2>
-                <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs" style={{ color: "var(--text-sub)" }}>
-                  <span>Movie #{movie.movieId}</span><span aria-hidden="true">·</span>
-                  <span>{formatDuration(movie.durationMinutes)}</span><span aria-hidden="true">·</span>
-                  <span>{formatDate(movie.releaseDate)}</span><span aria-hidden="true">·</span>
-                  <span>{LANG_NAME[movie.originalLanguage] ?? movie.originalLanguage ?? "Language not set"}</span>
+                <p className="mb-1 text-[11px] font-bold uppercase leading-4 tracking-[0.09em] text-blue-600">Movie content submission</p>
+                <h2 id="movie-detail-title" className="truncate text-xl font-bold leading-7" style={{ color: "var(--text-main)" }}>{localizedTitle}</h2>
+                <p className="mt-0.5 truncate text-[13px] leading-5" style={{ color: "var(--text-sub)" }}>
+                  {showOriginalTitle ? movie.originalTitle : "Content record awaiting an independent decision"}
                 </p>
               </div>
             </div>
@@ -396,9 +441,30 @@ export function MovieDetailModal(props: Props) {
               </div>
             </div>
           )}
-          {isReview && movie && <span className="ml-auto hidden flex-shrink-0 rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.06em] text-amber-600 sm:inline-flex">Pending review</span>}
+          {isReview && movie && <span className="ml-auto hidden flex-shrink-0 rounded-full bg-amber-500/10 px-3 py-1.5 text-[11px] font-bold uppercase leading-4 tracking-[0.06em] text-amber-600 sm:inline-flex">Pending review</span>}
           <button type="button" onClick={handleClose} disabled={isReview && Boolean(submitting)} aria-label="Close" className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl transition-colors hover:bg-black/5 disabled:opacity-40 dark:hover:bg-white/5" style={{ color: "var(--text-sub)" }}><X size={20} /></button>
         </header>
+
+        {isReview && movie && !loading && (
+          <section className="grid flex-shrink-0 grid-cols-2 border-b sm:grid-cols-4" aria-label="Submission information" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
+            <div className="border-b px-5 py-3.5 sm:border-b-0 sm:border-r lg:px-6" style={{ borderColor: "var(--border-color)" }}>
+              <p style={FL}>{submittedEvent ? "Submitted" : "Last updated"}</p>
+              <p className="truncate text-[13px] font-semibold leading-5" style={{ color: "var(--text-main)" }}>{formatDateTime(submittedEvent?.createdAt || movie.updatedAt)}</p>
+            </div>
+            <div className="border-b px-5 py-3.5 sm:border-b-0 sm:border-r lg:px-6" style={{ borderColor: "var(--border-color)" }}>
+              <p style={FL}>{submittedEvent ? "Submitted by" : "Last changed by"}</p>
+              <p className="truncate text-[13px] font-semibold leading-5" style={{ color: "var(--text-main)" }}>{submittedEvent?.actor || movie.updatedBy || movie.createdBy || "Not recorded"}</p>
+            </div>
+            <div className="border-r px-5 py-3.5 lg:px-6" style={{ borderColor: "var(--border-color)" }}>
+              <p style={FL}>Record version</p>
+              <p className="truncate text-[13px] font-semibold leading-5" style={{ color: "var(--text-main)" }}>{movie.version != null ? `Version ${movie.version}` : "Not recorded"}</p>
+            </div>
+            <div className="px-5 py-3.5 lg:px-6">
+              <p style={FL}>Source linkage</p>
+              <p className="truncate text-[13px] font-semibold leading-5" style={{ color: "var(--text-main)" }}>{contentSource}</p>
+            </div>
+          </section>
+        )}
 
         {loading || !movie ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3" style={{ color: "var(--text-sub)" }}>
@@ -489,7 +555,7 @@ export function MovieDetailModal(props: Props) {
               </nav>
 
               <main className={isReview
-                ? "nice-scrollbar min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_280px] lg:overflow-hidden"
+                ? "nice-scrollbar min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:overflow-hidden"
                 : `nice-scrollbar min-h-0 flex-1 overflow-y-auto ${dims.mainPad}`}
               >
                 <div className={isReview ? `nice-scrollbar min-h-0 ${dims.mainPad} lg:overflow-y-auto` : "contents"}>
@@ -586,65 +652,65 @@ export function MovieDetailModal(props: Props) {
                 )}
 
                 {tab === "overview" && isReview && (
-                  <div className="mx-auto max-w-3xl">
-                    <section className="pb-6">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-blue-600">Customer-facing content</p>
-                      <h3 className="mt-1 text-base font-bold" style={{ color: "var(--text-main)" }}>Title and synopsis</h3>
-                      <p className="mt-1 text-xs" style={{ color: "var(--text-sub)" }}>Review the information customers will see across booking channels.</p>
+                  <div className="mx-auto w-full max-w-4xl">
+                    <section className="pb-7">
+                      <p className="text-[11px] font-bold uppercase leading-4 tracking-[0.09em] text-blue-600">Customer-facing content</p>
+                      <h3 className="mt-1 text-[17px] font-bold leading-6" style={{ color: "var(--text-main)" }}>Title and synopsis</h3>
+                      <p className="mt-1 text-xs leading-[18px]" style={{ color: "var(--text-sub)" }}>Review the information customers will see across booking channels.</p>
 
                       <dl className="mt-5">
-                        <div className="grid gap-1 py-3 sm:grid-cols-[132px_minmax(0,1fr)] sm:gap-5">
-                          <dt className="text-xs font-semibold" style={{ color: "var(--text-sub)" }}>Display title</dt>
-                          <dd className="text-sm font-semibold" style={{ color: "var(--text-main)" }}>{vi?.title || en?.title || movie.originalTitle}</dd>
+                        <div className="grid gap-1 py-3.5 sm:grid-cols-[144px_minmax(0,1fr)] sm:gap-6">
+                          <dt className="text-[13px] font-semibold leading-5" style={{ color: "var(--text-sub)" }}>Display title</dt>
+                          <dd className="text-sm font-semibold leading-[22px]" style={{ color: "var(--text-main)" }}>{vi?.title || en?.title || movie.originalTitle}</dd>
                         </div>
-                        <div className="grid gap-1 border-t py-3 sm:grid-cols-[132px_minmax(0,1fr)] sm:gap-5" style={{ borderColor: "var(--border-color)" }}>
-                          <dt className="text-xs font-semibold" style={{ color: "var(--text-sub)" }}>Synopsis</dt>
-                          <dd className="text-sm leading-6" style={{ color: primarySynopsis ? "var(--text-main)" : "#dc2626" }}>{primarySynopsis || "Synopsis has not been supplied."}</dd>
+                        <div className="grid gap-1 border-t py-3.5 sm:grid-cols-[144px_minmax(0,1fr)] sm:gap-6" style={{ borderColor: "var(--border-color)" }}>
+                          <dt className="text-[13px] font-semibold leading-5" style={{ color: "var(--text-sub)" }}>Synopsis</dt>
+                          <dd className="text-sm leading-[22px]" style={{ color: primarySynopsis ? "var(--text-main)" : "#dc2626" }}>{primarySynopsis || "Synopsis has not been supplied."}</dd>
                         </div>
                         {(vi?.tagline || en?.tagline || movie.tagline) && (
-                          <div className="grid gap-1 border-t py-3 sm:grid-cols-[132px_minmax(0,1fr)] sm:gap-5" style={{ borderColor: "var(--border-color)" }}>
-                            <dt className="text-xs font-semibold" style={{ color: "var(--text-sub)" }}>Tagline</dt>
-                            <dd className="text-sm italic" style={{ color: "var(--text-main)" }}>“{vi?.tagline || en?.tagline || movie.tagline}”</dd>
+                          <div className="grid gap-1 border-t py-3.5 sm:grid-cols-[144px_minmax(0,1fr)] sm:gap-6" style={{ borderColor: "var(--border-color)" }}>
+                            <dt className="text-[13px] font-semibold leading-5" style={{ color: "var(--text-sub)" }}>Tagline</dt>
+                            <dd className="text-sm italic leading-[22px]" style={{ color: "var(--text-main)" }}>“{vi?.tagline || en?.tagline || movie.tagline}”</dd>
                           </div>
                         )}
-                        <div className="grid gap-1 border-t py-3 sm:grid-cols-[132px_minmax(0,1fr)] sm:gap-5" style={{ borderColor: "var(--border-color)" }}>
-                          <dt className="text-xs font-semibold" style={{ color: "var(--text-sub)" }}>Languages</dt>
+                        <div className="grid gap-1 border-t py-3.5 sm:grid-cols-[144px_minmax(0,1fr)] sm:gap-6" style={{ borderColor: "var(--border-color)" }}>
+                          <dt className="text-[13px] font-semibold leading-5" style={{ color: "var(--text-sub)" }}>Languages</dt>
                           <dd className="flex flex-wrap gap-1.5">
-                            {movie.translations?.map((translation) => <span key={translation.languageCode} className="rounded-md border px-2 py-0.5 text-[11px] font-semibold uppercase" style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}>{translation.languageCode}</span>)}
+                            {movie.translations?.map((translation) => <span key={translation.languageCode} className="rounded-md border px-2 py-0.5 text-xs font-semibold uppercase leading-[18px]" style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}>{translation.languageCode}</span>)}
                             {!movie.translations?.length && <span className="text-sm text-rose-600">No localized content supplied.</span>}
                           </dd>
                         </div>
                       </dl>
                     </section>
 
-                    <section className="border-t py-6" style={{ borderColor: "var(--border-color)" }}>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-blue-600">Classification</p>
-                      <h3 className="mt-1 text-base font-bold" style={{ color: "var(--text-main)" }}>Release information</h3>
+                    <section className="border-t py-7" style={{ borderColor: "var(--border-color)" }}>
+                      <p className="text-[11px] font-bold uppercase leading-4 tracking-[0.09em] text-blue-600">Classification</p>
+                      <h3 className="mt-1 text-[17px] font-bold leading-6" style={{ color: "var(--text-main)" }}>Release information</h3>
 
                       <dl className="mt-4">
-                        <div className="grid items-center gap-2 py-3 sm:grid-cols-[132px_minmax(0,1fr)] sm:gap-5">
-                          <dt className="text-xs font-semibold" style={{ color: "var(--text-sub)" }}>Age rating</dt>
+                        <div className="grid items-center gap-2 py-3.5 sm:grid-cols-[144px_minmax(0,1fr)] sm:gap-6">
+                          <dt className="text-[13px] font-semibold leading-5" style={{ color: "var(--text-sub)" }}>Age rating</dt>
                           <dd><AgeRatingDisplay code={movie.ageRating?.ratingCode} description={movie.ageRating?.description} /></dd>
                         </div>
-                        <div className="grid items-start gap-2 border-t py-3 sm:grid-cols-[132px_minmax(0,1fr)] sm:gap-5" style={{ borderColor: "var(--border-color)" }}>
-                          <dt className="text-xs font-semibold" style={{ color: "var(--text-sub)" }}>Genres</dt>
+                        <div className="grid items-start gap-2 border-t py-3.5 sm:grid-cols-[144px_minmax(0,1fr)] sm:gap-6" style={{ borderColor: "var(--border-color)" }}>
+                          <dt className="text-[13px] font-semibold leading-5" style={{ color: "var(--text-sub)" }}>Genres</dt>
                           <dd className="flex flex-wrap gap-1.5">
-                            {movie.genres?.map((genre) => <span key={genre.genreId} className="rounded-md border px-2 py-1 text-xs font-medium" style={{ borderColor: genre.status === "PENDING_REVIEW" ? "rgba(245,158,11,0.45)" : "var(--border-color)", color: genre.status === "PENDING_REVIEW" ? "#d97706" : "var(--text-main)" }}>{genre.genreName}</span>)}
+                            {movie.genres?.map((genre) => <span key={genre.genreId} className="rounded-md border px-2.5 py-1 text-[13px] font-medium leading-5" style={{ borderColor: genre.status === "PENDING_REVIEW" ? "rgba(245,158,11,0.45)" : "var(--border-color)", color: genre.status === "PENDING_REVIEW" ? "#d97706" : "var(--text-main)" }}>{genre.genreName}</span>)}
                             {!movie.genres?.length && <span className="text-sm text-rose-600">No genre supplied.</span>}
                           </dd>
                         </div>
-                        <div className="grid items-start gap-2 border-t py-3 sm:grid-cols-[132px_minmax(0,1fr)] sm:gap-5" style={{ borderColor: "var(--border-color)" }}>
-                          <dt className="text-xs font-semibold" style={{ color: "var(--text-sub)" }}>Formats</dt>
+                        <div className="grid items-start gap-2 border-t py-3.5 sm:grid-cols-[144px_minmax(0,1fr)] sm:gap-6" style={{ borderColor: "var(--border-color)" }}>
+                          <dt className="text-[13px] font-semibold leading-5" style={{ color: "var(--text-sub)" }}>Formats</dt>
                           <dd className="flex flex-wrap gap-1.5">
-                            {movie.formats?.map((format) => <span key={format.formatId} className="rounded-md border px-2 py-1 text-xs font-medium" style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }}>{format.formatCode}</span>)}
+                            {movie.formats?.map((format) => <span key={format.formatId} className="rounded-md border px-2.5 py-1 text-[13px] font-medium leading-5" style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }}>{format.formatCode}</span>)}
                             {!movie.formats?.length && <span className="text-sm text-rose-600">No screening format supplied.</span>}
                           </dd>
                         </div>
                       </dl>
                     </section>
 
-                    <section className="border-t pt-6" style={{ borderColor: "var(--border-color)" }}>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-blue-600">Catalog metadata</p>
+                    <section className="border-t pt-7" style={{ borderColor: "var(--border-color)" }}>
+                      <p className="text-[11px] font-bold uppercase leading-4 tracking-[0.09em] text-blue-600">Distribution metadata</p>
                       <dl className="mt-3 grid gap-x-8 sm:grid-cols-2">
                         <MetaRow icon={Clock} label="Runtime" value={formatDuration(movie.durationMinutes)} />
                         <MetaRow icon={Calendar} label="Release" value={formatDate(movie.releaseDate)} />
@@ -652,6 +718,20 @@ export function MovieDetailModal(props: Props) {
                         <MetaRow icon={MapPin} label="Country" value={movie.country ?? "Not set"} />
                       </dl>
                     </section>
+
+                    <details className="mt-6 rounded-xl border" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
+                      <summary className="cursor-pointer px-4 py-3.5 text-[13px] font-semibold leading-5" style={{ color: "var(--text-main)" }}>Record details</summary>
+                      <dl className="grid gap-x-8 border-t px-4 py-3 sm:grid-cols-2" style={{ borderColor: "var(--border-color)" }}>
+                        <MetaRow icon={Film} label="Record ID" value={String(movie.movieId)} />
+                        <MetaRow icon={History} label="Version" value={movie.version != null ? String(movie.version) : "Not recorded"} />
+                        <MetaRow icon={UserRound} label="Created by" value={movie.createdBy || "Not recorded"} />
+                        <MetaRow icon={UserRound} label="Last changed by" value={movie.updatedBy || "Not recorded"} />
+                        <MetaRow icon={Calendar} label="Created" value={formatDateTime(movie.createdAt)} />
+                        <MetaRow icon={Calendar} label="Last updated" value={formatDateTime(movie.updatedAt)} />
+                        {movie.tmdbId && <MetaRow icon={ExternalLink} label="TMDB ID" value={String(movie.tmdbId)} />}
+                        {movie.imdbId && <MetaRow icon={ExternalLink} label="IMDb ID" value={movie.imdbId} />}
+                      </dl>
+                    </details>
                   </div>
                 )}
 
@@ -753,6 +833,13 @@ export function MovieDetailModal(props: Props) {
                   </div>
                 )}
 
+                {tab === "media" && isReview && mediaImages.length === 0 && (
+                  <section className="rounded-xl border border-dashed p-5" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
+                    <p className="text-sm font-semibold" style={{ color: "var(--text-main)" }}>No reviewable assets</p>
+                    <p className="mt-1 text-xs" style={{ color: "var(--text-sub)" }}>A primary poster is required before this submission can be approved.</p>
+                  </section>
+                )}
+
                 {tab === "credits" && !isReview && (
                   <div className="space-y-4">
                     {directors.length > 0 && (
@@ -802,19 +889,19 @@ export function MovieDetailModal(props: Props) {
                   </div>
                 )}
 
-                {tab === "credits" && isReview && (
-                  <section className="rounded-2xl border p-5" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+                {tab === "media" && isReview && (
+                  <section className="mt-4 rounded-2xl border p-5" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
                     <SectionHeading icon={Users} title="Credits & rights metadata" description="Verify key creative credits and linked production companies." />
                     <div className="grid gap-6 md:grid-cols-2">
                       <div>
-                        <p className="mb-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-sub)" }}>Directors</p>
+                        <p className="mb-3 text-[13px] font-semibold uppercase leading-5 tracking-wide" style={{ color: "var(--text-sub)" }}>Directors</p>
                         <div className="space-y-2.5">
                           {directors.map((director) => <div key={director.personId} className="flex items-center gap-3 rounded-xl border p-3" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}><div className="flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ background: "var(--bg-hover)", color: "var(--text-sub)" }}>{director.photoUrl ? <img src={director.photoUrl} alt="" className="h-full w-full object-cover" /> : <UserRound size={18} />}</div><p className="text-sm font-semibold" style={{ color: "var(--text-main)" }}>{director.fullName}</p></div>)}
                           {!directors.length && <p className="text-sm text-amber-600">Director not supplied.</p>}
                         </div>
                       </div>
                       <div>
-                        <p className="mb-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-sub)" }}>Production companies</p>
+                        <p className="mb-3 text-[13px] font-semibold uppercase leading-5 tracking-wide" style={{ color: "var(--text-sub)" }}>Production companies</p>
                         <div className="space-y-2.5">
                           {movie.companies?.map((company) => <div key={company.companyId} className="flex items-center gap-3 rounded-xl border p-3" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}><div className="flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg" style={{ background: "var(--bg-hover)", color: "var(--text-sub)" }}>{company.logoUrl ? <img src={company.logoUrl} alt="" className="h-full w-full object-contain" /> : <Building2 size={18} />}</div><div className="min-w-0"><p className="truncate text-sm font-semibold" style={{ color: "var(--text-main)" }}>{company.name}</p><p className="text-xs" style={{ color: "var(--text-sub)" }}>{company.country || "Country not set"}</p></div></div>)}
                           {!movie.companies?.length && <p className="text-sm text-amber-600">Production company not supplied.</p>}
@@ -823,7 +910,7 @@ export function MovieDetailModal(props: Props) {
                     </div>
                     {actors.length > 0 && (
                       <div className="mt-6 border-t pt-5" style={{ borderColor: "var(--border-color)" }}>
-                        <p className="mb-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-sub)" }}>Principal cast · {actors.length}</p>
+                        <p className="mb-3 text-[13px] font-semibold uppercase leading-5 tracking-wide" style={{ color: "var(--text-sub)" }}>Principal cast · {actors.length}</p>
                         <div className="flex flex-wrap gap-2.5">
                           {actors.slice(0, 12).map((actor) => <span key={`${actor.personId}-${actor.characterName}`} className="rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }}><strong>{actor.fullName}</strong>{actor.characterName ? ` as ${actor.characterName}` : ""}</span>)}
                         </div>
@@ -832,32 +919,73 @@ export function MovieDetailModal(props: Props) {
                   </section>
                 )}
 
+                {tab === "activity" && isReview && (
+                  <section className="mx-auto w-full max-w-4xl">
+                    <div className="mb-5">
+                      <p className="text-[11px] font-bold uppercase leading-4 tracking-[0.09em] text-blue-600">Governance</p>
+                      <h3 className="mt-1 text-[17px] font-bold leading-6" style={{ color: "var(--text-main)" }}>Content lifecycle activity</h3>
+                      <p className="mt-1 text-xs leading-[18px]" style={{ color: "var(--text-sub)" }}>Status transitions, decision actors and recorded reasons for this catalog record.</p>
+                    </div>
+
+                    {historyLoading ? (
+                      <div className="flex items-center justify-center gap-2 rounded-xl border py-10 text-sm" style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}><Loader2 size={16} className="animate-spin" />Loading activity…</div>
+                    ) : historyUnavailable ? (
+                      <div className="rounded-xl border border-dashed p-5 text-sm" style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}>Activity history is temporarily unavailable. Review actions remain protected by the server workflow.</div>
+                    ) : history.length ? (
+                      <ol className="overflow-hidden rounded-xl border" style={{ borderColor: "var(--border-color)" }}>
+                        {history.map((entry) => (
+                          <li key={entry.historyId} className="grid gap-3 border-b px-4 py-4 last:border-b-0 sm:grid-cols-[36px_minmax(0,1fr)_auto]" style={{ borderColor: "var(--border-color)" }}>
+                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500/10 text-blue-600"><History size={15} /></span>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold" style={{ color: "var(--text-main)" }}>
+                                {formatWorkflowStatus(entry.fromStatus)} → {formatWorkflowStatus(entry.toStatus)}
+                              </p>
+                              <p className="mt-1 text-xs" style={{ color: "var(--text-sub)" }}>by {entry.actor || "System"}</p>
+                              {entry.reason && <p className="mt-2 rounded-lg px-3 py-2 text-xs leading-5" style={{ color: "var(--text-main)", background: "var(--bg-main)" }}>{entry.reason}</p>}
+                            </div>
+                            <time className="text-xs leading-[18px] sm:text-right" style={{ color: "var(--text-sub)" }}>{formatDateTime(entry.createdAt)}</time>
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <div className="rounded-xl border border-dashed p-5 text-sm" style={{ borderColor: "var(--border-color)", color: "var(--text-sub)" }}>No lifecycle transitions have been recorded yet.</div>
+                    )}
+                  </section>
+                )}
+
                 </div>
                 {isReview && (
-                  <aside className="border-t p-5 lg:overflow-y-auto lg:border-l lg:border-t-0" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
+                  <aside className="border-t p-6 lg:overflow-y-auto lg:border-l lg:border-t-0" style={{ borderColor: "var(--border-color)", background: "var(--bg-main)" }}>
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-bold" style={{ color: "var(--text-main)" }}>Review summary</p>
-                        <p className="mt-1 text-xs" style={{ color: "var(--text-sub)" }}>{passedCount}/{readinessChecks.length} required checks passed</p>
+                        <p className="text-[15px] font-bold leading-[22px]" style={{ color: "var(--text-main)" }}>Decision summary</p>
+                        <p className="mt-1 text-xs leading-[18px]" style={{ color: "var(--text-sub)" }}>{passedCount}/{readinessChecks.length} required checks passed</p>
                       </div>
-                      <span className="flex-shrink-0 rounded-full px-2 py-1 text-[10px] font-bold" style={{ color: approvalReady ? "#047857" : "#dc2626", background: approvalReady ? "rgba(5,150,105,0.1)" : "rgba(220,38,38,0.09)" }}>
-                        {approvalReady ? "READY" : `${blockers.length} ISSUE${blockers.length > 1 ? "S" : ""}`}
+                      <span className="flex-shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold leading-4" style={{ color: decisionReady ? "#047857" : "#dc2626", background: decisionReady ? "rgba(5,150,105,0.1)" : "rgba(220,38,38,0.09)" }}>
+                        {selfApproval ? "SOD BLOCK" : approvalReady ? "READY" : `${blockers.length} ISSUE${blockers.length > 1 ? "S" : ""}`}
                       </span>
                     </div>
+
+                    {selfApproval && (
+                      <div className="mt-4 rounded-xl border p-3" style={{ borderColor: "rgba(220,38,38,0.28)", background: "rgba(220,38,38,0.06)" }}>
+                        <p className="flex items-center gap-2 text-[13px] font-semibold leading-5 text-rose-700"><AlertTriangle size={14} />Independent approval required</p>
+                        <p className="mt-1.5 text-xs leading-[18px]" style={{ color: "var(--text-sub)" }}>You created this record, so separation-of-duties policy prevents self-approval.</p>
+                      </div>
+                    )}
 
                     <div className="mt-5 border-y" style={{ borderColor: "var(--border-color)" }}>
                       {blockers.length > 0 ? blockers.map((check) => (
                         <div key={check.key} className="flex gap-2.5 border-b py-3 last:border-b-0" style={{ borderColor: "var(--border-color)" }}>
                           <XCircle size={16} className="mt-0.5 flex-shrink-0 text-rose-600" />
                           <div>
-                            <p className="text-xs font-semibold" style={{ color: "var(--text-main)" }}>{check.label}</p>
-                            <p className="mt-1 text-[11px] leading-4" style={{ color: "var(--text-sub)" }}>{check.detail}</p>
+                            <p className="text-[13px] font-semibold leading-5" style={{ color: "var(--text-main)" }}>{check.label}</p>
+                            <p className="mt-1 text-xs leading-[18px]" style={{ color: "var(--text-sub)" }}>{check.detail}</p>
                           </div>
                         </div>
                       )) : (
                         <div className="flex gap-2.5 py-4">
                           <CheckCircle2 size={17} className="flex-shrink-0 text-emerald-600" />
-                          <p className="text-xs font-semibold text-emerald-700">Ready for content approval</p>
+                          <p className="text-[13px] font-semibold leading-5 text-emerald-700">Ready for content approval</p>
                         </div>
                       )}
                     </div>
@@ -865,19 +993,29 @@ export function MovieDetailModal(props: Props) {
                     {passedChecks.length > 0 && (
                       <div className="mt-4">
                         <button type="button" aria-expanded={showPassedChecks} onClick={() => setShowPassedChecks((current) => !current)} className="flex w-full items-center justify-between gap-3 py-1 text-left">
-                          <span className="text-xs font-semibold" style={{ color: "var(--text-main)" }}>Passed checks <span style={{ color: "var(--text-sub)" }}>({passedChecks.length})</span></span>
+                          <span className="text-[13px] font-semibold leading-5" style={{ color: "var(--text-main)" }}>Passed checks <span style={{ color: "var(--text-sub)" }}>({passedChecks.length})</span></span>
                           <ChevronDown size={15} className={`transition-transform ${showPassedChecks ? "rotate-180" : ""}`} style={{ color: "var(--text-sub)" }} />
                         </button>
                         {showPassedChecks && (
                           <ul className="mt-2 space-y-2">
-                            {passedChecks.map((check) => <li key={check.key} className="flex items-start gap-2 text-xs" style={{ color: "var(--text-sub)" }}><Check size={13} className="mt-0.5 flex-shrink-0 text-emerald-600" />{check.label}</li>)}
+                            {passedChecks.map((check) => <li key={check.key} className="flex items-start gap-2 text-xs leading-[18px]" style={{ color: "var(--text-sub)" }}><Check size={13} className="mt-0.5 flex-shrink-0 text-emerald-600" />{check.label}</li>)}
                           </ul>
                         )}
                       </div>
                     )}
 
-                    {warnings.length > 0 && <p className="mt-5 flex items-center gap-2 text-xs text-amber-600"><AlertTriangle size={14} />{warnings.length} non-blocking observation{warnings.length > 1 ? "s" : ""}</p>}
-                    <p className="mt-5 text-[11px] leading-4" style={{ color: "var(--text-sub)" }}>Approval validates catalog content only. It does not publish the movie or open sales.</p>
+                    {warnings.length > 0 && (
+                      <details className="mt-5">
+                        <summary className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold leading-5 text-amber-600"><AlertTriangle size={14} />{warnings.length} non-blocking observation{warnings.length > 1 ? "s" : ""}</summary>
+                        <ul className="mt-2 space-y-2 pl-5 text-xs leading-[18px]" style={{ color: "var(--text-sub)" }}>
+                          {warnings.map((warning) => <li key={warning} className="list-disc">{warning}</li>)}
+                        </ul>
+                      </details>
+                    )}
+                    <div className="mt-5 border-t pt-4" style={{ borderColor: "var(--border-color)" }}>
+                      <p className="text-[11px] font-bold uppercase leading-4 tracking-[0.08em]" style={{ color: "var(--text-sub)" }}>Decision scope</p>
+                      <p className="mt-2 text-xs leading-[18px]" style={{ color: "var(--text-sub)" }}>Approval validates this catalog submission only. It does not publish the movie, activate a release plan or open ticket sales.</p>
+                    </div>
                   </aside>
                 )}
               </main>
@@ -888,7 +1026,7 @@ export function MovieDetailModal(props: Props) {
         {/* Footer only exists in review mode (approve/reject actions). View mode closes via
             the header's X only — a footer there only duplicated that affordance. */}
         {isReview && (
-          <footer className="flex-shrink-0 border-t px-5 py-4 sm:px-6" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
+          <footer className="flex-shrink-0 border-t px-5 py-4 sm:px-6 lg:px-7" style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}>
             {showRejectForm && (
               <div className="mb-4 rounded-xl border p-4" style={{ borderColor: noteTooShort ? "rgba(220,38,38,0.5)" : "var(--border-color)", background: "var(--bg-main)" }}>
                 <div className="mb-2 flex items-center justify-between gap-3">
@@ -910,14 +1048,14 @@ export function MovieDetailModal(props: Props) {
             )}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               {!showRejectForm && (
-                <p className="text-xs" style={{ color: approvalReady ? "#047857" : "var(--text-sub)" }}>
-                  {approvalReady ? "All required checks passed." : `${blockers.length} required issue${blockers.length > 1 ? "s" : ""} must be resolved before approval.`}
+                <p className="text-[13px] leading-5" style={{ color: decisionReady ? "#047857" : "var(--text-sub)" }}>
+                  {selfApproval ? "Independent approval is required for this submission." : approvalReady ? "All required checks passed." : `${blockers.length} required issue${blockers.length > 1 ? "s" : ""} must be resolved before approval.`}
                 </p>
               )}
               <div className="flex items-center justify-end gap-2.5 sm:ml-auto">
                 {showRejectForm && <button type="button" onClick={() => { setShowRejectForm(false); setNote(""); }} disabled={submitting === "reject"} className="rounded-xl border px-4 py-3 text-sm font-semibold disabled:opacity-40" style={{ borderColor: "var(--border-color)", color: "var(--text-main)" }}>Cancel</button>}
                 {can.requestChanges && <button type="button" onClick={showRejectForm ? handleReject : () => setShowRejectForm(true)} disabled={Boolean(submitting) || loading || !movie || (showRejectForm && note.trim().length < MIN_NOTE_LENGTH)} className="inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-40" style={{ color: "#dc2626", borderColor: "rgba(220,38,38,0.45)", background: "rgba(220,38,38,0.04)" }}>{submitting === "reject" ? <Loader2 size={15} className="animate-spin" /> : <XCircle size={15} />}{showRejectForm ? "Send change request" : "Request changes"}</button>}
-                {can.approve && !showRejectForm && <button type="button" onClick={handleApprove} disabled={Boolean(submitting) || loading || !movie || !approvalReady} title={!approvalReady ? "Resolve required review issues before approval" : undefined} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40">{submitting === "approve" ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}Approve content</button>}
+                {can.approve && !showRejectForm && <button type="button" onClick={handleApprove} disabled={Boolean(submitting) || loading || !movie || !decisionReady} title={selfApproval ? "Separation-of-duties policy prevents self-approval" : !approvalReady ? "Resolve required review issues before approval" : undefined} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40">{submitting === "approve" ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}Approve submission</button>}
               </div>
             </div>
           </footer>

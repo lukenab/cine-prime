@@ -5,13 +5,13 @@ import { RowActions, type RowAction } from "../components/admin/RowActions";
 
 type Props = {
   showtimes: ShowtimeResponse[];
-  onEdit: (showtime: ShowtimeResponse) => void;
-  onDelete: (id: number) => void;
+  onEdit?: (showtime: ShowtimeResponse) => void;
+  onDelete?: (id: number) => void;
   searchQuery: string;
   statusFilter: string;
   dateFilter: string;
   roomFilter: number | "";
-  onBulkStatusChange: (ids: number[], status: ShowtimeStatus, reason?: string) => Promise<void>;
+  onBulkStatusChange?: (ids: number[], status: ShowtimeStatus, reason?: string) => Promise<void>;
   /** True once the cinema dropdown above the table has narrowed the list to one branch -
    *  at that point the per-row cinema name is redundant and hidden. When "All Cinemas" is
    *  selected, rows can belong to different branches with same-named rooms, so it stays. */
@@ -65,6 +65,8 @@ export function ShowtimeTable({
   const [openSaleConfirm, setOpenSaleConfirm] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
+  const canChangeStatus = Boolean(onBulkStatusChange);
+  const hasRowActions = Boolean(onEdit || onDelete || onBulkStatusChange);
 
   const filtered = showtimes.filter((s) => {
     const q = searchQuery.toLowerCase();
@@ -113,7 +115,7 @@ export function ShowtimeTable({
   }, [searchQuery, statusFilter, dateFilter, roomFilter]);
 
   const runBulkAction = async (status: ShowtimeStatus, reason?: string) => {
-    if (selectedIds.length === 0) return;
+    if (selectedIds.length === 0 || !onBulkStatusChange) return;
     setBulkBusy(true);
     try {
       await onBulkStatusChange(selectedIds, status, reason);
@@ -130,6 +132,7 @@ export function ShowtimeTable({
   };
 
   const runSingleStatusAction = async (id: number, status: ShowtimeStatus) => {
+    if (!onBulkStatusChange) return;
     setBulkBusy(true);
     try {
       await onBulkStatusChange([id], status);
@@ -174,7 +177,7 @@ export function ShowtimeTable({
                 Cancel
               </button>
               <button
-                onClick={() => { onDelete(confirmDelete.showTimeId); setConfirmDelete(null); }}
+                onClick={() => { onDelete?.(confirmDelete.showTimeId); setConfirmDelete(null); }}
                 className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white transition-colors hover:opacity-90"
                 style={{ background: "#ef4444" }}
               >
@@ -223,7 +226,7 @@ export function ShowtimeTable({
         </div>
       )}
 
-      {selectedIds.length > 0 && (
+      {canChangeStatus && selectedIds.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}>
           <strong className="mr-auto text-sm" style={{ color: "var(--text-main)" }}>{selectedIds.length} selected</strong>
           <button type="button" disabled={bulkBusy || !canOpenSelected} title={!canOpenSelected ? "Open sales supports Scheduled or Suspended showtimes only" : undefined} onClick={() => setOpenSaleConfirm(true)} className="flex items-center gap-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"><PlayCircle size={14} /> Open sales</button>
@@ -239,7 +242,7 @@ export function ShowtimeTable({
             <thead>
               <tr className="border-b" style={{ borderColor: "var(--border-color)", backgroundColor: "rgba(128,128,128,0.04)" }}>
                 <th className="w-12 px-5 py-3.5 text-left">
-                  <input
+                  {canChangeStatus && <input
                     type="checkbox"
                     aria-label={hasNarrowingFilter
                       ? `Select all ${actionableFilteredIds.length} matching showtimes`
@@ -248,7 +251,7 @@ export function ShowtimeTable({
                     onChange={() => setSelectedIds((current) => allHeaderSelected
                       ? current.filter((id) => !headerSelectionIds.includes(id))
                       : Array.from(new Set([...current, ...headerSelectionIds])))}
-                  />
+                  />}
                 </th>
                 {["Movie", "Session", "Cinema & room", "Experience", "Seats", "Status", "Actions"].map((h) => (
                   <th key={h} className={`px-5 py-3.5 ${h === "Actions" ? "text-right" : "text-left"}`}>
@@ -271,15 +274,15 @@ export function ShowtimeTable({
                 pageItems.map((item) => {
                   const st = STATUS_STYLE[item.status] ?? STATUS_STYLE.COMPLETED;
                   const rowActions: RowAction[] = [
-                    { key: "edit", label: "Edit showtime", icon: Pencil, onSelect: () => onEdit(item), hidden: item.status !== "SCHEDULED" },
-                    { key: "open-sales", label: "Open sales", icon: PlayCircle, onSelect: () => void runSingleStatusAction(item.showTimeId, "ON_SALE"), hidden: item.status !== "SCHEDULED" && item.status !== "SUSPENDED" },
-                    { key: "suspend", label: "Suspend sales", icon: PauseCircle, onSelect: () => void runSingleStatusAction(item.showTimeId, "SUSPENDED"), hidden: item.status !== "SCHEDULED" && item.status !== "ON_SALE" },
-                    { key: "delete", label: "Delete draft showtime", icon: Trash2, onSelect: () => setConfirmDelete(item), hidden: item.status !== "SCHEDULED", destructive: true, separatorBefore: true },
+                    { key: "edit", label: "Edit showtime", icon: Pencil, onSelect: () => onEdit?.(item), hidden: !onEdit || item.status !== "SCHEDULED" },
+                    { key: "open-sales", label: "Open sales", icon: PlayCircle, onSelect: () => void runSingleStatusAction(item.showTimeId, "ON_SALE"), hidden: !canChangeStatus || (item.status !== "SCHEDULED" && item.status !== "SUSPENDED") },
+                    { key: "suspend", label: "Suspend sales", icon: PauseCircle, onSelect: () => void runSingleStatusAction(item.showTimeId, "SUSPENDED"), hidden: !canChangeStatus || (item.status !== "SCHEDULED" && item.status !== "ON_SALE") },
+                    { key: "delete", label: "Delete draft showtime", icon: Trash2, onSelect: () => setConfirmDelete(item), hidden: !onDelete || item.status !== "SCHEDULED", destructive: true, separatorBefore: true },
                   ];
                   return (
                     <tr key={item.showTimeId} className="border-b last:border-none hover-row transition-colors" style={{ borderColor: "var(--border-color)" }}>
                       <td className="px-5 py-3.5">
-                        <input
+                        {canChangeStatus && <input
                           type="checkbox"
                           aria-label={`Select ${item.movieName}`}
                           disabled={item.status === "CANCELLED" || item.status === "COMPLETED"}
@@ -287,7 +290,7 @@ export function ShowtimeTable({
                           onChange={() => setSelectedIds((current) => current.includes(item.showTimeId)
                             ? current.filter((id) => id !== item.showTimeId)
                             : [...current, item.showTimeId])}
-                        />
+                        />}
                       </td>
                       <td className="px-5 py-3.5">
                         <div className="flex min-w-[220px] items-center gap-3">
@@ -344,7 +347,9 @@ export function ShowtimeTable({
                       </td>
 
                       <td className="w-[72px] px-5 py-3.5 text-right">
-                        <RowActions ariaLabel={`Actions for ${item.movieName}`} actions={rowActions} busy={bulkBusy} />
+                        {hasRowActions
+                          ? <RowActions ariaLabel={`Actions for ${item.movieName}`} actions={rowActions} busy={bulkBusy} />
+                          : <span aria-label="No actions available" style={{ color: "var(--text-sub)" }}>—</span>}
                       </td>
                     </tr>
                   );
